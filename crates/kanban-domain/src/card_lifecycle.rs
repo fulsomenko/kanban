@@ -5,7 +5,46 @@
 //! to ensure consistent behavior.
 
 use crate::{Board, Card, CardStatus, Column, Sprint, SprintLog};
+use std::collections::HashSet;
+use std::hash::Hash;
 use uuid::Uuid;
+
+/// Return the input slice with duplicates removed, preserving the order of
+/// the first occurrence of each element. Useful for batch APIs that need
+/// stable, dedup-tolerant input.
+pub fn dedup_preserving_order<T: Hash + Eq + Copy>(items: &[T]) -> Vec<T> {
+    let mut seen: HashSet<T> = HashSet::new();
+    items
+        .iter()
+        .copied()
+        .filter(|item| seen.insert(*item))
+        .collect()
+}
+
+/// Compute the target positions for a batch move of cards into a column.
+///
+/// Cards whose IDs are in `moving_ids` are placed at the tail of the column,
+/// in their input order, starting at the position right after the last
+/// non-moving card. Returns `(card_id, target_position)` pairs in the order
+/// of the first occurrence of each id in `moving_ids` (duplicates are
+/// dropped via [`dedup_preserving_order`]).
+///
+/// This is a pure function: it does no I/O and takes the current column
+/// contents as a snapshot input. The service layer is responsible for
+/// reading `existing_cards` and persisting the resulting positions.
+pub fn compute_move_positions(existing_cards: &[Card], moving_ids: &[Uuid]) -> Vec<(Uuid, i32)> {
+    let deduped = dedup_preserving_order(moving_ids);
+    let moving_set: HashSet<Uuid> = deduped.iter().copied().collect();
+    let base = existing_cards
+        .iter()
+        .filter(|c| !moving_set.contains(&c.id))
+        .count();
+    deduped
+        .into_iter()
+        .enumerate()
+        .map(|(i, id)| (id, (base + i) as i32))
+        .collect()
+}
 
 /// Direction for moving a card between columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,6 +200,65 @@ pub fn compute_card_column_move(
         new_position,
         new_status,
     })
+}
+
+/// Compute the column where a card should live given its new status,
+/// to maintain the status ↔ completion column invariant.
+///
+/// Returns `Some(target_column_id)` if the card must move. Position within
+/// the target column is the caller's responsibility (typically "append at end").
+/// Returns `None` if no move is needed (already correctly placed, or board
+/// has fewer than 2 columns, or no completion column is resolvable).
+pub fn target_column_for_status(
+    card: &Card,
+    new_status: CardStatus,
+    board: &Board,
+    columns: &[Column],
+) -> Option<Uuid> {
+    let sorted = sorted_board_columns(board.id, columns);
+    if sorted.len() < 2 {
+        return None;
+    }
+    let completion_col_id = board.resolve_completion_column(columns)?;
+
+    if new_status == CardStatus::Done {
+        if card.column_id == completion_col_id {
+            return None;
+        }
+        Some(completion_col_id)
+    } else {
+        if card.column_id != completion_col_id {
+            return None;
+        }
+        let completion_idx = sorted.iter().position(|c| c.id == completion_col_id)?;
+        if completion_idx == 0 {
+            return None;
+        }
+        Some(sorted[completion_idx - 1].id)
+    }
+}
+
+/// Compute the status a card should have after being moved to `new_column_id`,
+/// to maintain the status ↔ completion column invariant.
+///
+/// Returns `Some(new_status)` if status must change, `None` otherwise.
+pub fn target_status_for_column_move(
+    card: &Card,
+    new_column_id: Uuid,
+    board: &Board,
+    columns: &[Column],
+) -> Option<CardStatus> {
+    let completion_col_id = board.resolve_completion_column(columns)?;
+    let moving_to_completion = new_column_id == completion_col_id;
+    let was_in_completion = card.column_id == completion_col_id;
+
+    if moving_to_completion && card.status != CardStatus::Done {
+        Some(CardStatus::Done)
+    } else if !moving_to_completion && was_in_completion && card.status == CardStatus::Done {
+        Some(CardStatus::Todo)
+    } else {
+        None
+    }
 }
 
 /// Compact card positions in a column to be sequential (0, 1, 2, ...).
@@ -596,5 +694,166 @@ mod tests {
         let count = migrate_sprint_logs(&mut cards, &[], &[board]);
 
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn migrate_with_mixed_cards_only_backfills_eligible() {
+        let mut board = test_board();
+        let col = Column::new(board.id, "Todo".to_string(), 0);
+        let sprint = Sprint::new(board.id, 1, None, None);
+
+        let mut card_needs_backfill = test_card(&mut board, &col, "Needs Backfill", 0);
+        card_needs_backfill.sprint_id = Some(sprint.id);
+
+        let mut card_already_logged = test_card(&mut board, &col, "Already Logged", 1);
+        card_already_logged.sprint_id = Some(sprint.id);
+        card_already_logged.sprint_logs.push(SprintLog::new(
+            sprint.id,
+            1,
+            None,
+            "Active".to_string(),
+        ));
+        let already_logged_before = card_already_logged.sprint_logs.clone();
+
+        let card_no_sprint = test_card(&mut board, &col, "No Sprint", 2);
+        let no_sprint_before = card_no_sprint.sprint_logs.clone();
+
+        let mut cards = vec![card_needs_backfill, card_already_logged, card_no_sprint];
+        let count = migrate_sprint_logs(&mut cards, &[sprint], &[board]);
+
+        assert_eq!(count, 1, "only the eligible card should be migrated");
+        assert_eq!(cards[0].sprint_logs.len(), 1);
+        assert_eq!(cards[0].sprint_logs[0].sprint_number, 1);
+        assert_eq!(
+            cards[1].sprint_logs, already_logged_before,
+            "card with existing logs should be untouched"
+        );
+        assert_eq!(
+            cards[2].sprint_logs, no_sprint_before,
+            "card with no sprint_id should be untouched"
+        );
+    }
+
+    // --- compute_move_positions ---
+
+    #[test]
+    fn compute_move_positions_appends_after_existing_non_moving_cards() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing1 = test_card(&mut board, &cols[0], "E1", 0);
+        let existing2 = test_card(&mut board, &cols[0], "E2", 1);
+        let existing = vec![existing1, existing2];
+
+        let move_a = Uuid::new_v4();
+        let move_b = Uuid::new_v4();
+
+        let positions = compute_move_positions(&existing, &[move_a, move_b]);
+
+        assert_eq!(positions, vec![(move_a, 2), (move_b, 3)]);
+    }
+
+    #[test]
+    fn compute_move_positions_within_same_column_excludes_moving_from_base() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let card1 = test_card(&mut board, &cols[0], "C1", 0);
+        let card2 = test_card(&mut board, &cols[0], "C2", 1);
+        let card3 = test_card(&mut board, &cols[0], "C3", 2);
+        let c1 = card1.id;
+        let c3 = card3.id;
+        let existing = vec![card1, card2, card3];
+
+        // Move c1 and c3; c2 stays — base = 1 (only c2 is non-moving)
+        let positions = compute_move_positions(&existing, &[c1, c3]);
+
+        assert_eq!(positions, vec![(c1, 1), (c3, 2)]);
+    }
+
+    #[test]
+    fn compute_move_positions_into_empty_column_starts_at_zero() {
+        let move_a = Uuid::new_v4();
+        let move_b = Uuid::new_v4();
+
+        let positions = compute_move_positions(&[], &[move_a, move_b]);
+
+        assert_eq!(positions, vec![(move_a, 0), (move_b, 1)]);
+    }
+
+    #[test]
+    fn compute_move_positions_with_empty_moving_returns_empty() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing = vec![test_card(&mut board, &cols[0], "E", 0)];
+
+        let positions = compute_move_positions(&existing, &[]);
+
+        assert!(positions.is_empty());
+    }
+
+    #[test]
+    fn compute_move_positions_preserves_input_order() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing = vec![test_card(&mut board, &cols[0], "E", 0)];
+
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+        let id3 = Uuid::new_v4();
+
+        let positions = compute_move_positions(&existing, &[id3, id1, id2]);
+
+        assert_eq!(positions, vec![(id3, 1), (id1, 2), (id2, 3)]);
+    }
+
+    #[test]
+    fn compute_move_positions_dedupes_repeated_moving_ids_first_occurrence_wins() {
+        let mut board = test_board();
+        let cols = add_columns(&board, &["Col"]);
+        let existing = vec![test_card(&mut board, &cols[0], "E", 0)];
+
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+
+        // Duplicates of id_a and id_b: only first occurrence kept.
+        let positions = compute_move_positions(&existing, &[id_a, id_b, id_a, id_b, id_a]);
+
+        // base = 1 (one existing non-moving), only two unique moving ids → positions 1, 2.
+        assert_eq!(positions, vec![(id_a, 1), (id_b, 2)]);
+    }
+
+    // --- dedup_preserving_order ---
+
+    #[test]
+    fn dedup_preserving_order_empty_input_returns_empty() {
+        let out: Vec<u32> = dedup_preserving_order(&[]);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn dedup_preserving_order_no_duplicates_returns_input_in_order() {
+        let out = dedup_preserving_order(&[3u32, 1, 2]);
+        assert_eq!(out, vec![3, 1, 2]);
+    }
+
+    #[test]
+    fn dedup_preserving_order_all_duplicates_returns_single_first() {
+        let out = dedup_preserving_order(&[7u32, 7, 7, 7]);
+        assert_eq!(out, vec![7]);
+    }
+
+    #[test]
+    fn dedup_preserving_order_mixed_preserves_first_occurrence_order() {
+        // First-occurrence positions: a=0, b=1, c=3 → output order [a, b, c].
+        let out = dedup_preserving_order(&[1u32, 2, 1, 3, 2, 1, 3]);
+        assert_eq!(out, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn dedup_preserving_order_works_for_uuid() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+        let out = dedup_preserving_order(&[a, b, a, c, b]);
+        assert_eq!(out, vec![a, b, c]);
     }
 }

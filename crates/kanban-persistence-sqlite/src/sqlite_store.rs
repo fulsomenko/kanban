@@ -1154,6 +1154,16 @@ impl DataStore for SqliteStore {
         run(self.fetch_cards_with_filter("AND column_id = ?", &[column_id.to_string()]))
     }
 
+    fn list_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<Vec<Card>> {
+        if column_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = column_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let where_clause = format!("AND column_id IN ({placeholders})");
+        let binds: Vec<String> = column_ids.iter().map(|id| id.to_string()).collect();
+        run(self.fetch_cards_with_filter(&where_clause, &binds))
+    }
+
     fn list_cards_by_sprint(&self, sprint_id: Uuid) -> KanbanResult<Vec<Card>> {
         run(self.fetch_cards_with_filter("AND sprint_id = ?", &[sprint_id.to_string()]))
     }
@@ -1517,6 +1527,10 @@ impl PersistenceStore for SqliteStore {
 
     fn instance_id(&self) -> Uuid {
         self.instance_id
+    }
+
+    async fn close(&self) {
+        self.pool.close().await;
     }
 }
 

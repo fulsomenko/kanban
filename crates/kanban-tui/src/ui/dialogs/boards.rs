@@ -432,6 +432,11 @@ mod tests {
         });
     }
 
+    // POSIX-only: relies on `/home/max/...` being absolute and on the `HOME`
+    // env var. `display_dialog_path` documents that it returns the resolved
+    // path unchanged on Windows, where forward-slash paths aren't absolute
+    // and there is no `HOME` variable to substitute.
+    #[cfg(unix)]
     #[test]
     fn test_display_dialog_path_shrinks_absolute_input_under_home() {
         with_home(Some("/home/max"), || {

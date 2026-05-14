@@ -52,67 +52,14 @@ impl UpdateSprint {
 
         if !matches!(updates.card_prefix, crate::FieldUpdate::NoChange) {
             let sprint = context.get_sprint(self.sprint_id)?;
-            let board_id = sprint.board_id;
-            let sprint_id = sprint.id;
-
-            // Lock check: prefix is locked if any card (active or archived) is assigned
-            let has_cards = !context.store.list_cards_by_sprint(sprint_id)?.is_empty()
-                || context
-                    .store
-                    .list_archived_cards()?
-                    .iter()
-                    .any(|ac| ac.card.sprint_id == Some(sprint_id));
-            if has_cards {
-                return Err(KanbanError::validation(
-                    "sprint card_prefix cannot be changed after cards have been assigned",
-                ));
-            }
-
-            // Uniqueness check when setting a new prefix
+            validate_card_prefix_not_locked(self.sprint_id, context)?;
             if let crate::FieldUpdate::Set(ref new_prefix) = updates.card_prefix {
-                let new_prefix_lower = new_prefix.to_lowercase();
-
-                let board = context.get_board(board_id)?;
-
-                if board
-                    .card_prefix
-                    .as_deref()
-                    .map(|p| p.to_lowercase())
-                    .as_deref()
-                    == Some(new_prefix_lower.as_str())
-                {
-                    return Err(KanbanError::validation(
-                        "sprint card_prefix must not match the board card_prefix",
-                    ));
-                }
-
-                let sibling_collision = context
-                    .store
-                    .list_sprints_by_board(board_id)?
-                    .iter()
-                    .filter(|s| s.id != sprint_id)
-                    .any(|s| {
-                        s.card_prefix
-                            .as_deref()
-                            .map(|p| p.to_lowercase())
-                            .as_deref()
-                            == Some(new_prefix_lower.as_str())
-                    });
-                if sibling_collision {
-                    return Err(KanbanError::validation(
-                        "sprint card_prefix must be unique within the board",
-                    ));
-                }
+                validate_card_prefix_unique(new_prefix, self.sprint_id, sprint.board_id, context)?;
             }
         }
 
         if let Some(ref name) = updates.name {
-            let sprint = context.get_sprint(self.sprint_id)?;
-            let board_id = sprint.board_id;
-            let mut board = context.get_board(board_id)?;
-            let idx = board.add_sprint_name_at_used_index(name.clone());
-            updates.name_index = crate::FieldUpdate::Set(idx);
-            context.store.upsert_board(board)?;
+            allocate_sprint_name(name.clone(), self.sprint_id, context, &mut updates)?;
         }
 
         let mut sprint = context.get_sprint(self.sprint_id)?;
@@ -124,6 +71,76 @@ impl UpdateSprint {
     pub fn description(&self) -> String {
         "Update sprint".to_string()
     }
+}
+
+fn validate_card_prefix_not_locked(sprint_id: Uuid, context: &CommandContext) -> KanbanResult<()> {
+    let has_active = !context.store.list_cards_by_sprint(sprint_id)?.is_empty();
+    let has_archived = context
+        .store
+        .list_archived_cards()?
+        .iter()
+        .any(|ac| ac.card.sprint_id == Some(sprint_id));
+    if has_active || has_archived {
+        return Err(KanbanError::validation(
+            "sprint card_prefix cannot be changed after cards have been assigned",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_card_prefix_unique(
+    new_prefix: &str,
+    sprint_id: Uuid,
+    board_id: Uuid,
+    context: &CommandContext,
+) -> KanbanResult<()> {
+    let new_prefix_lower = new_prefix.to_lowercase();
+    let board = context.get_board(board_id)?;
+
+    if board
+        .card_prefix
+        .as_deref()
+        .map(|p| p.to_lowercase())
+        .as_deref()
+        == Some(new_prefix_lower.as_str())
+    {
+        return Err(KanbanError::validation(
+            "sprint card_prefix must not match the board card_prefix",
+        ));
+    }
+
+    let sibling_collision = context
+        .store
+        .list_sprints_by_board(board_id)?
+        .iter()
+        .filter(|s| s.id != sprint_id)
+        .any(|s| {
+            s.card_prefix
+                .as_deref()
+                .map(|p| p.to_lowercase())
+                .as_deref()
+                == Some(new_prefix_lower.as_str())
+        });
+    if sibling_collision {
+        return Err(KanbanError::validation(
+            "sprint card_prefix must be unique within the board",
+        ));
+    }
+    Ok(())
+}
+
+fn allocate_sprint_name(
+    name: String,
+    sprint_id: Uuid,
+    context: &CommandContext,
+    updates: &mut SprintUpdate,
+) -> KanbanResult<()> {
+    let sprint = context.get_sprint(sprint_id)?;
+    let mut board = context.get_board(sprint.board_id)?;
+    let idx = board.add_sprint_name_at_used_index(name);
+    updates.name_index = crate::FieldUpdate::Set(idx);
+    context.store.upsert_board(board)?;
+    Ok(())
 }
 
 /// Create a new sprint.
@@ -605,6 +622,138 @@ mod tests {
         assert_eq!(archived_cards.len(), 1);
         assert_eq!(archived_cards[0].card.updated_at, fixed_time);
         assert_eq!(archived_cards[0].card.sprint_id, None);
+    }
+
+    #[test]
+    fn test_validate_card_prefix_not_locked_with_no_cards_returns_ok() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let context = tc.as_command_context();
+        assert!(validate_card_prefix_not_locked(sprint_id, &context).is_ok());
+    }
+
+    #[test]
+    fn test_validate_card_prefix_not_locked_with_active_card_returns_validation_error() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let sprint_id = sprint.id;
+        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        card.sprint_id = Some(sprint_id);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+        tc.store.upsert_card(card).unwrap();
+
+        let context = tc.as_command_context();
+        let err = validate_card_prefix_not_locked(sprint_id, &context).unwrap_err();
+        assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_validate_card_prefix_unique_for_distinct_prefix_returns_ok() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let context = tc.as_command_context();
+        assert!(validate_card_prefix_unique("UNIQUE", sprint_id, board_id, &context).is_ok());
+    }
+
+    #[test]
+    fn test_validate_card_prefix_unique_self_does_not_collide() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let context = tc.as_command_context();
+        assert!(validate_card_prefix_unique("SPR", sprint_id, board_id, &context).is_ok());
+    }
+
+    #[test]
+    fn test_allocate_sprint_name_sets_name_index_and_upserts_board() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let context = tc.as_command_context();
+        let mut updates = SprintUpdate::default();
+        allocate_sprint_name("My Sprint".to_string(), sprint_id, &context, &mut updates).unwrap();
+
+        assert!(matches!(updates.name_index, crate::FieldUpdate::Set(_)));
+        let board = tc.store.get_board(board_id).unwrap().unwrap();
+        assert!(board.sprint_names.contains(&"My Sprint".to_string()));
+    }
+
+    #[test]
+    fn test_validate_card_prefix_not_locked_with_archived_card_returns_validation_error() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let sprint_id = sprint.id;
+        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        card.sprint_id = Some(sprint_id);
+        let archived = crate::ArchivedCard::new(card, col.id, 0);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+        tc.store.insert_archived_card(archived).unwrap();
+
+        let context = tc.as_command_context();
+        let err = validate_card_prefix_not_locked(sprint_id, &context).unwrap_err();
+        assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_validate_card_prefix_unique_collides_with_board_prefix_returns_validation_error() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint_id = sprint.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let context = tc.as_command_context();
+        let err = validate_card_prefix_unique("KAN", sprint_id, board_id, &context).unwrap_err();
+        assert!(err.is_validation());
+    }
+
+    #[test]
+    fn test_validate_card_prefix_unique_collides_with_sibling_sprint_returns_validation_error() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board_id = board.id;
+        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None);
+        sprint1.card_prefix = Some("SPR".to_string());
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
+        let sprint2_id = sprint2.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_sprint(sprint1).unwrap();
+        tc.store.upsert_sprint(sprint2).unwrap();
+
+        let context = tc.as_command_context();
+        let err = validate_card_prefix_unique("SPR", sprint2_id, board_id, &context).unwrap_err();
+        assert!(err.is_validation());
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
 use uuid::Uuid;
@@ -15,6 +15,12 @@ struct StoreState {
     boards: HashMap<Uuid, Board>,
     columns: HashMap<Uuid, Column>,
     cards: HashMap<Uuid, Card>,
+    /// Secondary index: column_id -> set of card ids currently in that column.
+    /// Maintained transactionally by every method that mutates `cards`'s
+    /// column membership (upsert_card, delete_card, delete_cards_by_columns,
+    /// apply_snapshot). Lets `count_cards_in_column_excluding` and friends
+    /// run in O(column_size) instead of O(total_cards).
+    cards_by_column: HashMap<Uuid, HashSet<Uuid>>,
     sprints: HashMap<Uuid, Sprint>,
     archived_cards: HashMap<Uuid, ArchivedCard>,
     graph: DependencyGraph,
@@ -26,9 +32,36 @@ impl StoreState {
             boards: HashMap::new(),
             columns: HashMap::new(),
             cards: HashMap::new(),
+            cards_by_column: HashMap::new(),
             sprints: HashMap::new(),
             archived_cards: HashMap::new(),
             graph: DependencyGraph::new(),
+        }
+    }
+
+    fn add_card_to_column_index(&mut self, card_id: Uuid, column_id: Uuid) {
+        self.cards_by_column
+            .entry(column_id)
+            .or_default()
+            .insert(card_id);
+    }
+
+    fn remove_card_from_column_index(&mut self, card_id: Uuid, column_id: Uuid) {
+        if let Some(set) = self.cards_by_column.get_mut(&column_id) {
+            set.remove(&card_id);
+            if set.is_empty() {
+                self.cards_by_column.remove(&column_id);
+            }
+        }
+    }
+
+    fn rebuild_card_column_index(&mut self) {
+        self.cards_by_column.clear();
+        for card in self.cards.values() {
+            self.cards_by_column
+                .entry(card.column_id)
+                .or_default()
+                .insert(card.id);
         }
     }
 }
@@ -183,11 +216,14 @@ impl DataStore for InMemoryStore {
     fn list_cards_by_column(&self, column_id: Uuid) -> KanbanResult<Vec<Card>> {
         let state = self.read_state()?;
         let mut cards: Vec<Card> = state
-            .cards
-            .values()
-            .filter(|c| c.column_id == column_id)
-            .cloned()
-            .collect();
+            .cards_by_column
+            .get(&column_id)
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(|id| state.cards.get(id).cloned())
+                    .collect()
+            })
+            .unwrap_or_default();
         cards.sort_by_key(|c| c.position);
         Ok(cards)
     }
@@ -206,12 +242,11 @@ impl DataStore for InMemoryStore {
 
     fn count_cards_in_column(&self, column_id: Uuid) -> KanbanResult<usize> {
         let state = self.read_state()?;
-        let count = state
-            .cards
-            .values()
-            .filter(|c| c.column_id == column_id)
-            .count();
-        Ok(count)
+        Ok(state
+            .cards_by_column
+            .get(&column_id)
+            .map(|s| s.len())
+            .unwrap_or(0))
     }
 
     fn count_cards_in_column_excluding(
@@ -221,22 +256,31 @@ impl DataStore for InMemoryStore {
     ) -> KanbanResult<usize> {
         let state = self.read_state()?;
         let count = state
-            .cards
-            .values()
-            .filter(|c| c.column_id == column_id && !exclude.contains(&c.id))
-            .count();
+            .cards_by_column
+            .get(&column_id)
+            .map(|ids| ids.iter().filter(|id| !exclude.contains(id)).count())
+            .unwrap_or(0);
         Ok(count)
     }
 
     fn upsert_card(&self, card: Card) -> KanbanResult<()> {
         let mut state = self.write_state()?;
+        let old_column_id = state.cards.get(&card.id).map(|c| c.column_id);
+        if let Some(old) = old_column_id {
+            if old != card.column_id {
+                state.remove_card_from_column_index(card.id, old);
+            }
+        }
+        state.add_card_to_column_index(card.id, card.column_id);
         state.cards.insert(card.id, card);
         Ok(())
     }
 
     fn delete_card(&self, id: Uuid) -> KanbanResult<()> {
         let mut state = self.write_state()?;
-        state.cards.remove(&id);
+        if let Some(card) = state.cards.remove(&id) {
+            state.remove_card_from_column_index(id, card.column_id);
+        }
         Ok(())
     }
 
@@ -245,6 +289,9 @@ impl DataStore for InMemoryStore {
         state
             .cards
             .retain(|_, c| !column_ids.contains(&c.column_id));
+        for col_id in column_ids {
+            state.cards_by_column.remove(col_id);
+        }
         Ok(())
     }
 
@@ -419,6 +466,7 @@ impl DataStore for InMemoryStore {
         state.boards = snapshot.boards.into_iter().map(|b| (b.id, b)).collect();
         state.columns = snapshot.columns.into_iter().map(|c| (c.id, c)).collect();
         state.cards = snapshot.cards.into_iter().map(|c| (c.id, c)).collect();
+        state.rebuild_card_column_index();
         state.archived_cards = snapshot
             .archived_cards
             .into_iter()
@@ -691,6 +739,242 @@ mod tests {
 
         assert!(store.list_cards_by_column(col1.id).unwrap().is_empty());
         assert!(store.get_card(card2_id).unwrap().is_some());
+    }
+
+    // --- cards_by_column index maintenance ---
+
+    #[test]
+    fn test_column_index_upsert_new_card_indexes_under_target_column() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col = make_column(board.id, "C", 0);
+        let card = make_card(&mut board, col.id, "Card", 0);
+        store.upsert_card(card).unwrap();
+        assert_eq!(store.count_cards_in_column(col.id).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_column_index_upsert_with_same_column_keeps_single_entry() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col = make_column(board.id, "C", 0);
+        let card = make_card(&mut board, col.id, "Card", 0);
+        let mut card2 = card.clone();
+        card2.title = "Renamed".to_string();
+        store.upsert_card(card).unwrap();
+        store.upsert_card(card2).unwrap();
+        assert_eq!(
+            store.count_cards_in_column(col.id).unwrap(),
+            1,
+            "re-upserting the same card must not double-count"
+        );
+    }
+
+    #[test]
+    fn test_column_index_upsert_with_column_change_moves_index_entry() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col_a = make_column(board.id, "A", 0);
+        let col_b = make_column(board.id, "B", 1);
+        let card = make_card(&mut board, col_a.id, "Card", 0);
+        let card_id = card.id;
+        store.upsert_card(card.clone()).unwrap();
+        assert_eq!(store.count_cards_in_column(col_a.id).unwrap(), 1);
+        assert_eq!(store.count_cards_in_column(col_b.id).unwrap(), 0);
+
+        let mut moved = card;
+        moved.column_id = col_b.id;
+        store.upsert_card(moved).unwrap();
+
+        assert_eq!(
+            store.count_cards_in_column(col_a.id).unwrap(),
+            0,
+            "card must be removed from old column index"
+        );
+        assert_eq!(
+            store.count_cards_in_column(col_b.id).unwrap(),
+            1,
+            "card must be added to new column index"
+        );
+        let fetched = store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(fetched.column_id, col_b.id);
+    }
+
+    #[test]
+    fn test_column_index_delete_card_removes_from_index() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col = make_column(board.id, "C", 0);
+        let card = make_card(&mut board, col.id, "Card", 0);
+        let card_id = card.id;
+        store.upsert_card(card).unwrap();
+        assert_eq!(store.count_cards_in_column(col.id).unwrap(), 1);
+
+        store.delete_card(card_id).unwrap();
+        assert_eq!(store.count_cards_in_column(col.id).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_column_index_delete_cards_by_columns_clears_target_columns() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col_a = make_column(board.id, "A", 0);
+        let col_b = make_column(board.id, "B", 1);
+        let card_a1 = make_card(&mut board, col_a.id, "A1", 0);
+        let card_a2 = make_card(&mut board, col_a.id, "A2", 1);
+        let card_b1 = make_card(&mut board, col_b.id, "B1", 0);
+        store.upsert_card(card_a1).unwrap();
+        store.upsert_card(card_a2).unwrap();
+        store.upsert_card(card_b1).unwrap();
+
+        store.delete_cards_by_columns(&[col_a.id]).unwrap();
+
+        assert_eq!(store.count_cards_in_column(col_a.id).unwrap(), 0);
+        assert_eq!(store.count_cards_in_column(col_b.id).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_column_index_apply_snapshot_rebuilds_from_snapshot_cards() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col_a = make_column(board.id, "A", 0);
+        let col_b = make_column(board.id, "B", 1);
+        // Seed with pre-snapshot state so we can verify the rebuild overwrites it.
+        let pre_card = make_card(&mut board, col_a.id, "Pre", 0);
+        store.upsert_card(pre_card).unwrap();
+
+        // Build a snapshot whose cards land in different columns than the pre-state.
+        let board_id = board.id;
+        let post_card_a = make_card(&mut board, col_a.id, "PostA", 0);
+        let post_card_b1 = make_card(&mut board, col_b.id, "PostB1", 0);
+        let post_card_b2 = make_card(&mut board, col_b.id, "PostB2", 1);
+        let snapshot = Snapshot::from_data(
+            vec![Board {
+                id: board_id,
+                ..make_board("B")
+            }],
+            vec![col_a.clone(), col_b.clone()],
+            vec![post_card_a, post_card_b1, post_card_b2],
+            vec![],
+            vec![],
+            DependencyGraph::new(),
+        );
+
+        store.apply_snapshot(snapshot).unwrap();
+
+        assert_eq!(
+            store.count_cards_in_column(col_a.id).unwrap(),
+            1,
+            "snapshot rebuild must reset col_a index to snapshot contents"
+        );
+        assert_eq!(
+            store.count_cards_in_column(col_b.id).unwrap(),
+            2,
+            "snapshot rebuild must populate col_b index from snapshot"
+        );
+    }
+
+    #[test]
+    fn test_count_cards_in_column_excluding_with_multiple_excludes() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col = make_column(board.id, "C", 0);
+        let card1 = make_card(&mut board, col.id, "C1", 0);
+        let card2 = make_card(&mut board, col.id, "C2", 1);
+        let card3 = make_card(&mut board, col.id, "C3", 2);
+        let c1 = card1.id;
+        let c3 = card3.id;
+        store.upsert_card(card1).unwrap();
+        store.upsert_card(card2).unwrap();
+        store.upsert_card(card3).unwrap();
+
+        assert_eq!(
+            store
+                .count_cards_in_column_excluding(col.id, &[c1, c3])
+                .unwrap(),
+            1,
+            "excluding two of three should leave one"
+        );
+        assert_eq!(
+            store
+                .count_cards_in_column_excluding(col.id, &[Uuid::new_v4()])
+                .unwrap(),
+            3,
+            "excluding ids that aren't in the column should be a no-op"
+        );
+    }
+
+    // --- list_cards_by_column via column index ---
+
+    #[test]
+    fn test_list_cards_by_column_returns_only_cards_in_that_column() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col_a = make_column(board.id, "A", 0);
+        let col_b = make_column(board.id, "B", 1);
+        let a1 = make_card(&mut board, col_a.id, "A1", 0);
+        let a2 = make_card(&mut board, col_a.id, "A2", 1);
+        let b1 = make_card(&mut board, col_b.id, "B1", 0);
+        let a1_id = a1.id;
+        let a2_id = a2.id;
+        store.upsert_card(a1).unwrap();
+        store.upsert_card(a2).unwrap();
+        store.upsert_card(b1).unwrap();
+
+        let listed = store.list_cards_by_column(col_a.id).unwrap();
+        let ids: Vec<Uuid> = listed.iter().map(|c| c.id).collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&a1_id));
+        assert!(ids.contains(&a2_id));
+    }
+
+    #[test]
+    fn test_list_cards_by_column_returns_cards_sorted_by_position() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col = make_column(board.id, "C", 0);
+        // Insert out of position order to confirm the sort applies.
+        let c_pos2 = make_card(&mut board, col.id, "P2", 2);
+        let c_pos0 = make_card(&mut board, col.id, "P0", 0);
+        let c_pos1 = make_card(&mut board, col.id, "P1", 1);
+        store.upsert_card(c_pos2).unwrap();
+        store.upsert_card(c_pos0).unwrap();
+        store.upsert_card(c_pos1).unwrap();
+
+        let positions: Vec<i32> = store
+            .list_cards_by_column(col.id)
+            .unwrap()
+            .iter()
+            .map(|c| c.position)
+            .collect();
+        assert_eq!(positions, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_list_cards_by_column_after_column_change_reflects_new_membership() {
+        let store = InMemoryStore::new();
+        let mut board = make_board("B");
+        let col_a = make_column(board.id, "A", 0);
+        let col_b = make_column(board.id, "B", 1);
+        let card = make_card(&mut board, col_a.id, "Card", 0);
+        let card_id = card.id;
+        store.upsert_card(card.clone()).unwrap();
+
+        let mut moved = card;
+        moved.column_id = col_b.id;
+        store.upsert_card(moved).unwrap();
+
+        assert!(store.list_cards_by_column(col_a.id).unwrap().is_empty());
+        let in_b = store.list_cards_by_column(col_b.id).unwrap();
+        assert_eq!(in_b.len(), 1);
+        assert_eq!(in_b[0].id, card_id);
+    }
+
+    #[test]
+    fn test_list_cards_by_column_unknown_column_returns_empty() {
+        let store = InMemoryStore::new();
+        let listed = store.list_cards_by_column(Uuid::new_v4()).unwrap();
+        assert!(listed.is_empty());
     }
 
     #[test]

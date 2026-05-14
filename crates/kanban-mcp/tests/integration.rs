@@ -143,6 +143,91 @@ async fn create_card_then_update_with_all_fields() {
     assert_eq!(updated.description.as_deref(), Some("A description"));
 }
 
+// KAN-394: status ↔ completion column invariant via MCP
+
+#[tokio::test]
+async fn mcp_update_card_status_to_done_moves_to_completion_column() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx.create_board("Board".into(), None).unwrap();
+    let backlog = ctx.create_column(board.id, "Backlog".into(), None).unwrap();
+    let _progress = ctx
+        .create_column(board.id, "In Progress".into(), None)
+        .unwrap();
+    let done = ctx.create_column(board.id, "Done".into(), None).unwrap();
+
+    let card = ctx
+        .create_card(board.id, backlog.id, "Card".into(), Default::default())
+        .unwrap();
+
+    let updated = ctx
+        .update_card(
+            card.id,
+            kanban_domain::CardUpdate {
+                status: Some(kanban_domain::CardStatus::Done),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(updated.status, kanban_domain::CardStatus::Done);
+    assert_eq!(
+        updated.column_id, done.id,
+        "MCP update_card(status=Done) must move card to completion column"
+    );
+    assert!(updated.completed_at.is_some());
+}
+
+#[tokio::test]
+async fn mcp_move_card_to_completion_column_sets_status_done() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx.create_board("Board".into(), None).unwrap();
+    let backlog = ctx.create_column(board.id, "Backlog".into(), None).unwrap();
+    let _progress = ctx
+        .create_column(board.id, "In Progress".into(), None)
+        .unwrap();
+    let done = ctx.create_column(board.id, "Done".into(), None).unwrap();
+
+    let card = ctx
+        .create_card(board.id, backlog.id, "Card".into(), Default::default())
+        .unwrap();
+
+    let moved = ctx.move_card(card.id, done.id, None).unwrap();
+    assert_eq!(moved.column_id, done.id);
+    assert_eq!(
+        moved.status,
+        kanban_domain::CardStatus::Done,
+        "MCP move_card to completion column must set status=Done"
+    );
+    assert!(moved.completed_at.is_some());
+}
+
+#[tokio::test]
+async fn mcp_move_card_away_from_completion_column_clears_done_status() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx.create_board("Board".into(), None).unwrap();
+    let backlog = ctx.create_column(board.id, "Backlog".into(), None).unwrap();
+    let _progress = ctx
+        .create_column(board.id, "In Progress".into(), None)
+        .unwrap();
+    let done = ctx.create_column(board.id, "Done".into(), None).unwrap();
+
+    let card = ctx
+        .create_card(board.id, backlog.id, "Card".into(), Default::default())
+        .unwrap();
+
+    // Send card to Done via MCP move
+    let _ = ctx.move_card(card.id, done.id, None).unwrap();
+
+    // Now move it back to Backlog — status must clear
+    let moved_back = ctx.move_card(card.id, backlog.id, None).unwrap();
+    assert_eq!(moved_back.column_id, backlog.id);
+    assert_eq!(
+        moved_back.status,
+        kanban_domain::CardStatus::Todo,
+        "MCP move_card away from completion column must clear Done status"
+    );
+    assert!(moved_back.completed_at.is_none());
+}
+
 // Sprint round-trips
 
 #[tokio::test]

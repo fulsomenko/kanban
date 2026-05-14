@@ -78,6 +78,16 @@ pub trait PersistenceStore: Send + Sync {
             "load_sync not supported by this backend".into(),
         ))
     }
+
+    /// Drain any open connections / file handles before the backing file is
+    /// unlinked. Required on Windows: the OS refuses to delete files that
+    /// still have live handles, and async resources (e.g. an `sqlx` pool)
+    /// outlive synchronous `Drop` because the runtime needs time to close
+    /// each connection.
+    ///
+    /// The default is a no-op; backends with long-lived handles (e.g.
+    /// `SqliteStore`) override this.
+    async fn close(&self) {}
 }
 
 /// Trait for detecting changes to the storage file

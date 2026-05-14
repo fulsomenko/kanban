@@ -1,9 +1,6 @@
-use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent};
+use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
 use std::time::Duration;
 use tokio::sync::mpsc;
-
-#[cfg(target_os = "windows")]
-use crossterm::event::KeyEventKind;
 
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -37,7 +34,7 @@ impl EventHandler {
                         let mut had_key = false;
                         while event::poll(Duration::from_millis(0)).unwrap_or(false) {
                             if let Ok(CrosstermEvent::Key(key)) = event::read() {
-                                #[cfg(target_os = "windows")]
+                                tracing::trace!(code = ?key.code, kind = ?key.kind, modifiers = ?key.modifiers, "raw key event");
                                 if key.kind != KeyEventKind::Press {
                                     continue;
                                 }

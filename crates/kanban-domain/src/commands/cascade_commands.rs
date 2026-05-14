@@ -1,0 +1,317 @@
+//! Cascade primitives.
+//!
+//! These commands are deliberately atomic and bypass the per-entity validation
+//! that the standalone delete commands (e.g. [`DeleteColumn`](super::DeleteColumn))
+//! enforce. They are intended to be composed by the cascade helpers in
+//! [`super::cascade`] and executed as a single `KanbanContext::execute(...)`
+//! batch so the whole cascade is one undo unit with snapshot/rollback.
+//!
+//! **Do not construct these commands directly outside the cascade module.** The
+//! canonical entry points are the helpers in [`super::cascade`] which encode the
+//! ordering invariants (graph edges → cards → archived → columns → sprints →
+//! board) that make the bypassed validations safe.
+
+use super::CommandContext;
+use crate::dependencies::CardGraphExt;
+use crate::KanbanResult;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum CascadeCommand {
+    DeleteCardEdges(DeleteCardEdges),
+    DeleteCardsByColumns(DeleteCardsByColumns),
+    DeleteArchivedCardsByColumns(DeleteArchivedCardsByColumns),
+    DeleteColumnsByBoard(DeleteColumnsByBoard),
+    DeleteSprintsByBoard(DeleteSprintsByBoard),
+}
+
+impl CascadeCommand {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        match self {
+            CascadeCommand::DeleteCardEdges(c) => c.execute(context),
+            CascadeCommand::DeleteCardsByColumns(c) => c.execute(context),
+            CascadeCommand::DeleteArchivedCardsByColumns(c) => c.execute(context),
+            CascadeCommand::DeleteColumnsByBoard(c) => c.execute(context),
+            CascadeCommand::DeleteSprintsByBoard(c) => c.execute(context),
+        }
+    }
+
+    pub fn description(&self) -> String {
+        match self {
+            CascadeCommand::DeleteCardEdges(c) => c.description(),
+            CascadeCommand::DeleteCardsByColumns(c) => c.description(),
+            CascadeCommand::DeleteArchivedCardsByColumns(c) => c.description(),
+            CascadeCommand::DeleteColumnsByBoard(c) => c.description(),
+            CascadeCommand::DeleteSprintsByBoard(c) => c.description(),
+        }
+    }
+}
+
+/// Remove all dependency-graph edges for a batch of card IDs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteCardEdges {
+    pub ids: Vec<Uuid>,
+}
+
+impl DeleteCardEdges {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let ids = self.ids.clone();
+        context.store.modify_graph(Box::new(move |graph| {
+            for id in &ids {
+                graph.cards.remove_card_edges(*id);
+            }
+            Ok(())
+        }))
+    }
+
+    pub fn description(&self) -> String {
+        format!("Remove {} card(s) from dependency graph", self.ids.len())
+    }
+}
+
+/// Delete all active cards belonging to the given columns.
+///
+/// Bypasses per-card validation. The dependency graph must be cleaned up
+/// separately (see [`DeleteCardEdges`]).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteCardsByColumns {
+    pub column_ids: Vec<Uuid>,
+}
+
+impl DeleteCardsByColumns {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.store.delete_cards_by_columns(&self.column_ids)
+    }
+
+    pub fn description(&self) -> String {
+        format!("Delete all cards in {} column(s)", self.column_ids.len())
+    }
+}
+
+/// Delete all archived cards belonging to the given columns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteArchivedCardsByColumns {
+    pub column_ids: Vec<Uuid>,
+}
+
+impl DeleteArchivedCardsByColumns {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let archived = context
+            .store
+            .list_archived_cards_by_columns(&self.column_ids)?;
+        for ac in archived {
+            context.store.delete_archived_card(ac.card.id)?;
+        }
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Delete archived cards in {} column(s)",
+            self.column_ids.len()
+        )
+    }
+}
+
+/// Delete all columns belonging to the given board.
+///
+/// Bypasses the emptiness checks in [`super::DeleteColumn`]. The caller is
+/// responsible for removing cards beforehand.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteColumnsByBoard {
+    pub board_id: Uuid,
+}
+
+impl DeleteColumnsByBoard {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.store.delete_columns_by_board(self.board_id)
+    }
+
+    pub fn description(&self) -> String {
+        format!("Delete all columns in board {}", self.board_id)
+    }
+}
+
+/// Delete all sprints belonging to the given board.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteSprintsByBoard {
+    pub board_id: Uuid,
+}
+
+impl DeleteSprintsByBoard {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        context.store.delete_sprints_by_board(self.board_id)
+    }
+
+    pub fn description(&self) -> String {
+        format!("Delete all sprints in board {}", self.board_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_helpers::TestContext;
+    use super::*;
+    use crate::DataStore;
+
+    #[test]
+    fn test_delete_card_edges_removes_all_edges_for_given_ids() {
+        let tc = TestContext::new();
+        let card_a = Uuid::new_v4();
+        let card_b = Uuid::new_v4();
+        let card_c = Uuid::new_v4();
+
+        {
+            let mut graph = tc.store.get_graph().unwrap();
+            graph.cards.add_blocks(card_a, card_b).unwrap();
+            graph.cards.add_blocks(card_b, card_c).unwrap();
+            tc.store.set_graph(graph).unwrap();
+        }
+        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 2);
+
+        let context = tc.as_command_context();
+        let cmd = DeleteCardEdges {
+            ids: vec![card_a, card_b],
+        };
+        cmd.execute(&context).unwrap();
+
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(
+            graph.cards.edges().len(),
+            0,
+            "edges incident to card_a or card_b should be removed"
+        );
+    }
+
+    #[test]
+    fn test_delete_card_edges_with_empty_input_is_noop() {
+        let tc = TestContext::new();
+        let card_a = Uuid::new_v4();
+        let card_b = Uuid::new_v4();
+        {
+            let mut graph = tc.store.get_graph().unwrap();
+            graph.cards.add_blocks(card_a, card_b).unwrap();
+            tc.store.set_graph(graph).unwrap();
+        }
+
+        let context = tc.as_command_context();
+        let cmd = DeleteCardEdges { ids: vec![] };
+        cmd.execute(&context).unwrap();
+
+        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_delete_cards_by_columns_removes_only_cards_in_given_columns() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".into(), Some("TST".into()));
+        let col1 = crate::Column::new(board.id, "C1".into(), 0);
+        let col2 = crate::Column::new(board.id, "C2".into(), 1);
+        let col3 = crate::Column::new(board.id, "C3".into(), 2);
+        let card1 = crate::Card::new(&mut board, col1.id, "1".into(), 0);
+        let card2 = crate::Card::new(&mut board, col2.id, "2".into(), 0);
+        let card3 = crate::Card::new(&mut board, col3.id, "3".into(), 0);
+        let card3_id = card3.id;
+        let col3_id = col3.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col1.clone()).unwrap();
+        tc.store.upsert_column(col2.clone()).unwrap();
+        tc.store.upsert_column(col3).unwrap();
+        tc.store.upsert_card(card1).unwrap();
+        tc.store.upsert_card(card2).unwrap();
+        tc.store.upsert_card(card3).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteCardsByColumns {
+            column_ids: vec![col1.id, col2.id],
+        };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_all_cards().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, card3_id);
+        assert_eq!(remaining[0].column_id, col3_id);
+    }
+
+    #[test]
+    fn test_delete_archived_cards_by_columns_removes_only_archived_in_given_columns() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".into(), Some("TST".into()));
+        let col1 = crate::Column::new(board.id, "C1".into(), 0);
+        let col2 = crate::Column::new(board.id, "C2".into(), 1);
+        let col1_id = col1.id;
+        let col2_id = col2.id;
+        let card1 = crate::Card::new(&mut board, col1_id, "1".into(), 0);
+        let card2 = crate::Card::new(&mut board, col2_id, "2".into(), 0);
+        let arch1 = crate::ArchivedCard::new(card1, col1_id, 0);
+        let arch2 = crate::ArchivedCard::new(card2, col2_id, 0);
+        let arch2_card_id = arch2.card.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col1).unwrap();
+        tc.store.upsert_column(col2).unwrap();
+        tc.store.insert_archived_card(arch1).unwrap();
+        tc.store.insert_archived_card(arch2).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteArchivedCardsByColumns {
+            column_ids: vec![col1_id],
+        };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_archived_cards().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].card.id, arch2_card_id);
+    }
+
+    #[test]
+    fn test_delete_columns_by_board_removes_all_columns_of_board() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".into(), None);
+        let board_id = board.id;
+        let other_board = crate::Board::new("Other".into(), None);
+        let other_board_id = other_board.id;
+        let col1 = crate::Column::new(board_id, "C1".into(), 0);
+        let col2 = crate::Column::new(board_id, "C2".into(), 1);
+        let other_col = crate::Column::new(other_board_id, "OC".into(), 0);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_board(other_board).unwrap();
+        tc.store.upsert_column(col1).unwrap();
+        tc.store.upsert_column(col2).unwrap();
+        tc.store.upsert_column(other_col).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteColumnsByBoard { board_id };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_all_columns().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].board_id, other_board_id);
+    }
+
+    #[test]
+    fn test_delete_sprints_by_board_removes_all_sprints_of_board() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), None);
+        let board_id = board.id;
+        let other_board = crate::Board::new("Other".to_string(), None);
+        let other_board_id = other_board.id;
+        let sprint1 = crate::Sprint::new(board_id, 1, None, None);
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
+        let other_sprint = crate::Sprint::new(other_board_id, 1, None, None);
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_board(other_board).unwrap();
+        tc.store.upsert_sprint(sprint1).unwrap();
+        tc.store.upsert_sprint(sprint2).unwrap();
+        tc.store.upsert_sprint(other_sprint).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = DeleteSprintsByBoard { board_id };
+        cmd.execute(&context).unwrap();
+
+        let remaining = tc.store.list_all_sprints().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].board_id, other_board_id);
+    }
+}

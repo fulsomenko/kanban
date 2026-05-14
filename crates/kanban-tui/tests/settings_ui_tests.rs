@@ -291,17 +291,19 @@ fn test_render_settings_storage_location_shows_absolute_path() {
         .expect("'Storage Location' label not found in rendered output");
 
     assert!(
-        value.starts_with('/'),
-        "Storage Location must show an absolute path (starting with '/'), got: {:?}",
+        std::path::Path::new(value).is_absolute(),
+        "Storage Location must show an absolute path, got: {:?}",
         &value[..value.find(' ').unwrap_or(value.len()).min(60)]
     );
 }
 
 #[test]
 fn test_render_settings_active_storage_location_shows_absolute_path_with_cli_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let cli_path = dir.path().join("cli_supplied.json");
     let mut app = App::test_default();
     app.app_config = kanban_core::AppConfig::default();
-    app.app_config.storage_location = Some("/tmp/cli_supplied.json".into());
+    app.app_config.storage_location = Some(cli_path.to_string_lossy().into_owned());
     app.app_config.storage_backend = Some("json".into());
     app.cli_file_override = true;
     app.has_data_file = true;
@@ -312,7 +314,7 @@ fn test_render_settings_active_storage_location_shows_absolute_path_with_cli_ove
         .expect("'Active Storage Location' label not found in rendered output");
 
     assert!(
-        value.starts_with('/'),
+        std::path::Path::new(value).is_absolute(),
         "Active Storage Location must show an absolute path, got: {:?}",
         &value[..value.find(' ').unwrap_or(value.len()).min(60)]
     );
@@ -353,9 +355,15 @@ fn test_render_settings_cli_override_without_config_storage_hides_config_storage
 
 #[test]
 fn test_apply_config_edit_with_non_default_content_writes_config() {
+    // configuration_location is pinned to a tempdir so the test passes in
+    // build sandboxes (nixpkgs, etc.) where $HOME is non-writable and
+    // config::save's fallback to dirs::config_dir() would hit EACCES.
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
     let mut app = App::test_default();
     app.app_config = kanban_core::AppConfig {
         default_card_prefix: Some("feat".into()),
+        configuration_location: Some(config_path.to_string_lossy().into_owned()),
         ..Default::default()
     };
     let format = EditFormat::Json;

@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 /// - **Relative paths** are resolved against the current directory. Any path that
 ///   would escape the current directory via `..` components is rejected.
 ///
+/// When the target exists, the returned path is in canonical form: no `\\?\`
+/// verbatim UNC prefix on Windows, and symlinks in the cwd (e.g. macOS
+/// `/var` → `/private/var`) are resolved.
+///
 /// # Security contract
 ///
 /// This function prevents callers from accidentally (or maliciously) opening files
@@ -20,13 +24,13 @@ pub fn validate_path(path: &Path) -> KanbanResult<PathBuf> {
 
 fn validate_path_with_cwd(path: &Path, cwd: &Path) -> KanbanResult<PathBuf> {
     if path.is_absolute() {
-        Ok(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
+        Ok(dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
     } else {
-        let resolved = cwd.join(path);
-        let canonical = resolved
-            .canonicalize()
-            .unwrap_or_else(|_| normalize_path(&resolved));
-        if !canonical.starts_with(cwd) {
+        let canonical_cwd = dunce::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+        let resolved = canonical_cwd.join(path);
+        let canonical =
+            dunce::canonicalize(&resolved).unwrap_or_else(|_| normalize_path(&resolved));
+        if !canonical.starts_with(&canonical_cwd) {
             return Err(KanbanError::validation(format!(
                 "Path traversal not allowed: '{}' resolves outside current directory",
                 path.display()
@@ -62,9 +66,9 @@ mod tests {
     #[test]
     fn test_validate_path_relative_within_cwd_returns_resolved() -> KanbanResult<()> {
         let dir = TempDir::new().unwrap();
-        let cwd = dir.path();
-        let result = validate_path_with_cwd(Path::new("some/nested/file.json"), cwd)?;
-        assert!(result.starts_with(cwd));
+        let cwd = dunce::canonicalize(dir.path()).unwrap();
+        let result = validate_path_with_cwd(Path::new("some/nested/file.json"), &cwd)?;
+        assert!(result.starts_with(&cwd));
         assert!(result.ends_with("some/nested/file.json"));
         Ok(())
     }
@@ -87,5 +91,48 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("Path traversal not allowed"), "Got: {err}");
+    }
+
+    #[test]
+    fn test_validate_path_relative_within_cwd_existing_file_returns_resolved() -> KanbanResult<()> {
+        let dir = TempDir::new().unwrap();
+        let cwd = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::write(cwd.join("kanban.json"), b"{}").unwrap();
+        let result = validate_path_with_cwd(Path::new("kanban.json"), &cwd)?;
+        assert!(
+            result.starts_with(&cwd),
+            "result {} should start with cwd {}",
+            result.display(),
+            cwd.display()
+        );
+        assert!(result.ends_with("kanban.json"));
+        assert!(
+            !result.to_string_lossy().starts_with(r"\\?\"),
+            "result should not have UNC prefix, got: {}",
+            result.display()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_path_absolute_existing_file_returns_non_unc() -> KanbanResult<()> {
+        let dir = TempDir::new().unwrap();
+        let cwd = dunce::canonicalize(dir.path()).unwrap();
+        let abs = cwd.join("kanban.json");
+        std::fs::write(&abs, b"{}").unwrap();
+        let result = validate_path_with_cwd(&abs, &cwd)?;
+        assert!(
+            result.starts_with(&cwd),
+            "result {} should start with cwd {}",
+            result.display(),
+            cwd.display()
+        );
+        assert!(
+            !result.to_string_lossy().starts_with(r"\\?\"),
+            "result should not have UNC prefix, got: {}",
+            result.display()
+        );
+        assert!(result.ends_with("kanban.json"));
+        Ok(())
     }
 }

@@ -1,3 +1,207 @@
+## [0.5.1] - 2026-05-14 ([#270](https://github.com/fulsomenko/kanban/pull/270))
+
+### KAN-449 Make Apply Config Edit Test Sandbox Safe (2026-05-14)
+
+Make settings_ui_tests `apply_config_edit` non-default-content test sandbox-safe (KAN-449)
+- `test_apply_config_edit_with_non_default_content_writes_config` now pins `configuration_location` to a `tempfile::tempdir()` path before building the DTO. Without this, `AppConfigDto::from_config` resolves `configuration_location` via `effective_configuration_location` → `dirs::config_dir()` → `$HOME/.config/kanban/config.toml`, and `config::save`'s `create_dir_all` fails with `EACCES` in build sandboxes (nixpkgs, etc.) where `$HOME` is non-writable.
+- No production code change. Same failure class as the 2026-05-07 nixpkgs-update log that KAN-396 closed for the other `apply_config_edit` tests; this is the one new instance that landed in #267 and slipped past that fix.
+
+
+## [0.5.0] - 2026-05-14 ([#251](https://github.com/fulsomenko/kanban/pull/251))
+
+### KAN-330 Startup Choose Storage File Dialog (2026-05-14)
+
+Show a "choose storage file" dialog on TUI startup when no file is configured (KAN-330)
+- Opening `kanban` with no file argument, no `KANBAN_FILE` env var, and no `storage_location` config now shows a startup dialog explaining both modes instead of silently opening an ephemeral in-memory board
+- The dialog has a JSON/SQLite radio (default JSON); pressing `Tab` toggles the selection and swaps the filename's extension to match (`.json` ↔ `.sqlite`)
+- The filename input is pre-filled with `boards.json` and shows a "Will be saved at: <abs path>" preview that updates as you type — pressing Enter creates the file at that path
+- Pressing Escape dismisses the dialog and continues in memory, with the existing `x` export available to save work to a file at any time
+- Choosing a file fully adopts that backend: the in-memory state is transferred to the new on-disk backend, the file is created, undo state is reinitialised, and subsequent changes (creating boards, etc.) are persisted normally
+- If the chosen path cannot be opened (e.g. parent directory missing) the dialog stays open with the input preserved and an error banner explains what went wrong, so the user can correct the path and retry
+- Layout reads top-to-bottom as description → filename input + path preview → format selector → action keys, with `x`, `Tab`, `Enter`, and `Esc` rendered in bold so the keyboard hints stand out from the surrounding prose
+
+### KAN-332 Require Explicit File Path No Implicit Kanban Json Default (2026-05-14)
+
+Require explicit file path — no implicit kanban.json default (KAN-332)
+- Running `kanban <subcommand>` without a file argument, `KANBAN_FILE` env var, or `storage_location` config setting now fails with a clear error that lists all three ways to provide a file, instead of silently falling back to `kanban.json` in the current directory
+- `kanban` with no args and no configured file now opens the TUI backed by an in-memory store instead of silently creating `kanban.json` — the TUI is fully usable without a file; data is not persisted until a storage location is configured from within the settings
+- `kanban` with `KANBAN_FILE` or a `storage_location` config setting continues to open the TUI with that file as before
+- `kanban completions` and `kanban migrate` are not affected — they do not operate on a data file
+- README Quick Start updated to remove the implication that `kanban.json` is created automatically on first run
+
+### KAN-394 Mcp Sync Card Status With Completion Column (2026-05-14)
+
+Fix: sync card status ↔ completion column across CLI, MCP, and TUI (KAN-394)
+Card status and column position now stay in lockstep with the board's completion column, regardless of which surface initiates the change:
+- Marking a card as done via `kanban card update --status done` (CLI), the MCP `update_card` tool, or the TUI's `c` key automatically moves it to the board's resolved completion column and stamps `completed_at`.
+- Moving a card *into* the completion column via CLI `kanban card move`, MCP `move_card`, the TUI's `h`/`l` keys, or any of the multi-select batch equivalents now sets `status=done` and stamps `completed_at`. Moving back out clears both.
+- Multi-select batch operations (`c`, `h`/`l` on multiple cards, sprint-detail batch toggle) execute as a **single undo unit** — one `undo()` reverses every card and every chained command together — and produce **distinct positions** in the destination column instead of all colliding on the same one.
+- Atomic updates that already specify both `column_id` and `status` explicitly are respected as-is; auto-sync only fires when the caller leaves one side unspecified.
+Internally, the sync is orchestrated at the service layer (`KanbanContext::update_card`, `move_card`, `update_cards`, `move_cards`) by composing chained commands on top of the existing `execute(Vec<Command>)` atomic-batch infrastructure. Domain commands (`UpdateCard`, `MoveCard`, `MoveCards`) remain pure single-responsibility primitives. A new trait method `KanbanOperations::update_cards(Vec<(Uuid, CardUpdate)>)` provides the batched entry point used by the TUI multi-select handlers.
+
+### KAN-397 Ci Wire Aur Publish Into Release Workflow (2026-05-14)
+
+Wire AUR publish into release workflow
+- Move AUR publish steps inline into release.yml so they run automatically on every release
+- Remove the dead `release: [published]` trigger from aur-publish.yml (GitHub Actions does not fire it when GITHUB_TOKEN creates the release)
+- Keep aur-publish.yml as a workflow_dispatch fallback for manual re-runs
+
+### KAN-403 Regression Card Selector Newly Created Card (2026-05-14)
+
+After creating a new card in the TUI, the selector now jumps to the new card immediately — so the very next action (edit, move, mark complete, open details) lands on the card you just made. Previously, when another card was already selected, the selector stayed on that prior card and the next keystroke acted on it instead.
+This restores the demo-recording flow (Beat 2 creates a card, Beat 3 edits it) and matches the pre-regression behaviour.
+
+### KAN-405 Json Backend Should Not Persist Command Log Between Sessions (2026-05-14)
+
+Fix undo crash and strip command log from persistence (KAN-404, KAN-405)
+- Undo is now in-session only for all backends — the command log is never written to `kanban.json` or SQLite
+- Opening a file with a stale `commands` section no longer causes a crash or corrupts board state when pressing undo
+- Existing data files with embedded command logs are cleaned up on the next open — JSON files are rewritten in place and SQLite files have the legacy `command_log`/`undo_state` tables dropped. Both backends announce the cleanup via the application log
+- After upgrading, downgrading to a pre-405 build is not supported on SQLite databases — the legacy `command_log` and `undo_state` tables are dropped on first open
+- Card sort is now deterministic when multiple cards tie on the primary sort key — tied cards order by ascending `card_number` regardless of how the backend yielded them, so cards no longer visibly jump on every render
+- Archiving a card and triggering the resulting column compaction now form a single undo step instead of two, so one undo restores the previous state cleanly
+- Archive selection now stays anchored to the focused card's column when archiving across multiple columns, instead of jumping to an unrelated card
+
+### KAN-406 Sprint Assignment Dialog Group Sprints By Status With Completed Sprints In Separate Section (2026-05-14)
+
+Group sprints by status in the sprint assignment dialog (KAN-406)
+- Sprint assignment dialog (single-card and multi-card) now splits sprints into two headed sections: `Active / Planned` and `Completed / Ended`.
+- Completed sprints render in green, Ended sprints (Active sprints whose `end_date` has passed) in red, so retrospective assignment targets are visually distinct.
+- Cards can now be assigned to Completed and Ended sprints — useful for logging work against past sprints in retrospect.
+- `j`/`k` navigation skips section headers; the dialog scrolls to keep the selected entry on-screen when the list overflows the viewport.
+- When the list is scrolled past a section's header, the relevant header label stays pinned at the top row so the active section is always visible.
+- `Cancelled` sprints remain hidden.
+
+### KAN-418 Fix Kanban V Output (2026-05-14)
+
+Fix `kanban -V` / `--version` / `--help` output (KAN-418)
+- `kanban -V` and `kanban --version` now write to **stdout** with exit code **0** instead of stderr with exit 1, and no longer carry the spurious `Error:` prefix
+- The trailing blank line after the version output is gone — output ends in a single newline
+- `kanban --help` is fixed by the same path: stdout, exit 0, no `Error:` prefix
+- Real argument errors (e.g. unknown flags) are unaffected — they continue to surface on stderr with a non-zero exit code
+- The `commit:` line in `-V` output is still omitted when no commit hash is available at build time (e.g. `cargo install kanban` from crates.io)
+
+### KAN-419 Show Sprint History On Cards With 1 Plus Sprint Assigned (2026-05-14)
+
+Show sprint history on cards with 1+ sprint assigned (KAN-419)
+- Sprint history box now appears in the card details view as soon as a card has 1 or more sprints assigned, instead of requiring 2+ sprints
+- This makes it easier to see what sprints a card is on without needing to view multiple sprint transitions
+
+### KAN-420 Bump Minimum Rust Version (2026-05-14)
+
+Bump minimum Rust version to 1.74 (KAN-420)
+- `CONTRIBUTING.md` prerequisites now correctly state Rust 1.74+ instead of 1.70+
+- `rust-version = "1.74"` added to the workspace `Cargo.toml` so `cargo` enforces the minimum at build time
+- The actual floor is set by `ratatui 0.29` and `clap 4.5`, both of which declare a 1.74 MSRV
+
+### KAN-421 Add Build Time Debug Info For Target Os And Cfg Flags (2026-05-14)
+
+Add raw key event trace logging to EventHandler (KAN-421)
+- Setting `RUST_LOG=trace` logs every raw key event (code, kind, modifiers) before the Windows key filter runs — on Windows this captures both Press and Release events, which is the exact signal needed to diagnose key-doubling issues
+
+### KAN-426 Replace Cfg Gated Keyeventkind Filter (2026-05-14)
+
+Make KeyEventKind::Press filter unconditional across all platforms (KAN-426)
+- The Windows-only `#[cfg(target_os = "windows")]` gate on the key event filter is removed — the filter now runs on all platforms
+- On Linux/macOS crossterm only emits `Press` events in standard terminal mode, so the filter is a no-op there; behaviour is unchanged on all platforms
+- Removes platform-specific code divergence and makes the filter testable on any OS
+
+### KAN-427 Lift Delete Board To Service (2026-05-14)
+
+Lift `DeleteBoard` cascade orchestration from the domain layer to the service layer (KAN-427)
+- `BoardCommand::Delete(DeleteBoard)` is now atomic — it only deletes the board record.
+- The cascade (dependency-graph edges → active cards → archived cards → columns → sprints → board) is composed in `KanbanContext::delete_board` and executed as a single `execute(...)` batch, which gives one undo unit and snapshot-based rollback on partial failure.
+- New `Command::Cascade(CascadeCommand)` variant groups the validation-bypassing cascade primitives: `DeleteCardEdges`, `DeleteCardsByColumns`, `DeleteArchivedCardsByColumns`, `DeleteColumnsByBoard`, `DeleteSprintsByBoard`.
+- New `commands::cascade::delete_board(store, id)` is the canonical batch builder.
+- New `DataStore::list_cards_by_columns` (SQLite-optimised) eliminates a per-column N+1 read in the cascade.
+- User-visible behaviour is unchanged.
+
+### KAN-428 Lift Move Cards To Service (2026-05-14)
+
+Lift MoveCards batch position calculation from domain to service (KAN-428)
+- Add pure `kanban_domain::card_lifecycle::compute_move_positions` that returns target positions for a batch move given the current column contents and the moving card IDs.
+- Add pure helper `kanban_domain::card_lifecycle::dedup_preserving_order<T: Hash + Eq + Copy>(items: &[T]) -> Vec<T>`, used internally by `compute_move_positions` and by the service-layer move orchestration.
+- Remove the `MoveCards` (`CardCommand::MoveMultiple`) domain command — its position-computation orchestration is now performed in the service layer.
+- `KanbanContext::move_cards_detailed` and `KanbanContext::move_cards` build a batch of atomic `MoveCard` commands plus the existing chained status updates, executed in a single `execute` call (one undo unit, snapshot rollback on failure).
+- `build_move_cards_batch` performs a single batch-level WIP pre-check using the column listing it already fetches for position computation, so a `WipLimitExceeded` error from a batch move is reported once at the batch level instead of per-card. The pre-check compares against the deduplicated mover count, so callers passing duplicates that would fit under the limit are not falsely rejected.
+- `InMemoryStore` is now indexed by column: `count_cards_in_column`, `count_cards_in_column_excluding`, and `list_cards_by_column` run in O(column_size) instead of O(total_cards). The index is maintained transactionally across `upsert_card`, `delete_card`, `delete_cards_by_columns`, and `apply_snapshot`. SQLite already does the equivalent indexed lookup via `WHERE column_id = ?`, so behaviour is consistent across backends.
+- `KanbanContext::move_cards` and `move_cards_detailed` validate input ids via per-id `backend.get_card(id)` instead of an upfront `list_all_cards()` HashSet — strictly cheaper for typical small batches. Validation is consolidated inside `build_move_cards_batch` so an unknown id surfaces as `not_found` before the WIP pre-check can miscount it. `move_cards_detailed` also dedupes its input upfront so both `succeeded` and `failed` report each id at most once.
+- **Behaviour change**: `KanbanContext::move_cards` (and the MCP `move_cards` tool) now error and roll back the entire batch when any input card ID is unknown, instead of silently dropping invalid IDs. Callers that need partial-success semantics should use `move_cards_detailed`, which continues to report per-ID failures without rolling back the rest of the batch.
+
+### KAN-430 Lift Migrate Sprint Logs To Service (2026-05-14)
+
+Lift MigrateSprintLogs from domain to service layer (KAN-430)
+- The `CardCommand::MigrateSprintLogs` domain command and its associated struct are removed
+- A new `KanbanContext::migrate_sprint_logs()` method takes its place — wraps the pure `card_lifecycle::migrate_sprint_logs()` function with the read → transform → persist-changed loop
+- TUI invokes the service method directly via a new `TuiContext::migrate_sprint_logs()` delegation
+- Behaviour change: this is now a pure data migration that does not record on the undo stack — sprint-log backfills should not be undoable
+
+### KAN-431 Extract Update Sprint Validators (2026-05-14)
+
+Refactor UpdateSprint to extract validators into pure functions (KAN-431)
+- Extract `validate_card_prefix_not_locked`, `validate_card_prefix_unique`, and `allocate_sprint_name` from the inline body of `UpdateSprint::execute`
+- Slim `execute` into a thin coordinator that calls the extracted helpers in sequence
+- Behavior is unchanged — existing integration tests pass without modification; new focused unit tests added for each extracted function
+
+### KAN-434 Collapse Singular Service Methods (2026-05-14)
+
+Service layer cleanup: singular card mutations now share orchestration with their batch counterparts (KAN-434)
+- `update_card` is a one-line shorthand over `update_cards(vec![(id, updates)])`. The status ↔ completion-column auto-sync now fires symmetrically on `update_card` as well — a column-only update into the completion column auto-sets `status=Done`, and a column-only update out of it clears `Done`. Previously only status-driven updates triggered the column move, so column-only callers silently missed the sync. No production caller exercised that path before this release, so existing behaviour is preserved and the gap is closed.
+- `assign_card_to_sprint` is a one-line shorthand over `assign_cards_to_sprint(vec![card_id], sprint_id)`. Behaviour is unchanged — both implementations dispatched the same underlying domain command.
+- Both singulars retain their original public signature (`KanbanResult<Card>`) and trailing `get_card` for the return value. CLI, MCP, and TUI delegations are untouched.
+The design principle: **singular builds on plural, not the other way around.** The atomic-transaction infrastructure (`KanbanContext::execute(Vec<Command>)`) is the fundamental unit at the service layer; the per-card singular is a convenience wrapper for the batch-of-one case. This keeps orchestration in one place — when future tweaks land (e.g. the per-board auto-sync opt-out tracked as KAN-432), they only need to touch the plural.
+
+### KAN-435 Sprint Detail Card Lists (2026-05-14)
+
+The sprint-detail card lists now behave more like the main-board lists:
+- **Scrolling works.** Pressing `j` / `k` past the visible viewport in either the Uncompleted or Completed panel scrolls the list to keep the selected card on-screen. Previously the selection moved off-screen and got truncated. Both panels scroll independently of each other.
+- **Multi-select works on the Completed panel.** `v` and `V` now toggle multi-selection on completed cards in addition to uncompleted ones. Batch actions you initiate from sprint detail can target either panel.
+- **Movement actions are enabled on both panels.** Action configs are aligned — every card action available on the main-board list is also available here.
+- **Sort order applies on populate.** Opening a sprint detail with a non-default board sort (e.g. priority, due date) now shows both panels already ordered the way the main board orders. Previously the lists used raw iteration order until you opened the sort dialog manually.
+Known gaps remaining (tracked as follow-up cards):
+- Search filter (`/` query) does not yet propagate to sprint-detail panels on every frame — only on initial populate.
+- Toggling a card from Completed back to Uncompleted in sprint detail still routes to the second-to-last board column (KAN-394 default) rather than the card's pre-completion column. The original-column tracking the user proposed is a separate change.
+
+### KAN-445 Fix Validate Path Windows Unc (2026-05-14)
+
+Fix Windows path handling across `validate_path`, TUI startup, and storage migrations (KAN-445)
+- On Windows, launching `kanban` with an existing data file (e.g. `kanban
+  kanban.json`) no longer fails with the misleading error `Path traversal
+  not allowed: 'kanban.json' resolves outside current directory`
+- The path validator now uses `dunce::canonicalize`, which returns the
+  ordinary `C:\…` form on Windows instead of the verbatim `\?\C:\…` UNC
+  form that `std::fs::canonicalize` emits. The traversal guard's prefix
+  comparison against the current working directory now succeeds for paths
+  inside the cwd, as intended
+- The current working directory is canonicalized through the same path,
+  so the comparison is robust even when the cwd itself is in non-canonical
+  form (e.g. a UNC-shaped Windows cwd, or a `/var` → `/private/var`
+  symlink on macOS)
+- The TUI's startup `--file` resolution follows the same canonical form,
+  so `app_config.storage_location` no longer leaks `\?\C:\…` paths into
+  settings rendering, migration source paths, and other downstream
+  consumers
+- Absolute paths that point at existing files are likewise returned in
+  their plain form, so downstream consumers no longer see surprise UNC
+  prefixes leaking out of the service layer
+- On Windows, a failed storage migration (`kanban migrate`) now actually
+  removes the partially-written destination file instead of leaving an
+  orphan that blocks retries. The SQLite store now exposes an async
+  `close()` that drains its connection pool before the cleanup `remove_file`
+  runs — Windows refuses to delete files with live handles, and the
+  previous `drop(store)` was synchronous-only and didn't wait for in-flight
+  connections. POSIX behaviour is unchanged
+- No change to the path traversal protection — escapes via `..` are
+  still rejected
+
+### Other Changes (2026-05-14)
+
+Fix duplicated key presses on Windows
+- Filter out non-Press KeyEventKind variants on Windows so each keystroke registers once instead of twice (Press + Release)
+- Resolves text input duplicating, backspace deleting two characters at a time, and the help menu not staying open
+- Linux behavior unchanged (compile-time cfg gate)
+
+
 ## [0.4.1] - 2026-05-07 ([#242](https://github.com/fulsomenko/kanban/pull/242))
 
 ### KAN-396 Fix Tui Make Settings Config Edit Tests Sandbox Safe For Nixpkgs (2026-05-07)

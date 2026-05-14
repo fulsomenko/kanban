@@ -84,6 +84,40 @@ fn test_create_card_selects_newly_created_card() {
 }
 
 #[test]
+fn test_create_card_selects_newly_created_card_when_prior_selection_exists() {
+    // KAN-403 regression: when a card was already selected, creating a new
+    // card must move the selector to the new card, not stay on the prior one.
+    let mut app = setup_app_with_board();
+
+    app.focus.active = Focus::Cards;
+    app.input.set("First".to_string());
+    app.create_card();
+    app.prepare_frame();
+    let first_id = app
+        .get_selected_card_id()
+        .expect("first card should be selected after creation");
+
+    app.input.set("Second".to_string());
+    app.create_card();
+    app.prepare_frame();
+
+    let cards = app.model.cards();
+    let second = cards
+        .iter()
+        .find(|c| c.title == "Second")
+        .expect("second card exists in model");
+    assert_ne!(second.id, first_id);
+
+    let selected = app
+        .get_selected_card_id()
+        .expect("a card is selected after the second creation");
+    assert_eq!(
+        selected, second.id,
+        "selection must jump to the newly created card, not stay on the prior one"
+    );
+}
+
+#[test]
 fn test_create_card_auto_completes_in_done_column() {
     let mut app = App::test_default();
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();
