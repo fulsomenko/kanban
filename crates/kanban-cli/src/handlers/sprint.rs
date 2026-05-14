@@ -24,11 +24,11 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
 pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Result<()> {
     match action {
         SprintAction::Create {
-            board_id,
+            board,
             prefix,
             name,
         } => {
-            let board_uuid = match ctx.resolve_board_id(&board_id) {
+            let board_uuid = match ctx.resolve_board_id(&board) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
@@ -37,11 +37,11 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
             output::output_success(&sprint);
         }
         SprintAction::List {
-            board_id,
+            board,
             page,
             page_size,
         } => {
-            let board_uuid = match ctx.resolve_board_id(&board_id) {
+            let board_uuid = match ctx.resolve_board_id(&board) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
@@ -49,14 +49,14 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
             let (page, page_size) = resolve_page_params(page, page_size)?;
             output::output_success(PaginatedList::paginate(sprints, page, page_size)?);
         }
-        SprintAction::Get { id } => {
-            let uuid = match ctx.resolve_sprint_id_global(&id) {
+        SprintAction::Get { sprint } => {
+            let uuid = match ctx.resolve_sprint_id_global(&sprint) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
             match ctx.get_sprint(uuid)? {
-                Some(sprint) => output::output_success(&sprint),
-                None => return output::output_error(&format!("Sprint not found: {}", id)),
+                Some(s) => output::output_success(&s),
+                None => return output::output_error(&format!("Sprint not found: {}", sprint)),
             }
         }
         SprintAction::Update(args) => {
@@ -66,35 +66,38 @@ pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Resul
             };
             output::output_success(&sprint);
         }
-        SprintAction::Activate { id, duration_days } => {
-            let uuid = match ctx.resolve_sprint_id_global(&id) {
+        SprintAction::Activate {
+            sprint,
+            duration_days,
+        } => {
+            let uuid = match ctx.resolve_sprint_id_global(&sprint) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
-            let sprint = ctx.activate_sprint(uuid, duration_days)?;
+            let activated = ctx.activate_sprint(uuid, duration_days)?;
             ctx.save().await?;
-            output::output_success(&sprint);
+            output::output_success(&activated);
         }
-        SprintAction::Complete { id } => {
-            let uuid = match ctx.resolve_sprint_id_global(&id) {
+        SprintAction::Complete { sprint } => {
+            let uuid = match ctx.resolve_sprint_id_global(&sprint) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
-            let sprint = ctx.complete_sprint(uuid)?;
+            let completed = ctx.complete_sprint(uuid)?;
             ctx.save().await?;
-            output::output_success(&sprint);
+            output::output_success(&completed);
         }
-        SprintAction::Cancel { id } => {
-            let uuid = match ctx.resolve_sprint_id_global(&id) {
+        SprintAction::Cancel { sprint } => {
+            let uuid = match ctx.resolve_sprint_id_global(&sprint) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
-            let sprint = ctx.cancel_sprint(uuid)?;
+            let cancelled = ctx.cancel_sprint(uuid)?;
             ctx.save().await?;
-            output::output_success(&sprint);
+            output::output_success(&cancelled);
         }
-        SprintAction::Delete { id } => {
-            let uuid = match ctx.resolve_sprint_id_global(&id) {
+        SprintAction::Delete { sprint } => {
+            let uuid = match ctx.resolve_sprint_id_global(&sprint) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
@@ -128,7 +131,7 @@ async fn handle_update(
     args: SprintUpdateArgs,
 ) -> anyhow::Result<kanban_domain::Sprint> {
     let uuid = ctx
-        .resolve_sprint_id_global(&args.id)
+        .resolve_sprint_id_global(&args.sprint)
         .map_err(anyhow::Error::from)?;
     let start_date = if args.clear_start_date {
         FieldUpdate::Clear

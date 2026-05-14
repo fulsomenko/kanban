@@ -16,22 +16,22 @@ pub async fn handle(ctx: &mut CliContext, action: BoardAction) -> anyhow::Result
             let (page, page_size) = resolve_page_params(page, page_size)?;
             output::output_success(PaginatedList::paginate(boards, page, page_size)?);
         }
-        BoardAction::Get { id } => {
-            let uuid = match ctx.resolve_board_id(&id) {
+        BoardAction::Get { board } => {
+            let uuid = match ctx.resolve_board_id(&board) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
             match ctx.get_board(uuid)? {
-                Some(board) => output::output_success(&board),
-                None => return output::output_error(&format!("Board not found: {}", id)),
+                Some(b) => output::output_success(&b),
+                None => return output::output_error(&format!("Board not found: {}", board)),
             }
         }
         BoardAction::Update(args) => {
             let board = handle_update(ctx, args).await?;
             output::output_success(&board);
         }
-        BoardAction::Delete { id } => {
-            let uuid = match ctx.resolve_board_id(&id) {
+        BoardAction::Delete { board } => {
+            let uuid = match ctx.resolve_board_id(&board) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
@@ -48,7 +48,7 @@ async fn handle_update(
     args: BoardUpdateArgs,
 ) -> anyhow::Result<kanban_domain::Board> {
     let uuid = ctx
-        .resolve_board_id(&args.id)
+        .resolve_board_id(&args.board)
         .map_err(anyhow::Error::from)?;
     let updates = BoardUpdate {
         name: args.name,

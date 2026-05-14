@@ -303,7 +303,7 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "TODO",
@@ -331,7 +331,7 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "TODO",
@@ -344,7 +344,7 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "DONE",
@@ -357,7 +357,7 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "list",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -382,7 +382,7 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "First",
@@ -401,7 +401,7 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "Second",
@@ -440,7 +440,7 @@ mod column_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "To Delete",
@@ -489,7 +489,7 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "TODO",
@@ -517,9 +517,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Test Task",
@@ -547,9 +547,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Test Task",
@@ -584,9 +584,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task 1",
@@ -599,9 +599,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task 2",
@@ -634,9 +634,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task With Desc",
@@ -673,9 +673,9 @@ mod card_tests {
                     file.to_str().unwrap(),
                     "card",
                     "create",
-                    "--board-id",
+                    "--board",
                     &board_id,
-                    "--column-id",
+                    "--column",
                     &column_id,
                     "--title",
                     &format!("Task {i}"),
@@ -736,9 +736,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Only Card",
@@ -778,9 +778,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Original",
@@ -828,7 +828,7 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "DONE",
@@ -847,9 +847,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task",
@@ -869,7 +869,7 @@ mod card_tests {
                 "card",
                 "move",
                 &card_id,
-                "--column-id",
+                "--column",
                 &col2_id,
             ])
             .assert()
@@ -894,9 +894,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "To Archive",
@@ -957,9 +957,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "My Feature Task",
@@ -1000,9 +1000,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "My Task",
@@ -1043,9 +1043,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task 1",
@@ -1064,9 +1064,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task 2",
@@ -1085,7 +1085,7 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "archive-cards",
-                "--ids",
+                "--cards",
                 &format!("{},{}", card1_id, card2_id),
             ])
             .assert()
@@ -1111,7 +1111,7 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "DONE",
@@ -1130,9 +1130,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task 1",
@@ -1151,9 +1151,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task 2",
@@ -1172,9 +1172,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "move-cards",
-                "--ids",
+                "--cards",
                 &format!("{},{}", card1_id, card2_id),
-                "--column-id",
+                "--column",
                 &col2_id,
             ])
             .assert()
@@ -1218,7 +1218,7 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "TODO",
@@ -1246,9 +1246,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Prefix Test Card",
@@ -1287,9 +1287,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Number Lookup Card",
@@ -1328,9 +1328,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Archive Me",
@@ -1384,7 +1384,7 @@ mod card_tests {
                     file.to_str().unwrap(),
                     "column",
                     "create",
-                    "--board-id",
+                    "--board",
                     &board_b_id,
                     "--name",
                     "TODO",
@@ -1403,9 +1403,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_a_id,
-                "--column-id",
+                "--column",
                 &col_a_id,
                 "--title",
                 "Card on A",
@@ -1422,9 +1422,9 @@ mod card_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_b_id,
-                "--column-id",
+                "--column",
                 &col_b_id,
                 "--title",
                 "Card on B",
@@ -1516,7 +1516,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1542,7 +1542,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--prefix",
                 "SPRINT",
@@ -1569,7 +1569,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1580,7 +1580,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1591,7 +1591,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "list",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1616,7 +1616,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1654,7 +1654,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1695,7 +1695,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1736,7 +1736,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "TODO",
@@ -1755,9 +1755,9 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task",
@@ -1776,7 +1776,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1799,7 +1799,7 @@ mod sprint_tests {
                 "card",
                 "assign-sprint",
                 &card_id,
-                "--sprint-id",
+                "--sprint",
                 &sprint_id,
             ])
             .assert()
@@ -1824,7 +1824,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "TODO",
@@ -1843,9 +1843,9 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Task",
@@ -1864,7 +1864,7 @@ mod sprint_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -1887,7 +1887,7 @@ mod sprint_tests {
                 "card",
                 "assign-sprint",
                 &card_id,
-                "--sprint-id",
+                "--sprint",
                 &sprint_id,
             ])
             .assert()
@@ -1960,7 +1960,7 @@ mod export_import_tests {
         let board_id = extract_id(&board_json);
 
         kanban()
-            .args([file.to_str().unwrap(), "export", "--board-id", &board_id])
+            .args([file.to_str().unwrap(), "export", "--board", &board_id])
             .assert()
             .success()
             .stdout(predicate::str::contains("\"boards\""))
@@ -2077,7 +2077,7 @@ mod error_tests {
             .args([file.to_str().unwrap(), "column", "list"])
             .assert()
             .failure()
-            .stderr(predicate::str::contains("--board-id"));
+            .stderr(predicate::str::contains("--board"));
     }
 
     #[test]
@@ -2146,7 +2146,7 @@ mod error_tests {
                 file.to_str().unwrap(),
                 "column",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
                 "--name",
                 "TODO",
@@ -2173,9 +2173,9 @@ mod error_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Test",
@@ -2221,9 +2221,9 @@ mod error_tests {
                 file.to_str().unwrap(),
                 "card",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
-                "--column-id",
+                "--column",
                 &column_id,
                 "--title",
                 "Test",
@@ -2275,7 +2275,7 @@ mod error_tests {
                 file.to_str().unwrap(),
                 "sprint",
                 "create",
-                "--board-id",
+                "--board",
                 &board_id,
             ])
             .assert()
@@ -2548,13 +2548,7 @@ mod name_resolution_tests {
         let cjson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
                 .args([
-                    &file,
-                    "column",
-                    "create",
-                    "--board-id",
-                    &board_id,
-                    "--name",
-                    "TODO",
+                    &file, "column", "create", "--board", &board_id, "--name", "TODO",
                 ])
                 .assert()
                 .success()
@@ -2644,15 +2638,7 @@ mod name_resolution_tests {
         let (_dir, file, _board, _col) = setup_named_board("B", "B");
         let json = parse_json_output(&String::from_utf8_lossy(
             &kanban()
-                .args([
-                    &file,
-                    "column",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--name",
-                    "Doing",
-                ])
+                .args([&file, "column", "create", "--board", "B", "--name", "Doing"])
                 .assert()
                 .success()
                 .get_output()
@@ -2666,19 +2652,13 @@ mod name_resolution_tests {
         let (_dir, file, _board, _col) = setup_named_board("MyB", "MB");
         kanban()
             .args([
-                &file,
-                "column",
-                "create",
-                "--board-id",
-                "MyB",
-                "--name",
-                "Doing",
+                &file, "column", "create", "--board", "MyB", "--name", "Doing",
             ])
             .assert()
             .success();
         let json = parse_json_output(&String::from_utf8_lossy(
             &kanban()
-                .args([&file, "column", "list", "--board-id", "MyB"])
+                .args([&file, "column", "list", "--board", "MyB"])
                 .assert()
                 .success()
                 .get_output()
@@ -2718,13 +2698,7 @@ mod name_resolution_tests {
             .success();
         kanban()
             .args([
-                &file,
-                "column",
-                "create",
-                "--board-id",
-                "Beta",
-                "--name",
-                "TODO",
+                &file, "column", "create", "--board", "Beta", "--name", "TODO",
             ])
             .assert()
             .success();
@@ -2758,15 +2732,7 @@ mod name_resolution_tests {
         let json = parse_json_output(&String::from_utf8_lossy(
             &kanban()
                 .args([
-                    &file,
-                    "card",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--column-id",
-                    "TODO",
-                    "--title",
-                    "Hello",
+                    &file, "card", "create", "--board", "B", "--column", "TODO", "--title", "Hello",
                 ])
                 .assert()
                 .success()
@@ -2781,29 +2747,13 @@ mod name_resolution_tests {
         let (_dir, file, _b, _c) = setup_named_board("B", "B");
         kanban()
             .args([
-                &file,
-                "card",
-                "create",
-                "--board-id",
-                "B",
-                "--column-id",
-                "TODO",
-                "--title",
-                "T1",
+                &file, "card", "create", "--board", "B", "--column", "TODO", "--title", "T1",
             ])
             .assert()
             .success();
         let json = parse_json_output(&String::from_utf8_lossy(
             &kanban()
-                .args([
-                    &file,
-                    "card",
-                    "list",
-                    "--board-id",
-                    "B",
-                    "--column-id",
-                    "TODO",
-                ])
+                .args([&file, "card", "list", "--board", "B", "--column", "TODO"])
                 .assert()
                 .success()
                 .get_output()
@@ -2816,29 +2766,13 @@ mod name_resolution_tests {
     fn test_card_move_with_column_name() {
         let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
         kanban()
-            .args([
-                &file,
-                "column",
-                "create",
-                "--board-id",
-                "B",
-                "--name",
-                "Doing",
-            ])
+            .args([&file, "column", "create", "--board", "B", "--name", "Doing"])
             .assert()
             .success();
         let cjson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
                 .args([
-                    &file,
-                    "card",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--column-id",
-                    "TODO",
-                    "--title",
-                    "T",
+                    &file, "card", "create", "--board", "B", "--column", "TODO", "--title", "T",
                 ])
                 .assert()
                 .success()
@@ -2848,7 +2782,7 @@ mod name_resolution_tests {
         let card_id = extract_id(&cjson);
         let mjson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
-                .args([&file, "card", "move", &card_id, "--column-id", "Doing"])
+                .args([&file, "card", "move", &card_id, "--column", "Doing"])
                 .assert()
                 .success()
                 .get_output()
@@ -2861,29 +2795,13 @@ mod name_resolution_tests {
     fn test_card_assign_sprint_by_name() {
         let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
         kanban()
-            .args([
-                &file,
-                "sprint",
-                "create",
-                "--board-id",
-                "B",
-                "--name",
-                "alpha",
-            ])
+            .args([&file, "sprint", "create", "--board", "B", "--name", "alpha"])
             .assert()
             .success();
         let cjson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
                 .args([
-                    &file,
-                    "card",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--column-id",
-                    "TODO",
-                    "--title",
-                    "T",
+                    &file, "card", "create", "--board", "B", "--column", "TODO", "--title", "T",
                 ])
                 .assert()
                 .success()
@@ -2898,7 +2816,7 @@ mod name_resolution_tests {
                     "card",
                     "assign-sprint",
                     &card_id,
-                    "--sprint-id",
+                    "--sprint",
                     "alpha",
                 ])
                 .assert()
@@ -2913,29 +2831,13 @@ mod name_resolution_tests {
     fn test_card_assign_sprint_by_number() {
         let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
         kanban()
-            .args([
-                &file,
-                "sprint",
-                "create",
-                "--board-id",
-                "B",
-                "--name",
-                "alpha",
-            ])
+            .args([&file, "sprint", "create", "--board", "B", "--name", "alpha"])
             .assert()
             .success();
         let cjson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
                 .args([
-                    &file,
-                    "card",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--column-id",
-                    "TODO",
-                    "--title",
-                    "T",
+                    &file, "card", "create", "--board", "B", "--column", "TODO", "--title", "T",
                 ])
                 .assert()
                 .success()
@@ -2945,7 +2847,7 @@ mod name_resolution_tests {
         let card_id = extract_id(&cjson);
         let ajson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
-                .args([&file, "card", "assign-sprint", &card_id, "--sprint-id", "1"])
+                .args([&file, "card", "assign-sprint", &card_id, "--sprint", "1"])
                 .assert()
                 .success()
                 .get_output()
@@ -2958,29 +2860,13 @@ mod name_resolution_tests {
     fn test_card_move_cards_with_card_identifiers_and_column_name() {
         let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
         kanban()
-            .args([
-                &file,
-                "column",
-                "create",
-                "--board-id",
-                "B",
-                "--name",
-                "Doing",
-            ])
+            .args([&file, "column", "create", "--board", "B", "--name", "Doing"])
             .assert()
             .success();
         for title in ["T1", "T2"] {
             kanban()
                 .args([
-                    &file,
-                    "card",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--column-id",
-                    "TODO",
-                    "--title",
-                    title,
+                    &file, "card", "create", "--board", "B", "--column", "TODO", "--title", title,
                 ])
                 .assert()
                 .success();
@@ -2991,9 +2877,9 @@ mod name_resolution_tests {
                     &file,
                     "card",
                     "move-cards",
-                    "--ids",
+                    "--cards",
                     "KAN-1,KAN-2",
-                    "--column-id",
+                    "--column",
                     "Doing",
                 ])
                 .assert()
@@ -3021,41 +2907,19 @@ mod name_resolution_tests {
             .success();
         kanban()
             .args([
-                &file,
-                "column",
-                "create",
-                "--board-id",
-                "Beta",
-                "--name",
-                "TODO",
+                &file, "column", "create", "--board", "Beta", "--name", "TODO",
             ])
             .assert()
             .success();
         kanban()
             .args([
-                &file,
-                "card",
-                "create",
-                "--board-id",
-                "Alpha",
-                "--column-id",
-                "TODO",
-                "--title",
-                "A1",
+                &file, "card", "create", "--board", "Alpha", "--column", "TODO", "--title", "A1",
             ])
             .assert()
             .success();
         kanban()
             .args([
-                &file,
-                "card",
-                "create",
-                "--board-id",
-                "Beta",
-                "--column-id",
-                "TODO",
-                "--title",
-                "B1",
+                &file, "card", "create", "--board", "Beta", "--column", "TODO", "--title", "B1",
             ])
             .assert()
             .success();
@@ -3064,9 +2928,9 @@ mod name_resolution_tests {
                 &file,
                 "card",
                 "move-cards",
-                "--ids",
+                "--cards",
                 "A-1,B-1",
-                "--column-id",
+                "--column",
                 "TODO",
             ])
             .assert()
@@ -3084,15 +2948,7 @@ mod name_resolution_tests {
         let (_dir, file, _b, _c) = setup_named_board("B", "B");
         let json = parse_json_output(&String::from_utf8_lossy(
             &kanban()
-                .args([
-                    &file,
-                    "sprint",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--name",
-                    "alpha",
-                ])
+                .args([&file, "sprint", "create", "--board", "B", "--name", "alpha"])
                 .assert()
                 .success()
                 .get_output()
@@ -3107,13 +2963,7 @@ mod name_resolution_tests {
         let sjson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
                 .args([
-                    &file,
-                    "sprint",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--name",
-                    "yarara",
+                    &file, "sprint", "create", "--board", "B", "--name", "yarara",
                 ])
                 .assert()
                 .success()
@@ -3137,15 +2987,7 @@ mod name_resolution_tests {
         let (_dir, file, _b, _c) = setup_named_board("B", "B");
         let sjson = parse_json_output(&String::from_utf8_lossy(
             &kanban()
-                .args([
-                    &file,
-                    "sprint",
-                    "create",
-                    "--board-id",
-                    "B",
-                    "--name",
-                    "alpha",
-                ])
+                .args([&file, "sprint", "create", "--board", "B", "--name", "alpha"])
                 .assert()
                 .success()
                 .get_output()
@@ -3167,15 +3009,7 @@ mod name_resolution_tests {
     fn test_sprint_activate_by_name() {
         let (_dir, file, _b, _c) = setup_named_board("B", "B");
         kanban()
-            .args([
-                &file,
-                "sprint",
-                "create",
-                "--board-id",
-                "B",
-                "--name",
-                "alpha",
-            ])
+            .args([&file, "sprint", "create", "--board", "B", "--name", "alpha"])
             .assert()
             .success();
         let json = parse_json_output(&String::from_utf8_lossy(
@@ -3194,28 +3028,12 @@ mod name_resolution_tests {
         let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
         // sprint #1
         kanban()
-            .args([
-                &file,
-                "sprint",
-                "create",
-                "--board-id",
-                "B",
-                "--name",
-                "alpha",
-            ])
+            .args([&file, "sprint", "create", "--board", "B", "--name", "alpha"])
             .assert()
             .success();
         // sprint #2
         kanban()
-            .args([
-                &file,
-                "sprint",
-                "create",
-                "--board-id",
-                "B",
-                "--name",
-                "beta",
-            ])
+            .args([&file, "sprint", "create", "--board", "B", "--name", "beta"])
             .assert()
             .success();
         // activate sprint #1, then complete it
@@ -3254,7 +3072,7 @@ mod name_resolution_tests {
         let (_dir, file, _b, _c) = setup_named_board("ExpBoard", "E");
         // export prints raw JSON (not the CliResponse envelope)
         let out = kanban()
-            .args([&file, "export", "--board-id", "ExpBoard"])
+            .args([&file, "export", "--board", "ExpBoard"])
             .assert()
             .success()
             .get_output()

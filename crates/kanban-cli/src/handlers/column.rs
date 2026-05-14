@@ -7,11 +7,11 @@ use kanban_domain::{ColumnUpdate, FieldUpdate, KanbanOperations};
 pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Result<()> {
     match action {
         ColumnAction::Create {
-            board_id,
+            board,
             name,
             position,
         } => {
-            let board_uuid = match ctx.resolve_board_id(&board_id) {
+            let board_uuid = match ctx.resolve_board_id(&board) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
@@ -20,11 +20,11 @@ pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Resul
             output::output_success(&column);
         }
         ColumnAction::List {
-            board_id,
+            board,
             page,
             page_size,
         } => {
-            let board_uuid = match ctx.resolve_board_id(&board_id) {
+            let board_uuid = match ctx.resolve_board_id(&board) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
@@ -32,22 +32,22 @@ pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Resul
             let (page, page_size) = resolve_page_params(page, page_size)?;
             output::output_success(PaginatedList::paginate(columns, page, page_size)?);
         }
-        ColumnAction::Get { id } => {
-            let uuid = match ctx.resolve_column_id_global(&id) {
+        ColumnAction::Get { column } => {
+            let uuid = match ctx.resolve_column_id_global(&column) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
             match ctx.get_column(uuid)? {
-                Some(column) => output::output_success(&column),
-                None => return output::output_error(&format!("Column not found: {}", id)),
+                Some(c) => output::output_success(&c),
+                None => return output::output_error(&format!("Column not found: {}", column)),
             }
         }
         ColumnAction::Update(args) => {
             let column = handle_update(ctx, args).await?;
             output::output_success(&column);
         }
-        ColumnAction::Delete { id } => {
-            let uuid = match ctx.resolve_column_id_global(&id) {
+        ColumnAction::Delete { column } => {
+            let uuid = match ctx.resolve_column_id_global(&column) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
@@ -55,14 +55,14 @@ pub async fn handle(ctx: &mut CliContext, action: ColumnAction) -> anyhow::Resul
             ctx.save().await?;
             output::output_success(serde_json::json!({"deleted": uuid.to_string()}));
         }
-        ColumnAction::Reorder { id, position } => {
-            let uuid = match ctx.resolve_column_id_global(&id) {
+        ColumnAction::Reorder { column, position } => {
+            let uuid = match ctx.resolve_column_id_global(&column) {
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
-            let column = ctx.reorder_column(uuid, position)?;
+            let c = ctx.reorder_column(uuid, position)?;
             ctx.save().await?;
-            output::output_success(&column);
+            output::output_success(&c);
         }
     }
     Ok(())
@@ -73,7 +73,7 @@ async fn handle_update(
     args: ColumnUpdateArgs,
 ) -> anyhow::Result<kanban_domain::Column> {
     let uuid = ctx
-        .resolve_column_id_global(&args.id)
+        .resolve_column_id_global(&args.column)
         .map_err(anyhow::Error::from)?;
     let updates = ColumnUpdate {
         name: args.name,

@@ -64,21 +64,21 @@ pub enum BoardAction {
     /// Get a specific board by UUID or name
     Get {
         /// Board UUID or name
-        id: String,
+        board: String,
     },
     /// Update a board
     Update(BoardUpdateArgs),
     /// Delete a board by UUID or name
     Delete {
         /// Board UUID or name
-        id: String,
+        board: String,
     },
 }
 
 #[derive(Args)]
 pub struct BoardUpdateArgs {
     /// Board UUID or name
-    pub id: String,
+    pub board: String,
     #[arg(long)]
     pub name: Option<String>,
     #[arg(long)]
@@ -102,7 +102,7 @@ pub enum ColumnAction {
     Create {
         /// Board UUID or name
         #[arg(long)]
-        board_id: String,
+        board: String,
         #[arg(long)]
         name: String,
         #[arg(long)]
@@ -112,7 +112,7 @@ pub enum ColumnAction {
     List {
         /// Board UUID or name
         #[arg(long)]
-        board_id: String,
+        board: String,
         #[arg(long)]
         page: Option<u32>,
         #[arg(long)]
@@ -121,19 +121,19 @@ pub enum ColumnAction {
     /// Get a specific column by UUID or name
     Get {
         /// Column UUID or name
-        id: String,
+        column: String,
     },
     /// Update a column
     Update(ColumnUpdateArgs),
     /// Delete a column by UUID or name
     Delete {
         /// Column UUID or name
-        id: String,
+        column: String,
     },
     /// Reorder a column by UUID or name
     Reorder {
         /// Column UUID or name
-        id: String,
+        column: String,
         #[arg(long)]
         position: i32,
     },
@@ -142,7 +142,7 @@ pub enum ColumnAction {
 #[derive(Args)]
 pub struct ColumnUpdateArgs {
     /// Column UUID or name
-    pub id: String,
+    pub column: String,
     #[arg(long)]
     pub name: Option<String>,
     #[arg(long)]
@@ -166,90 +166,90 @@ pub enum CardAction {
     Create(CardCreateArgs),
     /// List cards with optional filters
     List(CardListArgs),
-    /// Get a specific card by ID or identifier (e.g. KAN-5)
+    /// Get a specific card by UUID or identifier (e.g. KAN-5)
     Get {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
     },
     /// Update a card
     Update(CardUpdateArgs),
     /// Move a card to another column
     Move {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
         /// Column UUID or name
         #[arg(long)]
-        column_id: String,
+        column: String,
         #[arg(long)]
         position: Option<i32>,
     },
-    /// Archive a card by ID or identifier (e.g. KAN-5)
+    /// Archive a card by UUID or identifier (e.g. KAN-5)
     Archive {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
     },
-    /// Restore an archived card by ID or identifier (e.g. KAN-5)
+    /// Restore an archived card by UUID or identifier (e.g. KAN-5)
     Restore {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
         /// Column UUID or name
         #[arg(long)]
-        column_id: Option<String>,
+        column: Option<String>,
     },
-    /// Permanently delete an archived card by ID or identifier (e.g. KAN-5)
+    /// Permanently delete an archived card by UUID or identifier (e.g. KAN-5)
     Delete {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
     },
     /// Assign a card to a sprint
     AssignSprint {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
         /// Sprint UUID, name, or number
         #[arg(long)]
-        sprint_id: String,
+        sprint: String,
     },
     /// Unassign a card from its sprint
     UnassignSprint {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
     },
     /// Get the branch name for a card
     BranchName {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
     },
     /// Get the git checkout command for a card
     GitCheckout {
         /// Card UUID or identifier like KAN-5 or 5
-        id: String,
+        card: String,
     },
     /// Archive multiple cards
     #[command(name = "archive-cards")]
     ArchiveCards {
         /// Comma-separated card UUIDs or identifiers (e.g. KAN-1,KAN-2,42)
         #[arg(long, value_delimiter = ',')]
-        ids: Vec<String>,
+        cards: Vec<String>,
     },
     /// Move multiple cards to a column
     #[command(name = "move-cards")]
     MoveCards {
         /// Comma-separated card UUIDs or identifiers (e.g. KAN-1,KAN-2,42)
         #[arg(long, value_delimiter = ',')]
-        ids: Vec<String>,
+        cards: Vec<String>,
         /// Column UUID or name (must be on the same board as all selected cards)
         #[arg(long)]
-        column_id: String,
+        column: String,
     },
     /// Assign multiple cards to a sprint
     #[command(name = "assign-cards-to-sprint")]
     AssignCardsToSprint {
         /// Comma-separated card UUIDs or identifiers (e.g. KAN-1,KAN-2,42)
         #[arg(long, value_delimiter = ',')]
-        ids: Vec<String>,
+        cards: Vec<String>,
         /// Sprint UUID, name, or number (must be on the same board as all selected cards)
         #[arg(long)]
-        sprint_id: String,
+        sprint: String,
     },
 }
 
@@ -257,10 +257,10 @@ pub enum CardAction {
 pub struct CardCreateArgs {
     /// Board UUID or name
     #[arg(long)]
-    pub board_id: String,
+    pub board: String,
     /// Column UUID or name
     #[arg(long)]
-    pub column_id: String,
+    pub column: String,
     #[arg(long)]
     pub title: String,
     #[arg(long)]
@@ -277,13 +277,13 @@ pub struct CardCreateArgs {
 pub struct CardListArgs {
     /// Board UUID or name
     #[arg(long)]
-    pub board_id: Option<String>,
-    /// Column UUID or name (scoped to --board-id if given, else searched globally)
+    pub board: Option<String>,
+    /// Column UUID or name (scoped to --board if given, else searched globally)
     #[arg(long)]
-    pub column_id: Option<String>,
-    /// Sprint UUID, name, or number (scoped to --board-id if given, else searched globally)
+    pub column: Option<String>,
+    /// Sprint UUID, name, or number (scoped to --board if given, else searched globally)
     #[arg(long)]
-    pub sprint_id: Option<String>,
+    pub sprint: Option<String>,
     #[arg(long)]
     pub status: Option<String>,
     #[arg(long)]
@@ -297,7 +297,7 @@ pub struct CardListArgs {
 #[derive(Args)]
 pub struct CardUpdateArgs {
     /// Card UUID or identifier like KAN-5 or 5
-    pub id: String,
+    pub card: String,
     #[arg(long)]
     pub title: Option<String>,
     #[arg(long)]
@@ -327,7 +327,7 @@ pub enum SprintAction {
     Create {
         /// Board UUID or name
         #[arg(long)]
-        board_id: String,
+        board: String,
         #[arg(long)]
         prefix: Option<String>,
         #[arg(long)]
@@ -337,7 +337,7 @@ pub enum SprintAction {
     List {
         /// Board UUID or name
         #[arg(long)]
-        board_id: String,
+        board: String,
         #[arg(long)]
         page: Option<u32>,
         #[arg(long)]
@@ -346,31 +346,31 @@ pub enum SprintAction {
     /// Get a specific sprint by UUID, name, or number
     Get {
         /// Sprint UUID, name, or number
-        id: String,
+        sprint: String,
     },
     /// Update a sprint
     Update(SprintUpdateArgs),
     /// Activate a sprint by UUID, name, or number
     Activate {
         /// Sprint UUID, name, or number
-        id: String,
+        sprint: String,
         #[arg(long)]
         duration_days: Option<i32>,
     },
     /// Complete a sprint by UUID, name, or number
     Complete {
         /// Sprint UUID, name, or number
-        id: String,
+        sprint: String,
     },
     /// Cancel a sprint by UUID, name, or number
     Cancel {
         /// Sprint UUID, name, or number
-        id: String,
+        sprint: String,
     },
     /// Delete a sprint by UUID, name, or number
     Delete {
         /// Sprint UUID, name, or number
-        id: String,
+        sprint: String,
     },
     /// Carry over uncompleted cards from a completed sprint to a planning sprint
     CarryOver {
@@ -386,7 +386,7 @@ pub enum SprintAction {
 #[derive(Args)]
 pub struct SprintUpdateArgs {
     /// Sprint UUID, name, or number
-    pub id: String,
+    pub sprint: String,
     #[arg(long)]
     pub name: Option<String>,
     #[arg(long)]
@@ -428,7 +428,7 @@ pub struct MigrateArgs {
 pub struct ExportArgs {
     /// Board UUID or name; if omitted, exports all boards
     #[arg(long)]
-    pub board_id: Option<String>,
+    pub board: Option<String>,
 }
 
 #[derive(Args)]
