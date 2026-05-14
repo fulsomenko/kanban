@@ -2084,7 +2084,7 @@ mod error_tests {
     fn test_card_get_nonexistent_numeric_identifier() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
-        setup_board_and_column(&file);
+        kanban().args([file.to_str().unwrap()]).assert().success();
 
         kanban()
             .args([file.to_str().unwrap(), "card", "get", "555"])
@@ -2099,7 +2099,7 @@ mod error_tests {
     fn test_card_get_nonexistent_prefix_identifier() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
-        setup_board_and_column(&file);
+        kanban().args([file.to_str().unwrap()]).assert().success();
 
         kanban()
             .args([file.to_str().unwrap(), "card", "get", "KAN-5"])
@@ -2193,7 +2193,7 @@ mod error_tests {
     fn test_card_list_invalid_status() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
-        setup_board_and_column(&file);
+        kanban().args([file.to_str().unwrap()]).assert().success();
 
         kanban()
             .args([
@@ -2522,8 +2522,10 @@ mod missing_file_tests {
 
     #[test]
     fn test_missing_file_gives_clear_error() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("doesntexist.json");
         kanban()
-            .args(["doesntexist.json", "card", "get", "KAN-1"])
+            .args([file.to_str().unwrap(), "card", "get", "KAN-1"])
             .assert()
             .failure()
             .stderr(predicate::str::contains("\"success\":false"))
@@ -2532,8 +2534,10 @@ mod missing_file_tests {
 
     #[test]
     fn test_board_create_requires_existing_file() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("doesntexist.json");
         kanban()
-            .args(["doesntexist.json", "board", "create", "--name", "Test"])
+            .args([file.to_str().unwrap(), "board", "create", "--name", "Test"])
             .assert()
             .failure()
             .stderr(predicate::str::contains("Board file not found"));
