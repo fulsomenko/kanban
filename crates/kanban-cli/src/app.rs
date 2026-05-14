@@ -304,6 +304,12 @@ Provide the file path in one of these ways:
             }
             Some(cmd) => {
                 init_tracing_cli();
+                if !std::path::Path::new(&effective_file).exists() {
+                    return crate::output::output_error(&format!(
+                        "Board file not found: '{}'",
+                        effective_file
+                    ));
+                }
                 let mut ctx = CliContext::load(&store_manager, &effective_file, config).await?;
                 dispatch_subcommand(&mut ctx, cmd).await?;
             }
