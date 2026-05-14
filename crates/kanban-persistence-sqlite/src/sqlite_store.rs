@@ -369,6 +369,15 @@ impl SqliteStore {
         &self.pool
     }
 
+    /// Close the underlying connection pool, releasing every open file handle.
+    ///
+    /// Required before unlinking the SQLite database file on Windows: the OS
+    /// refuses to delete files that still have live handles, and `Pool::drop`
+    /// is synchronous-only — it does not wait for connections to fully close.
+    pub async fn close(&self) {
+        self.pool.close().await;
+    }
+
     pub async fn checkpoint(&self) -> KanbanResult<()> {
         sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&self.pool)

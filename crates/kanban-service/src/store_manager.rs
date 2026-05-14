@@ -296,6 +296,7 @@ impl StoreManager {
                     let repaired = snapshot_from_json_bytes(&store_snapshot.data)?;
                     let store = kanban_persistence_sqlite::SqliteStore::open(to_path).await?;
                     let outcome = store.apply_snapshot(repaired.clone());
+                    store.close().await;
                     drop(store);
                     if let Err(e) = outcome {
                         let _ = std::fs::remove_file(to_path);
