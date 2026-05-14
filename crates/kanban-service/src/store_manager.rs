@@ -295,7 +295,9 @@ impl StoreManager {
                 {
                     let repaired = snapshot_from_json_bytes(&store_snapshot.data)?;
                     let store = kanban_persistence_sqlite::SqliteStore::open(to_path).await?;
-                    if let Err(e) = store.apply_snapshot(repaired.clone()) {
+                    let outcome = store.apply_snapshot(repaired.clone());
+                    drop(store);
+                    if let Err(e) = outcome {
                         let _ = std::fs::remove_file(to_path);
                         let _ = std::fs::remove_file(format!("{}-wal", to_path));
                         let _ = std::fs::remove_file(format!("{}-shm", to_path));
@@ -307,7 +309,9 @@ impl StoreManager {
             }
             _ => {
                 let target = self.make_store(to_backend, to_path)?;
-                if let Err(e) = target.save(store_snapshot).await {
+                let outcome = target.save(store_snapshot).await;
+                drop(target);
+                if let Err(e) = outcome {
                     let _ = std::fs::remove_file(to_path);
                     let _ = std::fs::remove_file(format!("{}-wal", to_path));
                     let _ = std::fs::remove_file(format!("{}-shm", to_path));
