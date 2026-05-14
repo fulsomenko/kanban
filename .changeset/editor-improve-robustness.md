@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 Refactor editor functionality to handle arbitrary EDITOR strings
