@@ -33,6 +33,18 @@ pub trait DataStore: Send + Sync {
     fn upsert_card(&self, card: Card) -> KanbanResult<()>;
     fn delete_card(&self, id: Uuid) -> KanbanResult<()>;
     fn delete_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<()>;
+
+    /// Return all cards across the given columns in one call.
+    ///
+    /// Default impl loops over [`list_cards_by_column`](Self::list_cards_by_column);
+    /// SQL-backed implementations should override with a single `IN (?, …)` query.
+    fn list_cards_by_columns(&self, column_ids: &[Uuid]) -> KanbanResult<Vec<Card>> {
+        let mut out = Vec::new();
+        for col_id in column_ids {
+            out.extend(self.list_cards_by_column(*col_id)?);
+        }
+        Ok(out)
+    }
     fn clear_sprint_from_cards(
         &self,
         sprint_id: Uuid,

@@ -787,45 +787,21 @@ impl App {
                         CardListAction::Complete(card_id) => {
                             if let Some(card) = self.model.cards().iter().find(|c| c.id == card_id)
                             {
-                                use kanban_domain::{CardStatus, CardUpdate};
+                                use kanban_domain::{CardStatus, CardUpdate, KanbanOperations};
                                 let new_status = if card.status == CardStatus::Done {
                                     CardStatus::Todo
                                 } else {
                                     CardStatus::Done
                                 };
 
-                                let boards = self.model.boards();
-                                let columns = self.model.columns();
-                                let cards = self.model.cards();
-                                let toggle_result =
-                                    self.selection.active_board_index.and_then(|idx| {
-                                        boards.get(idx).and_then(|board| {
-                                        kanban_domain::card_lifecycle::compute_completion_toggle(
-                                            card,
-                                            board,
-                                            columns,
-                                            cards,
-                                        )
-                                    })
-                                    });
-
-                                let mut updates = CardUpdate {
-                                    status: Some(new_status),
-                                    ..Default::default()
-                                };
-
-                                if let Some(ref result) = toggle_result {
-                                    updates.column_id = Some(result.target_column_id);
-                                    updates.position = Some(result.new_position);
-                                    updates.status = Some(result.new_status);
-                                }
-
-                                let cmd = kanban_domain::commands::Command::Card(
-                                    kanban_domain::commands::CardCommand::Update(
-                                        kanban_domain::commands::UpdateCard { card_id, updates },
-                                    ),
-                                );
-                                if let Err(e) = self.execute_command(cmd) {
+                                // Service layer chains the column move automatically.
+                                if let Err(e) = self.ctx.update_card(
+                                    card_id,
+                                    CardUpdate {
+                                        status: Some(new_status),
+                                        ..Default::default()
+                                    },
+                                ) {
                                     tracing::error!("Failed to toggle card completion: {}", e);
                                     self.set_error(format!(
                                         "Failed to toggle card completion: {}",
@@ -940,40 +916,14 @@ impl App {
                                     });
 
                                 if let Some(result) = move_result {
-                                    let move_cmd = kanban_domain::commands::Command::Card(
-                                        kanban_domain::commands::CardCommand::Move(
-                                            kanban_domain::commands::MoveCard {
-                                                card_id,
-                                                new_column_id: result.target_column_id,
-                                                new_position: result.new_position,
-                                            },
-                                        ),
-                                    );
-                                    if let Err(e) = self.execute_command(move_cmd) {
+                                    use kanban_domain::KanbanOperations;
+                                    // Service layer chains the status flip when the
+                                    // move crosses the completion-column boundary.
+                                    if let Err(e) =
+                                        self.ctx.move_card(card_id, result.target_column_id, None)
+                                    {
                                         tracing::error!("Failed to move card: {}", e);
                                         self.set_error(format!("Failed to move card: {}", e));
-                                        return;
-                                    }
-
-                                    if let Some(new_status) = result.new_status {
-                                        let status_cmd = kanban_domain::commands::Command::Card(
-                                            kanban_domain::commands::CardCommand::Update(
-                                                kanban_domain::commands::UpdateCard {
-                                                    card_id,
-                                                    updates: kanban_domain::CardUpdate {
-                                                        status: Some(new_status),
-                                                        ..Default::default()
-                                                    },
-                                                },
-                                            ),
-                                        );
-                                        if let Err(e) = self.execute_command(status_cmd) {
-                                            tracing::error!("Failed to update card status: {}", e);
-                                            self.set_error(format!(
-                                                "Failed to update card status: {}",
-                                                e
-                                            ));
-                                        }
                                     }
                                 }
                             }
@@ -1268,58 +1218,34 @@ impl App {
     }
 
     pub fn toggle_completion_for_card_ids(&mut self, ids: Vec<uuid::Uuid>) {
-        use kanban_domain::commands::UpdateCard;
-        use kanban_domain::{CardStatus, CardUpdate};
+        use kanban_domain::{CardStatus, CardUpdate, KanbanOperations};
 
-        let mut update_commands: Vec<kanban_domain::commands::Command> = Vec::new();
-
-        for card_id in &ids {
-            let all_cards = self.model.cards();
-            let card = match all_cards.iter().find(|c| c.id == *card_id) {
-                Some(c) => c.clone(),
-                None => continue,
-            };
-
-            let boards = self.model.boards();
-            let columns = self.model.columns();
-            let cards = self.model.cards();
-            let toggle_result = self.selection.active_board_index.and_then(|idx| {
-                boards.get(idx).and_then(|board| {
-                    kanban_domain::card_lifecycle::compute_completion_toggle(
-                        &card, board, columns, cards,
-                    )
-                })
-            });
-
-            let updates = if let Some(ref result) = toggle_result {
-                CardUpdate {
-                    status: Some(result.new_status),
-                    column_id: Some(result.target_column_id),
-                    position: Some(result.new_position),
-                    ..Default::default()
-                }
-            } else {
-                let fallback = if card.status == CardStatus::Done {
+        let updates: Vec<(uuid::Uuid, CardUpdate)> = ids
+            .iter()
+            .filter_map(|card_id| {
+                let card = self
+                    .model
+                    .cards()
+                    .iter()
+                    .find(|c| c.id == *card_id)?
+                    .clone();
+                let new_status = if card.status == CardStatus::Done {
                     CardStatus::Todo
                 } else {
                     CardStatus::Done
                 };
-                CardUpdate {
-                    status: Some(fallback),
-                    ..Default::default()
-                }
-            };
+                Some((
+                    *card_id,
+                    CardUpdate {
+                        status: Some(new_status),
+                        ..Default::default()
+                    },
+                ))
+            })
+            .collect();
 
-            update_commands.push(kanban_domain::commands::Command::Card(
-                kanban_domain::commands::CardCommand::Update(UpdateCard {
-                    card_id: *card_id,
-                    updates,
-                }),
-            ));
-        }
-
-        if !update_commands.is_empty() {
-            if let Err(e) = self.execute_commands_batch(update_commands) {
+        if !updates.is_empty() {
+            if let Err(e) = self.ctx.update_cards(updates) {
                 tracing::error!("Failed to toggle card completion: {}", e);
                 self.set_error(format!("Failed to toggle card completion: {}", e));
             }

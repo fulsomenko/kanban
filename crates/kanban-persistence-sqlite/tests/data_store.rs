@@ -1,5 +1,3 @@
-use kanban_domain::command_store::CommandStore;
-use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
 use kanban_domain::data_store::DataStore;
 use kanban_domain::*;
 use kanban_persistence_sqlite::SqliteStore;
@@ -357,119 +355,87 @@ async fn test_sqlite_apply_snapshot_replaces_existing_data() {
     assert_eq!(boards[0].name, "New");
 }
 
-// --- CommandStore ---
+// --- Legacy table drop migration ---
 
-fn make_board_cmd(name: &str) -> Command {
-    Command::Board(BoardCommand::Create(CreateBoard {
-        id: Uuid::new_v4(),
-        name: name.into(),
-        card_prefix: None,
-        position: 0,
-    }))
+// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_open_drops_legacy_command_log_and_undo_state_tables() {
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    let dir = TempDir::new().unwrap();
+    let db_path = dir.path().join("legacy.sqlite");
+
+    // Seed the file with the pre-405 legacy tables, populated, before
+    // SqliteStore::open ever runs schema.sql or migrate().
+    {
+        let options = SqliteConnectOptions::new()
+            .filename(&db_path)
+            .create_if_missing(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE command_log (idx INTEGER PRIMARY KEY, cmd_json TEXT NOT NULL); \
+             INSERT INTO command_log (cmd_json) VALUES ('[]'); \
+             CREATE TABLE undo_state (id INTEGER PRIMARY KEY, cursor INTEGER NOT NULL); \
+             INSERT INTO undo_state (id, cursor) VALUES (1, 0);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool.close().await;
+    }
+
+    let store = SqliteStore::open(&db_path).await.unwrap();
+
+    let has_command_log: bool = sqlx::query_scalar(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    let has_undo_state: bool = sqlx::query_scalar(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='undo_state'",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+
+    assert!(
+        !has_command_log,
+        "command_log must be dropped when migrating a pre-405 database"
+    );
+    assert!(
+        !has_undo_state,
+        "undo_state must be dropped when migrating a pre-405 database"
+    );
+
+    // Confirm the rest of the schema is intact and the DB is usable.
+    let board = make_board("Survived migrate");
+    let id = board.id;
+    store.upsert_board(board).unwrap();
+    assert_eq!(
+        store.get_board(id).unwrap().unwrap().name,
+        "Survived migrate"
+    );
 }
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_append_returns_count() {
+async fn test_sqlite_open_succeeds_when_legacy_tables_absent() {
     let (store, _dir) = make_store().await;
-    let count = store.append_commands(&[make_board_cmd("B1")]).unwrap();
-    assert_eq!(count, 1);
-    let count = store.append_commands(&[make_board_cmd("B2")]).unwrap();
-    assert_eq!(count, 2);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_count_starts_at_zero() {
-    let (store, _dir) = make_store().await;
-    assert_eq!(store.command_count().unwrap(), 0);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_load_returns_slice() {
-    let (store, _dir) = make_store().await;
-    store.append_commands(&[make_board_cmd("B1")]).unwrap();
-    store.append_commands(&[make_board_cmd("B2")]).unwrap();
-    store.append_commands(&[make_board_cmd("B3")]).unwrap();
-
-    let batches = store.load_commands(0, 3).unwrap();
-    assert_eq!(batches.len(), 3);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_load_range_exclusive_end() {
-    let (store, _dir) = make_store().await;
-    store.append_commands(&[make_board_cmd("B1")]).unwrap();
-    store.append_commands(&[make_board_cmd("B2")]).unwrap();
-
-    assert_eq!(store.load_commands(0, 1).unwrap().len(), 1);
-    assert_eq!(store.load_commands(1, 2).unwrap().len(), 1);
-    assert_eq!(store.load_commands(0, 2).unwrap().len(), 2);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_truncate_removes_tail() {
-    let (store, _dir) = make_store().await;
-    store.append_commands(&[make_board_cmd("B1")]).unwrap();
-    store.append_commands(&[make_board_cmd("B2")]).unwrap();
-    store.append_commands(&[make_board_cmd("B3")]).unwrap();
-
-    store.truncate_commands_after(1).unwrap();
-    assert_eq!(store.command_count().unwrap(), 1);
-    assert_eq!(store.load_commands(0, 1).unwrap().len(), 1);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_batch_stores_multiple_commands() {
-    let (store, _dir) = make_store().await;
-    let batch = vec![make_board_cmd("B1"), make_board_cmd("B2")];
-    store.append_commands(&batch).unwrap();
-
-    let batches = store.load_commands(0, 1).unwrap();
-    assert_eq!(batches.len(), 1);
-    assert_eq!(batches[0].len(), 2);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_truncate_after_zero_clears_all() {
-    let (store, _dir) = make_store().await;
-    store.append_commands(&[make_board_cmd("B1")]).unwrap();
-    store.append_commands(&[make_board_cmd("B2")]).unwrap();
-    store.append_commands(&[make_board_cmd("B3")]).unwrap();
-    assert_eq!(store.command_count().unwrap(), 3);
-
-    store.truncate_commands_after(0).unwrap();
-    assert_eq!(store.command_count().unwrap(), 0);
-    assert!(store.load_commands(0, 10).unwrap().is_empty());
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_load_all_commands_consistent() {
-    let (store, _dir) = make_store().await;
-    store.append_commands(&[make_board_cmd("B1")]).unwrap();
-    store.append_commands(&[make_board_cmd("B2")]).unwrap();
-
-    let (batches, count) = store.load_all_commands().unwrap();
-    assert_eq!(count, 2);
-    assert_eq!(batches.len(), 2);
-    assert_eq!(batches[0].len(), 1);
-    assert_eq!(batches[1].len(), 1);
-}
-
-// multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
-#[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_command_store_load_from_beyond_end_returns_empty() {
-    let (store, _dir) = make_store().await;
-    store.append_commands(&[make_board_cmd("B1")]).unwrap();
-
-    let batches = store.load_commands(5, 10).unwrap();
-    assert!(batches.is_empty());
+    let has_command_log: bool = sqlx::query_scalar(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert!(
+        !has_command_log,
+        "fresh database must not contain a command_log table"
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

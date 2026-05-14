@@ -125,8 +125,10 @@ fn test_storage_location_with_dotdot_fails_validation() {
 
 #[test]
 fn test_storage_location_with_dotdot_in_filename_is_accepted() {
+    let dir = tempfile::tempdir().unwrap();
+    let location = dir.path().join("my..file.json");
     let config = kanban_core::AppConfig {
-        storage_location: Some("/tmp/my..file.json".to_string()),
+        storage_location: Some(location.to_string_lossy().into_owned()),
         ..Default::default()
     };
     let result = kanban_service::config::validate(&config);

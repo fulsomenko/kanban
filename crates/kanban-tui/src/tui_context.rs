@@ -78,6 +78,14 @@ impl TuiContext {
         self.inner.snapshot()
     }
 
+    pub fn migrate_sprint_logs(&mut self) -> KanbanResult<usize> {
+        let result = self.inner.migrate_sprint_logs()?;
+        if result > 0 && self.save_coordinator.has_save_channel() {
+            self.save_coordinator.queue_flush();
+        }
+        Ok(result)
+    }
+
     pub fn apply_snapshot(&mut self, s: kanban_domain::Snapshot) -> KanbanResult<()> {
         self.inner.apply_snapshot(s)
     }
@@ -282,6 +290,14 @@ impl KanbanOperations for TuiContext {
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
         let r = self.inner.move_cards(ids, column_id);
+        self.with_flush(r)
+    }
+
+    fn update_cards(
+        &mut self,
+        updates: Vec<(Uuid, kanban_domain::CardUpdate)>,
+    ) -> KanbanResult<usize> {
+        let r = self.inner.update_cards(updates);
         self.with_flush(r)
     }
 

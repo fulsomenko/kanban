@@ -238,7 +238,7 @@ async fn test_reload_after_external_json_change_returns_updated_data() -> Kanban
 mod sqlite_tests {
     use super::*;
     use kanban_domain::DataStore;
-    use kanban_persistence_sqlite::SqliteStore;
+    use kanban_service::sqlite_backend::SqliteBackend;
 
     /// Verifies that `open_deferred` with a SQLite backend does not issue any
     /// DB queries at construction time — `can_undo()` is `false` because
@@ -247,8 +247,8 @@ mod sqlite_tests {
     async fn test_open_context_sqlite_open_deferred_has_no_undo_history() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.sqlite3");
-        let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
-        let ctx = KanbanContext::open_deferred(Arc::new(store), AppConfig::default());
+        let backend = SqliteBackend::open(path.to_str().unwrap()).await.unwrap();
+        let ctx = KanbanContext::open_deferred(Arc::new(backend), AppConfig::default());
         assert!(!ctx.can_undo());
     }
 
@@ -258,25 +258,25 @@ mod sqlite_tests {
     async fn test_open_context_sqlite_save_succeeds() -> KanbanResult<()> {
         let dir = tempdir().unwrap();
         let path = dir.path().join("noop.sqlite3");
-        let store = SqliteStore::open(path.to_str().unwrap()).await?;
-        let ctx = KanbanContext::open_deferred(Arc::new(store), AppConfig::default());
+        let backend = SqliteBackend::open(path.to_str().unwrap()).await?;
+        let ctx = KanbanContext::open_deferred(Arc::new(backend), AppConfig::default());
         ctx.save().await?;
         Ok(())
     }
 
-    /// SQLite reads are always live: a board written by a second `SqliteStore`
+    /// SQLite reads are always live: a board written by a second `SqliteBackend`
     /// instance is immediately visible to the first context — no `reload()` needed.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_reload_on_sqlite_ctx_is_transparent() -> KanbanResult<()> {
         let dir = tempdir().unwrap();
         let path = dir.path().join("live.sqlite3");
 
-        let store1 = SqliteStore::open(path.to_str().unwrap()).await?;
-        let ctx = KanbanContext::open_deferred(Arc::new(store1), AppConfig::default());
+        let backend1 = SqliteBackend::open(path.to_str().unwrap()).await?;
+        let ctx = KanbanContext::open_deferred(Arc::new(backend1), AppConfig::default());
 
         // Second instance writes a board directly to the DB.
-        let store2 = SqliteStore::open(path.to_str().unwrap()).await?;
-        store2.upsert_board(kanban_domain::Board::new("Via2nd".into(), None))?;
+        let backend2 = SqliteBackend::open(path.to_str().unwrap()).await?;
+        backend2.upsert_board(kanban_domain::Board::new("Via2nd".into(), None))?;
 
         // First context sees the write immediately — SQLite reads are live.
         let boards = ctx.boards()?;
@@ -420,75 +420,6 @@ async fn test_initialize_undo_state_restores_correct_baseline_after_restart() ->
     let names: Vec<&str> = boards.iter().map(|b| b.name.as_str()).collect();
     assert!(names.contains(&"B0"), "B0 must survive undo");
     assert!(names.contains(&"B1"), "B1 must survive undo");
-    Ok(())
-}
-
-// ─── Issue 5: initialize_undo_state falls back to snapshot when no baseline ──
-
-/// A V5 file that has commands but `baseline_data: null` (written by an older
-/// version) must NOT destroy all data when the user hits undo.
-///
-/// Before the fix: `load_snapshot_at(0)` returns `None` →
-/// `unwrap_or_default()` produces an empty `Snapshot` as the baseline →
-/// undo applies the empty baseline → all boards disappear.
-///
-/// After the fix: `None` from `load_snapshot_at(0)` falls back to
-/// `backend.snapshot()` (current data), so undo applies current data as the
-/// baseline and boards remain unchanged.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_initialize_undo_state_no_stored_baseline_falls_back_to_current_snapshot(
-) -> KanbanResult<()> {
-    use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
-    use kanban_domain::{Board, Snapshot};
-    use kanban_persistence::{
-        snapshot_to_json_bytes, PersistenceMetadata, PersistenceStore, StoreSnapshot,
-    };
-
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("no_baseline.json");
-
-    // Write a file with a board, one command batch, but NO baseline_data.
-    // This simulates a file written by a version that predates baseline storage.
-    {
-        let board = Board::new("TestBoard".into(), None);
-        let board_id = board.id;
-        let snap = Snapshot {
-            boards: vec![board],
-            ..Snapshot::new()
-        };
-        let data = snapshot_to_json_bytes(&snap).unwrap();
-
-        let cmd = Command::Board(BoardCommand::Create(CreateBoard {
-            id: board_id,
-            name: "TestBoard".into(),
-            card_prefix: None,
-            position: 0,
-        }));
-
-        let jfs = JsonFileStore::new(&path);
-        // Pass None as baseline so the saved file has no baseline_data.
-        jfs.sync_command_log(&[vec![cmd]], 1, None).await.unwrap();
-        jfs.save(StoreSnapshot {
-            data,
-            metadata: PersistenceMetadata::new(uuid::Uuid::new_v4()),
-        })
-        .await
-        .unwrap();
-    }
-
-    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
-    let boards_before = ctx.boards()?;
-    assert_eq!(boards_before.len(), 1, "board must be present before undo");
-
-    let did_undo = ctx.undo()?;
-    assert!(did_undo, "undo must succeed (command_count=1)");
-
-    let boards_after = ctx.boards()?;
-    assert_eq!(
-        boards_after.len(),
-        1,
-        "undo must not wipe boards when baseline falls back to current snapshot"
-    );
     Ok(())
 }
 

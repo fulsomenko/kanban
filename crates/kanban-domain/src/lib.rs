@@ -63,5 +63,3 @@ pub use data_store::{DataStore, GraphMutFn};
 pub use in_memory_store::InMemoryStore;
 
 pub use error::{DependencyError, DomainError, KanbanError, KanbanResult};
-
-pub const COMMAND_SCHEMA_VERSION: u32 = 1;

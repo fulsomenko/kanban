@@ -4,9 +4,9 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, SprintCommand,
 };
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot, Sprint,
-    SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
+    Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot,
+    Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -134,6 +134,48 @@ impl KanbanContext {
         self.backend.apply_snapshot(snapshot)
     }
 
+    // ── Data migrations ───────────────────────────────────────────────────────
+
+    /// Backfill `sprint_logs` for cards that have a `sprint_id` but empty logs.
+    ///
+    /// This is a one-time data-migration utility, not a regular operation —
+    /// it bypasses the undo stack on purpose. The actual rule for what
+    /// constitutes a correctly migrated log lives in
+    /// [`kanban_domain::card_lifecycle::migrate_sprint_logs`]; this method
+    /// just orchestrates the read → transform → persist-changed loop.
+    ///
+    /// `sprints` and `boards` are passed by shared reference to the pure
+    /// function — they are reference data only, never mutated, so the
+    /// persist loop correctly iterates `cards` alone.
+    ///
+    /// Returns the number of cards that received a backfilled log.
+    pub fn migrate_sprint_logs(&mut self) -> KanbanResult<usize> {
+        let mut cards = self.backend.list_all_cards()?;
+        let sprints = self.backend.list_all_sprints()?;
+        let boards = self.backend.list_boards()?;
+        let before_logs: Vec<_> = cards.iter().map(|c| c.sprint_logs.clone()).collect();
+        let count =
+            kanban_domain::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
+        if count > 0 {
+            // Invalidate any pending redo: a data migration mutates state
+            // outside the command log, so replaying recorded commands against
+            // the post-migration backend could yield incoherent results.
+            if self.undo_cursor < self.command_count {
+                self.backend
+                    .truncate_commands_after(self.undo_cursor as u64)?;
+                self.command_count = self.undo_cursor;
+            }
+            tracing::info!("Migrated sprint logs for {} card(s)", count);
+            for (card, before) in cards.into_iter().zip(before_logs) {
+                if card.sprint_logs != before {
+                    self.backend.upsert_card(card)?;
+                }
+            }
+            self.dirty = true;
+        }
+        Ok(count)
+    }
+
     // ── Undo / Redo ───────────────────────────────────────────────────────────
 
     /// Loads the pre-existing command count and baseline snapshot from the backend.
@@ -142,28 +184,16 @@ impl KanbanContext {
     /// calls this automatically.  Idempotent if called more than once.
     pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
-            let count = self.backend.command_count()? as usize;
-            let baseline = if count > 0 {
-                match self.backend.load_snapshot_at(0)? {
-                    Some(snap) => snap,
-                    // Old file: commands present but no stored baseline.
-                    // Use current data as the undo floor so undo cannot
-                    // wipe existing data.
-                    None => self.backend.snapshot()?,
-                }
-            } else {
-                self.backend.snapshot()?
-            };
+            let baseline = self.backend.snapshot()?;
+            // Undo is in-session only — discard commands carried over from previous sessions.
+            if self.backend.command_count()? > 0 {
+                self.backend.truncate_commands_after(0)?;
+            }
             self.baseline_snapshot = Some(baseline);
-            self.command_count = count;
-            self.undo_cursor = count;
+            self.command_count = 0;
+            self.undo_cursor = 0;
         }
         Ok(())
-    }
-
-    fn notify_undo_state(&self) -> KanbanResult<()> {
-        self.backend
-            .on_undo_state_changed(self.undo_cursor as u64, self.baseline_snapshot.clone())
     }
 
     /// Execute a batch of commands as a single undo unit.
@@ -238,7 +268,6 @@ impl KanbanContext {
         }
 
         self.dirty = true;
-        self.notify_undo_state()?;
         Ok(())
     }
 
@@ -289,7 +318,6 @@ impl KanbanContext {
         }
 
         self.dirty = true;
-        self.notify_undo_state()?;
         Ok(true)
     }
 
@@ -326,7 +354,6 @@ impl KanbanContext {
 
         self.undo_cursor += 1;
         self.dirty = true;
-        self.notify_undo_state()?;
         Ok(true)
     }
 
@@ -343,7 +370,6 @@ impl KanbanContext {
         self.backend.truncate_commands_after(0)?;
         self.undo_cursor = 0;
         self.command_count = 0;
-        self.notify_undo_state()?;
         Ok(())
     }
 
@@ -401,7 +427,6 @@ impl KanbanContext {
         let baseline = self.backend.snapshot()?;
         self.backend.truncate_commands_after(0)?;
         self.baseline_snapshot = Some(baseline);
-        self.notify_undo_state()?;
         Ok(())
     }
 
@@ -470,33 +495,25 @@ impl KanbanContext {
     }
 
     pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
-        use kanban_domain::commands::MoveCards;
-        let all_cards = match self.backend.list_all_cards() {
-            Ok(c) => c,
-            Err(e) => {
-                return BatchOperationResult {
-                    succeeded: vec![],
-                    failed: ids
-                        .into_iter()
-                        .map(|id| BatchOperationFailure {
-                            id,
-                            error: e.to_string(),
-                        })
-                        .collect(),
-                };
-            }
-        };
-        let card_ids: std::collections::HashSet<Uuid> = all_cards.iter().map(|c| c.id).collect();
+        // Dedup at the input boundary so the per-id classification loop both
+        // (a) reports each invalid id once in `failed` and (b) reports each
+        // valid id once in `succeeded`, matching the one `MoveCard` per
+        // unique id that `compute_move_positions` will emit. Also avoids
+        // redundant get_card calls for the same id.
+        let ids = kanban_domain::card_lifecycle::dedup_preserving_order(&ids);
         let mut to_move = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            if card_ids.contains(&id) {
-                to_move.push(id);
-            } else {
-                failed.push(BatchOperationFailure {
+            match self.backend.get_card(id) {
+                Ok(Some(_)) => to_move.push(id),
+                Ok(None) => failed.push(BatchOperationFailure {
                     id,
                     error: KanbanError::not_found("card", id).to_string(),
-                });
+                }),
+                Err(e) => failed.push(BatchOperationFailure {
+                    id,
+                    error: e.to_string(),
+                }),
             }
         }
         if to_move.is_empty() {
@@ -506,10 +523,41 @@ impl KanbanContext {
             };
         }
         let succeeded = to_move.clone();
-        match self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
-            ids: to_move,
-            column_id,
-        }))]) {
+
+        let chained_status_updates =
+            match self.chained_status_updates_for_batch_move(&to_move, column_id) {
+                Ok(v) => v,
+                Err(e) => {
+                    let err = e.to_string();
+                    let mut all_failed = failed;
+                    all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                        id,
+                        error: err.clone(),
+                    }));
+                    return BatchOperationResult {
+                        succeeded: vec![],
+                        failed: all_failed,
+                    };
+                }
+            };
+
+        let batch = match self.build_move_cards_batch(&to_move, column_id, chained_status_updates) {
+            Ok(b) => b,
+            Err(e) => {
+                let err = e.to_string();
+                let mut all_failed = failed;
+                all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                    id,
+                    error: err.clone(),
+                }));
+                return BatchOperationResult {
+                    succeeded: vec![],
+                    failed: all_failed,
+                };
+            }
+        };
+
+        match self.execute(batch) {
             Ok(()) => BatchOperationResult { succeeded, failed },
             Err(e) => {
                 let err = e.to_string();
@@ -615,6 +663,158 @@ impl KanbanContext {
             }
         }
     }
+
+    /// KAN-394: given a status that's about to be applied to a card, compute the
+    /// target column the card should live in (and the position to use in that
+    /// column) to maintain the status ↔ completion column invariant. Returns
+    /// None when no chained move is needed.
+    ///
+    /// The position is computed via a column-scoped `list_cards_by_column`
+    /// query — same convention as `KanbanContext::move_card(_, _, None)` — so
+    /// we only ever read the target column, never the full cards table.
+    fn compute_target_column_for_status(
+        &self,
+        card_id: Uuid,
+        new_status: CardStatus,
+    ) -> KanbanResult<Option<(Uuid, i32)>> {
+        let Some(card) = self.backend.get_card(card_id)? else {
+            return Ok(None);
+        };
+        let Some(column) = self.backend.get_column(card.column_id)? else {
+            return Ok(None);
+        };
+        let Some(board) = self.backend.get_board(column.board_id)? else {
+            return Ok(None);
+        };
+        let columns = self.backend.list_columns_by_board(board.id)?;
+        let Some(target_col) = kanban_domain::card_lifecycle::target_column_for_status(
+            &card, new_status, &board, &columns,
+        ) else {
+            return Ok(None);
+        };
+        let pos = self.backend.list_cards_by_column(target_col)?.len() as i32;
+        Ok(Some((target_col, pos)))
+    }
+
+    /// KAN-394: per-card chained status updates for a batch move. For each id
+    /// in `ids`, asks the domain whether moving to `new_column_id` requires a
+    /// status flip. Returns the cards that need a status update along with
+    /// their target status. Cards that aren't found are silently skipped —
+    /// individual `MoveCard` commands will surface the not-found error.
+    fn chained_status_updates_for_batch_move(
+        &self,
+        ids: &[Uuid],
+        new_column_id: Uuid,
+    ) -> KanbanResult<Vec<(Uuid, CardStatus)>> {
+        let mut updates = Vec::new();
+        for &card_id in ids {
+            if let Some(new_status) = self.compute_target_status_for_move(card_id, new_column_id)? {
+                updates.push((card_id, new_status));
+            }
+        }
+        Ok(updates)
+    }
+
+    /// KAN-428: build the command batch for a multi-card move into one column.
+    ///
+    /// Validates that every input id is a known card up front so that an
+    /// unknown id surfaces as `not_found` rather than being miscounted by
+    /// the batch WIP pre-check. When the target column has a WIP limit,
+    /// performs a single batch-level pre-check that returns one clean
+    /// `WipLimitExceeded` before any per-card command runs. The per-card
+    /// `MoveCard::execute` WIP check still runs as belt-and-suspenders, but
+    /// since `count_cards_in_column_excluding` is now O(column_size +
+    /// exclude.len()), the redundant per-card checks are cheap.
+    fn build_move_cards_batch(
+        &self,
+        ids: &[Uuid],
+        column_id: Uuid,
+        chained_status_updates: Vec<(Uuid, CardStatus)>,
+    ) -> KanbanResult<Vec<Command>> {
+        use kanban_domain::commands::{MoveCard, UpdateCard};
+        use kanban_domain::DomainError;
+        use std::collections::HashSet;
+
+        for &id in ids {
+            if self.backend.get_card(id)?.is_none() {
+                return Err(KanbanError::not_found("card", id));
+            }
+        }
+
+        let existing = self.backend.list_cards_by_column(column_id)?;
+        let column = self
+            .backend
+            .get_column(column_id)?
+            .ok_or_else(|| KanbanError::not_found("column", column_id))?;
+
+        if let Some(limit) = column.wip_limit {
+            // `moving_set.len()` is the post-dedup mover count — `compute_move_positions`
+            // emits one `MoveCard` per unique id, so the pre-check must use the same
+            // count to avoid a false `WipLimitExceeded` when the caller passes
+            // duplicates that would actually fit under the limit.
+            let moving_set: HashSet<Uuid> = ids.iter().copied().collect();
+            let non_moving = existing
+                .iter()
+                .filter(|c| !moving_set.contains(&c.id))
+                .count();
+            if non_moving + moving_set.len() > limit as usize {
+                return Err(KanbanError::Domain(DomainError::wip_limit_exceeded(
+                    column_id,
+                    limit as u32,
+                )));
+            }
+        }
+
+        let positions = kanban_domain::card_lifecycle::compute_move_positions(&existing, ids);
+
+        let mut batch: Vec<Command> =
+            Vec::with_capacity(positions.len() + chained_status_updates.len());
+        for (card_id, new_position) in positions {
+            batch.push(Command::Card(CardCommand::Move(MoveCard {
+                card_id,
+                new_column_id: column_id,
+                new_position,
+            })));
+        }
+        for (card_id, new_status) in chained_status_updates {
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id,
+                updates: CardUpdate {
+                    status: Some(new_status),
+                    ..Default::default()
+                },
+            })));
+        }
+        Ok(batch)
+    }
+
+    /// KAN-394: given a column the card is about to move to, compute the status
+    /// the card should have to maintain the status ↔ completion column invariant.
+    /// Returns None when no chained status update is needed.
+    fn compute_target_status_for_move(
+        &self,
+        card_id: Uuid,
+        new_column_id: Uuid,
+    ) -> KanbanResult<Option<CardStatus>> {
+        let Some(card) = self.backend.get_card(card_id)? else {
+            return Ok(None);
+        };
+        let Some(column) = self.backend.get_column(new_column_id)? else {
+            return Ok(None);
+        };
+        let Some(board) = self.backend.get_board(column.board_id)? else {
+            return Ok(None);
+        };
+        let columns = self.backend.list_columns_by_board(board.id)?;
+        Ok(
+            kanban_domain::card_lifecycle::target_status_for_column_move(
+                &card,
+                new_column_id,
+                &board,
+                &columns,
+            ),
+        )
+    }
 }
 
 // ── KanbanOperations impl ─────────────────────────────────────────────────────
@@ -656,9 +856,8 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
-        use kanban_domain::commands::DeleteBoard;
-        let cmd = Command::Board(BoardCommand::Delete(DeleteBoard { board_id: id }));
-        self.execute(vec![cmd])
+        let commands = crate::cascade::delete_board(self.backend.as_data_store(), id)?;
+        self.execute(commands)
     }
 
     fn create_column(
@@ -795,12 +994,7 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
-        use kanban_domain::commands::UpdateCard;
-        let cmd = Command::Card(CardCommand::Update(UpdateCard {
-            card_id: id,
-            updates,
-        }));
-        self.execute(vec![cmd])?;
+        self.update_cards(vec![(id, updates)])?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
@@ -811,17 +1005,28 @@ impl KanbanOperations for KanbanContext {
         column_id: Uuid,
         position: Option<i32>,
     ) -> KanbanResult<Card> {
-        use kanban_domain::commands::MoveCard;
+        use kanban_domain::commands::{MoveCard, UpdateCard};
         let position = match position {
             Some(p) => p,
             None => self.backend.list_cards_by_column(column_id)?.len() as i32,
         };
-        let cmd = Command::Card(CardCommand::Move(MoveCard {
+        let mut batch = vec![Command::Card(CardCommand::Move(MoveCard {
             card_id: id,
             new_column_id: column_id,
             new_position: position,
-        }));
-        self.execute(vec![cmd])?;
+        }))];
+
+        if let Some(new_status) = self.compute_target_status_for_move(id, column_id)? {
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id: id,
+                updates: CardUpdate {
+                    status: Some(new_status),
+                    ..Default::default()
+                },
+            })));
+        }
+
+        self.execute(batch)?;
         self.get_card(id)?
             .ok_or_else(|| KanbanError::not_found("card", id))
     }
@@ -881,12 +1086,7 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
-        use kanban_domain::commands::AssignCardsToSprint;
-        let cmd = Command::Card(CardCommand::AssignToSprint(AssignCardsToSprint {
-            ids: vec![card_id],
-            sprint_id,
-        }));
-        self.execute(vec![cmd])?;
+        self.assign_cards_to_sprint(vec![card_id], sprint_id)?;
         self.get_card(card_id)?
             .ok_or_else(|| KanbanError::not_found("card", card_id))
     }
@@ -952,14 +1152,77 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        use kanban_domain::commands::MoveCards;
         let before = self.backend.list_cards_by_column(column_id)?.len();
-        self.execute(vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
-            ids,
-            column_id,
-        }))])?;
+
+        let chained_status_updates = self.chained_status_updates_for_batch_move(&ids, column_id)?;
+        let batch = self.build_move_cards_batch(&ids, column_id, chained_status_updates)?;
+
+        self.execute(batch)?;
         let after = self.backend.list_cards_by_column(column_id)?.len();
         Ok(after - before)
+    }
+
+    fn update_cards(&mut self, updates: Vec<(Uuid, CardUpdate)>) -> KanbanResult<usize> {
+        use kanban_domain::commands::{MoveCard, UpdateCard};
+        use std::collections::HashMap;
+
+        let count = updates.len();
+        let mut batch: Vec<Command> = Vec::with_capacity(count * 2);
+        // Track per-column position offsets within this batch so chained moves
+        // into the same target column don't all collapse onto the same
+        // position. `compute_target_column_for_status` reads `list_cards_by_column`
+        // once per call against the pre-batch state.
+        let mut position_offsets: HashMap<Uuid, i32> = HashMap::new();
+
+        enum Chained {
+            Move(Uuid, i32),
+            Status(CardStatus),
+        }
+
+        for (card_id, card_updates) in updates {
+            let chained = match (card_updates.status, card_updates.column_id) {
+                (Some(new_status), None) => self
+                    .compute_target_column_for_status(card_id, new_status)?
+                    .map(|(col, base_pos)| {
+                        let offset = position_offsets.entry(col).or_insert(0);
+                        let pos = base_pos + *offset;
+                        *offset += 1;
+                        Chained::Move(col, pos)
+                    }),
+                (None, Some(new_col)) => self
+                    .compute_target_status_for_move(card_id, new_col)?
+                    .map(Chained::Status),
+                _ => None,
+            };
+
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id,
+                updates: card_updates,
+            })));
+
+            match chained {
+                Some(Chained::Move(col, pos)) => {
+                    batch.push(Command::Card(CardCommand::Move(MoveCard {
+                        card_id,
+                        new_column_id: col,
+                        new_position: pos,
+                    })));
+                }
+                Some(Chained::Status(status)) => {
+                    batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                        card_id,
+                        updates: CardUpdate {
+                            status: Some(status),
+                            ..Default::default()
+                        },
+                    })));
+                }
+                None => {}
+            }
+        }
+
+        self.execute(batch)?;
+        Ok(count)
     }
 
     fn assign_cards_to_sprint(&mut self, ids: Vec<Uuid>, sprint_id: Uuid) -> KanbanResult<usize> {
@@ -1160,7 +1423,6 @@ impl KanbanOperations for KanbanContext {
         self.undo_cursor = 0;
         self.command_count = 0;
         self.dirty = true;
-        self.notify_undo_state()?;
 
         Ok(board)
     }

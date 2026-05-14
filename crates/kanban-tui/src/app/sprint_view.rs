@@ -1,5 +1,5 @@
 use crate::card_list::{CardList, CardListId};
-use crate::card_list_component::{CardListActionType, CardListComponent, CardListComponentConfig};
+use crate::card_list_component::{CardListComponent, CardListComponentConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SprintTaskPanel {
@@ -23,27 +23,21 @@ impl Default for SprintViewState {
             completed_cards: CardList::new(CardListId::All),
             uncompleted_component: CardListComponent::new(
                 CardListId::All,
-                CardListComponentConfig::new()
-                    .with_actions(vec![
-                        CardListActionType::Navigation,
-                        CardListActionType::Selection,
-                        CardListActionType::Editing,
-                        CardListActionType::Completion,
-                        CardListActionType::Priority,
-                        CardListActionType::Sorting,
-                    ])
-                    .with_movement(false),
+                CardListComponentConfig::default(),
             ),
             completed_component: CardListComponent::new(
                 CardListId::All,
-                CardListComponentConfig::new()
-                    .with_actions(vec![
-                        CardListActionType::Navigation,
-                        CardListActionType::Selection,
-                        CardListActionType::Sorting,
-                    ])
-                    .with_multi_select(false),
+                CardListComponentConfig::default(),
             ),
         }
+    }
+}
+
+impl SprintViewState {
+    pub fn sync_scroll(&mut self, uncompleted_viewport: usize, completed_viewport: usize) {
+        self.uncompleted_cards
+            .ensure_selected_visible(uncompleted_viewport);
+        self.completed_cards
+            .ensure_selected_visible(completed_viewport);
     }
 }

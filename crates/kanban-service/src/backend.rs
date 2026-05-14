@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use kanban_domain::command_store::CommandStore;
 use kanban_domain::data_store::DataStore;
-use kanban_domain::{InMemoryStore, KanbanResult, Snapshot};
+use kanban_domain::{InMemoryStore, KanbanResult};
 use uuid::Uuid;
 
 /// Combines the entity-level CRUD interface (`DataStore`) with the command
@@ -18,9 +18,6 @@ use uuid::Uuid;
 ///   a subsequent `flush()` would persist.
 /// - `needs_save_worker()`: returns `true` for backends (JSON) that require
 ///   a background worker to call `flush()` asynchronously after mutations.
-/// - `on_undo_state_changed()`: sync callback so the backend can cache the
-///   current undo cursor and baseline snapshot for inclusion in the next
-///   `flush()`. No-op for write-through backends.
 /// - `instance_id()`: stable ID used to distinguish file writes by this
 ///   instance from external modifications.
 #[async_trait]
@@ -49,12 +46,6 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         false
     }
 
-    /// Called by `KanbanContext` whenever `undo_cursor` or `baseline_snapshot`
-    /// change, so file-backed backends can include that state in the next flush.
-    fn on_undo_state_changed(&self, _cursor: u64, _baseline: Option<Snapshot>) -> KanbanResult<()> {
-        Ok(())
-    }
-
     /// Stable instance UUID used for own-write detection in file watchers.
     fn instance_id(&self) -> Uuid {
         Uuid::nil()
@@ -69,38 +60,6 @@ impl KanbanBackend for InMemoryStore {
     }
     // All lifecycle defaults are correct for in-memory: flush=noop, reload=noop,
     // needs_flush=false, needs_save_worker=false.
-}
-
-// ─── SqliteStore ─────────────────────────────────────────────────────────────
-
-#[cfg(feature = "sqlite")]
-#[async_trait]
-impl KanbanBackend for kanban_persistence_sqlite::SqliteStore {
-    fn as_data_store(&self) -> &dyn DataStore {
-        self
-    }
-
-    async fn flush(&self) -> KanbanResult<()> {
-        self.checkpoint().await
-    }
-
-    async fn reload(&self) -> KanbanResult<()> {
-        // SQLite reads are always live against the WAL; there is no in-memory
-        // cache to invalidate, so this is a deliberate no-op.
-        Ok(())
-    }
-
-    fn needs_flush(&self) -> bool {
-        false
-    }
-
-    fn needs_save_worker(&self) -> bool {
-        false
-    }
-
-    fn instance_id(&self) -> Uuid {
-        <kanban_persistence_sqlite::SqliteStore as kanban_persistence::PersistenceStore>::instance_id(self)
-    }
 }
 
 #[cfg(test)]
@@ -145,37 +104,29 @@ mod tests {
         store.reload().await.expect("reload should be a no-op");
     }
 
-    #[test]
-    fn test_on_undo_state_changed_returns_ok_for_in_memory() {
-        let store = InMemoryStore::new();
-        store
-            .on_undo_state_changed(0, None)
-            .expect("on_undo_state_changed must return Ok(()) for InMemoryStore");
-    }
-
-    // Step 1 — SQLite KanbanBackend lifecycle tests
+    // SQLite KanbanBackend lifecycle tests
     #[cfg(feature = "sqlite")]
     mod sqlite_backend_tests {
         use kanban_domain::{Board, DataStore};
-        use kanban_persistence_sqlite::SqliteStore;
 
         use crate::backend::KanbanBackend;
+        use crate::sqlite_backend::SqliteBackend;
 
         #[tokio::test(flavor = "multi_thread")]
         async fn test_sqlite_backend_needs_flush_returns_false() {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("t.sqlite3");
-            let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
-            assert!(!store.needs_flush());
+            let backend = SqliteBackend::open(path.to_str().unwrap()).await.unwrap();
+            assert!(!backend.needs_flush());
         }
 
         #[tokio::test(flavor = "multi_thread")]
         async fn test_sqlite_backend_flush_executes_wal_checkpoint() {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("t.sqlite3");
-            let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
-            store.upsert_board(Board::new("B".into(), None)).unwrap();
-            store
+            let backend = SqliteBackend::open(path.to_str().unwrap()).await.unwrap();
+            backend.upsert_board(Board::new("B".into(), None)).unwrap();
+            backend
                 .flush()
                 .await
                 .expect("WAL checkpoint should not error");
@@ -185,10 +136,10 @@ mod tests {
         async fn test_sqlite_backend_reload_is_noop() {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("t.sqlite3");
-            let store = SqliteStore::open(path.to_str().unwrap()).await.unwrap();
-            store.upsert_board(Board::new("A".into(), None)).unwrap();
-            store.reload().await.unwrap();
-            let boards = store.list_boards().unwrap();
+            let backend = SqliteBackend::open(path.to_str().unwrap()).await.unwrap();
+            backend.upsert_board(Board::new("A".into(), None)).unwrap();
+            backend.reload().await.unwrap();
+            let boards = backend.list_boards().unwrap();
             assert_eq!(boards.len(), 1);
             assert_eq!(boards[0].name, "A");
         }

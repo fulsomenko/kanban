@@ -10,26 +10,33 @@ use ratatui::{
     Frame,
 };
 
-pub(super) fn render_sprint_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    if let Some(sprint_idx) = app.selection.active_sprint_index {
-        if let Some(sprint) = app.model.sprints().get(sprint_idx) {
-            if let Some(board_idx) = app.selection.active_board_index {
-                if let Some(board) = app.model.boards().get(board_idx) {
-                    let is_completed = sprint.status == SprintStatus::Completed;
+pub(super) fn render_sprint_detail_view(app: &mut App, frame: &mut Frame, area: Rect) {
+    let sprint_idx = match app.selection.active_sprint_index {
+        Some(i) => i,
+        None => return,
+    };
+    let board_idx = match app.selection.active_board_index {
+        Some(i) => i,
+        None => return,
+    };
+    let sprint = match app.model.sprints().get(sprint_idx).cloned() {
+        Some(s) => s,
+        None => return,
+    };
+    let board = match app.model.boards().get(board_idx).cloned() {
+        Some(b) => b,
+        None => return,
+    };
 
-                    if is_completed {
-                        render_sprint_detail_with_tasks(app, frame, area, sprint, board);
-                    } else {
-                        render_sprint_detail_metadata(app, frame, area, sprint, board);
-                    }
-                }
-            }
-        }
+    if sprint.status == SprintStatus::Completed {
+        render_sprint_detail_with_tasks(app, frame, area, &sprint, &board);
+    } else {
+        render_sprint_detail_metadata(app, frame, area, &sprint, &board);
     }
 }
 
 fn render_sprint_detail_metadata(
-    app: &App,
+    app: &mut App,
     frame: &mut Frame,
     area: Rect,
     sprint: &Sprint,
@@ -80,7 +87,7 @@ fn sprint_date_lines(sprint: &Sprint) -> Vec<Line<'static>> {
         ));
     }
     if let Some(end) = sprint.end_date {
-        let end_style = if sprint.is_ended() {
+        let end_style = if sprint.is_ended(chrono::Utc::now()) {
             Style::default().fg(Color::Red)
         } else {
             normal_text()
@@ -156,7 +163,7 @@ fn sprint_timestamp_lines(sprint: &Sprint) -> Vec<Line<'static>> {
 }
 
 pub(super) fn render_sprint_detail_with_tasks(
-    app: &App,
+    app: &mut App,
     frame: &mut Frame,
     area: Rect,
     sprint: &Sprint,
@@ -167,6 +174,14 @@ pub(super) fn render_sprint_detail_with_tasks(
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
+    let uncompleted_focused = app.sprint_view.panel == crate::app::SprintTaskPanel::Uncompleted;
+    let completed_focused = app.sprint_view.panel == crate::app::SprintTaskPanel::Completed;
+
+    let uncompleted_viewport = chunks[0].height.saturating_sub(2) as usize;
+    let completed_viewport = chunks[1].height.saturating_sub(2) as usize;
+    app.sprint_view
+        .sync_scroll(uncompleted_viewport, completed_viewport);
+
     render_sprint_task_panel_with_selection(
         app,
         frame,
@@ -175,7 +190,7 @@ pub(super) fn render_sprint_detail_with_tasks(
         board,
         &app.sprint_view.uncompleted_cards,
         "Uncompleted",
-        app.sprint_view.panel == crate::app::SprintTaskPanel::Uncompleted,
+        uncompleted_focused,
     );
 
     render_sprint_task_panel_with_selection(
@@ -186,7 +201,7 @@ pub(super) fn render_sprint_detail_with_tasks(
         board,
         &app.sprint_view.completed_cards,
         "Completed",
-        app.sprint_view.panel == crate::app::SprintTaskPanel::Completed,
+        completed_focused,
     );
 }
 

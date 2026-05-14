@@ -26,6 +26,12 @@ Sleep 300ms
 Type "Implement MCP server support"
 Sleep 300ms
 Enter
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
 Sleep 1000ms
 Enter
 Sleep 1500ms
@@ -117,8 +123,10 @@ Space
 Sleep 800ms
 Escape
 Sleep 800ms
+Shift+G
+Sleep 1100ms
 Shift+L
-Sleep 500ms
+Sleep 900ms
 
 # Beat 7: Copy git branch and quit app
 Enter
@@ -148,11 +156,10 @@ Enter
 Sleep 1000ms
 
 #Beat 9: Complete the card
-Type "kanban demo.json card update KAN-12 --status done | jq"
+Type "kanban demo.json card move KAN-12 --column-id c2a0d5e2-c0a0-4b1c-9d3a-1f1c8e7a5b9c | jq"
+Enter
 Sleep 1300ms
 
 # End
-Ctrl+L
-Enter
 Sleep 3000ms
 

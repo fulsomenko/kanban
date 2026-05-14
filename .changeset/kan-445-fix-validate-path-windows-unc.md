@@ -1,0 +1,34 @@
+---
+bump: patch
+---
+
+Fix Windows path handling across `validate_path`, TUI startup, and storage migrations (KAN-445)
+
+- On Windows, launching `kanban` with an existing data file (e.g. `kanban
+  kanban.json`) no longer fails with the misleading error `Path traversal
+  not allowed: 'kanban.json' resolves outside current directory`
+- The path validator now uses `dunce::canonicalize`, which returns the
+  ordinary `C:\…` form on Windows instead of the verbatim `\\?\C:\…` UNC
+  form that `std::fs::canonicalize` emits. The traversal guard's prefix
+  comparison against the current working directory now succeeds for paths
+  inside the cwd, as intended
+- The current working directory is canonicalized through the same path,
+  so the comparison is robust even when the cwd itself is in non-canonical
+  form (e.g. a UNC-shaped Windows cwd, or a `/var` → `/private/var`
+  symlink on macOS)
+- The TUI's startup `--file` resolution follows the same canonical form,
+  so `app_config.storage_location` no longer leaks `\\?\C:\…` paths into
+  settings rendering, migration source paths, and other downstream
+  consumers
+- Absolute paths that point at existing files are likewise returned in
+  their plain form, so downstream consumers no longer see surprise UNC
+  prefixes leaking out of the service layer
+- On Windows, a failed storage migration (`kanban migrate`) now actually
+  removes the partially-written destination file instead of leaving an
+  orphan that blocks retries. The SQLite store now exposes an async
+  `close()` that drains its connection pool before the cleanup `remove_file`
+  runs — Windows refuses to delete files with live handles, and the
+  previous `drop(store)` was synchronous-only and didn't wait for in-flight
+  connections. POSIX behaviour is unchanged
+- No change to the path traversal protection — escapes via `..` are
+  still rejected

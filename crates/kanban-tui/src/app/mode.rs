@@ -28,6 +28,7 @@ pub enum DialogMode {
     ManageChildren,
     CarryOverSprint,
     ExportBoards,
+    ChooseStorageFile,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

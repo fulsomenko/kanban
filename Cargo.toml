@@ -15,6 +15,7 @@ members = [
 [workspace.package]
 version = "0.4.1"
 edition = "2021"
+rust-version = "1.74"
 authors = ["Max Emil Yoon Blomstervall"]
 license = "Apache-2.0"
 repository = "https://github.com/fulsomenko/kanban"
@@ -60,6 +61,9 @@ predicates = "3.0"
 # File watching and atomic operations
 notify = "6.1"
 tempfile = "3.8"
+
+# Windows path normalisation (strip `\\?\` UNC prefix)
+dunce = "1.0"
 
 [profile.release]
 opt-level = 3

@@ -29,7 +29,7 @@ Application configuration loaded from a TOML or JSON config file.
 | `default_sprint_prefix` | `Option<String>` | `"sprint"` | Default sprint identifier prefix |
 | `editing_format` | `Option<String>` | `"json"` | Format used for external editor (`"json"` or `"toml"`) |
 | `storage_backend` | `Option<String>` | `"json"` | Storage backend (`"json"` or `"sqlite"`) |
-| `storage_location` | `Option<String>` | `"kanban.json"` / `"kanban.sqlite"` | Path to the data file |
+| `storage_location` | `Option<String>` | `"boards.json"` / `"boards.sqlite"` | Path to the data file |
 
 **Effective-value getters** (return the value or its default):
 
@@ -39,7 +39,7 @@ config.effective_default_sprint_prefix() // → "sprint"
 config.effective_storage_backend()       // → "json"
 config.effective_editing_format()        // → "json"
 config.effective_configuration_format()  // → "toml"
-config.effective_storage_location()      // → "kanban.json"
+config.effective_storage_location()      // → "boards.json"
 ```
 
 **Validation**: `config.validate_values()` returns `CoreError::Validation` if any field is out of range.

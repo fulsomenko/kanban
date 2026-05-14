@@ -62,7 +62,7 @@ jobs:
         if: steps.check.outputs.has_changesets == 'true'
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin git@github.com:fulsomenko/kanban.git
 
       # bump-version reads changesets, aggregate-changelog reads then deletes them.
@@ -122,6 +122,53 @@ jobs:
         with:
           tag_name: v${{ steps.release.outputs.new }}
           generate_release_notes: true
+
+      - name: Update PKGBUILD version and sha256
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.new }}
+        run: |
+          set -euo pipefail
+          URL="https://github.com/fulsomenko/kanban/archive/v${VERSION}.tar.gz"
+          SHA256=$(curl -fsL "$URL" | sha256sum | cut -d' ' -f1)
+          sed -i "s|^pkgver=.*|pkgver=${VERSION}|" ./aur/PKGBUILD
+          sed -i "s|^pkgrel=.*|pkgrel=1|" ./aur/PKGBUILD
+          sed -i "s|sha256sums=.*|sha256sums=(\"${SHA256}\")|" ./aur/PKGBUILD
+
+      - name: Generate .SRCINFO
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          nix shell nixpkgs#pacman -c sh -c '
+            PACMAN_ROOT="$(dirname "$(dirname "$(command -v makepkg)")")"
+            export MAKEPKG_CONF="$PACMAN_ROOT/etc/makepkg.conf"
+            cd aur && makepkg --printsrcinfo > .SRCINFO
+          '
+
+      - name: Commit and push AUR files
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+        run: |
+          git add aur/PKGBUILD aur/.SRCINFO
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update AUR package to v${{ steps.release.outputs.new }}"
+            git push origin master
+          fi
+
+      - name: Deploy to AUR
+        if: steps.check.outputs.has_changesets == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@da03e160361ce01bf087e790b6ffd196d7dccff7
+        with:
+          pkgname: kanban
+          pkgbuild: ./aur/PKGBUILD
+          commit_username: github-actions[bot]
+          commit_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: "Update to v${{ steps.release.outputs.new }}"
+          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
+          updpkgsums: false
+          allow_empty_commits: false
 
       - name: Sync develop with master
         if: steps.check.outputs.has_changesets == 'true'

@@ -1,5 +1,4 @@
 use super::CommandContext;
-use crate::dependencies::card_graph::CardGraphExt;
 use crate::field_update::FieldUpdate;
 use crate::KanbanResult;
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, Sprint};
@@ -142,45 +141,12 @@ pub struct DeleteBoard {
 }
 
 impl DeleteBoard {
+    /// Delete the board record. **Atomic only** — does not cascade to columns,
+    /// cards, sprints, or graph edges. Cascade orchestration is the
+    /// responsibility of the service layer (see
+    /// `KanbanContext::delete_board`).
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let column_ids: Vec<Uuid> = context
-            .store
-            .list_columns_by_board(self.board_id)?
-            .iter()
-            .map(|c| c.id)
-            .collect();
-
-        let mut active_card_ids: Vec<Uuid> = Vec::new();
-        for col_id in &column_ids {
-            let cards = context.store.list_cards_by_column(*col_id)?;
-            active_card_ids.extend(cards.iter().map(|c| c.id));
-        }
-
-        let archived = context.store.list_archived_cards_by_columns(&column_ids)?;
-        let archived_card_ids: Vec<Uuid> = archived.iter().map(|ac| ac.card.id).collect();
-
-        let all_ids: Vec<Uuid> = active_card_ids
-            .iter()
-            .chain(archived_card_ids.iter())
-            .copied()
-            .collect();
-        context.store.modify_graph(Box::new(move |graph| {
-            for id in &all_ids {
-                graph.cards.remove_card_edges(*id);
-            }
-            Ok(())
-        }))?;
-
-        context.store.delete_cards_by_columns(&column_ids)?;
-
-        for ac in &archived {
-            context.store.delete_archived_card(ac.card.id)?;
-        }
-
-        context.store.delete_columns_by_board(self.board_id)?;
-        context.store.delete_sprints_by_board(self.board_id)?;
-        context.store.delete_board(self.board_id)?;
-        Ok(())
+        context.store.delete_board(self.board_id)
     }
 
     pub fn description(&self) -> String {
@@ -510,62 +476,23 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_board_propagates_list_cards_by_column_errors() {
+    fn test_delete_board_atomic_removes_only_board_record() {
         let tc = TestContext::new();
-        let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+        let board = Board::new("B".to_string(), Some("TST".to_string()));
         let board_id = board.id;
-        let col1 = Column::new(board_id, "Col1".to_string(), 0);
-        let col2 = Column::new(board_id, "Col2".to_string(), 1);
-        let card1 = Card::new(&mut board, col1.id, "C1".to_string(), 0);
-        let card2 = Card::new(&mut board, col2.id, "C2".to_string(), 0);
+        let col = Column::new(board_id, "Col".to_string(), 0);
         tc.store.upsert_board(board).unwrap();
-        tc.store.upsert_column(col1.clone()).unwrap();
-        tc.store.upsert_column(col2.clone()).unwrap();
-        tc.store.upsert_card(card1).unwrap();
-        tc.store.upsert_card(card2).unwrap();
+        tc.store.upsert_column(col.clone()).unwrap();
 
         let context = tc.as_command_context();
         let cmd = DeleteBoard { board_id };
         cmd.execute(&context).unwrap();
 
         assert!(tc.store.list_boards().unwrap().is_empty());
-        assert!(tc.store.list_all_columns().unwrap().is_empty());
-        assert!(tc.store.list_all_cards().unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_delete_board_cleans_dependency_graph_edges() {
-        use crate::dependencies::CardGraphExt;
-
-        let tc = TestContext::new();
-        let mut board = Board::new("B".to_string(), Some("TST".to_string()));
-        let col = Column::new(board.id, "Col".to_string(), 0);
-        let board_id = board.id;
-        let column_id = col.id;
-        let card_a = Card::new(&mut board, column_id, "A".to_string(), 0);
-        let card_b = Card::new(&mut board, column_id, "B".to_string(), 1);
-        let card_a_id = card_a.id;
-        let card_b_id = card_b.id;
-        tc.store.upsert_board(board).unwrap();
-        tc.store.upsert_column(col).unwrap();
-        tc.store.upsert_card(card_a).unwrap();
-        tc.store.upsert_card(card_b).unwrap();
-
-        let mut graph = tc.store.get_graph().unwrap();
-        graph.cards.add_blocks(card_a_id, card_b_id).unwrap();
-        tc.store.set_graph(graph).unwrap();
-
-        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 1);
-
-        let context = tc.as_command_context();
-        let cmd = DeleteBoard { board_id };
-        cmd.execute(&context).unwrap();
-
-        let graph = tc.store.get_graph().unwrap();
         assert_eq!(
-            graph.cards.edges().len(),
-            0,
-            "DeleteBoard should clean all dependency graph edges for deleted cards"
+            tc.store.list_all_columns().unwrap().len(),
+            1,
+            "atomic DeleteBoard must not cascade to columns; cascade is the service's responsibility"
         );
     }
 }

@@ -1,9 +1,12 @@
 pub mod backend;
+mod cascade;
 pub mod config;
 mod context;
 #[cfg(feature = "json")]
 pub mod json_backend;
 mod path;
+#[cfg(feature = "sqlite")]
+pub mod sqlite_backend;
 mod store_manager;
 pub use backend::KanbanBackend;
 pub use config::AppConfigDto;
