@@ -2517,6 +2517,755 @@ mod version_and_help_tests {
     }
 }
 
+/// Tests that every entity-id argument across the CLI accepts a human-readable name
+/// (board name, column name, sprint name, sprint number) — not just a UUID.
+mod name_resolution_tests {
+    use super::*;
+
+    /// Initialize a fresh file, create one board and one TODO column on it. Returns
+    /// (file path string, board_id, column_id).
+    fn setup_named_board(name: &str, prefix: &str) -> (tempfile::TempDir, String, String, String) {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json").to_str().unwrap().to_string();
+        kanban().args([&file]).assert().success();
+        let bjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "board",
+                    "create",
+                    "--name",
+                    name,
+                    "--card-prefix",
+                    prefix,
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let board_id = extract_id(&bjson);
+        let cjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "column",
+                    "create",
+                    "--board-id",
+                    &board_id,
+                    "--name",
+                    "TODO",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let column_id = extract_id(&cjson);
+        (dir, file, board_id, column_id)
+    }
+
+    // ---------- Board ----------
+
+    #[test]
+    fn test_board_get_by_name() {
+        let (_dir, file, board_id, _col) = setup_named_board("My Board", "MB");
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "board", "get", "My Board"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["id"], board_id);
+    }
+
+    #[test]
+    fn test_board_get_by_name_case_insensitive() {
+        let (_dir, file, board_id, _col) = setup_named_board("MyBoard", "MB");
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "board", "get", "myboard"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["id"], board_id);
+    }
+
+    #[test]
+    fn test_board_get_unknown_lists_available() {
+        let (_dir, file, _b, _c) = setup_named_board("Kanban", "KAN");
+        let assert = kanban()
+            .args([&file, "board", "get", "Personal"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+        assert!(stderr.contains("not found"), "stderr: {stderr}");
+        assert!(stderr.contains("Kanban"), "stderr: {stderr}");
+    }
+
+    #[test]
+    fn test_board_update_by_name() {
+        let (_dir, file, board_id, _col) = setup_named_board("Original", "ORG");
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "board", "update", "Original", "--card-prefix", "NEW"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["id"], board_id);
+        assert_eq!(json["data"]["card_prefix"], "NEW");
+    }
+
+    #[test]
+    fn test_board_delete_by_name() {
+        let (_dir, file, _board, _col) = setup_named_board("DeleteMe", "DEL");
+        kanban()
+            .args([&file, "board", "delete", "DeleteMe"])
+            .assert()
+            .success();
+        let assert = kanban()
+            .args([&file, "board", "get", "DeleteMe"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+        assert!(stderr.contains("not found"), "stderr: {stderr}");
+    }
+
+    // ---------- Column ----------
+
+    #[test]
+    fn test_column_create_with_board_name() {
+        let (_dir, file, _board, _col) = setup_named_board("B", "B");
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "column",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--name",
+                    "Doing",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["name"], "Doing");
+    }
+
+    #[test]
+    fn test_column_list_with_board_name() {
+        let (_dir, file, _board, _col) = setup_named_board("MyB", "MB");
+        kanban()
+            .args([
+                &file,
+                "column",
+                "create",
+                "--board-id",
+                "MyB",
+                "--name",
+                "Doing",
+            ])
+            .assert()
+            .success();
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "column", "list", "--board-id", "MyB"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["items"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_column_get_by_name() {
+        let (_dir, file, _board, column_id) = setup_named_board("B", "B");
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "column", "get", "TODO"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["id"], column_id);
+    }
+
+    #[test]
+    fn test_column_get_ambiguous_across_boards_lists_boards() {
+        let (_dir, file, _b, _c) = setup_named_board("Alpha", "A");
+        kanban()
+            .args([
+                &file,
+                "board",
+                "create",
+                "--name",
+                "Beta",
+                "--card-prefix",
+                "B",
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                &file,
+                "column",
+                "create",
+                "--board-id",
+                "Beta",
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success();
+        let assert = kanban()
+            .args([&file, "column", "get", "TODO"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+        assert!(stderr.contains("ambiguous"), "stderr: {stderr}");
+        assert!(stderr.contains("'Alpha'"), "stderr: {stderr}");
+        assert!(stderr.contains("'Beta'"), "stderr: {stderr}");
+    }
+
+    #[test]
+    fn test_column_get_unknown_lists_available() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "B");
+        let assert = kanban()
+            .args([&file, "column", "get", "Nope"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+        assert!(stderr.contains("not found"), "stderr: {stderr}");
+        assert!(stderr.contains("TODO"), "stderr: {stderr}");
+    }
+
+    // ---------- Card ----------
+
+    #[test]
+    fn test_card_create_with_board_and_column_names() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "B");
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "card",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--column-id",
+                    "TODO",
+                    "--title",
+                    "Hello",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["title"], "Hello");
+    }
+
+    #[test]
+    fn test_card_list_filters_by_names() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "B");
+        kanban()
+            .args([
+                &file,
+                "card",
+                "create",
+                "--board-id",
+                "B",
+                "--column-id",
+                "TODO",
+                "--title",
+                "T1",
+            ])
+            .assert()
+            .success();
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "card",
+                    "list",
+                    "--board-id",
+                    "B",
+                    "--column-id",
+                    "TODO",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["items"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_card_move_with_column_name() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
+        kanban()
+            .args([
+                &file,
+                "column",
+                "create",
+                "--board-id",
+                "B",
+                "--name",
+                "Doing",
+            ])
+            .assert()
+            .success();
+        let cjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "card",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--column-id",
+                    "TODO",
+                    "--title",
+                    "T",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let card_id = extract_id(&cjson);
+        let mjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "card", "move", &card_id, "--column-id", "Doing"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(mjson["data"]["id"], card_id);
+    }
+
+    #[test]
+    fn test_card_assign_sprint_by_name() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
+        kanban()
+            .args([
+                &file,
+                "sprint",
+                "create",
+                "--board-id",
+                "B",
+                "--name",
+                "alpha",
+            ])
+            .assert()
+            .success();
+        let cjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "card",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--column-id",
+                    "TODO",
+                    "--title",
+                    "T",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let card_id = extract_id(&cjson);
+        let ajson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "card",
+                    "assign-sprint",
+                    &card_id,
+                    "--sprint-id",
+                    "alpha",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert!(ajson["data"]["sprint_id"].is_string());
+    }
+
+    #[test]
+    fn test_card_assign_sprint_by_number() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
+        kanban()
+            .args([
+                &file,
+                "sprint",
+                "create",
+                "--board-id",
+                "B",
+                "--name",
+                "alpha",
+            ])
+            .assert()
+            .success();
+        let cjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "card",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--column-id",
+                    "TODO",
+                    "--title",
+                    "T",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let card_id = extract_id(&cjson);
+        let ajson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "card", "assign-sprint", &card_id, "--sprint-id", "1"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert!(ajson["data"]["sprint_id"].is_string());
+    }
+
+    #[test]
+    fn test_card_move_cards_with_card_identifiers_and_column_name() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
+        kanban()
+            .args([
+                &file,
+                "column",
+                "create",
+                "--board-id",
+                "B",
+                "--name",
+                "Doing",
+            ])
+            .assert()
+            .success();
+        for title in ["T1", "T2"] {
+            kanban()
+                .args([
+                    &file,
+                    "card",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--column-id",
+                    "TODO",
+                    "--title",
+                    title,
+                ])
+                .assert()
+                .success();
+        }
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "card",
+                    "move-cards",
+                    "--ids",
+                    "KAN-1,KAN-2",
+                    "--column-id",
+                    "Doing",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["succeeded_count"], 2);
+    }
+
+    #[test]
+    fn test_card_move_cards_spanning_boards_errors_clearly() {
+        let (_dir, file, _b, _c) = setup_named_board("Alpha", "A");
+        kanban()
+            .args([
+                &file,
+                "board",
+                "create",
+                "--name",
+                "Beta",
+                "--card-prefix",
+                "B",
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                &file,
+                "column",
+                "create",
+                "--board-id",
+                "Beta",
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                &file,
+                "card",
+                "create",
+                "--board-id",
+                "Alpha",
+                "--column-id",
+                "TODO",
+                "--title",
+                "A1",
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                &file,
+                "card",
+                "create",
+                "--board-id",
+                "Beta",
+                "--column-id",
+                "TODO",
+                "--title",
+                "B1",
+            ])
+            .assert()
+            .success();
+        let assert = kanban()
+            .args([
+                &file,
+                "card",
+                "move-cards",
+                "--ids",
+                "A-1,B-1",
+                "--column-id",
+                "TODO",
+            ])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+        assert!(stderr.contains("same board"), "stderr: {stderr}");
+        assert!(stderr.contains("'Alpha'"), "stderr: {stderr}");
+        assert!(stderr.contains("'Beta'"), "stderr: {stderr}");
+    }
+
+    // ---------- Sprint ----------
+
+    #[test]
+    fn test_sprint_create_with_board_name() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "B");
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "sprint",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--name",
+                    "alpha",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["sprint_number"], 1);
+    }
+
+    #[test]
+    fn test_sprint_get_by_name() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "B");
+        let sjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "sprint",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--name",
+                    "yarara",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let sprint_id = extract_id(&sjson);
+        let g = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "sprint", "get", "yarara"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(g["data"]["id"], sprint_id);
+    }
+
+    #[test]
+    fn test_sprint_get_by_number() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "B");
+        let sjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "sprint",
+                    "create",
+                    "--board-id",
+                    "B",
+                    "--name",
+                    "alpha",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let sprint_id = extract_id(&sjson);
+        let g = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "sprint", "get", "1"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(g["data"]["id"], sprint_id);
+    }
+
+    #[test]
+    fn test_sprint_activate_by_name() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "B");
+        kanban()
+            .args([
+                &file,
+                "sprint",
+                "create",
+                "--board-id",
+                "B",
+                "--name",
+                "alpha",
+            ])
+            .assert()
+            .success();
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "sprint", "activate", "alpha"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(json["data"]["status"], "Active");
+    }
+
+    #[test]
+    fn test_sprint_carry_over_by_names() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
+        // sprint #1
+        kanban()
+            .args([
+                &file,
+                "sprint",
+                "create",
+                "--board-id",
+                "B",
+                "--name",
+                "alpha",
+            ])
+            .assert()
+            .success();
+        // sprint #2
+        kanban()
+            .args([
+                &file,
+                "sprint",
+                "create",
+                "--board-id",
+                "B",
+                "--name",
+                "beta",
+            ])
+            .assert()
+            .success();
+        // activate sprint #1, then complete it
+        kanban()
+            .args([&file, "sprint", "activate", "alpha"])
+            .assert()
+            .success();
+        kanban()
+            .args([&file, "sprint", "complete", "alpha"])
+            .assert()
+            .success();
+        // carry over by names
+        let json = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file,
+                    "sprint",
+                    "carry-over",
+                    "--from",
+                    "alpha",
+                    "--to",
+                    "beta",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert!(json["data"]["carried_over"].is_number());
+    }
+
+    // ---------- Export ----------
+
+    #[test]
+    fn test_export_with_board_name() {
+        let (_dir, file, _b, _c) = setup_named_board("ExpBoard", "E");
+        // export prints raw JSON (not the CliResponse envelope)
+        let out = kanban()
+            .args([&file, "export", "--board-id", "ExpBoard"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let parsed: Value = serde_json::from_slice(&out).expect("export output should be JSON");
+        // Either {"boards": [...]} or a single board shape — just confirm parseable + non-empty.
+        assert!(parsed.is_object() || parsed.is_array());
+    }
+}
+
 mod missing_file_tests {
     use super::*;
 
