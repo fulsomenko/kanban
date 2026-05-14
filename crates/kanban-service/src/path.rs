@@ -19,13 +19,14 @@ pub fn validate_path(path: &Path) -> KanbanResult<PathBuf> {
 }
 
 fn validate_path_with_cwd(path: &Path, cwd: &Path) -> KanbanResult<PathBuf> {
+    let canonical_cwd = dunce::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     if path.is_absolute() {
         Ok(dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
     } else {
-        let resolved = cwd.join(path);
+        let resolved = canonical_cwd.join(path);
         let canonical =
             dunce::canonicalize(&resolved).unwrap_or_else(|_| normalize_path(&resolved));
-        if !canonical.starts_with(cwd) {
+        if !canonical.starts_with(&canonical_cwd) {
             return Err(KanbanError::validation(format!(
                 "Path traversal not allowed: '{}' resolves outside current directory",
                 path.display()
@@ -61,9 +62,9 @@ mod tests {
     #[test]
     fn test_validate_path_relative_within_cwd_returns_resolved() -> KanbanResult<()> {
         let dir = TempDir::new().unwrap();
-        let cwd = dir.path();
-        let result = validate_path_with_cwd(Path::new("some/nested/file.json"), cwd)?;
-        assert!(result.starts_with(cwd));
+        let cwd = dir.path().canonicalize().unwrap();
+        let result = validate_path_with_cwd(Path::new("some/nested/file.json"), &cwd)?;
+        assert!(result.starts_with(&cwd));
         assert!(result.ends_with("some/nested/file.json"));
         Ok(())
     }
