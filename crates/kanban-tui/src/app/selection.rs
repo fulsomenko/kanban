@@ -1,4 +1,5 @@
 use kanban_core::SelectionState;
+use std::cell::Cell;
 
 #[derive(Default)]
 pub struct SelectionHub {
@@ -7,6 +8,7 @@ pub struct SelectionHub {
     pub active_card_index: Option<usize>,
     pub active_card_id: Option<uuid::Uuid>,
     pub sprint: SelectionState,
+    pub sprint_scroll: Cell<usize>,
     pub active_sprint_index: Option<usize>,
     pub card_navigation_history: Vec<usize>,
     pub settings_config: SelectionState,
