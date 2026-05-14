@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::components::centered_rect;
 use crate::filters::FilterDialogState;
 use crate::theme::*;
+use kanban_core::pagination::scroll_offset_to_keep_visible;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Style,
@@ -115,14 +116,29 @@ fn render_filter_sprints_section(
         }
     }
 
-    let section =
-        Paragraph::new(sprint_lines).block(Block::default().borders(Borders::ALL).border_style(
-            if section_index == 0 {
-                focused_border()
-            } else {
-                Style::default()
-            },
-        ));
+    let selected_line_idx = if dialog_state.item_selection == 0 {
+        1
+    } else {
+        dialog_state.item_selection + 2
+    };
+    let viewport_height = area.height.saturating_sub(2) as usize;
+    let scroll = scroll_offset_to_keep_visible(
+        dialog_state.item_scroll.get(),
+        selected_line_idx,
+        viewport_height,
+    );
+    dialog_state.item_scroll.set(scroll);
+    let section = Paragraph::new(sprint_lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(if section_index == 0 {
+                    focused_border()
+                } else {
+                    Style::default()
+                }),
+        )
+        .scroll((scroll as u16, 0));
     frame.render_widget(section, area);
 }
 
