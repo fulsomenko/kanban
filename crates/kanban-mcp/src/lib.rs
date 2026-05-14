@@ -248,13 +248,13 @@ pub struct CreateBoardRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetBoardRequest {
     #[schemars(description = "UUID or name of the board to retrieve")]
-    pub board_id: String,
+    pub board: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UpdateBoardRequest {
     #[schemars(description = "UUID or name of the board to update")]
-    pub board_id: String,
+    pub board: String,
     #[schemars(description = "New name (optional)")]
     pub name: Option<String>,
     #[schemars(description = "New description (optional)")]
@@ -268,7 +268,7 @@ pub struct UpdateBoardRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct DeleteBoardRequest {
     #[schemars(description = "UUID or name of the board to delete")]
-    pub board_id: String,
+    pub board: String,
 }
 
 // Column
@@ -276,7 +276,7 @@ pub struct DeleteBoardRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CreateColumnRequest {
     #[schemars(description = "UUID or name of the board to create the column in")]
-    pub board_id: String,
+    pub board: String,
     #[schemars(description = "Name of the column")]
     pub name: String,
     #[schemars(description = "Position of the column (optional, appends to end if not specified)")]
@@ -286,19 +286,19 @@ pub struct CreateColumnRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListColumnsRequest {
     #[schemars(description = "UUID or name of the board to list columns for")]
-    pub board_id: String,
+    pub board: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetColumnRequest {
     #[schemars(description = "UUID or name of the column to retrieve")]
-    pub column_id: String,
+    pub column: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UpdateColumnRequest {
     #[schemars(description = "UUID or name of the column to update")]
-    pub column_id: String,
+    pub column: String,
     #[schemars(description = "New name (optional)")]
     pub name: Option<String>,
     #[schemars(description = "New position (optional)")]
@@ -312,13 +312,13 @@ pub struct UpdateColumnRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct DeleteColumnRequest {
     #[schemars(description = "UUID or name of the column to delete")]
-    pub column_id: String,
+    pub column: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ReorderColumnRequest {
     #[schemars(description = "UUID or name of the column to reorder")]
-    pub column_id: String,
+    pub column: String,
     #[schemars(description = "New position")]
     pub position: i32,
 }
@@ -328,9 +328,9 @@ pub struct ReorderColumnRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CreateCardRequest {
     #[schemars(description = "UUID or name of the board")]
-    pub board_id: String,
+    pub board: String,
     #[schemars(description = "UUID or name of the column to create the card in")]
-    pub column_id: String,
+    pub column: String,
     #[schemars(description = "Title of the card")]
     pub title: String,
     #[schemars(description = "Description of the card (optional)")]
@@ -348,15 +348,15 @@ pub struct CreateCardRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListCardsRequest {
     #[schemars(description = "Filter cards by board UUID or name")]
-    pub board_id: Option<String>,
+    pub board: Option<String>,
     #[schemars(
-        description = "Filter cards by column UUID or name (scoped to board_id if given, else global)"
+        description = "Filter cards by column UUID or name (scoped to board if given, else global)"
     )]
-    pub column_id: Option<String>,
+    pub column: Option<String>,
     #[schemars(
-        description = "Filter cards by sprint UUID, name, or number (scoped to board_id if given, else global)"
+        description = "Filter cards by sprint UUID, name, or number (scoped to board if given, else global)"
     )]
-    pub sprint_id: Option<String>,
+    pub sprint: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
@@ -376,13 +376,13 @@ pub struct ListArchivedCardsRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetCardRequest {
     #[schemars(description = "UUID or identifier of the card to retrieve (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UpdateCardRequest {
     #[schemars(description = "UUID or identifier of the card to update (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
     #[schemars(description = "New title (optional)")]
     pub title: Option<String>,
     #[schemars(description = "New description (optional)")]
@@ -404,11 +404,11 @@ pub struct UpdateCardRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct MoveCardRequest {
     #[schemars(description = "UUID or identifier of the card to move (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
     #[schemars(
         description = "UUID or name of the destination column (resolved within the card's board)"
     )]
-    pub column_id: String,
+    pub column: String,
     #[schemars(description = "Position in the new column (optional)")]
     pub position: Option<i32>,
 }
@@ -416,7 +416,7 @@ pub struct MoveCardRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ArchiveCardRequest {
     #[schemars(description = "UUID or identifier of the card to archive (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -424,17 +424,17 @@ pub struct RestoreCardRequest {
     #[schemars(
         description = "UUID or identifier of the archived card to restore (e.g. 'KAN-5' or '5')"
     )]
-    pub card_id: String,
+    pub card: String,
     #[schemars(
         description = "UUID or name of the column to restore the card to (optional; resolved within the card's board)"
     )]
-    pub column_id: Option<String>,
+    pub column: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct DeleteCardRequest {
     #[schemars(description = "UUID or identifier of the card to delete (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
 }
 
 // Card Sprint
@@ -442,11 +442,11 @@ pub struct DeleteCardRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct AssignCardToSprintRequest {
     #[schemars(description = "UUID or identifier of the card (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
     #[schemars(
         description = "UUID, name, or number of the sprint to assign to (resolved within the card's board)"
     )]
-    pub sprint_id: String,
+    pub sprint: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -454,7 +454,7 @@ pub struct UnassignCardFromSprintRequest {
     #[schemars(
         description = "UUID or identifier of the card to unassign from its sprint (e.g. 'KAN-5' or '5')"
     )]
-    pub card_id: String,
+    pub card: String,
 }
 
 // Card Utilities
@@ -462,13 +462,13 @@ pub struct UnassignCardFromSprintRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetCardBranchNameRequest {
     #[schemars(description = "UUID or identifier of the card (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetCardGitCheckoutRequest {
     #[schemars(description = "UUID or identifier of the card (e.g. 'KAN-5' or '5')")]
-    pub card_id: String,
+    pub card: String,
 }
 
 // Multi-card operations
@@ -476,7 +476,7 @@ pub struct GetCardGitCheckoutRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ArchiveCardsRequest {
     #[schemars(description = "Card UUIDs or identifiers (e.g. ['KAN-1', 'KAN-2', '42'])")]
-    pub ids: Vec<String>,
+    pub cards: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -484,11 +484,11 @@ pub struct MoveCardsRequest {
     #[schemars(
         description = "Card UUIDs or identifiers (e.g. ['KAN-1', 'KAN-2']); all cards must share a board"
     )]
-    pub ids: Vec<String>,
+    pub cards: Vec<String>,
     #[schemars(
         description = "UUID or name of the destination column (resolved within the cards' shared board)"
     )]
-    pub column_id: String,
+    pub column: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -496,11 +496,11 @@ pub struct AssignCardsToSprintRequest {
     #[schemars(
         description = "Card UUIDs or identifiers (e.g. ['KAN-1', 'KAN-2']); all cards must share a board"
     )]
-    pub ids: Vec<String>,
+    pub cards: Vec<String>,
     #[schemars(
         description = "UUID, name, or number of the sprint to assign to (resolved within the cards' shared board)"
     )]
-    pub sprint_id: String,
+    pub sprint: String,
 }
 
 // Sprint
@@ -508,7 +508,7 @@ pub struct AssignCardsToSprintRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CreateSprintRequest {
     #[schemars(description = "UUID or name of the board")]
-    pub board_id: String,
+    pub board: String,
     #[schemars(description = "Sprint prefix (optional)")]
     pub prefix: Option<String>,
     #[schemars(description = "Sprint name (optional)")]
@@ -518,19 +518,19 @@ pub struct CreateSprintRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListSprintsRequest {
     #[schemars(description = "UUID or name of the board")]
-    pub board_id: String,
+    pub board: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetSprintRequest {
     #[schemars(description = "UUID, name, or number of the sprint")]
-    pub sprint_id: String,
+    pub sprint: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct UpdateSprintRequest {
     #[schemars(description = "UUID, name, or number of the sprint to update")]
-    pub sprint_id: String,
+    pub sprint: String,
     #[schemars(description = "New sprint name (optional)")]
     pub name: Option<String>,
     #[schemars(description = "New prefix (optional)")]
@@ -550,7 +550,7 @@ pub struct UpdateSprintRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ActivateSprintRequest {
     #[schemars(description = "UUID, name, or number of the sprint to activate")]
-    pub sprint_id: String,
+    pub sprint: String,
     #[schemars(description = "Duration in days (optional)")]
     pub duration_days: Option<i32>,
 }
@@ -558,19 +558,19 @@ pub struct ActivateSprintRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CompleteSprintRequest {
     #[schemars(description = "UUID, name, or number of the sprint to complete")]
-    pub sprint_id: String,
+    pub sprint: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CancelSprintRequest {
     #[schemars(description = "UUID, name, or number of the sprint to cancel")]
-    pub sprint_id: String,
+    pub sprint: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct DeleteSprintRequest {
     #[schemars(description = "UUID, name, or number of the sprint to delete")]
-    pub sprint_id: String,
+    pub sprint: String,
 }
 
 // Carry-over
@@ -580,11 +580,11 @@ pub struct CarryOverSprintCardsRequest {
     #[schemars(
         description = "UUID, name, or number of the completed/cancelled source sprint to carry cards from"
     )]
-    pub from_sprint_id: String,
+    pub from_sprint: String,
     #[schemars(
         description = "UUID, name, or number of the planning sprint to carry cards to (must be on the same board as source)"
     )]
-    pub to_sprint_id: String,
+    pub to_sprint: String,
 }
 
 // Export/Import
@@ -594,7 +594,7 @@ pub struct ExportBoardRequest {
     #[schemars(
         description = "UUID or name of the board to export (optional, exports all if omitted)"
     )]
-    pub board_id: Option<String>,
+    pub board: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -656,7 +656,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_board(&self.ctx, &req.board_id).await?;
+        let id = resolve_board(&self.ctx, &req.board).await?;
         let board = read_op!(self.ctx, get_board, id)?;
         to_call_tool_result(&board)
     }
@@ -668,7 +668,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_board(&self.ctx, &req.board_id).await?;
+        let id = resolve_board(&self.ctx, &req.board).await?;
         let updates = BoardUpdate {
             name: req.name,
             description: req
@@ -694,7 +694,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_board(&self.ctx, &req.board_id).await?;
+        let id = resolve_board(&self.ctx, &req.board).await?;
         mutating_op!(self.ctx, delete_board, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
@@ -706,7 +706,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CreateColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board_id = resolve_board(&self.ctx, &req.board_id).await?;
+        let board_id = resolve_board(&self.ctx, &req.board).await?;
         let column = mutating_op!(self.ctx, create_column, board_id, req.name, req.position)?;
         to_call_tool_result(&column)
     }
@@ -716,7 +716,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListColumnsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board_id = resolve_board(&self.ctx, &req.board_id).await?;
+        let board_id = resolve_board(&self.ctx, &req.board).await?;
         let columns = read_op!(self.ctx, list_columns, board_id)?;
         to_call_tool_result(&columns)
     }
@@ -726,7 +726,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_column_global(&self.ctx, &req.column_id).await?;
+        let id = resolve_column_global(&self.ctx, &req.column).await?;
         let column = read_op!(self.ctx, get_column, id)?;
         to_call_tool_result(&column)
     }
@@ -736,7 +736,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_column_global(&self.ctx, &req.column_id).await?;
+        let id = resolve_column_global(&self.ctx, &req.column).await?;
         let updates = ColumnUpdate {
             name: req.name,
             position: req.position,
@@ -757,7 +757,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_column_global(&self.ctx, &req.column_id).await?;
+        let id = resolve_column_global(&self.ctx, &req.column).await?;
         mutating_op!(self.ctx, delete_column, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
@@ -767,7 +767,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ReorderColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_column_global(&self.ctx, &req.column_id).await?;
+        let id = resolve_column_global(&self.ctx, &req.column).await?;
         let column = mutating_op!(self.ctx, reorder_column, id, req.position)?;
         to_call_tool_result(&column)
     }
@@ -779,8 +779,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CreateCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board_id = resolve_board(&self.ctx, &req.board_id).await?;
-        let column_id = resolve_column_in_board(&self.ctx, &req.column_id, board_id).await?;
+        let board_id = resolve_board(&self.ctx, &req.board).await?;
+        let column_id = resolve_column_in_board(&self.ctx, &req.column, board_id).await?;
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let due_date = req.due_date.as_deref().map(parse_datetime).transpose()?;
 
@@ -809,18 +809,18 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board_id = match &req.board_id {
+        let board_id = match &req.board {
             Some(raw) => Some(resolve_board(&self.ctx, raw).await?),
             None => None,
         };
-        let column_id = match &req.column_id {
+        let column_id = match &req.column {
             Some(raw) => Some(match board_id {
                 Some(bid) => resolve_column_in_board(&self.ctx, raw, bid).await?,
                 None => resolve_column_global(&self.ctx, raw).await?,
             }),
             None => None,
         };
-        let sprint_id = match &req.sprint_id {
+        let sprint_id = match &req.sprint {
             Some(raw) => Some(match board_id {
                 Some(bid) => resolve_sprint_in_board(&self.ctx, raw, bid).await?,
                 None => resolve_sprint_global(&self.ctx, raw).await?,
@@ -848,19 +848,19 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        if let Ok(uuid) = uuid::Uuid::parse_str(&req.card_id) {
+        if let Ok(uuid) = uuid::Uuid::parse_str(&req.card) {
             let card = read_op!(self.ctx, get_card, uuid)?;
             return to_call_tool_result(&card);
         }
         let cards = {
             let guard = self.ctx.lock().await;
             guard
-                .find_cards_by_identifier(&req.card_id)
+                .find_cards_by_identifier(&req.card)
                 .map_err(kanban_err_to_mcp)?
         };
         match cards.as_slice() {
             [] => Err(McpError::invalid_params(
-                format!("Card not found: '{}'", req.card_id),
+                format!("Card not found: '{}'", req.card),
                 None,
             )),
             [card] => to_call_tool_result(card),
@@ -875,7 +875,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let id = resolve_card_id(&self.ctx, &req.card).await?;
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let status = req.status.as_deref().map(parse_status).transpose()?;
 
@@ -912,9 +912,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<MoveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let id = resolve_card_id(&self.ctx, &req.card).await?;
         let board_id = card_board(&self.ctx, id).await?;
-        let column_id = resolve_column_in_board(&self.ctx, &req.column_id, board_id).await?;
+        let column_id = resolve_column_in_board(&self.ctx, &req.column, board_id).await?;
         let card = mutating_op!(self.ctx, move_card, id, column_id, req.position)?;
         to_call_tool_result(&card)
     }
@@ -924,7 +924,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let id = resolve_card_id(&self.ctx, &req.card).await?;
         mutating_op!(self.ctx, archive_card, id)?;
         to_call_tool_result_json(serde_json::json!({"archived": id.to_string()}))
     }
@@ -934,8 +934,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<RestoreCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
-        let column_id = match req.column_id.as_deref() {
+        let id = resolve_card_id(&self.ctx, &req.card).await?;
+        let column_id = match req.column.as_deref() {
             Some(raw) => {
                 let board_id = card_board(&self.ctx, id).await?;
                 Some(resolve_column_in_board(&self.ctx, raw, board_id).await?)
@@ -951,7 +951,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let id = resolve_card_id(&self.ctx, &req.card).await?;
         mutating_op!(self.ctx, delete_card, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
@@ -980,9 +980,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<AssignCardToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card_id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let card_id = resolve_card_id(&self.ctx, &req.card).await?;
         let board_id = card_board(&self.ctx, card_id).await?;
-        let sprint_id = resolve_sprint_in_board(&self.ctx, &req.sprint_id, board_id).await?;
+        let sprint_id = resolve_sprint_in_board(&self.ctx, &req.sprint, board_id).await?;
         let card = mutating_op!(self.ctx, assign_card_to_sprint, card_id, sprint_id)?;
         to_call_tool_result(&card)
     }
@@ -992,7 +992,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UnassignCardFromSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card_id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let card_id = resolve_card_id(&self.ctx, &req.card).await?;
         let card = mutating_op!(self.ctx, unassign_card_from_sprint, card_id)?;
         to_call_tool_result(&card)
     }
@@ -1004,7 +1004,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardBranchNameRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let id = resolve_card_id(&self.ctx, &req.card).await?;
         let branch_name = read_op!(self.ctx, get_card_branch_name, id)?;
         to_call_tool_result_json(serde_json::json!({"branch_name": branch_name}))
     }
@@ -1014,7 +1014,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardGitCheckoutRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_card_id(&self.ctx, &req.card_id).await?;
+        let id = resolve_card_id(&self.ctx, &req.card).await?;
         let command = read_op!(self.ctx, get_card_git_checkout, id)?;
         to_call_tool_result_json(serde_json::json!({"command": command}))
     }
@@ -1028,7 +1028,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let ids = resolve_card_ids(&self.ctx, &req.ids).await?;
+        let ids = resolve_card_ids(&self.ctx, &req.cards).await?;
         let count = mutating_op!(self.ctx, archive_cards, ids)?;
         to_call_tool_result_json(serde_json::json!({"archived_count": count}))
     }
@@ -1040,9 +1040,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<MoveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let ids = resolve_card_ids(&self.ctx, &req.ids).await?;
+        let ids = resolve_card_ids(&self.ctx, &req.cards).await?;
         let board_id = require_same_board(&self.ctx, &ids).await?;
-        let column_id = resolve_column_in_board(&self.ctx, &req.column_id, board_id).await?;
+        let column_id = resolve_column_in_board(&self.ctx, &req.column, board_id).await?;
         let count = mutating_op!(self.ctx, move_cards, ids, column_id)?;
         to_call_tool_result_json(serde_json::json!({"moved_count": count}))
     }
@@ -1054,9 +1054,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<AssignCardsToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let ids = resolve_card_ids(&self.ctx, &req.ids).await?;
+        let ids = resolve_card_ids(&self.ctx, &req.cards).await?;
         let board_id = require_same_board(&self.ctx, &ids).await?;
-        let sprint_id = resolve_sprint_in_board(&self.ctx, &req.sprint_id, board_id).await?;
+        let sprint_id = resolve_sprint_in_board(&self.ctx, &req.sprint, board_id).await?;
         let count = mutating_op!(self.ctx, assign_cards_to_sprint, ids, sprint_id)?;
         to_call_tool_result_json(serde_json::json!({"assigned_count": count}))
     }
@@ -1068,7 +1068,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CreateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board_id = resolve_board(&self.ctx, &req.board_id).await?;
+        let board_id = resolve_board(&self.ctx, &req.board).await?;
         let sprint = mutating_op!(self.ctx, create_sprint, board_id, req.prefix, req.name)?;
         to_call_tool_result(&sprint)
     }
@@ -1078,7 +1078,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListSprintsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board_id = resolve_board(&self.ctx, &req.board_id).await?;
+        let board_id = resolve_board(&self.ctx, &req.board).await?;
         let sprints = read_op!(self.ctx, list_sprints, board_id)?;
         to_call_tool_result(&sprints)
     }
@@ -1088,7 +1088,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_sprint_global(&self.ctx, &req.sprint_id).await?;
+        let id = resolve_sprint_global(&self.ctx, &req.sprint).await?;
         let sprint = read_op!(self.ctx, get_sprint, id)?;
         to_call_tool_result(&sprint)
     }
@@ -1100,7 +1100,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_sprint_global(&self.ctx, &req.sprint_id).await?;
+        let id = resolve_sprint_global(&self.ctx, &req.sprint).await?;
 
         let start_date = if req.clear_start_date == Some(true) {
             FieldUpdate::Clear
@@ -1145,7 +1145,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ActivateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_sprint_global(&self.ctx, &req.sprint_id).await?;
+        let id = resolve_sprint_global(&self.ctx, &req.sprint).await?;
         let sprint = mutating_op!(self.ctx, activate_sprint, id, req.duration_days)?;
         to_call_tool_result(&sprint)
     }
@@ -1155,7 +1155,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CompleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_sprint_global(&self.ctx, &req.sprint_id).await?;
+        let id = resolve_sprint_global(&self.ctx, &req.sprint).await?;
         let sprint = mutating_op!(self.ctx, complete_sprint, id)?;
         to_call_tool_result(&sprint)
     }
@@ -1165,7 +1165,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CancelSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_sprint_global(&self.ctx, &req.sprint_id).await?;
+        let id = resolve_sprint_global(&self.ctx, &req.sprint).await?;
         let sprint = mutating_op!(self.ctx, cancel_sprint, id)?;
         to_call_tool_result(&sprint)
     }
@@ -1175,7 +1175,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = resolve_sprint_global(&self.ctx, &req.sprint_id).await?;
+        let id = resolve_sprint_global(&self.ctx, &req.sprint).await?;
         mutating_op!(self.ctx, delete_sprint, id)?;
         to_call_tool_result_json(serde_json::json!({"deleted": id.to_string()}))
     }
@@ -1187,12 +1187,12 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CarryOverSprintCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let from_id = resolve_sprint_global(&self.ctx, &req.from_sprint_id).await?;
+        let from_id = resolve_sprint_global(&self.ctx, &req.from_sprint).await?;
         let from_sprint = read_op!(self.ctx, get_sprint, from_id)?.ok_or_else(|| {
             McpError::invalid_params(format!("Sprint not found: {}", from_id), None)
         })?;
         let to_id =
-            resolve_sprint_in_board(&self.ctx, &req.to_sprint_id, from_sprint.board_id).await?;
+            resolve_sprint_in_board(&self.ctx, &req.to_sprint, from_sprint.board_id).await?;
 
         let count = mutating_op!(self.ctx, carry_over_sprint_cards, from_id, to_id)?;
         to_call_tool_result_json(serde_json::json!({ "carried_over_count": count }))
@@ -1205,7 +1205,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ExportBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board_id = match req.board_id.as_deref() {
+        let board_id = match req.board.as_deref() {
             Some(raw) => Some(resolve_board(&self.ctx, raw).await?),
             None => None,
         };
