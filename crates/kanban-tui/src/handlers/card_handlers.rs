@@ -196,8 +196,9 @@ impl App {
                             tracing::info!("Enabled sprint filter - showing active sprint only");
                         }
                     } else {
-                        tracing::warn!("No active sprint set for filtering");
-                        self.set_error("No active sprint set for filtering");
+                        let msg = "No active sprint set for filtering";
+                        tracing::warn!("{}", msg);
+                        self.set_error(msg);
                     }
                 }
             }
