@@ -281,6 +281,58 @@ pub fn format_ambiguous_matches(identifier: &str, cards: &[Card]) -> String {
     )
 }
 
+/// Find all boards whose `name` equals `query` (case-insensitive).
+pub fn find_boards_by_name<'a>(query: &str, boards: &'a [Board]) -> Vec<&'a Board> {
+    let needle = query.to_lowercase();
+    boards
+        .iter()
+        .filter(|b| b.name.to_lowercase() == needle)
+        .collect()
+}
+
+/// Find all columns in the given slice whose `name` equals `query` (case-insensitive).
+///
+/// The caller is responsible for scoping `columns` (e.g. filtering by `board_id` first).
+pub fn find_columns_by_name<'a>(query: &str, columns: &'a [Column]) -> Vec<&'a Column> {
+    let needle = query.to_lowercase();
+    columns
+        .iter()
+        .filter(|c| c.name.to_lowercase() == needle)
+        .collect()
+}
+
+/// Find all sprints matching `query`, by sprint number or by sprint name.
+///
+/// - If `query` parses as a `u32`, match sprints whose `sprint_number == query`.
+/// - Otherwise, match sprints whose resolved name (via `board.sprint_names[name_index]`)
+///   equals `query` (case-insensitive).
+///
+/// `boards` is required to resolve sprint names — each sprint's `board_id` is looked up.
+pub fn find_sprints_by_query<'a>(
+    query: &str,
+    sprints: &'a [Sprint],
+    boards: &[Board],
+) -> Vec<&'a Sprint> {
+    if let Ok(number) = query.parse::<u32>() {
+        return sprints
+            .iter()
+            .filter(|s| s.sprint_number == number)
+            .collect();
+    }
+    let needle = query.to_lowercase();
+    sprints
+        .iter()
+        .filter(|s| {
+            let Some(board) = boards.iter().find(|b| b.id == s.board_id) else {
+                return false;
+            };
+            s.get_name(board)
+                .map(|n| n.to_lowercase() == needle)
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
 impl CardSearcher for CompositeSearcher {
     fn matches(&self, card: &Card, board: &Board, sprints: &[Sprint]) -> bool {
         if self.searchers.is_empty() {
@@ -295,6 +347,7 @@ impl CardSearcher for CompositeSearcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     fn create_test_card(board: &mut Board, title: &str) -> Card {
         let column = crate::Column::new(board.id, "Todo".to_string(), 0);
@@ -727,5 +780,143 @@ mod tests {
         assert!(
             find_cards_by_identifier("not-a-number", &cards, &columns, &boards, &[]).is_empty()
         );
+    }
+
+    #[test]
+    fn test_find_boards_by_name_case_insensitive_match() {
+        let boards = vec![
+            Board::new("Kanban".to_string(), None),
+            Board::new("Personal".to_string(), None),
+        ];
+        let result = find_boards_by_name("kanban", &boards);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "Kanban");
+
+        let result = find_boards_by_name("KANBAN", &boards);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "Kanban");
+    }
+
+    #[test]
+    fn test_find_boards_by_name_no_match_returns_empty() {
+        let boards = vec![Board::new("Kanban".to_string(), None)];
+        assert!(find_boards_by_name("missing", &boards).is_empty());
+    }
+
+    #[test]
+    fn test_find_boards_by_name_multiple_with_same_name_returns_all() {
+        let boards = vec![
+            Board::new("Shared".to_string(), None),
+            Board::new("Shared".to_string(), None),
+        ];
+        let result = find_boards_by_name("shared", &boards);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_find_columns_by_name_case_insensitive_match() {
+        let board_id = Uuid::new_v4();
+        let columns = vec![
+            Column::new(board_id, "TODO".to_string(), 0),
+            Column::new(board_id, "Doing".to_string(), 1),
+            Column::new(board_id, "Done".to_string(), 2),
+        ];
+        let result = find_columns_by_name("todo", &columns);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "TODO");
+
+        let result = find_columns_by_name("DOING", &columns);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "Doing");
+    }
+
+    #[test]
+    fn test_find_columns_by_name_returns_multiple_when_same_name_across_boards() {
+        let columns = vec![
+            Column::new(Uuid::new_v4(), "TODO".to_string(), 0),
+            Column::new(Uuid::new_v4(), "TODO".to_string(), 0),
+        ];
+        let result = find_columns_by_name("todo", &columns);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_find_columns_by_name_no_match_returns_empty() {
+        let columns = vec![Column::new(Uuid::new_v4(), "TODO".to_string(), 0)];
+        assert!(find_columns_by_name("missing", &columns).is_empty());
+    }
+
+    #[test]
+    fn test_find_sprints_by_query_matches_number() {
+        let mut board = Board::new("B".to_string(), None);
+        board.sprint_names.push("alpha".to_string());
+        let mut sprint1 = crate::Sprint::new(board.id, 1, Some(0), None);
+        sprint1.sprint_number = 1;
+        let mut sprint2 = crate::Sprint::new(board.id, 2, None, None);
+        sprint2.sprint_number = 2;
+        let sprints = vec![sprint1, sprint2];
+        let boards = vec![board];
+
+        let result = find_sprints_by_query("1", &sprints, &boards);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].sprint_number, 1);
+    }
+
+    #[test]
+    fn test_find_sprints_by_query_matches_name_case_insensitive() {
+        let mut board = Board::new("B".to_string(), None);
+        board.sprint_names.push("yarara-release".to_string());
+        board.sprint_names.push("moonshot".to_string());
+        let sprint1 = crate::Sprint::new(board.id, 1, Some(0), None);
+        let sprint2 = crate::Sprint::new(board.id, 2, Some(1), None);
+        let sprints = vec![sprint1.clone(), sprint2];
+        let boards = vec![board];
+
+        let result = find_sprints_by_query("yarara-release", &sprints, &boards);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, sprint1.id);
+
+        let result = find_sprints_by_query("YARARA-RELEASE", &sprints, &boards);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, sprint1.id);
+    }
+
+    #[test]
+    fn test_find_sprints_by_query_number_takes_priority_over_name() {
+        let mut board = Board::new("B".to_string(), None);
+        board.sprint_names.push("1".to_string());
+        let sprint_numbered = crate::Sprint::new(board.id, 1, None, None);
+        let sprint_named = crate::Sprint::new(board.id, 99, Some(0), None);
+        let sprints = vec![sprint_numbered.clone(), sprint_named];
+        let boards = vec![board];
+
+        let result = find_sprints_by_query("1", &sprints, &boards);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, sprint_numbered.id);
+    }
+
+    #[test]
+    fn test_find_sprints_by_query_no_match_returns_empty() {
+        let mut board = Board::new("B".to_string(), None);
+        board.sprint_names.push("alpha".to_string());
+        let sprint = crate::Sprint::new(board.id, 1, Some(0), None);
+        let sprints = vec![sprint];
+        let boards = vec![board];
+
+        assert!(find_sprints_by_query("nope", &sprints, &boards).is_empty());
+        assert!(find_sprints_by_query("99", &sprints, &boards).is_empty());
+    }
+
+    #[test]
+    fn test_find_sprints_by_query_ambiguous_number_across_boards_returns_all() {
+        let board_a = Board::new("A".to_string(), None);
+        let board_b = Board::new("B".to_string(), None);
+        let sprint_a = crate::Sprint::new(board_a.id, 13, None, None);
+        let sprint_b = crate::Sprint::new(board_b.id, 13, None, None);
+        let sprints = vec![sprint_a, sprint_b];
+        let boards = vec![board_a, board_b];
+
+        let result = find_sprints_by_query("13", &sprints, &boards);
+        assert_eq!(result.len(), 2);
     }
 }
