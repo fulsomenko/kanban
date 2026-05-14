@@ -88,4 +88,41 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(err.contains("Path traversal not allowed"), "Got: {err}");
     }
+
+    #[test]
+    fn test_validate_path_relative_within_cwd_existing_file_returns_resolved() -> KanbanResult<()> {
+        let dir = TempDir::new().unwrap();
+        let cwd = dir.path().canonicalize().unwrap();
+        std::fs::write(cwd.join("kanban.json"), b"{}").unwrap();
+        let result = validate_path_with_cwd(Path::new("kanban.json"), &cwd)?;
+        assert!(
+            result.starts_with(&cwd),
+            "result {} should start with cwd {}",
+            result.display(),
+            cwd.display()
+        );
+        assert!(result.ends_with("kanban.json"));
+        assert!(
+            !result.to_string_lossy().starts_with(r"\\?\"),
+            "result should not have UNC prefix, got: {}",
+            result.display()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_path_absolute_existing_file_returns_non_unc() -> KanbanResult<()> {
+        let dir = TempDir::new().unwrap();
+        let cwd = dir.path().canonicalize().unwrap();
+        let abs = cwd.join("kanban.json");
+        std::fs::write(&abs, b"{}").unwrap();
+        let result = validate_path_with_cwd(&abs, &cwd)?;
+        assert!(
+            !result.to_string_lossy().starts_with(r"\\?\"),
+            "result should not have UNC prefix, got: {}",
+            result.display()
+        );
+        assert!(result.ends_with("kanban.json"));
+        Ok(())
+    }
 }
