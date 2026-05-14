@@ -1367,6 +1367,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "crossterm",
+ "dunce",
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",

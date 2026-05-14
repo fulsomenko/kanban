@@ -251,7 +251,7 @@ impl App {
                     .map(|cwd| cwd.join(path))
                     .unwrap_or_else(|_| path.to_path_buf())
             };
-            let canonical = resolved.canonicalize().unwrap_or(resolved);
+            let canonical = dunce::canonicalize(&resolved).unwrap_or(resolved);
             app_config.storage_location = Some(canonical.display().to_string());
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
