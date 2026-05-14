@@ -355,9 +355,15 @@ fn test_render_settings_cli_override_without_config_storage_hides_config_storage
 
 #[test]
 fn test_apply_config_edit_with_non_default_content_writes_config() {
+    // configuration_location is pinned to a tempdir so the test passes in
+    // build sandboxes (nixpkgs, etc.) where $HOME is non-writable and
+    // config::save's fallback to dirs::config_dir() would hit EACCES.
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
     let mut app = App::test_default();
     app.app_config = kanban_core::AppConfig {
         default_card_prefix: Some("feat".into()),
+        configuration_location: Some(config_path.to_string_lossy().into_owned()),
         ..Default::default()
     };
     let format = EditFormat::Json;
