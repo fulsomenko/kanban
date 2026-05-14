@@ -1,7 +1,7 @@
 use crate::KanbanResult;
 use crate::{
     ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardSummary, CardUpdate, Column,
-    ColumnUpdate, CreateCardOptions, Sprint, SprintUpdate,
+    ColumnUpdate, CreateCardOptions, KanbanError, Sprint, SprintUpdate,
 };
 use uuid::Uuid;
 
@@ -99,4 +99,249 @@ pub trait KanbanOperations {
     // Import/Export
     fn export_board(&self, board_id: Option<Uuid>) -> KanbanResult<String>;
     fn import_board(&mut self, data: &str) -> KanbanResult<Board>;
+
+    // ---------- Name/UUID resolvers (shared by CLI, MCP, anything else) ----------
+    //
+    // Each resolver accepts a raw string that may be a UUID, an entity name, or
+    // (for sprints) a sprint number. The UUID fast path returns immediately;
+    // otherwise the resolver lists matches and errors with a human-friendly
+    // "not found, here are the alternatives" or "ambiguous, here are the
+    // matches" message.
+
+    fn resolve_board_id(&self, raw: &str) -> KanbanResult<Uuid> {
+        if let Ok(uuid) = Uuid::parse_str(raw) {
+            return Ok(uuid);
+        }
+        let boards = self.list_boards()?;
+        let matches = crate::search::find_boards_by_name(raw, &boards);
+        match matches.as_slice() {
+            [] => Err(KanbanError::validation(format!(
+                "Board '{}' not found. Available: {}",
+                raw,
+                join_quoted(boards.iter().map(|b| b.name.as_str()))
+            ))),
+            [b] => Ok(b.id),
+            many => Err(KanbanError::validation(format!(
+                "Board '{}' is ambiguous: {} matches. Specify by UUID. Matching IDs: {}",
+                raw,
+                many.len(),
+                many.iter()
+                    .map(|b| b.id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))),
+        }
+    }
+
+    fn resolve_column_id(&self, raw: &str, board_id: Uuid) -> KanbanResult<Uuid> {
+        if let Ok(uuid) = Uuid::parse_str(raw) {
+            return Ok(uuid);
+        }
+        let columns = self.list_columns(board_id)?;
+        let matches = crate::search::find_columns_by_name(raw, &columns);
+        match matches.as_slice() {
+            [] => Err(KanbanError::validation(format!(
+                "Column '{}' not found on this board. Available: {}",
+                raw,
+                join_quoted(columns.iter().map(|c| c.name.as_str()))
+            ))),
+            [c] => Ok(c.id),
+            many => Err(KanbanError::validation(format!(
+                "Column '{}' is ambiguous on this board: {} matches. Specify by UUID.",
+                raw,
+                many.len()
+            ))),
+        }
+    }
+
+    fn resolve_column_id_global(&self, raw: &str) -> KanbanResult<Uuid> {
+        if let Ok(uuid) = Uuid::parse_str(raw) {
+            return Ok(uuid);
+        }
+        let boards = self.list_boards()?;
+        let mut all_columns = Vec::new();
+        for board in &boards {
+            all_columns.extend(self.list_columns(board.id)?);
+        }
+        let matches = crate::search::find_columns_by_name(raw, &all_columns);
+        match matches.as_slice() {
+            [] => Err(KanbanError::validation(format!(
+                "Column '{}' not found. Available: {}",
+                raw,
+                join_quoted(all_columns.iter().map(|c| c.name.as_str()))
+            ))),
+            [c] => Ok(c.id),
+            many => {
+                let board_names: Vec<String> = many
+                    .iter()
+                    .map(|c| {
+                        boards
+                            .iter()
+                            .find(|b| b.id == c.board_id)
+                            .map(|b| b.name.clone())
+                            .unwrap_or_else(|| "(unknown)".to_string())
+                    })
+                    .collect();
+                Err(KanbanError::validation(format!(
+                    "Column '{}' is ambiguous: found on boards {}. Use the UUID or a unique name.",
+                    raw,
+                    join_quoted(board_names.iter().map(|s| s.as_str()))
+                )))
+            }
+        }
+    }
+
+    fn resolve_sprint_id(&self, raw: &str, board_id: Uuid) -> KanbanResult<Uuid> {
+        if let Ok(uuid) = Uuid::parse_str(raw) {
+            return Ok(uuid);
+        }
+        let sprints = self.list_sprints(board_id)?;
+        let board = self
+            .get_board(board_id)?
+            .ok_or_else(|| KanbanError::not_found("board", board_id))?;
+        let boards_vec = vec![board];
+        let matches = crate::search::find_sprints_by_query(raw, &sprints, &boards_vec);
+        match matches.as_slice() {
+            [] => {
+                let available = sprints
+                    .iter()
+                    .map(|s| {
+                        let label = s.get_name(&boards_vec[0]).unwrap_or("(unnamed)");
+                        format!("#{} {}", s.sprint_number, label)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Err(KanbanError::validation(format!(
+                    "Sprint '{}' not found on this board. Available: {}",
+                    raw, available
+                )))
+            }
+            [s] => Ok(s.id),
+            many => Err(KanbanError::validation(format!(
+                "Sprint '{}' is ambiguous on this board: {} matches. Specify by UUID.",
+                raw,
+                many.len()
+            ))),
+        }
+    }
+
+    fn resolve_sprint_id_global(&self, raw: &str) -> KanbanResult<Uuid> {
+        if let Ok(uuid) = Uuid::parse_str(raw) {
+            return Ok(uuid);
+        }
+        let boards = self.list_boards()?;
+        let mut all_sprints = Vec::new();
+        for board in &boards {
+            all_sprints.extend(self.list_sprints(board.id)?);
+        }
+        let matches = crate::search::find_sprints_by_query(raw, &all_sprints, &boards);
+        match matches.as_slice() {
+            [] => Err(KanbanError::validation(format!(
+                "Sprint '{}' not found across any board.",
+                raw
+            ))),
+            [s] => Ok(s.id),
+            many => {
+                let board_names: Vec<String> = many
+                    .iter()
+                    .map(|s| {
+                        boards
+                            .iter()
+                            .find(|b| b.id == s.board_id)
+                            .map(|b| b.name.clone())
+                            .unwrap_or_else(|| "(unknown)".to_string())
+                    })
+                    .collect();
+                Err(KanbanError::validation(format!(
+                    "Sprint '{}' is ambiguous: found on boards {}. Use the UUID or a unique name.",
+                    raw,
+                    join_quoted(board_names.iter().map(|s| s.as_str()))
+                )))
+            }
+        }
+    }
+
+    fn resolve_card_id(&self, raw: &str) -> KanbanResult<Uuid> {
+        if let Ok(uuid) = Uuid::parse_str(raw) {
+            return Ok(uuid);
+        }
+        let matches = self.find_cards_by_identifier(raw)?;
+        match matches.as_slice() {
+            [] => Err(KanbanError::validation(format!(
+                "Card not found: '{}'",
+                raw
+            ))),
+            [c] => Ok(c.id),
+            many => Err(KanbanError::validation(
+                crate::search::format_ambiguous_matches(raw, many),
+            )),
+        }
+    }
+
+    fn resolve_card_ids(&self, raws: &[String]) -> KanbanResult<Vec<Uuid>> {
+        let mut resolved = Vec::with_capacity(raws.len());
+        let mut errors = Vec::new();
+        for raw in raws {
+            match self.resolve_card_id(raw) {
+                Ok(id) => resolved.push(id),
+                Err(e) => errors.push(format!("'{}': {}", raw, e)),
+            }
+        }
+        if !errors.is_empty() {
+            return Err(KanbanError::validation(format!(
+                "Could not resolve {} card(s): {}",
+                errors.len(),
+                errors.join("; ")
+            )));
+        }
+        Ok(resolved)
+    }
+
+    /// For batch operations, verify all the given cards belong to the same board.
+    /// Returns the shared `board_id` on success; otherwise a validation error
+    /// listing the boards involved.
+    fn require_same_board(&self, card_ids: &[Uuid]) -> KanbanResult<Uuid> {
+        let mut board_ids = std::collections::BTreeSet::new();
+        let mut found_boards = Vec::new();
+        for cid in card_ids {
+            let card = self
+                .get_card(*cid)?
+                .ok_or_else(|| KanbanError::not_found("card", *cid))?;
+            let column = self
+                .get_column(card.column_id)?
+                .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
+            if board_ids.insert(column.board_id) {
+                found_boards.push(column.board_id);
+            }
+        }
+        match found_boards.as_slice() {
+            [] => Err(KanbanError::validation(
+                "No cards provided for batch operation.".to_string(),
+            )),
+            [b] => Ok(*b),
+            many => {
+                let names: Vec<String> = many
+                    .iter()
+                    .map(|bid| {
+                        self.get_board(*bid)
+                            .ok()
+                            .flatten()
+                            .map(|b| b.name)
+                            .unwrap_or_else(|| bid.to_string())
+                    })
+                    .collect();
+                Err(KanbanError::validation(format!(
+                    "Batch operation requires all cards on the same board, but the selection spans boards: {}",
+                    join_quoted(names.iter().map(|s| s.as_str()))
+                )))
+            }
+        }
+    }
+}
+
+fn join_quoted<'a, I: IntoIterator<Item = &'a str>>(iter: I) -> String {
+    iter.into_iter()
+        .map(|s| format!("'{}'", s))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
