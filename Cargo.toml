@@ -62,6 +62,9 @@ predicates = "3.0"
 notify = "6.1"
 tempfile = "3.8"
 
+# Windows path normalisation (strip `\\?\` UNC prefix)
+dunce = "1.0"
+
 [profile.release]
 opt-level = 3
 lto = true

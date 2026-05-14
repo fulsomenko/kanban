@@ -595,6 +595,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1337,6 +1343,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dirs",
+ "dunce",
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
@@ -1360,6 +1367,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "crossterm",
+ "dunce",
  "kanban-core",
  "kanban-domain",
  "kanban-persistence",
@@ -1710,7 +1718,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

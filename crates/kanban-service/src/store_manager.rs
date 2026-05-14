@@ -295,10 +295,11 @@ impl StoreManager {
                 {
                     let repaired = snapshot_from_json_bytes(&store_snapshot.data)?;
                     let store = kanban_persistence_sqlite::SqliteStore::open(to_path).await?;
-                    if let Err(e) = store.apply_snapshot(repaired.clone()) {
-                        let _ = std::fs::remove_file(to_path);
-                        let _ = std::fs::remove_file(format!("{}-wal", to_path));
-                        let _ = std::fs::remove_file(format!("{}-shm", to_path));
+                    let outcome = store.apply_snapshot(repaired.clone());
+                    store.close().await;
+                    drop(store);
+                    if let Err(e) = outcome {
+                        cleanup_destination_files(to_path).await;
                         return Err(e);
                     }
                 }
@@ -307,10 +308,11 @@ impl StoreManager {
             }
             _ => {
                 let target = self.make_store(to_backend, to_path)?;
-                if let Err(e) = target.save(store_snapshot).await {
-                    let _ = std::fs::remove_file(to_path);
-                    let _ = std::fs::remove_file(format!("{}-wal", to_path));
-                    let _ = std::fs::remove_file(format!("{}-shm", to_path));
+                let outcome = target.save(store_snapshot).await;
+                target.close().await;
+                drop(target);
+                if let Err(e) = outcome {
+                    cleanup_destination_files(to_path).await;
                     return Err(e.into());
                 }
             }
@@ -325,6 +327,40 @@ impl Clone for StoreManager {
             registry: Arc::clone(&self.registry),
         }
     }
+}
+
+/// Best-effort `remove_file` that retries with linear backoff. SQLite on
+/// Windows can briefly hold a file handle even after `PersistenceStore::close`
+/// returns, because the OS-level handle release is asynchronous and lags the
+/// pool's synchronization. POSIX always succeeds on the first try.
+async fn remove_file_with_windows_retry(path: &std::path::Path) {
+    for delay_ms in [0u64, 50, 100, 200, 400] {
+        if delay_ms > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+        }
+        if std::fs::remove_file(path).is_ok() {
+            return;
+        }
+        if !path.exists() {
+            return;
+        }
+    }
+    tracing::warn!(
+        path = %path.display(),
+        "failed to remove file after retry backoff; orphan may remain on disk"
+    );
+}
+
+/// Remove the main destination and its SQLite WAL/SHM sidecars (best-effort).
+/// The sidecars are named `<path>-wal` and `<path>-shm` regardless of the
+/// main file's extension, so they're constructed by appending to the raw
+/// path string rather than via `Path::with_extension`.
+async fn cleanup_destination_files(to_path: &str) {
+    remove_file_with_windows_retry(std::path::Path::new(to_path)).await;
+    let wal = format!("{}-wal", to_path);
+    let shm = format!("{}-shm", to_path);
+    remove_file_with_windows_retry(std::path::Path::new(&wal)).await;
+    remove_file_with_windows_retry(std::path::Path::new(&shm)).await;
 }
 
 fn repair_snapshot_fks(snapshot: &mut StoreSnapshot) -> Result<(), KanbanError> {

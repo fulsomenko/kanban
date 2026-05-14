@@ -685,10 +685,7 @@ mod tests {
         let dto = AppConfigDto::from_config(&config, true);
         assert_eq!(dto.storage_backend.as_deref(), Some("json"));
         assert!(
-            dto.storage_location
-                .as_deref()
-                .unwrap()
-                .ends_with("/boards.json"),
+            Path::new(dto.storage_location.as_deref().unwrap()).ends_with("boards.json"),
             "got: {:?}",
             dto.storage_location
         );
@@ -710,10 +707,7 @@ mod tests {
         assert_eq!(dto.default_sprint_prefix.as_deref(), Some("iter"));
         assert_eq!(dto.storage_backend.as_deref(), Some("sqlite"));
         assert!(
-            dto.storage_location
-                .as_deref()
-                .unwrap()
-                .ends_with("/boards.sqlite"),
+            Path::new(dto.storage_location.as_deref().unwrap()).ends_with("boards.sqlite"),
             "got: {:?}",
             dto.storage_location
         );
@@ -785,15 +779,17 @@ mod tests {
 
     #[test]
     fn test_validate_storage_location_any_extension_accepted() {
+        let dir = TempDir::new().unwrap();
         for name in &[
-            "/tmp/board.json",
-            "/tmp/board.sqlite",
-            "/tmp/board.txt",
-            "/tmp/board.dat",
-            "/tmp/mydata",
+            "board.json",
+            "board.sqlite",
+            "board.txt",
+            "board.dat",
+            "mydata",
         ] {
+            let location = dir.path().join(name);
             let config = AppConfig {
-                storage_location: Some(name.to_string()),
+                storage_location: Some(location.to_string_lossy().into_owned()),
                 ..Default::default()
             };
             validate(&config).unwrap();

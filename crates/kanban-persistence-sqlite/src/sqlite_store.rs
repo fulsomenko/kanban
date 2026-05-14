@@ -1528,6 +1528,10 @@ impl PersistenceStore for SqliteStore {
     fn instance_id(&self) -> Uuid {
         self.instance_id
     }
+
+    async fn close(&self) {
+        self.pool.close().await;
+    }
 }
 
 #[cfg(test)]
