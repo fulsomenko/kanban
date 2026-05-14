@@ -16,6 +16,24 @@ pub enum DomainError {
     #[error("{entity} {id} not found")]
     NotFound { entity: &'static str, id: Uuid },
 
+    /// Returned when a name- or identifier-based lookup misses. The `available`
+    /// vector is appended to the message so users see what they could have typed.
+    #[error("{}", format_not_found_by_name(entity, name, available))]
+    NotFoundByName {
+        entity: &'static str,
+        name: String,
+        available: Vec<String>,
+    },
+
+    /// Returned when a name- or identifier-based lookup matches more than one
+    /// entity. `matches` is a list of human-readable labels for each match.
+    #[error("{}", format_ambiguous(entity, name, matches))]
+    Ambiguous {
+        entity: &'static str,
+        name: String,
+        matches: Vec<String>,
+    },
+
     #[error("validation error: {0}")]
     Validation(String),
 
@@ -24,6 +42,32 @@ pub enum DomainError {
 
     #[error("column {column_id} has reached its WIP limit of {limit}")]
     WipLimitExceeded { column_id: Uuid, limit: u32 },
+}
+
+fn format_not_found_by_name(entity: &str, name: &str, available: &[String]) -> String {
+    if available.is_empty() {
+        format!("{} '{}' not found", entity, name)
+    } else {
+        format!(
+            "{} '{}' not found. Available: {}",
+            entity,
+            name,
+            available
+                .iter()
+                .map(|s| format!("'{}'", s))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+fn format_ambiguous(entity: &str, name: &str, matches: &[String]) -> String {
+    format!(
+        "{} '{}' is ambiguous: {}. Specify by UUID or a unique name.",
+        entity,
+        name,
+        matches.join(", ")
+    )
 }
 
 impl DomainError {
@@ -94,12 +138,48 @@ impl KanbanError {
         Self::Domain(DomainError::NotFound { entity, id })
     }
 
+    pub fn not_found_by_name(
+        entity: &'static str,
+        name: impl Into<String>,
+        available: Vec<String>,
+    ) -> Self {
+        Self::Domain(DomainError::NotFoundByName {
+            entity,
+            name: name.into(),
+            available,
+        })
+    }
+
+    pub fn ambiguous(entity: &'static str, name: impl Into<String>, matches: Vec<String>) -> Self {
+        Self::Domain(DomainError::Ambiguous {
+            entity,
+            name: name.into(),
+            matches,
+        })
+    }
+
     pub fn validation(msg: impl Into<String>) -> Self {
         Self::Domain(DomainError::Validation(msg.into()))
     }
 
+    /// True for both `NotFound` (by UUID) and `NotFoundByName`.
     pub fn is_not_found(&self) -> bool {
-        matches!(self, KanbanError::Domain(DomainError::NotFound { .. }))
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::NotFound { .. })
+                | KanbanError::Domain(DomainError::NotFoundByName { .. })
+        )
+    }
+
+    pub fn is_not_found_by_name(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::NotFoundByName { .. })
+        )
+    }
+
+    pub fn is_ambiguous(&self) -> bool {
+        matches!(self, KanbanError::Domain(DomainError::Ambiguous { .. }))
     }
 
     pub fn is_validation(&self) -> bool {
@@ -225,6 +305,64 @@ mod tests {
         let id = Uuid::new_v4();
         let err = KanbanError::Domain(DomainError::wip_limit_exceeded(id, 3));
         assert!(err.is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_not_found_by_name_display_lists_available() {
+        let err = KanbanError::not_found_by_name(
+            "Column",
+            "done",
+            vec!["TODO".into(), "Doing".into(), "Complete".into()],
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("'done'"), "msg: {msg}");
+        assert!(msg.contains("not found"), "msg: {msg}");
+        assert!(msg.contains("'TODO'"), "msg: {msg}");
+        assert!(msg.contains("'Doing'"), "msg: {msg}");
+        assert!(msg.contains("'Complete'"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_not_found_by_name_display_with_empty_available_omits_list() {
+        let err = KanbanError::not_found_by_name("Card", "KAN-999", Vec::new());
+        let msg = err.to_string();
+        assert!(msg.contains("'KAN-999' not found"), "msg: {msg}");
+        assert!(!msg.contains("Available:"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_ambiguous_display_lists_matches() {
+        let err = KanbanError::ambiguous(
+            "Sprint",
+            "13",
+            vec!["'Project A'".into(), "'Project B'".into()],
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("'13' is ambiguous"), "msg: {msg}");
+        assert!(msg.contains("'Project A'"), "msg: {msg}");
+        assert!(msg.contains("'Project B'"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_is_not_found_by_name_predicate() {
+        let err = KanbanError::not_found_by_name("Column", "foo", Vec::new());
+        assert!(err.is_not_found_by_name());
+        // is_not_found is the umbrella predicate covering both shapes.
+        assert!(err.is_not_found());
+    }
+
+    #[test]
+    fn test_is_ambiguous_predicate() {
+        let err = KanbanError::ambiguous("Card", "5", vec!["x".into(), "y".into()]);
+        assert!(err.is_ambiguous());
+        assert!(!err.is_not_found());
+    }
+
+    #[test]
+    fn test_is_not_found_true_for_uuid_variant_too() {
+        let err = KanbanError::not_found("card", Uuid::new_v4());
+        assert!(err.is_not_found(), "umbrella predicate covers Uuid variant");
+        assert!(!err.is_not_found_by_name());
     }
 
     #[test]
