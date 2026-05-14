@@ -161,17 +161,19 @@ mod tests {
     }
 
     #[test]
-    fn resolve_editor_with_handles_simple_editor() {
-        let (path, args) = resolve_editor_with(Some("vim"));
-        assert!(path.ends_with("vim") || path.ends_with("vim.exe"));
+    fn resolve_editor_with_handles_simple_editor_path_no_args() {
+        let (path, args) = resolve_editor_with(Some("cargo"));
+        assert!(path.is_absolute());
+        assert!(path.ends_with("cargo") || path.ends_with("cargo.exe"));
         assert!(args.is_empty());
     }
 
     #[test]
-    fn resolve_editor_with_handles_multiword_editor() {
-        let (path, args) = resolve_editor_with(Some("code --wait"));
-        assert!(path.ends_with("code") || path.ends_with("code.exe") || path.ends_with("code.cmd"));
-        assert_eq!(args, vec!["--wait"]);
+    fn resolve_editor_with_handles_simple_editor_path_with_args() {
+        let (path, args) = resolve_editor_with(Some("cargo version"));
+        assert!(path.is_absolute());
+        assert!(path.ends_with("cargo") || path.ends_with("cargo.exe"));
+        assert_eq!(args, vec!["version"]);
     }
 
     #[test]
