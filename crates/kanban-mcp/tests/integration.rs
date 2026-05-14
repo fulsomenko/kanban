@@ -546,3 +546,96 @@ async fn test_mcp_reload_resets_undo_history() {
         "reload must reset undo history — cursor is invalid after external change"
     );
 }
+
+// ============================================================================
+// Name resolution via McpContext (same default trait methods as CLI uses).
+// Confirms the MCP context picks up the shared resolvers and they produce
+// the same human-friendly error messages.
+// ============================================================================
+
+#[tokio::test]
+async fn resolve_board_id_by_name_on_mcp_context() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx
+        .create_board("MyBoard".into(), Some("MB".into()))
+        .unwrap();
+    assert_eq!(ctx.resolve_board_id("MyBoard").unwrap(), board.id);
+    assert_eq!(ctx.resolve_board_id("myboard").unwrap(), board.id);
+}
+
+#[tokio::test]
+async fn resolve_board_id_unknown_lists_available_on_mcp() {
+    let (mut ctx, _tmp) = setup().await;
+    ctx.create_board("Alpha".into(), None).unwrap();
+    ctx.create_board("Beta".into(), None).unwrap();
+    let msg = ctx.resolve_board_id("Gamma").unwrap_err().to_string();
+    assert!(msg.contains("not found"), "msg: {msg}");
+    assert!(msg.contains("'Alpha'"), "msg: {msg}");
+    assert!(msg.contains("'Beta'"), "msg: {msg}");
+}
+
+#[tokio::test]
+async fn resolve_column_id_global_ambiguous_on_mcp() {
+    let (mut ctx, _tmp) = setup().await;
+    let a = ctx.create_board("A".into(), None).unwrap();
+    let b = ctx.create_board("B".into(), None).unwrap();
+    ctx.create_column(a.id, "TODO".into(), None).unwrap();
+    ctx.create_column(b.id, "TODO".into(), None).unwrap();
+    let msg = ctx
+        .resolve_column_id_global("todo")
+        .unwrap_err()
+        .to_string();
+    assert!(msg.contains("ambiguous"), "msg: {msg}");
+    assert!(msg.contains("'A'"), "msg: {msg}");
+    assert!(msg.contains("'B'"), "msg: {msg}");
+}
+
+#[tokio::test]
+async fn resolve_sprint_id_by_name_and_number_on_mcp() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx.create_board("B".into(), None).unwrap();
+    let sprint = ctx
+        .create_sprint(board.id, None, Some("alpha".into()))
+        .unwrap();
+    assert_eq!(ctx.resolve_sprint_id("alpha", board.id).unwrap(), sprint.id);
+    assert_eq!(
+        ctx.resolve_sprint_id(&sprint.sprint_number.to_string(), board.id)
+            .unwrap(),
+        sprint.id
+    );
+}
+
+#[tokio::test]
+async fn resolve_card_ids_aggregates_failures_on_mcp() {
+    let (mut ctx, _tmp) = setup().await;
+    let board = ctx.create_board("B".into(), Some("KAN".into())).unwrap();
+    let col = ctx.create_column(board.id, "TODO".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "T".into(), Default::default())
+        .unwrap();
+    let raws = vec![format!("KAN-{}", card.card_number), "KAN-999".into()];
+    let err = ctx.resolve_card_ids(&raws).unwrap_err().to_string();
+    assert!(err.contains("KAN-999"), "msg: {err}");
+}
+
+#[tokio::test]
+async fn require_same_board_rejects_cross_board_on_mcp() {
+    let (mut ctx, _tmp) = setup().await;
+    let a = ctx.create_board("Alpha".into(), Some("A".into())).unwrap();
+    let b = ctx.create_board("Beta".into(), Some("B".into())).unwrap();
+    let col_a = ctx.create_column(a.id, "TODO".into(), None).unwrap();
+    let col_b = ctx.create_column(b.id, "TODO".into(), None).unwrap();
+    let c_a = ctx
+        .create_card(a.id, col_a.id, "a".into(), Default::default())
+        .unwrap();
+    let c_b = ctx
+        .create_card(b.id, col_b.id, "b".into(), Default::default())
+        .unwrap();
+    let err = ctx
+        .require_same_board(&[c_a.id, c_b.id])
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("same board"), "msg: {err}");
+    assert!(err.contains("'Alpha'"), "msg: {err}");
+    assert!(err.contains("'Beta'"), "msg: {err}");
+}
