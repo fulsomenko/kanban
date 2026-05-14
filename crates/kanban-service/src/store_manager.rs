@@ -299,9 +299,9 @@ impl StoreManager {
                     store.close().await;
                     drop(store);
                     if let Err(e) = outcome {
-                        let _ = std::fs::remove_file(to_path);
-                        let _ = std::fs::remove_file(format!("{}-wal", to_path));
-                        let _ = std::fs::remove_file(format!("{}-shm", to_path));
+                        remove_file_with_windows_retry(to_path);
+                        remove_file_with_windows_retry(&format!("{}-wal", to_path));
+                        remove_file_with_windows_retry(&format!("{}-shm", to_path));
                         return Err(e);
                     }
                 }
@@ -313,9 +313,9 @@ impl StoreManager {
                 let outcome = target.save(store_snapshot).await;
                 drop(target);
                 if let Err(e) = outcome {
-                    let _ = std::fs::remove_file(to_path);
-                    let _ = std::fs::remove_file(format!("{}-wal", to_path));
-                    let _ = std::fs::remove_file(format!("{}-shm", to_path));
+                    remove_file_with_windows_retry(to_path);
+                    remove_file_with_windows_retry(&format!("{}-wal", to_path));
+                    remove_file_with_windows_retry(&format!("{}-shm", to_path));
                     return Err(e.into());
                 }
             }
@@ -328,6 +328,24 @@ impl Clone for StoreManager {
     fn clone(&self) -> Self {
         Self {
             registry: Arc::clone(&self.registry),
+        }
+    }
+}
+
+/// Best-effort `remove_file` that retries with linear backoff. SQLite on
+/// Windows can briefly hold a file handle even after `Pool::close().await`
+/// returns, because the OS-level handle release is asynchronous and lags the
+/// pool's synchronization. POSIX always succeeds on the first try.
+fn remove_file_with_windows_retry(path: &str) {
+    for delay_ms in [0u64, 50, 100, 200, 400] {
+        if delay_ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        }
+        if std::fs::remove_file(path).is_ok() {
+            return;
+        }
+        if !std::path::Path::new(path).exists() {
+            return;
         }
     }
 }
