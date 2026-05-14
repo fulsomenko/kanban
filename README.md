@@ -40,12 +40,16 @@ export KANBAN_FILE=boards.json   # or pass the path as the first argument
 
 kanban board create --name "My Project"
 kanban board list
-kanban card create --board-id <ID> --column-id <ID> --title "Fix the bug" --priority high
-kanban card list --board-id <ID>
-kanban sprint create --board-id <ID>
-kanban sprint activate <SPRINT_ID> --duration-days 14
-kanban card assign-sprint <CARD_ID> --sprint-id <SPRINT_ID>
+kanban card create --board "My Project" --column TODO --title "Fix the bug" --priority high
+kanban card list --board "My Project"
+kanban sprint create --board "My Project"
+kanban sprint activate yarara-release --duration-days 14
+kanban card assign-sprint KAN-5 --sprint yarara-release
 ```
+
+Every entity argument accepts either a UUID or a human-readable name (sprint
+numbers also work for sprints; cards accept their `KAN-N` identifier). When a
+name doesn't match, the error lists what's available.
 
 All commands output JSON. Use `kanban --help` for full reference.
 
