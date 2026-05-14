@@ -1,6 +1,7 @@
 use crate::app::{App, BoardFocus};
 use crate::components::*;
 use crate::theme::*;
+use kanban_core::pagination::scroll_offset_to_keep_visible;
 use kanban_domain::{Sprint, SprintStatus};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -215,7 +216,17 @@ fn render_board_sprints_list(
         }
     }
 
-    let sprints = Paragraph::new(sprint_lines).block(sprints_config.block());
+    let selected_idx = app.selection.sprint.get().unwrap_or(0);
+    let viewport_height = area.height.saturating_sub(2) as usize;
+    let scroll = scroll_offset_to_keep_visible(
+        app.selection.sprint_scroll.get(),
+        selected_idx,
+        viewport_height,
+    );
+    app.selection.sprint_scroll.set(scroll);
+    let sprints = Paragraph::new(sprint_lines)
+        .block(sprints_config.block())
+        .scroll((scroll as u16, 0));
     frame.render_widget(sprints, area);
 }
 
@@ -272,6 +283,16 @@ fn render_board_columns_list(
         }
     }
 
-    let columns = Paragraph::new(column_lines).block(columns_config.block());
+    let selected_idx = app.dialog_input.column_selection.get().unwrap_or(0);
+    let viewport_height = area.height.saturating_sub(2) as usize;
+    let scroll = scroll_offset_to_keep_visible(
+        app.dialog_input.column_scroll.get(),
+        selected_idx,
+        viewport_height,
+    );
+    app.dialog_input.column_scroll.set(scroll);
+    let columns = Paragraph::new(column_lines)
+        .block(columns_config.block())
+        .scroll((scroll as u16, 0));
     frame.render_widget(columns, area);
 }
