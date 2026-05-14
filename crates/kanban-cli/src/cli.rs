@@ -1,5 +1,4 @@
 use clap::{Args, Parser, Subcommand};
-use uuid::Uuid;
 
 use kanban_core::VERSION;
 
@@ -62,24 +61,24 @@ pub enum BoardAction {
         #[arg(long)]
         page_size: Option<u32>,
     },
-    /// Get a specific board by ID
+    /// Get a specific board by UUID or name
     Get {
-        /// Board ID
-        id: Uuid,
+        /// Board UUID or name
+        id: String,
     },
     /// Update a board
     Update(BoardUpdateArgs),
-    /// Delete a board by ID
+    /// Delete a board by UUID or name
     Delete {
-        /// Board ID
-        id: Uuid,
+        /// Board UUID or name
+        id: String,
     },
 }
 
 #[derive(Args)]
 pub struct BoardUpdateArgs {
-    /// Board ID to update
-    pub id: Uuid,
+    /// Board UUID or name
+    pub id: String,
     #[arg(long)]
     pub name: Option<String>,
     #[arg(long)]
@@ -101,8 +100,9 @@ pub struct ColumnCommand {
 pub enum ColumnAction {
     /// Create a new column
     Create {
+        /// Board UUID or name
         #[arg(long)]
-        board_id: Uuid,
+        board_id: String,
         #[arg(long)]
         name: String,
         #[arg(long)]
@@ -110,29 +110,30 @@ pub enum ColumnAction {
     },
     /// List columns for a board
     List {
+        /// Board UUID or name
         #[arg(long)]
-        board_id: Uuid,
+        board_id: String,
         #[arg(long)]
         page: Option<u32>,
         #[arg(long)]
         page_size: Option<u32>,
     },
-    /// Get a specific column by ID
+    /// Get a specific column by UUID or name
     Get {
-        /// Column ID
-        id: Uuid,
+        /// Column UUID or name
+        id: String,
     },
     /// Update a column
     Update(ColumnUpdateArgs),
-    /// Delete a column by ID
+    /// Delete a column by UUID or name
     Delete {
-        /// Column ID
-        id: Uuid,
+        /// Column UUID or name
+        id: String,
     },
-    /// Reorder a column by ID
+    /// Reorder a column by UUID or name
     Reorder {
-        /// Column ID
-        id: Uuid,
+        /// Column UUID or name
+        id: String,
         #[arg(long)]
         position: i32,
     },
@@ -140,8 +141,8 @@ pub enum ColumnAction {
 
 #[derive(Args)]
 pub struct ColumnUpdateArgs {
-    /// Column ID to update
-    pub id: Uuid,
+    /// Column UUID or name
+    pub id: String,
     #[arg(long)]
     pub name: Option<String>,
     #[arg(long)]
@@ -176,8 +177,9 @@ pub enum CardAction {
     Move {
         /// Card UUID or identifier like KAN-5 or 5
         id: String,
+        /// Column UUID or name
         #[arg(long)]
-        column_id: Uuid,
+        column_id: String,
         #[arg(long)]
         position: Option<i32>,
     },
@@ -190,8 +192,9 @@ pub enum CardAction {
     Restore {
         /// Card UUID or identifier like KAN-5 or 5
         id: String,
+        /// Column UUID or name
         #[arg(long)]
-        column_id: Option<Uuid>,
+        column_id: Option<String>,
     },
     /// Permanently delete an archived card by ID or identifier (e.g. KAN-5)
     Delete {
@@ -202,8 +205,9 @@ pub enum CardAction {
     AssignSprint {
         /// Card UUID or identifier like KAN-5 or 5
         id: String,
+        /// Sprint UUID, name, or number
         #[arg(long)]
-        sprint_id: Uuid,
+        sprint_id: String,
     },
     /// Unassign a card from its sprint
     UnassignSprint {
@@ -223,33 +227,40 @@ pub enum CardAction {
     /// Archive multiple cards
     #[command(name = "archive-cards")]
     ArchiveCards {
+        /// Comma-separated card UUIDs or identifiers (e.g. KAN-1,KAN-2,42)
         #[arg(long, value_delimiter = ',')]
-        ids: Vec<Uuid>,
+        ids: Vec<String>,
     },
     /// Move multiple cards to a column
     #[command(name = "move-cards")]
     MoveCards {
+        /// Comma-separated card UUIDs or identifiers (e.g. KAN-1,KAN-2,42)
         #[arg(long, value_delimiter = ',')]
-        ids: Vec<Uuid>,
+        ids: Vec<String>,
+        /// Column UUID or name (must be on the same board as all selected cards)
         #[arg(long)]
-        column_id: Uuid,
+        column_id: String,
     },
     /// Assign multiple cards to a sprint
     #[command(name = "assign-cards-to-sprint")]
     AssignCardsToSprint {
+        /// Comma-separated card UUIDs or identifiers (e.g. KAN-1,KAN-2,42)
         #[arg(long, value_delimiter = ',')]
-        ids: Vec<Uuid>,
+        ids: Vec<String>,
+        /// Sprint UUID, name, or number (must be on the same board as all selected cards)
         #[arg(long)]
-        sprint_id: Uuid,
+        sprint_id: String,
     },
 }
 
 #[derive(Args)]
 pub struct CardCreateArgs {
+    /// Board UUID or name
     #[arg(long)]
-    pub board_id: Uuid,
+    pub board_id: String,
+    /// Column UUID or name
     #[arg(long)]
-    pub column_id: Uuid,
+    pub column_id: String,
     #[arg(long)]
     pub title: String,
     #[arg(long)]
@@ -264,12 +275,15 @@ pub struct CardCreateArgs {
 
 #[derive(Args)]
 pub struct CardListArgs {
+    /// Board UUID or name
     #[arg(long)]
-    pub board_id: Option<Uuid>,
+    pub board_id: Option<String>,
+    /// Column UUID or name (scoped to --board-id if given, else searched globally)
     #[arg(long)]
-    pub column_id: Option<Uuid>,
+    pub column_id: Option<String>,
+    /// Sprint UUID, name, or number (scoped to --board-id if given, else searched globally)
     #[arg(long)]
-    pub sprint_id: Option<Uuid>,
+    pub sprint_id: Option<String>,
     #[arg(long)]
     pub status: Option<String>,
     #[arg(long)]
@@ -311,8 +325,9 @@ pub struct SprintCommand {
 pub enum SprintAction {
     /// Create a new sprint
     Create {
+        /// Board UUID or name
         #[arg(long)]
-        board_id: Uuid,
+        board_id: String,
         #[arg(long)]
         prefix: Option<String>,
         #[arg(long)]
@@ -320,57 +335,58 @@ pub enum SprintAction {
     },
     /// List sprints for a board
     List {
+        /// Board UUID or name
         #[arg(long)]
-        board_id: Uuid,
+        board_id: String,
         #[arg(long)]
         page: Option<u32>,
         #[arg(long)]
         page_size: Option<u32>,
     },
-    /// Get a specific sprint by ID
+    /// Get a specific sprint by UUID, name, or number
     Get {
-        /// Sprint ID
-        id: Uuid,
+        /// Sprint UUID, name, or number
+        id: String,
     },
     /// Update a sprint
     Update(SprintUpdateArgs),
-    /// Activate a sprint by ID
+    /// Activate a sprint by UUID, name, or number
     Activate {
-        /// Sprint ID
-        id: Uuid,
+        /// Sprint UUID, name, or number
+        id: String,
         #[arg(long)]
         duration_days: Option<i32>,
     },
-    /// Complete a sprint by ID
+    /// Complete a sprint by UUID, name, or number
     Complete {
-        /// Sprint ID
-        id: Uuid,
+        /// Sprint UUID, name, or number
+        id: String,
     },
-    /// Cancel a sprint by ID
+    /// Cancel a sprint by UUID, name, or number
     Cancel {
-        /// Sprint ID
-        id: Uuid,
+        /// Sprint UUID, name, or number
+        id: String,
     },
-    /// Delete a sprint by ID
+    /// Delete a sprint by UUID, name, or number
     Delete {
-        /// Sprint ID
-        id: Uuid,
+        /// Sprint UUID, name, or number
+        id: String,
     },
     /// Carry over uncompleted cards from a completed sprint to a planning sprint
     CarryOver {
-        /// ID of the completed sprint to carry cards from
+        /// Source sprint UUID, name, or number (must be completed)
         #[arg(long)]
-        from: Uuid,
-        /// ID of the planning sprint to carry cards to
+        from: String,
+        /// Target sprint UUID, name, or number (must be in planning; on same board as source)
         #[arg(long)]
-        to: Uuid,
+        to: String,
     },
 }
 
 #[derive(Args)]
 pub struct SprintUpdateArgs {
-    /// Sprint ID to update
-    pub id: Uuid,
+    /// Sprint UUID, name, or number
+    pub id: String,
     #[arg(long)]
     pub name: Option<String>,
     #[arg(long)]
@@ -410,8 +426,9 @@ pub struct MigrateArgs {
 // Export/Import commands
 #[derive(Args)]
 pub struct ExportArgs {
+    /// Board UUID or name; if omitted, exports all boards
     #[arg(long)]
-    pub board_id: Option<Uuid>,
+    pub board_id: Option<String>,
 }
 
 #[derive(Args)]
