@@ -205,11 +205,12 @@ async fn test_resolve_card_id_by_identifier() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_resolve_card_id_not_found_returns_validation_error() {
+async fn test_resolve_card_id_not_found_returns_not_found_by_name() {
     let (ctx, _dir) = open_ctx().await;
     let err = ctx.resolve_card_id("KAN-999").unwrap_err();
-    assert!(err.is_validation(), "got: {err}");
-    assert!(err.to_string().contains("Card not found"));
+    assert!(err.is_not_found(), "got: {err}");
+    assert!(err.is_not_found_by_name(), "got: {err}");
+    assert!(err.to_string().contains("'KAN-999' not found"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -302,4 +303,122 @@ async fn test_uuid_fast_path_returns_uuid_even_when_nothing_exists() {
     let random = Uuid::new_v4();
     // No entities exist; resolver returns the UUID; downstream get_* would be NotFound.
     assert_eq!(ctx.resolve_board_id(&random.to_string()).unwrap(), random);
+}
+
+// ---------- New error variants & API ergonomics (KAN-400 review fixes) ----------
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_board_miss_returns_not_found_by_name_variant() {
+    let (mut ctx, _dir) = open_ctx().await;
+    ctx.create_board("Kanban".into(), None).unwrap();
+    let err = ctx.resolve_board_id("missing").unwrap_err();
+    assert!(err.is_not_found_by_name(), "got: {err:?}");
+    assert!(err.is_not_found(), "umbrella predicate also true");
+    assert!(
+        !err.is_validation(),
+        "no longer the catch-all Validation variant"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_board_ambiguous_returns_ambiguous_variant() {
+    let (mut ctx, _dir) = open_ctx().await;
+    ctx.create_board("Shared".into(), None).unwrap();
+    ctx.create_board("Shared".into(), None).unwrap();
+    let err = ctx.resolve_board_id("shared").unwrap_err();
+    assert!(err.is_ambiguous(), "got: {err:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_column_id_global_with_zero_boards_is_graceful() {
+    // No boards, no columns — error message lists "" (empty available) but doesn't crash.
+    let (ctx, _dir) = open_ctx().await;
+    let err = ctx.resolve_column_id_global("foo").unwrap_err();
+    assert!(err.is_not_found_by_name(), "got: {err:?}");
+    let msg = err.to_string();
+    assert!(msg.contains("'foo'"), "msg: {msg}");
+    // No "Available:" segment when the list is empty.
+    assert!(!msg.contains("Available:"), "msg: {msg}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_sprint_id_global_named_ambiguity_across_boards() {
+    // Two boards, each with a sprint named "alpha"; resolver should flag ambiguity
+    // and name both boards in the matches list.
+    let (mut ctx, _dir) = open_ctx().await;
+    let board_a = ctx.create_board("Alpha-Board".into(), None).unwrap();
+    let board_b = ctx.create_board("Beta-Board".into(), None).unwrap();
+    ctx.create_sprint(board_a.id, None, Some("alpha".into()))
+        .unwrap();
+    ctx.create_sprint(board_b.id, None, Some("alpha".into()))
+        .unwrap();
+    let err = ctx.resolve_sprint_id_global("alpha").unwrap_err();
+    assert!(err.is_ambiguous(), "got: {err:?}");
+    let msg = err.to_string();
+    assert!(msg.contains("'Alpha-Board'"), "msg: {msg}");
+    assert!(msg.contains("'Beta-Board'"), "msg: {msg}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_sprint_id_on_board_does_not_bleed_other_board_numbers() {
+    // KAN-400 footgun-regression: with the split API the on-board variant
+    // never matches a sprint from another board, even with the same sprint_number.
+    let (mut ctx, _dir) = open_ctx().await;
+    let board_a = ctx.create_board("A".into(), None).unwrap();
+    let board_b = ctx.create_board("B".into(), None).unwrap();
+    let _s_a = ctx.create_sprint(board_a.id, None, None).unwrap();
+    let s_b = ctx.create_sprint(board_b.id, None, None).unwrap();
+    assert_eq!(s_b.sprint_number, 1, "both sprints are #1 by construction");
+    // Resolving "1" on board B returns the B sprint, not A's.
+    let resolved = ctx.resolve_sprint_id("1", board_b.id).unwrap();
+    assert_eq!(resolved, s_b.id);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_card_ids_mixed_uuid_identifier_and_number() {
+    // Single batch with three input shapes: UUID, KAN-N identifier, bare number.
+    // All resolve against one snapshot.
+    let (mut ctx, _dir) = open_ctx().await;
+    let board = ctx.create_board("B".into(), Some("KAN".into())).unwrap();
+    let col = ctx.create_column(board.id, "TODO".into(), None).unwrap();
+    let c1 = ctx
+        .create_card(board.id, col.id, "one".into(), Default::default())
+        .unwrap();
+    let c2 = ctx
+        .create_card(board.id, col.id, "two".into(), Default::default())
+        .unwrap();
+    let c3 = ctx
+        .create_card(board.id, col.id, "three".into(), Default::default())
+        .unwrap();
+
+    let raws: Vec<String> = vec![
+        c1.id.to_string(),                 // raw UUID
+        format!("KAN-{}", c2.card_number), // prefixed identifier
+        c3.card_number.to_string(),        // bare number
+    ];
+    let ids = ctx.resolve_card_ids(&raws).unwrap();
+    assert_eq!(ids, vec![c1.id, c2.id, c3.id]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_card_ids_takes_single_snapshot_per_batch() {
+    // Behavioural check: even a batch of 10 inputs against 50 cards completes
+    // without per-element backend churn. We assert correctness here; the perf
+    // contract is provable by inspecting the implementation (one set of
+    // list_all_* at the top, then pure in-memory matching).
+    let (mut ctx, _dir) = open_ctx().await;
+    let board = ctx.create_board("B".into(), Some("KAN".into())).unwrap();
+    let col = ctx.create_column(board.id, "TODO".into(), None).unwrap();
+    let mut all_ids = Vec::new();
+    for i in 0..50 {
+        let c = ctx
+            .create_card(board.id, col.id, format!("c{i}"), Default::default())
+            .unwrap();
+        all_ids.push(c.id);
+    }
+    // Resolve the first 10 by identifier.
+    let raws: Vec<String> = (1..=10).map(|n| format!("KAN-{n}")).collect();
+    let resolved = ctx.resolve_card_ids(&raws).unwrap();
+    assert_eq!(resolved.len(), 10);
+    assert_eq!(resolved, all_ids[0..10]);
 }

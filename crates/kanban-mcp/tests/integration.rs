@@ -639,3 +639,273 @@ async fn require_same_board_rejects_cross_board_on_mcp() {
     assert!(err.contains("'Alpha'"), "msg: {err}");
     assert!(err.contains("'Beta'"), "msg: {err}");
 }
+
+// ============================================================================
+// Tool-handler tests (KAN-400 review fix: previously only McpContext was tested,
+// not the actual tool bodies that go through `locked_session` + resolution).
+// ============================================================================
+
+use kanban_mcp::{
+    AssignCardToSprintRequest, CarryOverSprintCardsRequest, CreateBoardRequest, CreateCardRequest,
+    CreateColumnRequest, CreateSprintRequest, KanbanMcpServer, MoveCardRequest, MoveCardsRequest,
+};
+use rmcp::handler::server::wrapper::Parameters;
+use serde_json::Value;
+
+async fn setup_server() -> (KanbanMcpServer, TempDir) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.json");
+    let store_manager = default_store_manager();
+    let server = KanbanMcpServer::new(
+        &store_manager,
+        &path.to_string_lossy(),
+        AppConfig::default(),
+    )
+    .await
+    .unwrap();
+    (server, dir)
+}
+
+fn text_payload(result: &rmcp::model::CallToolResult) -> Value {
+    let raw = &result.content[0]
+        .as_text()
+        .expect("expected text content")
+        .text;
+    serde_json::from_str(raw).expect("tool result is JSON")
+}
+
+#[tokio::test]
+async fn tool_move_card_resolves_names_through_locked_session() {
+    let (server, _tmp) = setup_server().await;
+    // Seed: board with two columns and one card.
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "Doing".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "T".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+        }))
+        .await
+        .unwrap();
+    // Move KAN-1 to Doing using names end-to-end.
+    let result = server
+        .tool_move_card(Parameters(MoveCardRequest {
+            card: "KAN-1".into(),
+            column: "Doing".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert_eq!(body["title"], "T");
+    assert!(body["column_id"].is_string());
+}
+
+#[tokio::test]
+async fn tool_move_cards_rejects_cross_board_batch() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "Alpha".into(),
+            card_prefix: Some("A".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "Beta".into(),
+            card_prefix: Some("B".into()),
+        }))
+        .await
+        .unwrap();
+    for board in ["Alpha", "Beta"] {
+        server
+            .tool_create_column(Parameters(CreateColumnRequest {
+                board: board.into(),
+                name: "TODO".into(),
+                position: None,
+            }))
+            .await
+            .unwrap();
+        server
+            .tool_create_card(Parameters(CreateCardRequest {
+                board: board.into(),
+                column: "TODO".into(),
+                title: format!("{board}-1"),
+                description: None,
+                priority: None,
+                points: None,
+                due_date: None,
+            }))
+            .await
+            .unwrap();
+    }
+    let err = server
+        .tool_move_cards(Parameters(MoveCardsRequest {
+            cards: vec!["A-1".into(), "B-1".into()],
+            column: "TODO".into(),
+        }))
+        .await
+        .unwrap_err();
+    let msg = format!("{:?}", err);
+    assert!(msg.contains("same board"), "err: {msg}");
+    assert!(msg.contains("'Alpha'"), "err: {msg}");
+    assert!(msg.contains("'Beta'"), "err: {msg}");
+}
+
+#[tokio::test]
+async fn tool_carry_over_sprint_cards_scopes_to_named_from_board() {
+    // from_sprint is global; to_sprint must resolve on from_sprint's board.
+    // A sprint of the same name on a different board must not match `to`.
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "Alpha".into(),
+            card_prefix: Some("A".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "Beta".into(),
+            card_prefix: Some("B".into()),
+        }))
+        .await
+        .unwrap();
+    // Both boards get a "next" sprint name. Only Alpha gets the "completed" one.
+    server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "Alpha".into(),
+            prefix: None,
+            name: Some("completed".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "Alpha".into(),
+            prefix: None,
+            name: Some("next".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "Beta".into(),
+            prefix: None,
+            name: Some("next".into()),
+        }))
+        .await
+        .unwrap();
+    // Activate + complete the source sprint on Alpha.
+    server
+        .tool_activate_sprint(Parameters(kanban_mcp::ActivateSprintRequest {
+            sprint: "completed".into(),
+            duration_days: Some(1),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_complete_sprint(Parameters(kanban_mcp::CompleteSprintRequest {
+            sprint: "completed".into(),
+        }))
+        .await
+        .unwrap();
+    // Even though both boards have a "next" sprint, the carry-over must
+    // resolve "next" within Alpha (the source's board), not error on
+    // ambiguity. (Per KAN-400 design: to_sprint is scoped to from_sprint's board.)
+    let result = server
+        .tool_carry_over_sprint_cards(Parameters(CarryOverSprintCardsRequest {
+            from_sprint: "completed".into(),
+            to_sprint: "next".into(),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert!(body["carried_over_count"].is_number());
+}
+
+#[tokio::test]
+async fn tool_assign_card_to_sprint_resolves_by_name_then_mutates() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "B".into(),
+            prefix: None,
+            name: Some("alpha".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "T".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+        }))
+        .await
+        .unwrap();
+    // Assign using card identifier + sprint name + sprint number both work.
+    let r1 = server
+        .tool_assign_card_to_sprint(Parameters(AssignCardToSprintRequest {
+            card: "KAN-1".into(),
+            sprint: "alpha".into(),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&r1);
+    assert!(body["sprint_id"].is_string());
+    let r2 = server
+        .tool_assign_card_to_sprint(Parameters(AssignCardToSprintRequest {
+            card: "KAN-1".into(),
+            sprint: "1".into(), // sprint number
+        }))
+        .await
+        .unwrap();
+    let body2 = text_payload(&r2);
+    assert!(body2["sprint_id"].is_string());
+}

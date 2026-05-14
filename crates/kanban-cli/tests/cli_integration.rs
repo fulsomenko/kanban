@@ -1476,7 +1476,7 @@ mod card_tests {
             .args([file.to_str().unwrap(), "card", "archive", "KAN-1"])
             .assert()
             .failure()
-            .stderr(predicate::str::contains("Ambiguous"))
+            .stderr(predicate::str::contains("ambiguous"))
             .stderr(predicate::str::contains(&card_a_id))
             .stderr(predicate::str::contains(&card_b_id));
     }
@@ -2789,6 +2789,71 @@ mod name_resolution_tests {
                 .stdout,
         ));
         assert_eq!(mjson["data"]["id"], card_id);
+    }
+
+    #[test]
+    fn test_sprint_get_ambiguous_name_across_boards_lists_both() {
+        // KAN-400 review fix: cross-board sprint name ambiguity must name the
+        // conflicting boards (was previously underspecified).
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json").to_str().unwrap().to_string();
+        kanban().args([&file]).assert().success();
+        kanban()
+            .args([
+                &file,
+                "board",
+                "create",
+                "--name",
+                "Alpha",
+                "--card-prefix",
+                "A",
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                &file,
+                "board",
+                "create",
+                "--name",
+                "Beta",
+                "--card-prefix",
+                "B",
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                &file,
+                "sprint",
+                "create",
+                "--board",
+                "Alpha",
+                "--name",
+                "shared-name",
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                &file,
+                "sprint",
+                "create",
+                "--board",
+                "Beta",
+                "--name",
+                "shared-name",
+            ])
+            .assert()
+            .success();
+        let assert = kanban()
+            .args([&file, "sprint", "get", "shared-name"])
+            .assert()
+            .failure();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+        assert!(stderr.contains("ambiguous"), "stderr: {stderr}");
+        assert!(stderr.contains("'Alpha'"), "stderr: {stderr}");
+        assert!(stderr.contains("'Beta'"), "stderr: {stderr}");
     }
 
     /// Regression: `card restore <archived_uuid> --column <name>` must work.
