@@ -228,6 +228,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_scroll_offset_to_keep_visible_zero_viewport_is_noop() {
+        assert_eq!(scroll_offset_to_keep_visible(7, 99, 0), 7);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_already_visible_keeps_offset() {
+        // viewport rows 5..=9, selected 7 → stays at offset 5
+        assert_eq!(scroll_offset_to_keep_visible(5, 7, 5), 5);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_selection_above_scrolls_up() {
+        // viewport rows 10..=14, selected 3 → snap offset to 3
+        assert_eq!(scroll_offset_to_keep_visible(10, 3, 5), 3);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_selection_below_scrolls_down() {
+        // viewport rows 0..=4, selected 7 → selected becomes last visible (offset 3)
+        assert_eq!(scroll_offset_to_keep_visible(0, 7, 5), 3);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_at_top_edge_no_scroll() {
+        // viewport rows 5..=9, selected 5 (top edge) → keep
+        assert_eq!(scroll_offset_to_keep_visible(5, 5, 5), 5);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_at_bottom_edge_no_scroll() {
+        // viewport rows 5..=9, selected 9 (bottom edge) → keep
+        assert_eq!(scroll_offset_to_keep_visible(5, 9, 5), 5);
+    }
+
+    #[test]
     fn test_page_info_empty() {
         let page = Page::new(0);
         let info = page.get_page_info(10);
