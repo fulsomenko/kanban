@@ -495,33 +495,25 @@ impl KanbanContext {
     }
 
     pub fn move_cards_detailed(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> BatchOperationResult {
-        use kanban_domain::commands::MoveCards;
-        let all_cards = match self.backend.list_all_cards() {
-            Ok(c) => c,
-            Err(e) => {
-                return BatchOperationResult {
-                    succeeded: vec![],
-                    failed: ids
-                        .into_iter()
-                        .map(|id| BatchOperationFailure {
-                            id,
-                            error: e.to_string(),
-                        })
-                        .collect(),
-                };
-            }
-        };
-        let card_ids: std::collections::HashSet<Uuid> = all_cards.iter().map(|c| c.id).collect();
+        // Dedup at the input boundary so the per-id classification loop both
+        // (a) reports each invalid id once in `failed` and (b) reports each
+        // valid id once in `succeeded`, matching the one `MoveCard` per
+        // unique id that `compute_move_positions` will emit. Also avoids
+        // redundant get_card calls for the same id.
+        let ids = kanban_domain::card_lifecycle::dedup_preserving_order(&ids);
         let mut to_move = Vec::new();
         let mut failed = Vec::new();
         for id in ids {
-            if card_ids.contains(&id) {
-                to_move.push(id);
-            } else {
-                failed.push(BatchOperationFailure {
+            match self.backend.get_card(id) {
+                Ok(Some(_)) => to_move.push(id),
+                Ok(None) => failed.push(BatchOperationFailure {
                     id,
                     error: KanbanError::not_found("card", id).to_string(),
-                });
+                }),
+                Err(e) => failed.push(BatchOperationFailure {
+                    id,
+                    error: e.to_string(),
+                }),
             }
         }
         if to_move.is_empty() {
@@ -549,21 +541,21 @@ impl KanbanContext {
                 }
             };
 
-        let mut batch = vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
-            ids: to_move,
-            column_id,
-        }))];
-        for (card_id, new_status) in chained_status_updates {
-            batch.push(Command::Card(CardCommand::Update(
-                kanban_domain::commands::UpdateCard {
-                    card_id,
-                    updates: CardUpdate {
-                        status: Some(new_status),
-                        ..Default::default()
-                    },
-                },
-            )));
-        }
+        let batch = match self.build_move_cards_batch(&to_move, column_id, chained_status_updates) {
+            Ok(b) => b,
+            Err(e) => {
+                let err = e.to_string();
+                let mut all_failed = failed;
+                all_failed.extend(succeeded.into_iter().map(|id| BatchOperationFailure {
+                    id,
+                    error: err.clone(),
+                }));
+                return BatchOperationResult {
+                    succeeded: vec![],
+                    failed: all_failed,
+                };
+            }
+        };
 
         match self.execute(batch) {
             Ok(()) => BatchOperationResult { succeeded, failed },
@@ -707,8 +699,8 @@ impl KanbanContext {
     /// KAN-394: per-card chained status updates for a batch move. For each id
     /// in `ids`, asks the domain whether moving to `new_column_id` requires a
     /// status flip. Returns the cards that need a status update along with
-    /// their target status. Cards that aren't found are silently skipped — the
-    /// `MoveCards` command will surface the not-found error itself.
+    /// their target status. Cards that aren't found are silently skipped —
+    /// individual `MoveCard` commands will surface the not-found error.
     fn chained_status_updates_for_batch_move(
         &self,
         ids: &[Uuid],
@@ -721,6 +713,79 @@ impl KanbanContext {
             }
         }
         Ok(updates)
+    }
+
+    /// KAN-428: build the command batch for a multi-card move into one column.
+    ///
+    /// Validates that every input id is a known card up front so that an
+    /// unknown id surfaces as `not_found` rather than being miscounted by
+    /// the batch WIP pre-check. When the target column has a WIP limit,
+    /// performs a single batch-level pre-check that returns one clean
+    /// `WipLimitExceeded` before any per-card command runs. The per-card
+    /// `MoveCard::execute` WIP check still runs as belt-and-suspenders, but
+    /// since `count_cards_in_column_excluding` is now O(column_size +
+    /// exclude.len()), the redundant per-card checks are cheap.
+    fn build_move_cards_batch(
+        &self,
+        ids: &[Uuid],
+        column_id: Uuid,
+        chained_status_updates: Vec<(Uuid, CardStatus)>,
+    ) -> KanbanResult<Vec<Command>> {
+        use kanban_domain::commands::{MoveCard, UpdateCard};
+        use kanban_domain::DomainError;
+        use std::collections::HashSet;
+
+        for &id in ids {
+            if self.backend.get_card(id)?.is_none() {
+                return Err(KanbanError::not_found("card", id));
+            }
+        }
+
+        let existing = self.backend.list_cards_by_column(column_id)?;
+        let column = self
+            .backend
+            .get_column(column_id)?
+            .ok_or_else(|| KanbanError::not_found("column", column_id))?;
+
+        if let Some(limit) = column.wip_limit {
+            // `moving_set.len()` is the post-dedup mover count — `compute_move_positions`
+            // emits one `MoveCard` per unique id, so the pre-check must use the same
+            // count to avoid a false `WipLimitExceeded` when the caller passes
+            // duplicates that would actually fit under the limit.
+            let moving_set: HashSet<Uuid> = ids.iter().copied().collect();
+            let non_moving = existing
+                .iter()
+                .filter(|c| !moving_set.contains(&c.id))
+                .count();
+            if non_moving + moving_set.len() > limit as usize {
+                return Err(KanbanError::Domain(DomainError::wip_limit_exceeded(
+                    column_id,
+                    limit as u32,
+                )));
+            }
+        }
+
+        let positions = kanban_domain::card_lifecycle::compute_move_positions(&existing, ids);
+
+        let mut batch: Vec<Command> =
+            Vec::with_capacity(positions.len() + chained_status_updates.len());
+        for (card_id, new_position) in positions {
+            batch.push(Command::Card(CardCommand::Move(MoveCard {
+                card_id,
+                new_column_id: column_id,
+                new_position,
+            })));
+        }
+        for (card_id, new_status) in chained_status_updates {
+            batch.push(Command::Card(CardCommand::Update(UpdateCard {
+                card_id,
+                updates: CardUpdate {
+                    status: Some(new_status),
+                    ..Default::default()
+                },
+            })));
+        }
+        Ok(batch)
     }
 
     /// KAN-394: given a column the card is about to move to, compute the status
@@ -1087,23 +1152,10 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn move_cards(&mut self, ids: Vec<Uuid>, column_id: Uuid) -> KanbanResult<usize> {
-        use kanban_domain::commands::{MoveCards, UpdateCard};
         let before = self.backend.list_cards_by_column(column_id)?.len();
 
         let chained_status_updates = self.chained_status_updates_for_batch_move(&ids, column_id)?;
-        let mut batch = vec![Command::Card(CardCommand::MoveMultiple(MoveCards {
-            ids,
-            column_id,
-        }))];
-        for (card_id, new_status) in chained_status_updates {
-            batch.push(Command::Card(CardCommand::Update(UpdateCard {
-                card_id,
-                updates: CardUpdate {
-                    status: Some(new_status),
-                    ..Default::default()
-                },
-            })));
-        }
+        let batch = self.build_move_cards_batch(&ids, column_id, chained_status_updates)?;
 
         self.execute(batch)?;
         let after = self.backend.list_cards_by_column(column_id)?.len();
