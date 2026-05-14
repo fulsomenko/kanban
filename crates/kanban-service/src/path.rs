@@ -117,6 +117,12 @@ mod tests {
         std::fs::write(&abs, b"{}").unwrap();
         let result = validate_path_with_cwd(&abs, &cwd)?;
         assert!(
+            result.starts_with(&cwd),
+            "result {} should start with cwd {}",
+            result.display(),
+            cwd.display()
+        );
+        assert!(
             !result.to_string_lossy().starts_with(r"\\?\"),
             "result should not have UNC prefix, got: {}",
             result.display()
