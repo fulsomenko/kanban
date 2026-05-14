@@ -17,12 +17,14 @@ fn editor_env_hint(is_powershell: bool) -> &'static str {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn fallback_editor() -> (String, Vec<String>) {
-    if cfg!(target_os = "windows") {
-        ("notepad".to_string(), vec![])
-    } else {
-        ("vi".to_string(), vec![])
-    }
+    ("notepad".to_string(), vec![])
+}
+
+#[cfg(not(target_os = "windows"))]
+fn fallback_editor() -> (String, Vec<String>) {
+    ("vi".to_string(), vec![])
 }
 
 fn parse_editor(full_command: &str) -> (String, Vec<String>) {
