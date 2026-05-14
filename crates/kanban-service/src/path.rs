@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn test_validate_path_relative_within_cwd_returns_resolved() -> KanbanResult<()> {
         let dir = TempDir::new().unwrap();
-        let cwd = dir.path().canonicalize().unwrap();
+        let cwd = dunce::canonicalize(dir.path()).unwrap();
         let result = validate_path_with_cwd(Path::new("some/nested/file.json"), &cwd)?;
         assert!(result.starts_with(&cwd));
         assert!(result.ends_with("some/nested/file.json"));
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn test_validate_path_relative_within_cwd_existing_file_returns_resolved() -> KanbanResult<()> {
         let dir = TempDir::new().unwrap();
-        let cwd = dir.path().canonicalize().unwrap();
+        let cwd = dunce::canonicalize(dir.path()).unwrap();
         std::fs::write(cwd.join("kanban.json"), b"{}").unwrap();
         let result = validate_path_with_cwd(Path::new("kanban.json"), &cwd)?;
         assert!(
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn test_validate_path_absolute_existing_file_returns_non_unc() -> KanbanResult<()> {
         let dir = TempDir::new().unwrap();
-        let cwd = dir.path().canonicalize().unwrap();
+        let cwd = dunce::canonicalize(dir.path()).unwrap();
         let abs = cwd.join("kanban.json");
         std::fs::write(&abs, b"{}").unwrap();
         let result = validate_path_with_cwd(&abs, &cwd)?;
