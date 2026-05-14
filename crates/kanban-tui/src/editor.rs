@@ -26,10 +26,13 @@ fn fallback_editor() -> (String, Vec<String>) {
 }
 
 fn parse_editor(full_command: &str) -> (String, Vec<String>) {
-    let parts = shell_words::split(full_command).unwrap_or_default();
-    let program = parts.first().cloned().unwrap_or_default();
-    let args = parts.into_iter().skip(1).collect();
-    (program, args)
+    match shell_words::split(full_command) {
+        Ok(mut parts) if !parts.is_empty() => {
+            let program = parts.remove(0);
+            (program, parts)
+        }
+        _ => (full_command.to_string(), vec![]),
+    }
 }
 
 fn resolve_editor_with(editor_env: Option<&str>) -> (PathBuf, Vec<String>) {
@@ -141,6 +144,20 @@ mod tests {
         let (program, args) = parse_editor("\'C:/Program Files/VS Code/code.cmd\' --wait");
         assert_eq!(program, "C:/Program Files/VS Code/code.cmd");
         assert_eq!(args, vec!["--wait"]);
+    }
+
+    #[test]
+    fn parse_editor_handles_malformed_single_word_command() {
+        let (program, args) = parse_editor("'vim");
+        assert_eq!(program, "'vim");
+        assert!(args.is_empty())
+    }
+
+    #[test]
+    fn parse_editor_handles_malformed_multiword_command() {
+        let (program, args) = parse_editor("'vim -u NONE");
+        assert_eq!(program, "'vim -u NONE");
+        assert!(args.is_empty())
     }
 
     #[test]
