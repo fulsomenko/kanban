@@ -301,14 +301,46 @@ pub fn find_columns_by_name<'a>(query: &str, columns: &'a [Column]) -> Vec<&'a C
         .collect()
 }
 
-/// Find all sprints matching `query`, by sprint number or by sprint name.
+/// Find sprints matching `query` (number or name) **within a single board**.
 ///
-/// - If `query` parses as a `u32`, match sprints whose `sprint_number == query`.
-/// - Otherwise, match sprints whose resolved name (via `board.sprint_names[name_index]`)
-///   equals `query` (case-insensitive).
+/// - If `query` parses as a `u32`, match sprints whose `board_id == board.id`
+///   and `sprint_number == query`.
+/// - Otherwise, match sprints on this board whose resolved name (via
+///   `board.sprint_names[name_index]`) equals `query` (case-insensitive).
 ///
-/// `boards` is required to resolve sprint names — each sprint's `board_id` is looked up.
-pub fn find_sprints_by_query<'a>(
+/// The board-scoped contract is enforced on both branches, so callers don't
+/// need to pre-filter the slice.
+pub fn find_sprints_by_query_on_board<'a>(
+    query: &str,
+    sprints: &'a [Sprint],
+    board: &Board,
+) -> Vec<&'a Sprint> {
+    if let Ok(number) = query.parse::<u32>() {
+        return sprints
+            .iter()
+            .filter(|s| s.board_id == board.id && s.sprint_number == number)
+            .collect();
+    }
+    let needle = query.to_lowercase();
+    sprints
+        .iter()
+        .filter(|s| {
+            s.board_id == board.id
+                && s.get_name(board)
+                    .map(|n| n.to_lowercase() == needle)
+                    .unwrap_or(false)
+        })
+        .collect()
+}
+
+/// Find sprints matching `query` (number or name) **across all the given boards**.
+///
+/// - If `query` parses as a `u32`, match every sprint whose `sprint_number == query`,
+///   regardless of board (caller decides what to do with multi-board ambiguity).
+/// - Otherwise, match sprints whose resolved name on their own board equals
+///   `query` (case-insensitive). The sprint's `board_id` is looked up in `boards`;
+///   a sprint whose board is missing from the slice is silently skipped.
+pub fn find_sprints_by_query_global<'a>(
     query: &str,
     sprints: &'a [Sprint],
     boards: &[Board],
@@ -857,7 +889,7 @@ mod tests {
         let sprints = vec![sprint1, sprint2];
         let boards = vec![board];
 
-        let result = find_sprints_by_query("1", &sprints, &boards);
+        let result = find_sprints_by_query_global("1", &sprints, &boards);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].sprint_number, 1);
     }
@@ -872,11 +904,11 @@ mod tests {
         let sprints = vec![sprint1.clone(), sprint2];
         let boards = vec![board];
 
-        let result = find_sprints_by_query("yarara-release", &sprints, &boards);
+        let result = find_sprints_by_query_global("yarara-release", &sprints, &boards);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, sprint1.id);
 
-        let result = find_sprints_by_query("YARARA-RELEASE", &sprints, &boards);
+        let result = find_sprints_by_query_global("YARARA-RELEASE", &sprints, &boards);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, sprint1.id);
     }
@@ -890,7 +922,7 @@ mod tests {
         let sprints = vec![sprint_numbered.clone(), sprint_named];
         let boards = vec![board];
 
-        let result = find_sprints_by_query("1", &sprints, &boards);
+        let result = find_sprints_by_query_global("1", &sprints, &boards);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, sprint_numbered.id);
     }
@@ -903,8 +935,8 @@ mod tests {
         let sprints = vec![sprint];
         let boards = vec![board];
 
-        assert!(find_sprints_by_query("nope", &sprints, &boards).is_empty());
-        assert!(find_sprints_by_query("99", &sprints, &boards).is_empty());
+        assert!(find_sprints_by_query_global("nope", &sprints, &boards).is_empty());
+        assert!(find_sprints_by_query_global("99", &sprints, &boards).is_empty());
     }
 
     #[test]
@@ -916,7 +948,50 @@ mod tests {
         let sprints = vec![sprint_a, sprint_b];
         let boards = vec![board_a, board_b];
 
-        let result = find_sprints_by_query("13", &sprints, &boards);
+        let result = find_sprints_by_query_global("13", &sprints, &boards);
         assert_eq!(result.len(), 2);
+    }
+
+    // ---- find_sprints_by_query_on_board scoping tests (KAN-400 footgun fix) ----
+
+    #[test]
+    fn test_find_sprints_by_query_on_board_number_matches_only_on_that_board() {
+        let board_a = Board::new("A".to_string(), None);
+        let board_b = Board::new("B".to_string(), None);
+        let on_a = crate::Sprint::new(board_a.id, 13, None, None);
+        let on_b = crate::Sprint::new(board_b.id, 13, None, None);
+        let sprints = vec![on_a.clone(), on_b];
+
+        let result = find_sprints_by_query_on_board("13", &sprints, &board_a);
+        assert_eq!(result.len(), 1, "expected exactly one match on board A");
+        assert_eq!(result[0].id, on_a.id);
+    }
+
+    #[test]
+    fn test_find_sprints_by_query_on_board_name_matches_only_on_that_board() {
+        let mut board_a = Board::new("A".to_string(), None);
+        board_a.sprint_names.push("alpha".to_string());
+        let mut board_b = Board::new("B".to_string(), None);
+        board_b.sprint_names.push("alpha".to_string());
+        let on_a = crate::Sprint::new(board_a.id, 1, Some(0), None);
+        let on_b = crate::Sprint::new(board_b.id, 1, Some(0), None);
+        let sprints = vec![on_a.clone(), on_b];
+
+        let result = find_sprints_by_query_on_board("alpha", &sprints, &board_a);
+        assert_eq!(result.len(), 1, "expected exactly one match on board A");
+        assert_eq!(result[0].id, on_a.id);
+    }
+
+    #[test]
+    fn test_find_sprints_by_query_on_board_ignores_other_board_sprints_in_slice() {
+        // Footgun-regression: even if a caller passes sprints from a different
+        // board, the on_board variant filters them out.
+        let board_a = Board::new("A".to_string(), None);
+        let board_b = Board::new("B".to_string(), None);
+        let only_on_b = crate::Sprint::new(board_b.id, 13, None, None);
+        let sprints = vec![only_on_b];
+
+        let result = find_sprints_by_query_on_board("13", &sprints, &board_a);
+        assert!(result.is_empty());
     }
 }

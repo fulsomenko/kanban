@@ -48,9 +48,9 @@ pub use query::{
     CardQueryBuilder,
 };
 pub use search::{
-    find_boards_by_name, find_cards_by_identifier, find_columns_by_name, find_sprints_by_query,
-    format_ambiguous_matches, BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy,
-    TitleSearcher,
+    find_boards_by_name, find_cards_by_identifier, find_columns_by_name,
+    find_sprints_by_query_global, find_sprints_by_query_on_board, format_ambiguous_matches,
+    BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy, TitleSearcher,
 };
 pub use snapshot::Snapshot;
 pub use sort::{get_sorter_for_field, OrderedSorter, SortBy};
