@@ -12,8 +12,12 @@ Fix Windows failure when launching `kanban` with an existing data file (KAN-445)
   form that `std::fs::canonicalize` emits. The traversal guard's prefix
   comparison against the current working directory now succeeds for paths
   inside the cwd, as intended
+- The current working directory is canonicalized through the same path,
+  so the comparison is robust even when the cwd itself is in non-canonical
+  form (e.g. a UNC-shaped Windows cwd, or a `/var` → `/private/var`
+  symlink on macOS)
 - Absolute paths that point at existing files are likewise returned in
   their plain form, so downstream consumers no longer see surprise UNC
   prefixes leaking out of the service layer
-- No behaviour change on Linux or macOS, and no change to the path
-  traversal protection — escapes via `..` are still rejected
+- No change to the path traversal protection — escapes via `..` are
+  still rejected
