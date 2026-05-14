@@ -2791,6 +2791,45 @@ mod name_resolution_tests {
         assert_eq!(mjson["data"]["id"], card_id);
     }
 
+    /// Regression: `card restore <archived_uuid> --column <name>` must work.
+    /// The board-derivation helper used to chain via active cards only, which
+    /// failed for archived cards. It now falls back to archived_card.original_column_id.
+    #[test]
+    fn test_card_restore_archived_with_column_name() {
+        let (_dir, file, _b, _c) = setup_named_board("B", "KAN");
+        kanban()
+            .args([&file, "column", "create", "--board", "B", "--name", "Doing"])
+            .assert()
+            .success();
+        let cjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([
+                    &file, "card", "create", "--board", "B", "--column", "TODO", "--title", "X",
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        let card_uuid = extract_id(&cjson);
+        kanban()
+            .args([&file, "card", "archive", "KAN-1"])
+            .assert()
+            .success();
+        // Archived cards aren't reachable via KAN-N identifier, so use UUID.
+        // The --column name resolution must still succeed by chaining via the
+        // archived card's original_column_id to derive the board.
+        let rjson = parse_json_output(&String::from_utf8_lossy(
+            &kanban()
+                .args([&file, "card", "restore", &card_uuid, "--column", "Doing"])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        ));
+        assert_eq!(rjson["data"]["id"], card_uuid);
+    }
+
     #[test]
     fn test_card_assign_sprint_by_name() {
         let (_dir, file, _b, _c) = setup_named_board("B", "KAN");

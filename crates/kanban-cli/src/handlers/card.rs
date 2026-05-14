@@ -236,14 +236,24 @@ fn resolve_sprint_for_card(ctx: &CliContext, raw: &str, card_id: Uuid) -> Result
 }
 
 fn card_board_id(ctx: &CliContext, card_id: Uuid) -> Result<Uuid, String> {
-    let card = ctx
-        .get_card(card_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Card not found: {}", card_id))?;
+    // Try active cards first; if the card is archived, fall back via its
+    // original_column_id. Either path resolves to the card's board.
+    let column_id = match ctx.get_card(card_id).map_err(|e| e.to_string())? {
+        Some(card) => card.column_id,
+        None => {
+            let archived = ctx
+                .list_archived_cards()
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .find(|a| a.card.id == card_id)
+                .ok_or_else(|| format!("Card not found: {}", card_id))?;
+            archived.original_column_id
+        }
+    };
     let column = ctx
-        .get_column(card.column_id)
+        .get_column(column_id)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Column not found: {}", card.column_id))?;
+        .ok_or_else(|| format!("Column not found: {}", column_id))?;
     Ok(column.board_id)
 }
 
