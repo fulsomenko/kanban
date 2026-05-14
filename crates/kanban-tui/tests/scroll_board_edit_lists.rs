@@ -62,7 +62,7 @@ fn test_board_columns_list_scrolls_to_keep_selection_visible() {
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     for i in 0..20 {
         app.ctx
-            .create_column(board.id, format!("ColMark{:02}", i), Some(i as i32))
+            .create_column(board.id, format!("ColMark{:02}", i), Some(i))
             .unwrap();
     }
     app.prepare_frame();
