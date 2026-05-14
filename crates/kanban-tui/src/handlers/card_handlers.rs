@@ -197,6 +197,7 @@ impl App {
                         }
                     } else {
                         tracing::warn!("No active sprint set for filtering");
+                        self.set_error("No active sprint set for filtering");
                     }
                 }
             }
