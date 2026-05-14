@@ -97,6 +97,10 @@ For `y`/`Y` clipboard operations to persist after the app exits, you need a clip
 - **Wayland**: `wl-clip-persist`, `cliphist`, `clipman`, or your DE's built-in manager
 - **X11**: Most desktop environments include one by default
 
+### Windows and WSL
+
+If your setup is Windows and WSL, and you often switch between them, then it is recommended to install separate binaries for each system to avoid constant recompiles.
+
 ---
 
 ## EDITOR configuration
