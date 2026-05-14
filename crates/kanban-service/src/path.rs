@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 /// - **Relative paths** are resolved against the current directory. Any path that
 ///   would escape the current directory via `..` components is rejected.
 ///
+/// When the target exists, the returned path is in canonical form: no `\\?\`
+/// verbatim UNC prefix on Windows, and symlinks in the cwd (e.g. macOS
+/// `/var` → `/private/var`) are resolved.
+///
 /// # Security contract
 ///
 /// This function prevents callers from accidentally (or maliciously) opening files
@@ -19,10 +23,10 @@ pub fn validate_path(path: &Path) -> KanbanResult<PathBuf> {
 }
 
 fn validate_path_with_cwd(path: &Path, cwd: &Path) -> KanbanResult<PathBuf> {
-    let canonical_cwd = dunce::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     if path.is_absolute() {
         Ok(dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
     } else {
+        let canonical_cwd = dunce::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
         let resolved = canonical_cwd.join(path);
         let canonical =
             dunce::canonicalize(&resolved).unwrap_or_else(|_| normalize_path(&resolved));
