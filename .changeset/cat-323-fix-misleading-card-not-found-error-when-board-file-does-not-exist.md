@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 Running `kanban missing.json card get KAN-1` (or any subcommand) when the

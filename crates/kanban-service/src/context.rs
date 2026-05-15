@@ -993,6 +993,18 @@ impl KanbanOperations for KanbanContext {
             .collect())
     }
 
+    fn list_all_cards(&self) -> KanbanResult<Vec<Card>> {
+        self.backend.list_all_cards()
+    }
+
+    fn list_all_columns(&self) -> KanbanResult<Vec<Column>> {
+        self.backend.list_all_columns()
+    }
+
+    fn list_all_sprints(&self) -> KanbanResult<Vec<Sprint>> {
+        self.backend.list_all_sprints()
+    }
+
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         self.update_cards(vec![(id, updates)])?;
         self.get_card(id)?

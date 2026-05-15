@@ -36,8 +36,8 @@ kanban board delete <ID>
 ### `column`
 
 ```bash
-kanban column create --board-id <ID> --name <NAME> [--position <N>]
-kanban column list --board-id <ID>
+kanban column create --board <ID> --name <NAME> [--position <N>]
+kanban column list --board <ID>
 kanban column get <ID>
 kanban column update <ID> [--name <NAME>] [--position <N>] [--wip-limit <N>]
 kanban column delete <ID>
@@ -48,10 +48,10 @@ kanban column reorder <ID> --position <N>
 
 ```bash
 # CRUD
-kanban card create --board-id <ID> --column-id <ID> --title <TITLE>
+kanban card create --board <ID> --column <ID> --title <TITLE>
                    [--description <DESC>] [--priority low|medium|high|critical]
                    [--points <N>] [--due-date <YYYY-MM-DD>]
-kanban card list [--board-id <ID>] [--column-id <ID>] [--sprint-id <ID>]
+kanban card list [--board <ID>] [--column <ID>] [--sprint <ID>]
                  [--status todo|in_progress|blocked|done]
                  [--page <N>] [--page-size <N>]
 kanban card get <ID_OR_IDENTIFIER>
@@ -61,12 +61,12 @@ kanban card update <ID_OR_IDENTIFIER> [--title <TITLE>] [--description <DESC>]
 kanban card delete <ID_OR_IDENTIFIER>
 
 # Movement & archiving
-kanban card move <ID_OR_IDENTIFIER> --column-id <ID> [--position <N>]
+kanban card move <ID_OR_IDENTIFIER> --column <ID> [--position <N>]
 kanban card archive <ID_OR_IDENTIFIER>
-kanban card restore <ID_OR_IDENTIFIER> [--column-id <ID>]
+kanban card restore <ID_OR_IDENTIFIER> [--column <ID>]
 
 # Sprint
-kanban card assign-sprint <ID_OR_IDENTIFIER> --sprint-id <ID>
+kanban card assign-sprint <ID_OR_IDENTIFIER> --sprint <ID>
 kanban card unassign-sprint <ID_OR_IDENTIFIER>
 
 # Git
@@ -74,9 +74,9 @@ kanban card branch-name <ID_OR_IDENTIFIER>
 kanban card git-checkout <ID_OR_IDENTIFIER>
 
 # Bulk operations
-kanban card archive-cards --ids <UUID,UUID,...>
-kanban card move-cards --ids <UUID,UUID,...> --column-id <ID>
-kanban card assign-cards-to-sprint --ids <UUID,UUID,...> --sprint-id <ID>
+kanban card archive-cards --cards <UUID,UUID,...>
+kanban card move-cards --cards <UUID,UUID,...> --column <ID>
+kanban card assign-cards-to-sprint --cards <UUID,UUID,...> --sprint <ID>
 ```
 
 **Card identifier resolution**: `<ID_OR_IDENTIFIER>` accepts:
@@ -87,8 +87,8 @@ kanban card assign-cards-to-sprint --ids <UUID,UUID,...> --sprint-id <ID>
 ### `sprint`
 
 ```bash
-kanban sprint create --board-id <ID> [--name <NAME>] [--prefix <PREFIX>]
-kanban sprint list --board-id <ID>
+kanban sprint create --board <ID> [--name <NAME>] [--prefix <PREFIX>]
+kanban sprint list --board <ID>
 kanban sprint get <ID>
 kanban sprint update <ID> [--name <NAME>] [--prefix <PREFIX>]
                           [--card-prefix <PREFIX>]
@@ -103,7 +103,7 @@ kanban sprint carry-over --from <ID> --to <ID>
 ### Top-level commands
 
 ```bash
-kanban export [--board-id <ID>] [--output <FILE>]
+kanban export [--board <ID>] [--output <FILE>]
 kanban import <FILE>
 kanban migrate <SOURCE> <BACKEND> [-o <OUTPUT>] [--source-backend <BACKEND>]
 kanban completions <bash|zsh|fish|powershell>

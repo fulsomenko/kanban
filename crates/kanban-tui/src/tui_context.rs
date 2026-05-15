@@ -231,6 +231,18 @@ impl KanbanOperations for TuiContext {
         self.inner.find_cards_by_identifier(identifier)
     }
 
+    fn list_all_cards(&self) -> KanbanResult<Vec<Card>> {
+        self.inner.list_all_cards()
+    }
+
+    fn list_all_columns(&self) -> KanbanResult<Vec<kanban_domain::Column>> {
+        self.inner.list_all_columns()
+    }
+
+    fn list_all_sprints(&self) -> KanbanResult<Vec<kanban_domain::Sprint>> {
+        self.inner.list_all_sprints()
+    }
+
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         let r = self.inner.update_card(id, updates);
         self.with_flush(r)
