@@ -51,12 +51,6 @@ fn core_err_to_mcp(e: kanban_core::CoreError) -> McpError {
     kanban_err_to_mcp(KanbanError::from(e))
 }
 
-#[cfg(test)]
-fn parse_uuid(s: &str) -> Result<Uuid, McpError> {
-    Uuid::parse_str(s)
-        .map_err(|e| McpError::invalid_params(format!("Invalid UUID '{}': {}", s, e), None))
-}
-
 fn parse_priority(s: &str) -> Result<CardPriority, McpError> {
     match s.to_lowercase().as_str() {
         "low" => Ok(CardPriority::Low),
@@ -106,39 +100,47 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
         })
 }
 
-#[cfg(test)]
-fn parse_uuids_csv(s: &str) -> Result<Vec<Uuid>, McpError> {
-    s.split(',').map(|id| parse_uuid(id.trim())).collect()
+// ---------- Locked sessions ----------
+//
+// Two flavours, named by intent. Each acquires the context lock and drops it
+// when the closure returns; resolution + the work share one consistent view
+// of state, closing any TOCTOU window.
+//
+// - `locked_read(ctx, |ctx| ...)` — lock, run closure, drop. No disk reload,
+//   no save. The closure takes `&McpContext` so the type system enforces
+//   read-only semantics. Use for tool handlers that resolve names + read
+//   state without mutating.
+//
+// - `locked_write(ctx, |ctx| ...)` — lock, reload from disk, run closure,
+//   save, drop. The closure takes `&mut McpContext`. Reload+save bracket
+//   the closure so mutations see the latest disk state and are persisted.
+//
+// For trivial reads with no resolution (`tool_list_boards`, etc.) the older
+// `read_op!` macro is still appropriate — it's a one-liner that elides the
+// closure ceremony.
+
+async fn locked_read<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
+where
+    F: FnOnce(&McpContext) -> Result<T, McpError>,
+{
+    let guard = ctx.lock().await;
+    f(&guard)
 }
 
-// ---------- Locked session ----------
-//
-// A single lock guard wraps reload → resolve → mutate → save. That eliminates
-// the TOCTOU window in multi-step handlers (where a concurrent tool call could
-// shift entities between the resolve and mutate steps).
-//
-// Use cases:
-// - `locked_session(ctx, save=true, |g| { resolve names, mutate, return })` for
-//   any handler that touches entity state.
-// - For simple reads with no resolution, `read_op!` still applies — it avoids
-//   the reload cost.
-
-async fn locked_session<T, F>(ctx: &Arc<Mutex<McpContext>>, save: bool, f: F) -> Result<T, McpError>
+async fn locked_write<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
     F: FnOnce(&mut McpContext) -> Result<T, McpError>,
 {
     let mut guard = ctx.lock().await;
     guard.reload().await.map_err(kanban_err_to_mcp)?;
     let result = f(&mut guard)?;
-    if save {
-        guard.save().await.map_err(kanban_err_to_mcp)?;
-    }
+    guard.save().await.map_err(kanban_err_to_mcp)?;
     Ok(result)
 }
 
 /// Helper trait: gives `&McpContext` access to MCP-flavoured error mapping for
 /// the resolvers it inherits via `KanbanOperations`. Keeps closure bodies
-/// readable inside `locked_session`.
+/// readable inside `locked_read` / `locked_write`.
 trait McpResolve {
     fn mcp_resolve_board(&self, raw: &str) -> Result<Uuid, McpError>;
     fn mcp_resolve_column_in_board(&self, raw: &str, board_id: Uuid) -> Result<Uuid, McpError>;
@@ -657,7 +659,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let board = locked_session(&self.ctx, false, |ctx| {
+        let board = locked_read(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_board(&req.board)?;
             ctx.get_board(id).map_err(kanban_err_to_mcp)
         })
@@ -688,7 +690,7 @@ impl KanbanMcpServer {
                 .unwrap_or(FieldUpdate::NoChange),
             ..Default::default()
         };
-        let board = locked_session(&self.ctx, true, |ctx| {
+        let board = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_board(&req.board)?;
             ctx.update_board(id, updates).map_err(kanban_err_to_mcp)
         })
@@ -701,7 +703,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_session(&self.ctx, true, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_board(&req.board)?;
             ctx.delete_board(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -717,7 +719,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CreateColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let column = locked_session(&self.ctx, true, |ctx| {
+        let column = locked_write(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;
             ctx.create_column(board_id, req.name, req.position)
                 .map_err(kanban_err_to_mcp)
@@ -731,7 +733,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListColumnsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let columns = locked_session(&self.ctx, false, |ctx| {
+        let columns = locked_read(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;
             ctx.list_columns(board_id).map_err(kanban_err_to_mcp)
         })
@@ -744,7 +746,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let column = locked_session(&self.ctx, false, |ctx| {
+        let column = locked_read(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_column_global(&req.column)?;
             ctx.get_column(id).map_err(kanban_err_to_mcp)
         })
@@ -768,7 +770,7 @@ impl KanbanMcpServer {
                     .unwrap_or(FieldUpdate::NoChange)
             },
         };
-        let column = locked_session(&self.ctx, true, |ctx| {
+        let column = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_column_global(&req.column)?;
             ctx.update_column(id, updates).map_err(kanban_err_to_mcp)
         })
@@ -781,7 +783,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_session(&self.ctx, true, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_column_global(&req.column)?;
             ctx.delete_column(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -795,7 +797,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ReorderColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let column = locked_session(&self.ctx, true, |ctx| {
+        let column = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_column_global(&req.column)?;
             ctx.reorder_column(id, req.position)
                 .map_err(kanban_err_to_mcp)
@@ -819,7 +821,7 @@ impl KanbanMcpServer {
             points: req.points,
             due_date,
         };
-        let card = locked_session(&self.ctx, true, |ctx| {
+        let card = locked_write(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;
             let column_id = ctx.mcp_resolve_column_in_board(&req.column, board_id)?;
             ctx.create_card(board_id, column_id, req.title, options)
@@ -839,7 +841,7 @@ impl KanbanMcpServer {
         let status = req.status.as_deref().map(parse_status).transpose()?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
-        let result = locked_session(&self.ctx, false, |ctx| {
+        let result = locked_read(&self.ctx, |ctx| {
             let board_id = match &req.board {
                 Some(raw) => Some(ctx.mcp_resolve_board(raw)?),
                 None => None,
@@ -932,7 +934,7 @@ impl KanbanMcpServer {
             due_date,
             sprint_id: FieldUpdate::NoChange,
         };
-        let card = locked_session(&self.ctx, true, |ctx| {
+        let card = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.update_card(id, updates).map_err(kanban_err_to_mcp)
         })
@@ -945,7 +947,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<MoveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card = locked_session(&self.ctx, true, |ctx| {
+        let card = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
             let board_id = ctx.mcp_card_board(id)?;
             let column_id = ctx.mcp_resolve_column_in_board(&req.column, board_id)?;
@@ -961,7 +963,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_session(&self.ctx, true, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.archive_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -975,7 +977,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<RestoreCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card = locked_session(&self.ctx, true, |ctx| {
+        let card = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
             let column_id = match req.column.as_deref() {
                 Some(raw) => {
@@ -995,7 +997,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_session(&self.ctx, true, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.delete_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1028,7 +1030,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<AssignCardToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card = locked_session(&self.ctx, true, |ctx| {
+        let card = locked_write(&self.ctx, |ctx| {
             let card_id = ctx.mcp_resolve_card(&req.card)?;
             let board_id = ctx.mcp_card_board(card_id)?;
             let sprint_id = ctx.mcp_resolve_sprint_in_board(&req.sprint, board_id)?;
@@ -1044,7 +1046,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UnassignCardFromSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let card = locked_session(&self.ctx, true, |ctx| {
+        let card = locked_write(&self.ctx, |ctx| {
             let card_id = ctx.mcp_resolve_card(&req.card)?;
             ctx.unassign_card_from_sprint(card_id)
                 .map_err(kanban_err_to_mcp)
@@ -1060,7 +1062,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardBranchNameRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let branch_name = locked_session(&self.ctx, false, |ctx| {
+        let branch_name = locked_read(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.get_card_branch_name(id).map_err(kanban_err_to_mcp)
         })
@@ -1073,7 +1075,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardGitCheckoutRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let command = locked_session(&self.ctx, false, |ctx| {
+        let command = locked_read(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.get_card_git_checkout(id).map_err(kanban_err_to_mcp)
         })
@@ -1090,7 +1092,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let count = locked_session(&self.ctx, true, |ctx| {
+        let count = locked_write(&self.ctx, |ctx| {
             let ids = ctx.mcp_resolve_cards(&req.cards)?;
             ctx.archive_cards(ids).map_err(kanban_err_to_mcp)
         })
@@ -1105,7 +1107,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<MoveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let count = locked_session(&self.ctx, true, |ctx| {
+        let count = locked_write(&self.ctx, |ctx| {
             let ids = ctx.mcp_resolve_cards(&req.cards)?;
             let board_id = ctx.mcp_require_same_board(&ids)?;
             let column_id = ctx.mcp_resolve_column_in_board(&req.column, board_id)?;
@@ -1122,7 +1124,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<AssignCardsToSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let count = locked_session(&self.ctx, true, |ctx| {
+        let count = locked_write(&self.ctx, |ctx| {
             let ids = ctx.mcp_resolve_cards(&req.cards)?;
             let board_id = ctx.mcp_require_same_board(&ids)?;
             let sprint_id = ctx.mcp_resolve_sprint_in_board(&req.sprint, board_id)?;
@@ -1140,7 +1142,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CreateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let sprint = locked_session(&self.ctx, true, |ctx| {
+        let sprint = locked_write(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;
             ctx.create_sprint(board_id, req.prefix, req.name)
                 .map_err(kanban_err_to_mcp)
@@ -1154,7 +1156,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListSprintsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let sprints = locked_session(&self.ctx, false, |ctx| {
+        let sprints = locked_read(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;
             ctx.list_sprints(board_id).map_err(kanban_err_to_mcp)
         })
@@ -1167,7 +1169,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let sprint = locked_session(&self.ctx, false, |ctx| {
+        let sprint = locked_read(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.get_sprint(id).map_err(kanban_err_to_mcp)
         })
@@ -1213,7 +1215,7 @@ impl KanbanMcpServer {
             start_date,
             end_date,
         };
-        let sprint = locked_session(&self.ctx, true, |ctx| {
+        let sprint = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.update_sprint(id, updates).map_err(kanban_err_to_mcp)
         })
@@ -1226,7 +1228,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ActivateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let sprint = locked_session(&self.ctx, true, |ctx| {
+        let sprint = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.activate_sprint(id, req.duration_days)
                 .map_err(kanban_err_to_mcp)
@@ -1240,7 +1242,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CompleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let sprint = locked_session(&self.ctx, true, |ctx| {
+        let sprint = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.complete_sprint(id).map_err(kanban_err_to_mcp)
         })
@@ -1253,7 +1255,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CancelSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let sprint = locked_session(&self.ctx, true, |ctx| {
+        let sprint = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.cancel_sprint(id).map_err(kanban_err_to_mcp)
         })
@@ -1266,7 +1268,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_session(&self.ctx, true, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.delete_sprint(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1282,7 +1284,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CarryOverSprintCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let count = locked_session(&self.ctx, true, |ctx| {
+        let count = locked_write(&self.ctx, |ctx| {
             let from_id = ctx.mcp_resolve_sprint_global(&req.from_sprint)?;
             let from_sprint = ctx
                 .get_sprint(from_id)
@@ -1305,7 +1307,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ExportBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let json = locked_session(&self.ctx, false, |ctx| {
+        let json = locked_read(&self.ctx, |ctx| {
             let board_id = match req.board.as_deref() {
                 Some(raw) => Some(ctx.mcp_resolve_board(raw)?),
                 None => None,
@@ -1380,27 +1382,6 @@ impl ServerHandler for KanbanMcpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // parse_uuid
-
-    #[test]
-    fn parse_uuid_valid() {
-        let id = "550e8400-e29b-41d4-a716-446655440000";
-        let result = parse_uuid(id).unwrap();
-        assert_eq!(result.to_string(), id);
-    }
-
-    #[test]
-    fn parse_uuid_invalid() {
-        let err = parse_uuid("not-a-uuid").unwrap_err();
-        assert!(err.message.contains("Invalid UUID"));
-    }
-
-    #[test]
-    fn parse_uuid_empty() {
-        let err = parse_uuid("").unwrap_err();
-        assert!(err.message.contains("Invalid UUID"));
-    }
 
     // parse_priority
 
@@ -1496,37 +1477,6 @@ mod tests {
     fn parse_datetime_invalid() {
         let err = parse_datetime("not-a-date").unwrap_err();
         assert!(err.message.contains("Invalid date"));
-    }
-
-    // parse_uuids_csv
-
-    #[test]
-    fn parse_uuids_csv_single() {
-        let id = "550e8400-e29b-41d4-a716-446655440000";
-        let result = parse_uuids_csv(id).unwrap();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].to_string(), id);
-    }
-
-    #[test]
-    fn parse_uuids_csv_multiple() {
-        let ids = "550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440001";
-        let result = parse_uuids_csv(ids).unwrap();
-        assert_eq!(result.len(), 2);
-    }
-
-    #[test]
-    fn parse_uuids_csv_with_spaces() {
-        let ids = "550e8400-e29b-41d4-a716-446655440000 , 660e8400-e29b-41d4-a716-446655440001";
-        let result = parse_uuids_csv(ids).unwrap();
-        assert_eq!(result.len(), 2);
-    }
-
-    #[test]
-    fn parse_uuids_csv_invalid_in_list() {
-        let ids = "550e8400-e29b-41d4-a716-446655440000,bad-uuid";
-        let err = parse_uuids_csv(ids).unwrap_err();
-        assert!(err.message.contains("Invalid UUID"));
     }
 
     // to_call_tool_result / to_call_tool_result_json
