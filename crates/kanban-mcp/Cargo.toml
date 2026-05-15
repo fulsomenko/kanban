@@ -21,10 +21,10 @@ sqlite = ["kanban-service/sqlite"]
 
 [dependencies]
 # Workspace crates
-kanban-core = { path = "../kanban-core", version = "^0.5" }
-kanban-domain = { path = "../kanban-domain", version = "^0.5" }
-kanban-persistence = { path = "../kanban-persistence", version = "^0.5" }
-kanban-service = { path = "../kanban-service", version = "^0.5" }
+kanban-core = { path = "../kanban-core", version = "^0.6" }
+kanban-domain = { path = "../kanban-domain", version = "^0.6" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.6" }
+kanban-service = { path = "../kanban-service", version = "^0.6" }
 
 # MCP SDK
 rmcp = { version = "0.11", features = ["server", "transport-io"] }
@@ -53,9 +53,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-kanban-domain = { path = "../kanban-domain", version = "^0.5" }
-kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.5" }
-kanban-service = { path = "../kanban-service", version = "^0.5" }
+kanban-domain = { path = "../kanban-domain", version = "^0.6" }
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.6" }
+kanban-service = { path = "../kanban-service", version = "^0.6" }
 tempfile.workspace = true
 tokio.workspace = true
 chrono.workspace = true

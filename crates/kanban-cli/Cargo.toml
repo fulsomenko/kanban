@@ -25,11 +25,11 @@ json = ["kanban-service/json"]
 sqlite = ["kanban-service/sqlite"]
 
 [dependencies]
-kanban-core = { path = "../kanban-core", version = "^0.5" }
-kanban-domain = { path = "../kanban-domain", version = "^0.5" }
-kanban-persistence = { path = "../kanban-persistence", version = "^0.5" }
-kanban-service = { path = "../kanban-service", version = "^0.5" }
-kanban-tui = { path = "../kanban-tui", version = "^0.5", optional = true }
+kanban-core = { path = "../kanban-core", version = "^0.6" }
+kanban-domain = { path = "../kanban-domain", version = "^0.6" }
+kanban-persistence = { path = "../kanban-persistence", version = "^0.6" }
+kanban-service = { path = "../kanban-service", version = "^0.6" }
+kanban-tui = { path = "../kanban-tui", version = "^0.6", optional = true }
 clap.workspace = true
 clap_complete.workspace = true
 tokio.workspace = true
@@ -42,8 +42,8 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.5" }
-kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.5" }
+kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.6" }
+kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.6" }
 tempfile.workspace = true
 assert_cmd.workspace = true
 predicates.workspace = true
