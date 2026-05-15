@@ -152,21 +152,17 @@ impl DomainError {
     }
 
     fn fmt_batch_resolution_failed(entity: &str, failures: &[BatchResolutionFailure]) -> String {
-        // Singularize the entity noun when there's exactly one failure;
-        // otherwise add a plural `s`. Keep entity capitalization for
-        // consistency with `NotFoundByName` and `Ambiguous` siblings.
-        let n = failures.len();
-        let noun = if n == 1 {
-            entity.to_string()
-        } else {
-            format!("{}s", entity)
-        };
         let parts = failures
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ");
-        format!("Could not resolve {} {}: {}", n, noun, parts)
+        format!(
+            "Could not resolve {} {}: {}",
+            failures.len(),
+            pluralize(entity, failures.len()),
+            parts
+        )
     }
 
     pub fn board_not_found(id: Uuid) -> Self {
@@ -227,6 +223,16 @@ pub enum KanbanError {
 
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+/// Return `noun` (when count is 1) or `noun + "s"` (otherwise).
+/// Trivial English helper used by error message formatters.
+fn pluralize(noun: &str, count: usize) -> String {
+    if count == 1 {
+        noun.to_string()
+    } else {
+        format!("{}s", noun)
+    }
 }
 
 pub type KanbanResult<T> = Result<T, KanbanError>;
