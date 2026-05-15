@@ -63,4 +63,7 @@ pub use command_store::CommandStore;
 pub use data_store::{DataStore, GraphMutFn};
 pub use in_memory_store::InMemoryStore;
 
-pub use error::{DependencyError, DomainError, KanbanError, KanbanResult};
+pub use error::{
+    AmbiguousMatch, BatchResolutionCause, BatchResolutionFailure, DependencyError, DomainError,
+    KanbanError, KanbanResult,
+};

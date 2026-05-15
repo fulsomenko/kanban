@@ -1,6 +1,42 @@
 use thiserror::Error;
 use uuid::Uuid;
 
+/// One element of an `Ambiguous` error's match list. Carries both a
+/// human-readable label (what makes this match distinguishable from the
+/// others) and the entity's UUID (always copy-pasteable). Display always
+/// renders as `{label} ({uuid})` so users can disambiguate by either.
+#[derive(Debug, Clone)]
+pub struct AmbiguousMatch {
+    /// Human-readable label that distinguishes this match. Examples:
+    ///   - board name (when two boards share a name)
+    ///   - `"on board 'X'"` (when a column name appears on multiple boards)
+    ///   - `"#15 'yarara-release' on board 'Project A'"` (sprint global match)
+    ///   - card title
+    pub label: String,
+    /// The matched entity's UUID.
+    pub id: Uuid,
+}
+
+/// One element of a `BatchResolutionFailed` error. Carries the raw input
+/// the caller passed and the typed reason it couldn't be resolved.
+#[derive(Debug, Clone)]
+pub struct BatchResolutionFailure {
+    /// The string the caller passed for this slot (UUID, identifier, name, etc.).
+    pub raw_input: String,
+    /// Why this input couldn't be resolved.
+    pub cause: BatchResolutionCause,
+}
+
+/// Why a single input in a batch resolver call failed.
+#[derive(Debug, Clone)]
+pub enum BatchResolutionCause {
+    /// No entity matched the input.
+    NotFound,
+    /// More than one entity matched. Carries the same match data an
+    /// `Ambiguous` single-resolver error would.
+    Ambiguous(Vec<AmbiguousMatch>),
+}
+
 #[derive(Error, Debug)]
 pub enum DependencyError {
     #[error("cycle detected: adding this edge would create a circular dependency")]
@@ -18,7 +54,7 @@ pub enum DomainError {
 
     /// Returned when a name- or identifier-based lookup misses. The `available`
     /// vector is appended to the message so users see what they could have typed.
-    #[error("{}", format_not_found_by_name(entity, name, available))]
+    #[error("{}", DomainError::fmt_not_found_by_name(entity, name, available))]
     NotFoundByName {
         entity: &'static str,
         name: String,
@@ -26,12 +62,22 @@ pub enum DomainError {
     },
 
     /// Returned when a name- or identifier-based lookup matches more than one
-    /// entity. `matches` is a list of human-readable labels for each match.
-    #[error("{}", format_ambiguous(entity, name, matches))]
+    /// entity. Each match carries both a human-readable label and a UUID so
+    /// users can disambiguate by either.
+    #[error("{}", DomainError::fmt_ambiguous(entity, name, matches))]
     Ambiguous {
         entity: &'static str,
         name: String,
-        matches: Vec<String>,
+        matches: Vec<AmbiguousMatch>,
+    },
+
+    /// Returned by batch resolvers (`resolve_card_ids`, future siblings) when
+    /// one or more inputs in the batch couldn't be resolved. Carries per-input
+    /// typed causes so callers can introspect.
+    #[error("{}", DomainError::fmt_batch_resolution_failed(entity, failures))]
+    BatchResolutionFailed {
+        entity: &'static str,
+        failures: Vec<BatchResolutionFailure>,
     },
 
     #[error("validation error: {0}")]
@@ -44,33 +90,58 @@ pub enum DomainError {
     WipLimitExceeded { column_id: Uuid, limit: u32 },
 }
 
-fn format_not_found_by_name(entity: &str, name: &str, available: &[String]) -> String {
-    if available.is_empty() {
-        format!("{} '{}' not found", entity, name)
-    } else {
+impl DomainError {
+    // ----- Display formatters for the name/identifier resolver variants -----
+
+    fn fmt_not_found_by_name(entity: &str, name: &str, available: &[String]) -> String {
+        if available.is_empty() {
+            format!("{} '{}' not found", entity, name)
+        } else {
+            format!(
+                "{} '{}' not found. Available: {}",
+                entity,
+                name,
+                available
+                    .iter()
+                    .map(|s| format!("'{}'", s))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+    }
+
+    fn fmt_ambiguous(entity: &str, name: &str, matches: &[AmbiguousMatch]) -> String {
+        let rendered = matches
+            .iter()
+            .map(|m| format!("{} ({})", m.label, m.id))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{} '{}' is ambiguous: {}.", entity, name, rendered)
+    }
+
+    fn fmt_batch_resolution_failed(entity: &str, failures: &[BatchResolutionFailure]) -> String {
+        let parts: Vec<String> = failures
+            .iter()
+            .map(|f| match &f.cause {
+                BatchResolutionCause::NotFound => format!("'{}' (not found)", f.raw_input),
+                BatchResolutionCause::Ambiguous(matches) => {
+                    let rendered = matches
+                        .iter()
+                        .map(|m| format!("{} ({})", m.label, m.id))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("'{}' (ambiguous: {})", f.raw_input, rendered)
+                }
+            })
+            .collect();
         format!(
-            "{} '{}' not found. Available: {}",
-            entity,
-            name,
-            available
-                .iter()
-                .map(|s| format!("'{}'", s))
-                .collect::<Vec<_>>()
-                .join(", ")
+            "Could not resolve {} {}(s): {}",
+            failures.len(),
+            entity.to_lowercase(),
+            parts.join(", ")
         )
     }
-}
 
-fn format_ambiguous(entity: &str, name: &str, matches: &[String]) -> String {
-    format!(
-        "{} '{}' is ambiguous: {}. Specify by UUID or a unique name.",
-        entity,
-        name,
-        matches.join(", ")
-    )
-}
-
-impl DomainError {
     pub fn board_not_found(id: Uuid) -> Self {
         Self::NotFound {
             entity: "board",
@@ -150,12 +221,23 @@ impl KanbanError {
         })
     }
 
-    pub fn ambiguous(entity: &'static str, name: impl Into<String>, matches: Vec<String>) -> Self {
+    pub fn ambiguous(
+        entity: &'static str,
+        name: impl Into<String>,
+        matches: Vec<AmbiguousMatch>,
+    ) -> Self {
         Self::Domain(DomainError::Ambiguous {
             entity,
             name: name.into(),
             matches,
         })
+    }
+
+    pub fn batch_resolution_failed(
+        entity: &'static str,
+        failures: Vec<BatchResolutionFailure>,
+    ) -> Self {
+        Self::Domain(DomainError::BatchResolutionFailed { entity, failures })
     }
 
     pub fn validation(msg: impl Into<String>) -> Self {
@@ -180,6 +262,13 @@ impl KanbanError {
 
     pub fn is_ambiguous(&self) -> bool {
         matches!(self, KanbanError::Domain(DomainError::Ambiguous { .. }))
+    }
+
+    pub fn is_batch_resolution_failed(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::BatchResolutionFailed { .. })
+        )
     }
 
     pub fn is_validation(&self) -> bool {
@@ -331,16 +420,72 @@ mod tests {
     }
 
     #[test]
-    fn test_ambiguous_display_lists_matches() {
+    fn test_ambiguous_display_includes_label_and_uuid_per_match() {
+        // KAN-400 polish: every match carries both a human label and a UUID
+        // so users can disambiguate by either.
+        let a_id = Uuid::new_v4();
+        let b_id = Uuid::new_v4();
         let err = KanbanError::ambiguous(
             "Sprint",
             "13",
-            vec!["'Project A'".into(), "'Project B'".into()],
+            vec![
+                AmbiguousMatch {
+                    label: "on board 'Project A'".into(),
+                    id: a_id,
+                },
+                AmbiguousMatch {
+                    label: "on board 'Project B'".into(),
+                    id: b_id,
+                },
+            ],
         );
         let msg = err.to_string();
         assert!(msg.contains("'13' is ambiguous"), "msg: {msg}");
         assert!(msg.contains("'Project A'"), "msg: {msg}");
         assert!(msg.contains("'Project B'"), "msg: {msg}");
+        assert!(
+            msg.contains(&a_id.to_string()),
+            "label-only is not enough: {msg}"
+        );
+        assert!(
+            msg.contains(&b_id.to_string()),
+            "label-only is not enough: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_ambiguous_display_single_match_renders_cleanly() {
+        // Degenerate case; can happen if a different resolver path produces
+        // a single-match Ambiguous (shouldn't, but be defensive).
+        let id = Uuid::new_v4();
+        let err = KanbanError::ambiguous(
+            "Card",
+            "5",
+            vec![AmbiguousMatch {
+                label: "Some title".into(),
+                id,
+            }],
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("'5' is ambiguous"), "msg: {msg}");
+        assert!(msg.contains("Some title"), "msg: {msg}");
+        assert!(msg.contains(&id.to_string()), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_ambiguous_message_drops_specify_by_uuid_coda() {
+        // The old wording "Specify by UUID" was redundant once the UUID is
+        // already in the message. New message doesn't repeat it.
+        let err = KanbanError::ambiguous(
+            "Board",
+            "shared",
+            vec![AmbiguousMatch {
+                label: "shared".into(),
+                id: Uuid::new_v4(),
+            }],
+        );
+        let msg = err.to_string();
+        assert!(!msg.contains("Specify by UUID"), "msg: {msg}");
     }
 
     #[test]
@@ -353,9 +498,55 @@ mod tests {
 
     #[test]
     fn test_is_ambiguous_predicate() {
-        let err = KanbanError::ambiguous("Card", "5", vec!["x".into(), "y".into()]);
+        let err = KanbanError::ambiguous(
+            "Card",
+            "5",
+            vec![
+                AmbiguousMatch {
+                    label: "x".into(),
+                    id: Uuid::new_v4(),
+                },
+                AmbiguousMatch {
+                    label: "y".into(),
+                    id: Uuid::new_v4(),
+                },
+            ],
+        );
         assert!(err.is_ambiguous());
         assert!(!err.is_not_found());
+    }
+
+    #[test]
+    fn test_batch_resolution_failed_display_includes_each_input_and_cause() {
+        let err = KanbanError::batch_resolution_failed(
+            "Card",
+            vec![
+                BatchResolutionFailure {
+                    raw_input: "KAN-999".into(),
+                    cause: BatchResolutionCause::NotFound,
+                },
+                BatchResolutionFailure {
+                    raw_input: "KAN-998".into(),
+                    cause: BatchResolutionCause::Ambiguous(vec![AmbiguousMatch {
+                        label: "'one'".into(),
+                        id: Uuid::new_v4(),
+                    }]),
+                },
+            ],
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("2 card"), "msg: {msg}");
+        assert!(msg.contains("'KAN-999'"), "msg: {msg}");
+        assert!(msg.contains("'KAN-998'"), "msg: {msg}");
+        assert!(msg.contains("not found"), "msg: {msg}");
+        assert!(msg.contains("ambiguous"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_is_batch_resolution_failed_predicate() {
+        let err = KanbanError::batch_resolution_failed("Card", Vec::new());
+        assert!(err.is_batch_resolution_failed());
+        assert!(!err.is_not_found(), "not the same as a single not-found");
     }
 
     #[test]
