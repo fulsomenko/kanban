@@ -1,3 +1,5 @@
+use std::fmt;
+
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -17,6 +19,12 @@ pub struct AmbiguousMatch {
     pub id: Uuid,
 }
 
+impl fmt::Display for AmbiguousMatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.label, self.id)
+    }
+}
+
 /// One element of a `BatchResolutionFailed` error. Carries the raw input
 /// the caller passed and the typed reason it couldn't be resolved.
 #[derive(Debug, Clone)]
@@ -27,6 +35,12 @@ pub struct BatchResolutionFailure {
     pub cause: BatchResolutionCause,
 }
 
+impl fmt::Display for BatchResolutionFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}' ({})", self.raw_input, self.cause)
+    }
+}
+
 /// Why a single input in a batch resolver call failed.
 #[derive(Debug, Clone)]
 pub enum BatchResolutionCause {
@@ -35,6 +49,24 @@ pub enum BatchResolutionCause {
     /// More than one entity matched. Carries the same match data an
     /// `Ambiguous` single-resolver error would.
     Ambiguous(Vec<AmbiguousMatch>),
+}
+
+impl fmt::Display for BatchResolutionCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotFound => write!(f, "not found"),
+            Self::Ambiguous(matches) => {
+                f.write_str("ambiguous: ")?;
+                for (i, m) in matches.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{}", m)?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -113,33 +145,28 @@ impl DomainError {
     fn fmt_ambiguous(entity: &str, name: &str, matches: &[AmbiguousMatch]) -> String {
         let rendered = matches
             .iter()
-            .map(|m| format!("{} ({})", m.label, m.id))
+            .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ");
         format!("{} '{}' is ambiguous: {}.", entity, name, rendered)
     }
 
     fn fmt_batch_resolution_failed(entity: &str, failures: &[BatchResolutionFailure]) -> String {
-        let parts: Vec<String> = failures
+        // Singularize the entity noun when there's exactly one failure;
+        // otherwise add a plural `s`. Keep entity capitalization for
+        // consistency with `NotFoundByName` and `Ambiguous` siblings.
+        let n = failures.len();
+        let noun = if n == 1 {
+            entity.to_string()
+        } else {
+            format!("{}s", entity)
+        };
+        let parts = failures
             .iter()
-            .map(|f| match &f.cause {
-                BatchResolutionCause::NotFound => format!("'{}' (not found)", f.raw_input),
-                BatchResolutionCause::Ambiguous(matches) => {
-                    let rendered = matches
-                        .iter()
-                        .map(|m| format!("{} ({})", m.label, m.id))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!("'{}' (ambiguous: {})", f.raw_input, rendered)
-                }
-            })
-            .collect();
-        format!(
-            "Could not resolve {} {}(s): {}",
-            failures.len(),
-            entity.to_lowercase(),
-            parts.join(", ")
-        )
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("Could not resolve {} {}: {}", n, noun, parts)
     }
 
     pub fn board_not_found(id: Uuid) -> Self {
@@ -535,11 +562,95 @@ mod tests {
             ],
         );
         let msg = err.to_string();
-        assert!(msg.contains("2 card"), "msg: {msg}");
+        assert!(msg.contains("2 Cards"), "msg: {msg}");
         assert!(msg.contains("'KAN-999'"), "msg: {msg}");
         assert!(msg.contains("'KAN-998'"), "msg: {msg}");
         assert!(msg.contains("not found"), "msg: {msg}");
         assert!(msg.contains("ambiguous"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_batch_resolution_failed_display_singularizes_for_one_failure() {
+        // KAN-400 review-3 fix: "1 card(s)" was grammatically awkward. Now
+        // the noun agrees in number with the count, and entity casing matches
+        // sibling error variants (NotFoundByName / Ambiguous both keep
+        // "Card" capitalized).
+        let err = KanbanError::batch_resolution_failed(
+            "Card",
+            vec![BatchResolutionFailure {
+                raw_input: "KAN-999".into(),
+                cause: BatchResolutionCause::NotFound,
+            }],
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("1 Card"), "expected '1 Card' singular: {msg}");
+        assert!(
+            !msg.contains("1 Cards") && !msg.contains("card(s)"),
+            "no plural or parenthetical: {msg}"
+        );
+        assert!(msg.contains('('), "still wraps cause in parens: {msg}");
+    }
+
+    #[test]
+    fn test_batch_resolution_failed_display_preserves_entity_capitalization() {
+        // Sibling variants render "Card '...' not found"; the batch variant
+        // must match. No to_lowercase.
+        let err = KanbanError::batch_resolution_failed(
+            "Card",
+            vec![
+                BatchResolutionFailure {
+                    raw_input: "x".into(),
+                    cause: BatchResolutionCause::NotFound,
+                },
+                BatchResolutionFailure {
+                    raw_input: "y".into(),
+                    cause: BatchResolutionCause::NotFound,
+                },
+            ],
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("Cards"), "got: {msg}");
+        assert!(!msg.contains(" cards"), "lowercased entity: {msg}");
+    }
+
+    #[test]
+    fn test_ambiguous_match_display_is_label_then_uuid_in_parens() {
+        // Standalone Display impl on AmbiguousMatch so callers can render
+        // a match without re-implementing the format.
+        let id = Uuid::new_v4();
+        let m = AmbiguousMatch {
+            label: "'Alpha'".into(),
+            id,
+        };
+        let rendered = format!("{}", m);
+        assert_eq!(rendered, format!("'Alpha' ({})", id));
+    }
+
+    #[test]
+    fn test_batch_resolution_cause_display_renders_not_found_and_ambiguous() {
+        // Standalone Display impl on BatchResolutionCause for symmetry.
+        let nf = BatchResolutionCause::NotFound;
+        assert_eq!(format!("{}", nf), "not found");
+
+        let id = Uuid::new_v4();
+        let amb = BatchResolutionCause::Ambiguous(vec![
+            AmbiguousMatch {
+                label: "'A'".into(),
+                id,
+            },
+            AmbiguousMatch {
+                label: "'B'".into(),
+                id,
+            },
+        ]);
+        let rendered = format!("{}", amb);
+        assert!(rendered.starts_with("ambiguous: "), "got: {rendered}");
+        assert!(rendered.contains("'A'"), "got: {rendered}");
+        assert!(rendered.contains("'B'"), "got: {rendered}");
+        assert!(
+            rendered.matches(&id.to_string()).count() == 2,
+            "got: {rendered}"
+        );
     }
 
     #[test]
