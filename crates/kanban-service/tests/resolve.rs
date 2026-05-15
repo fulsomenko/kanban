@@ -259,7 +259,8 @@ async fn test_resolve_card_ids_failure_display_lists_each_input() {
         .resolve_card_ids(&["KAN-999".into(), "KAN-998".into()])
         .unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("2 card"), "got: {msg}");
+    // Entity stays capitalized, plural agrees with count (no "(s)" parenthetical).
+    assert!(msg.contains("2 Cards"), "got: {msg}");
     assert!(msg.contains("'KAN-999'"), "got: {msg}");
     assert!(msg.contains("'KAN-998'"), "got: {msg}");
     assert!(msg.contains("not found"), "got: {msg}");
