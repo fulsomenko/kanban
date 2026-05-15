@@ -1,4 +1,5 @@
 use kanban_domain::CardFilters;
+use std::cell::Cell;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilterDialogSection {
@@ -12,6 +13,7 @@ pub struct FilterDialogState {
     pub current_section: FilterDialogSection,
     pub section_index: usize,
     pub item_selection: usize,
+    pub item_scroll: Cell<usize>,
     pub filters: CardFilters,
 }
 
@@ -21,6 +23,7 @@ impl FilterDialogState {
             current_section: FilterDialogSection::Sprints,
             section_index: 0,
             item_selection: 0,
+            item_scroll: Cell::new(0),
             filters,
         }
     }
@@ -28,6 +31,7 @@ impl FilterDialogState {
     pub fn next_section(&mut self) {
         self.section_index = (self.section_index + 1) % 3;
         self.item_selection = 0;
+        self.item_scroll.set(0);
         self.current_section = match self.section_index {
             0 => FilterDialogSection::Sprints,
             1 => FilterDialogSection::DateRange,
@@ -43,6 +47,7 @@ impl FilterDialogState {
             self.section_index - 1
         };
         self.item_selection = 0;
+        self.item_scroll.set(0);
         self.current_section = match self.section_index {
             0 => FilterDialogSection::Sprints,
             1 => FilterDialogSection::DateRange,

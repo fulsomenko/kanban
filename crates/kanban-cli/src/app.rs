@@ -280,22 +280,43 @@ Provide the file path in one of these ways:
 
         match command {
             None => {
-                #[cfg(feature = "tui")]
-                {
-                    let error_log = std::sync::Arc::new(std::sync::Mutex::new(
-                        kanban_tui::error_log::ErrorLogState::default(),
-                    ));
-                    init_tracing_tui(std::sync::Arc::clone(&error_log));
-
-                    let (mut app, save_rx) =
-                        App::new_with_store(store_manager, validated_file).await?;
-                    app.set_error_log(error_log);
-                    app.run(save_rx).await?;
+                // KANBAN_FILE env var resolves into validated_file via clap's env attribute.
+                let has_explicit_file =
+                    validated_file.is_some() || config.storage_location.is_some();
+                if has_explicit_file && !std::path::Path::new(&effective_file).exists() {
+                    use kanban_domain::Snapshot;
+                    use kanban_persistence::{
+                        snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot,
+                    };
+                    let store =
+                        store_manager.make_store_with_config(validated_file.as_deref(), &config)?;
+                    let data = snapshot_to_json_bytes(&Snapshot::new())
+                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                    let metadata = PersistenceMetadata::new(uuid::Uuid::new_v4());
+                    store
+                        .save(StoreSnapshot { data, metadata })
+                        .await
+                        .map_err(|e| anyhow::anyhow!("{e}"))?;
                 }
-                #[cfg(not(feature = "tui"))]
-                anyhow::bail!(
-                    "TUI not available in this build. Run `kanban --help` for available subcommands."
-                );
+                use std::io::IsTerminal;
+                if std::io::stdin().is_terminal() {
+                    #[cfg(feature = "tui")]
+                    {
+                        let error_log = std::sync::Arc::new(std::sync::Mutex::new(
+                            kanban_tui::error_log::ErrorLogState::default(),
+                        ));
+                        init_tracing_tui(std::sync::Arc::clone(&error_log));
+                        let (mut app, save_rx) =
+                            App::new_with_store(store_manager, validated_file).await?;
+                        app.set_error_log(error_log);
+                        app.run(save_rx).await?;
+                    }
+                    #[cfg(not(feature = "tui"))]
+                    anyhow::bail!(
+                        "TUI not available in this build. Run `kanban --help` for available subcommands."
+                    );
+                }
+                // Non-TTY: file created above if needed, exit cleanly.
             }
             Some(Commands::Completions { .. }) => unreachable!(),
             Some(Commands::Migrate(args)) => {
@@ -304,6 +325,12 @@ Provide the file path in one of these ways:
             }
             Some(cmd) => {
                 init_tracing_cli();
+                if !std::path::Path::new(&effective_file).exists() {
+                    return crate::output::output_error(&format!(
+                        "Board file not found: '{}'",
+                        effective_file
+                    ));
+                }
                 let mut ctx = CliContext::load(&store_manager, &effective_file, config).await?;
                 dispatch_subcommand(&mut ctx, cmd).await?;
             }

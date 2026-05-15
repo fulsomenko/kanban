@@ -16,18 +16,28 @@ pub async fn handle(ctx: &mut CliContext, action: BoardAction) -> anyhow::Result
             let (page, page_size) = resolve_page_params(page, page_size)?;
             output::output_success(PaginatedList::paginate(boards, page, page_size)?);
         }
-        BoardAction::Get { id } => match ctx.get_board(id)? {
-            Some(board) => output::output_success(&board),
-            None => return output::output_error(&format!("Board not found: {}", id)),
-        },
+        BoardAction::Get { board } => {
+            let uuid = match ctx.resolve_board_id(&board) {
+                Ok(u) => u,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            match ctx.get_board(uuid)? {
+                Some(b) => output::output_success(&b),
+                None => return output::output_error(&format!("Board not found: {}", board)),
+            }
+        }
         BoardAction::Update(args) => {
             let board = handle_update(ctx, args).await?;
             output::output_success(&board);
         }
-        BoardAction::Delete { id } => {
-            ctx.delete_board(id)?;
+        BoardAction::Delete { board } => {
+            let uuid = match ctx.resolve_board_id(&board) {
+                Ok(u) => u,
+                Err(e) => return output::output_error(&e.to_string()),
+            };
+            ctx.delete_board(uuid)?;
             ctx.save().await?;
-            output::output_success(serde_json::json!({"deleted": id.to_string()}));
+            output::output_success(serde_json::json!({"deleted": uuid.to_string()}));
         }
     }
     Ok(())
@@ -37,6 +47,9 @@ async fn handle_update(
     ctx: &mut CliContext,
     args: BoardUpdateArgs,
 ) -> anyhow::Result<kanban_domain::Board> {
+    let uuid = ctx
+        .resolve_board_id(&args.board)
+        .map_err(anyhow::Error::from)?;
     let updates = BoardUpdate {
         name: args.name,
         description: args
@@ -53,7 +66,7 @@ async fn handle_update(
             .unwrap_or(FieldUpdate::NoChange),
         ..Default::default()
     };
-    let board = ctx.update_board(args.id, updates)?;
+    let board = ctx.update_board(uuid, updates)?;
     ctx.save().await?;
     Ok(board)
 }

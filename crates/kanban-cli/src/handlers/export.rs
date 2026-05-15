@@ -4,7 +4,14 @@ use crate::output;
 use kanban_domain::KanbanOperations;
 
 pub async fn handle_export(ctx: &CliContext, args: ExportArgs) -> anyhow::Result<()> {
-    let json = ctx.export_board(args.board_id)?;
+    let board_uuid = match args.board {
+        Some(raw) => match ctx.resolve_board_id(&raw) {
+            Ok(u) => Some(u),
+            Err(e) => return output::output_error(&e.to_string()),
+        },
+        None => None,
+    };
+    let json = ctx.export_board(board_uuid)?;
     println!("{}", json);
     Ok(())
 }

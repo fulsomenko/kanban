@@ -4,8 +4,38 @@
 //! viewport given a scroll offset. They are pure in-memory state and are never
 //! serialized or exposed through the CLI/MCP API.
 //!
+//! [`scroll_offset_to_keep_visible`] is the pure scroll-math primitive used by
+//! `Page::scroll_to_visible` and by callers that track a scroll offset outside
+//! of [`Page`].
+//!
 //! For the serialized pagination envelope used by CLI and MCP list responses,
 //! see [`super::paginated_list`].
+
+/// Compute the scroll offset that keeps `selected` inside a viewport of
+/// `viewport_height` rows. Minimal-scroll semantics: if `selected` is already
+/// visible, the offset is unchanged; otherwise it shifts just enough to bring
+/// `selected` to the nearest edge of the viewport.
+///
+/// This is the pure form of [`Page::scroll_to_visible`] and the canonical
+/// helper for any scrollable list that wants the same behavior as the main
+/// card list.
+pub fn scroll_offset_to_keep_visible(
+    current_offset: usize,
+    selected: usize,
+    viewport_height: usize,
+) -> usize {
+    if viewport_height == 0 {
+        return current_offset;
+    }
+    let scroll_end = current_offset + viewport_height;
+    if selected < current_offset {
+        selected
+    } else if selected >= scroll_end {
+        selected.saturating_sub(viewport_height - 1)
+    } else {
+        current_offset
+    }
+}
 
 /// Information about the visible portion of a paginated list.
 #[derive(Debug, Clone)]
@@ -163,18 +193,8 @@ impl Page {
 
     /// Scroll to make an item visible in the viewport.
     pub fn scroll_to_visible(&mut self, item_idx: usize, viewport_height: usize) {
-        if viewport_height == 0 {
-            return;
-        }
-
-        let scroll_start = self.scroll_offset;
-        let scroll_end = scroll_start + viewport_height;
-
-        if item_idx < scroll_start {
-            self.scroll_offset = item_idx;
-        } else if item_idx >= scroll_end {
-            self.scroll_offset = item_idx.saturating_sub(viewport_height - 1);
-        }
+        self.scroll_offset =
+            scroll_offset_to_keep_visible(self.scroll_offset, item_idx, viewport_height);
     }
 
     /// Navigate up by one item, returning the new index.
@@ -206,6 +226,41 @@ impl Default for Page {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_zero_viewport_is_noop() {
+        assert_eq!(scroll_offset_to_keep_visible(7, 99, 0), 7);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_already_visible_keeps_offset() {
+        // viewport rows 5..=9, selected 7 → stays at offset 5
+        assert_eq!(scroll_offset_to_keep_visible(5, 7, 5), 5);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_selection_above_scrolls_up() {
+        // viewport rows 10..=14, selected 3 → snap offset to 3
+        assert_eq!(scroll_offset_to_keep_visible(10, 3, 5), 3);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_selection_below_scrolls_down() {
+        // viewport rows 0..=4, selected 7 → selected becomes last visible (offset 3)
+        assert_eq!(scroll_offset_to_keep_visible(0, 7, 5), 3);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_at_top_edge_no_scroll() {
+        // viewport rows 5..=9, selected 5 (top edge) → keep
+        assert_eq!(scroll_offset_to_keep_visible(5, 5, 5), 5);
+    }
+
+    #[test]
+    fn test_scroll_offset_to_keep_visible_at_bottom_edge_no_scroll() {
+        // viewport rows 5..=9, selected 9 (bottom edge) → keep
+        assert_eq!(scroll_offset_to_keep_visible(5, 9, 5), 5);
+    }
 
     #[test]
     fn test_page_info_empty() {
