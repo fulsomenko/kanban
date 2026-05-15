@@ -119,6 +119,14 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
 // `read_op!` macro is still appropriate — it's a one-liner that elides the
 // closure ceremony.
 
+/// Acquire the context lock and run the closure with read-only access.
+///
+/// The in-memory cache is **not** reloaded — reads are served from whatever
+/// state the previous tool call left behind. If a separate process wrote to
+/// the file since the last reload, the read may be stale. That's an
+/// intentional perf tradeoff: typical MCP usage is single-process, and the
+/// reload cost (file read + parse) is significant relative to the read
+/// itself.
 async fn locked_read<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
     F: FnOnce(&McpContext) -> Result<T, McpError>,
@@ -127,6 +135,23 @@ where
     f(&guard)
 }
 
+/// Acquire the context lock, reload from disk, run the closure with mutable
+/// access, then save and drop. Reload + save bracket the closure so the
+/// mutation always operates on the latest disk state and is persisted before
+/// the lock releases.
+///
+/// # Reload semantics and undo limitations
+///
+/// `guard.reload()` fully discards the in-memory cache and resets undo
+/// history to the current on-disk state. As a consequence, within-session
+/// undo history from earlier tool calls is always wiped before each
+/// mutation: `tool_undo` can only undo the operation recorded during the
+/// **current** tool call, not operations from prior calls.
+///
+/// **Future work**: a `reload_if_changed()` method that compares file
+/// metadata (mtime / instance_id) and skips the full reload when no
+/// external write has occurred would let undo history persist across calls
+/// in the same session. Track as `KanbanBackend::reload_if_changed()`.
 async fn locked_write<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
     F: FnOnce(&mut McpContext) -> Result<T, McpError>,
@@ -139,8 +164,9 @@ where
 }
 
 /// Helper trait: gives `&McpContext` access to MCP-flavoured error mapping for
-/// the resolvers it inherits via `KanbanOperations`. Keeps closure bodies
-/// readable inside `locked_read` / `locked_write`.
+/// the resolvers it inherits via `KanbanOperations`. Each method is a thin
+/// `kanban_err_to_mcp` shim so closure bodies inside `locked_read` /
+/// `locked_write` stay readable.
 trait McpResolve {
     fn mcp_resolve_board(&self, raw: &str) -> Result<Uuid, McpError>;
     fn mcp_resolve_column_in_board(&self, raw: &str, board_id: Uuid) -> Result<Uuid, McpError>;
@@ -150,8 +176,6 @@ trait McpResolve {
     fn mcp_resolve_card(&self, raw: &str) -> Result<Uuid, McpError>;
     fn mcp_resolve_cards(&self, raws: &[String]) -> Result<Vec<Uuid>, McpError>;
     fn mcp_require_same_board(&self, card_ids: &[Uuid]) -> Result<Uuid, McpError>;
-    /// Derive a card's board via card → column → board.
-    fn mcp_card_board(&self, card_id: Uuid) -> Result<Uuid, McpError>;
 }
 
 impl McpResolve for McpContext {
@@ -183,21 +207,23 @@ impl McpResolve for McpContext {
     fn mcp_require_same_board(&self, card_ids: &[Uuid]) -> Result<Uuid, McpError> {
         self.require_same_board(card_ids).map_err(kanban_err_to_mcp)
     }
-    fn mcp_card_board(&self, card_id: Uuid) -> Result<Uuid, McpError> {
-        let card = self
-            .get_card(card_id)
-            .map_err(kanban_err_to_mcp)?
-            .ok_or_else(|| {
-                McpError::invalid_params(format!("Card not found: {}", card_id), None)
-            })?;
-        let column = self
-            .get_column(card.column_id)
-            .map_err(kanban_err_to_mcp)?
-            .ok_or_else(|| {
-                McpError::invalid_params(format!("Column not found: {}", card.column_id), None)
-            })?;
-        Ok(column.board_id)
-    }
+}
+
+/// Derive a card's board via card → column → board, with MCP-flavoured error
+/// mapping. Standalone (not on the resolver trait) because it composes
+/// multiple trait calls rather than being a simple error-mapping shim.
+fn card_board(ctx: &McpContext, card_id: Uuid) -> Result<Uuid, McpError> {
+    let card = ctx
+        .get_card(card_id)
+        .map_err(kanban_err_to_mcp)?
+        .ok_or_else(|| McpError::invalid_params(format!("Card not found: {}", card_id), None))?;
+    let column = ctx
+        .get_column(card.column_id)
+        .map_err(kanban_err_to_mcp)?
+        .ok_or_else(|| {
+            McpError::invalid_params(format!("Column not found: {}", card.column_id), None)
+        })?;
+    Ok(column.board_id)
 }
 
 /// Lock the context, reload from disk, execute a mutating operation, then save.
@@ -949,7 +975,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let card = locked_write(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
-            let board_id = ctx.mcp_card_board(id)?;
+            let board_id = card_board(ctx, id)?;
             let column_id = ctx.mcp_resolve_column_in_board(&req.column, board_id)?;
             ctx.move_card(id, column_id, req.position)
                 .map_err(kanban_err_to_mcp)
@@ -981,7 +1007,7 @@ impl KanbanMcpServer {
             let id = ctx.mcp_resolve_card(&req.card)?;
             let column_id = match req.column.as_deref() {
                 Some(raw) => {
-                    let board_id = ctx.mcp_card_board(id)?;
+                    let board_id = card_board(ctx, id)?;
                     Some(ctx.mcp_resolve_column_in_board(raw, board_id)?)
                 }
                 None => None,
@@ -1032,7 +1058,7 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let card = locked_write(&self.ctx, |ctx| {
             let card_id = ctx.mcp_resolve_card(&req.card)?;
-            let board_id = ctx.mcp_card_board(card_id)?;
+            let board_id = card_board(ctx, card_id)?;
             let sprint_id = ctx.mcp_resolve_sprint_in_board(&req.sprint, board_id)?;
             ctx.assign_card_to_sprint(card_id, sprint_id)
                 .map_err(kanban_err_to_mcp)
