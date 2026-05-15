@@ -1,7 +1,8 @@
 use crate::KanbanResult;
 use crate::{
-    ArchivedCard, Board, BoardUpdate, Card, CardStatus, CardSummary, CardUpdate, Column,
-    ColumnUpdate, CreateCardOptions, KanbanError, Sprint, SprintUpdate,
+    AmbiguousMatch, ArchivedCard, BatchResolutionCause, BatchResolutionFailure, Board, BoardUpdate,
+    Card, CardStatus, CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions,
+    KanbanError, Sprint, SprintUpdate,
 };
 use uuid::Uuid;
 
@@ -139,7 +140,12 @@ pub trait KanbanOperations {
             many => Err(KanbanError::ambiguous(
                 "Board",
                 raw,
-                many.iter().map(|b| b.id.to_string()).collect(),
+                many.iter()
+                    .map(|b| AmbiguousMatch {
+                        label: format!("'{}'", b.name),
+                        id: b.id,
+                    })
+                    .collect(),
             )),
         }
     }
@@ -160,7 +166,12 @@ pub trait KanbanOperations {
             many => Err(KanbanError::ambiguous(
                 "Column",
                 raw,
-                many.iter().map(|c| c.id.to_string()).collect(),
+                many.iter()
+                    .map(|c| AmbiguousMatch {
+                        label: format!("'{}'", c.name),
+                        id: c.id,
+                    })
+                    .collect(),
             )),
         }
     }
@@ -182,17 +193,21 @@ pub trait KanbanOperations {
             many => {
                 // Only need board names for the ambiguity message — one extra query.
                 let boards = self.list_boards()?;
-                let names: Vec<String> = many
+                let matches: Vec<AmbiguousMatch> = many
                     .iter()
                     .map(|c| {
-                        boards
+                        let board_name = boards
                             .iter()
                             .find(|b| b.id == c.board_id)
-                            .map(|b| format!("'{}'", b.name))
-                            .unwrap_or_else(|| "(unknown)".to_string())
+                            .map(|b| b.name.as_str())
+                            .unwrap_or("(unknown)");
+                        AmbiguousMatch {
+                            label: format!("on board '{}'", board_name),
+                            id: c.id,
+                        }
                     })
                     .collect();
-                Err(KanbanError::ambiguous("Column", raw, names))
+                Err(KanbanError::ambiguous("Column", raw, matches))
             }
         }
     }
@@ -221,7 +236,15 @@ pub trait KanbanOperations {
             many => Err(KanbanError::ambiguous(
                 "Sprint",
                 raw,
-                many.iter().map(|s| s.id.to_string()).collect(),
+                many.iter()
+                    .map(|s| {
+                        let name = s.get_name(&board).unwrap_or("(unnamed)");
+                        AmbiguousMatch {
+                            label: format!("#{} '{}'", s.sprint_number, name),
+                            id: s.id,
+                        }
+                    })
+                    .collect(),
             )),
         }
     }
@@ -251,17 +274,22 @@ pub trait KanbanOperations {
             }
             [s] => Ok(s.id),
             many => {
-                let names: Vec<String> = many
+                let matches: Vec<AmbiguousMatch> = many
                     .iter()
                     .map(|s| {
-                        boards
-                            .iter()
-                            .find(|b| b.id == s.board_id)
-                            .map(|b| format!("'{}'", b.name))
-                            .unwrap_or_else(|| "(unknown)".to_string())
+                        let board = boards.iter().find(|b| b.id == s.board_id);
+                        let board_name = board.map(|b| b.name.as_str()).unwrap_or("(unknown)");
+                        let sprint_name = board.and_then(|b| s.get_name(b)).unwrap_or("(unnamed)");
+                        AmbiguousMatch {
+                            label: format!(
+                                "#{} '{}' on board '{}'",
+                                s.sprint_number, sprint_name, board_name
+                            ),
+                            id: s.id,
+                        }
                     })
                     .collect();
-                Err(KanbanError::ambiguous("Sprint", raw, names))
+                Err(KanbanError::ambiguous("Sprint", raw, matches))
             }
         }
     }
@@ -282,7 +310,10 @@ pub trait KanbanOperations {
                 "Card",
                 raw,
                 many.iter()
-                    .map(|c| format!("{} ({})", c.id, c.title))
+                    .map(|c| AmbiguousMatch {
+                        label: format!("'{}'", c.title),
+                        id: c.id,
+                    })
                     .collect(),
             )),
         }
@@ -291,6 +322,10 @@ pub trait KanbanOperations {
     /// Resolve a batch of card identifiers against a single snapshot. Pure
     /// in-memory matching against `find_cards_by_identifier`; one set of
     /// `list_all_*` calls regardless of batch size.
+    ///
+    /// On failure, returns `KanbanError::BatchResolutionFailed` with per-input
+    /// typed causes so callers can introspect (which raw inputs failed, and
+    /// for what reason).
     fn resolve_card_ids(&self, raws: &[String]) -> KanbanResult<Vec<Uuid>> {
         // Single snapshot for the whole batch — no per-element backend round-trips.
         let cards = self.list_all_cards()?;
@@ -299,7 +334,7 @@ pub trait KanbanOperations {
         let sprints = self.list_all_sprints()?;
 
         let mut resolved = Vec::with_capacity(raws.len());
-        let mut errors = Vec::new();
+        let mut failures = Vec::new();
         for raw in raws {
             if let Ok(uuid) = Uuid::parse_str(raw) {
                 resolved.push(uuid);
@@ -308,17 +343,26 @@ pub trait KanbanOperations {
             let matches =
                 crate::search::find_cards_by_identifier(raw, &cards, &columns, &boards, &sprints);
             match matches.as_slice() {
-                [] => errors.push(format!("'{}': not found", raw)),
+                [] => failures.push(BatchResolutionFailure {
+                    raw_input: raw.clone(),
+                    cause: BatchResolutionCause::NotFound,
+                }),
                 [c] => resolved.push(c.id),
-                many => errors.push(format!("'{}': {} matches (ambiguous)", raw, many.len())),
+                many => failures.push(BatchResolutionFailure {
+                    raw_input: raw.clone(),
+                    cause: BatchResolutionCause::Ambiguous(
+                        many.iter()
+                            .map(|c| AmbiguousMatch {
+                                label: format!("'{}'", c.title),
+                                id: c.id,
+                            })
+                            .collect(),
+                    ),
+                }),
             }
         }
-        if !errors.is_empty() {
-            return Err(KanbanError::validation(format!(
-                "Could not resolve {} card(s): {}",
-                errors.len(),
-                errors.join("; ")
-            )));
+        if !failures.is_empty() {
+            return Err(KanbanError::batch_resolution_failed("Card", failures));
         }
         Ok(resolved)
     }
