@@ -84,6 +84,11 @@ cd kanban
 cargo install --path crates/kanban-cli
 ```
 
+### Homebrew (macOS & Linux)
+```bash
+brew install fulsomenko/kanban/kanban
+```
+
 ### Using Nix
 ```bash
 nix run github:fulsomenko/kanban
