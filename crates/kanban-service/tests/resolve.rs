@@ -67,13 +67,16 @@ async fn test_resolve_board_id_not_found_lists_available() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_resolve_board_id_ambiguous_returns_uuid_hint() {
+async fn test_resolve_board_id_ambiguous_includes_label_and_uuid_per_match() {
     let (mut ctx, _dir) = open_ctx().await;
-    ctx.create_board("Shared".into(), None).unwrap();
-    ctx.create_board("Shared".into(), None).unwrap();
+    let b1 = ctx.create_board("Shared".into(), None).unwrap();
+    let b2 = ctx.create_board("Shared".into(), None).unwrap();
     let err = ctx.resolve_board_id("shared").unwrap_err().to_string();
     assert!(err.contains("ambiguous"), "got: {err}");
-    assert!(err.contains("UUID"), "got: {err}");
+    // Every match now carries its UUID in the message — no need for the
+    // "Specify by UUID" coda.
+    assert!(err.contains(&b1.id.to_string()), "got: {err}");
+    assert!(err.contains(&b2.id.to_string()), "got: {err}");
 }
 
 // ---------- resolve_column_id ----------
@@ -214,7 +217,8 @@ async fn test_resolve_card_id_not_found_returns_not_found_by_name() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_resolve_card_ids_aggregates_failures() {
+async fn test_resolve_card_ids_aggregates_failures_as_typed_variant() {
+    use kanban_domain::{BatchResolutionCause, DomainError, KanbanError};
     let (mut ctx, _dir) = open_ctx().await;
     let board = ctx.create_board("B".into(), Some("KAN".into())).unwrap();
     let col = ctx.create_column(board.id, "TODO".into(), None).unwrap();
@@ -223,10 +227,42 @@ async fn test_resolve_card_ids_aggregates_failures() {
         .unwrap();
     let ident_ok = format!("KAN-{}", card.card_number);
     let raws: Vec<String> = vec![ident_ok.clone(), "KAN-999".into(), "KAN-998".into()];
-    let err = ctx.resolve_card_ids(&raws).unwrap_err().to_string();
-    assert!(err.contains("2 card"), "got: {err}");
-    assert!(err.contains("KAN-999"), "got: {err}");
-    assert!(err.contains("KAN-998"), "got: {err}");
+
+    let err = ctx.resolve_card_ids(&raws).unwrap_err();
+    assert!(err.is_batch_resolution_failed(), "got: {err:?}");
+
+    // Programmatic introspection: pull out the typed failures.
+    let KanbanError::Domain(DomainError::BatchResolutionFailed { entity, failures }) = err else {
+        panic!("expected BatchResolutionFailed");
+    };
+    assert_eq!(entity, "Card");
+    assert_eq!(failures.len(), 2);
+    let by_input: std::collections::HashMap<_, _> = failures
+        .iter()
+        .map(|f| (f.raw_input.clone(), &f.cause))
+        .collect();
+    assert!(matches!(
+        by_input["KAN-999"],
+        BatchResolutionCause::NotFound
+    ));
+    assert!(matches!(
+        by_input["KAN-998"],
+        BatchResolutionCause::NotFound
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_card_ids_failure_display_lists_each_input() {
+    let (mut ctx, _dir) = open_ctx().await;
+    ctx.create_board("B".into(), Some("KAN".into())).unwrap();
+    let err = ctx
+        .resolve_card_ids(&["KAN-999".into(), "KAN-998".into()])
+        .unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("2 card"), "got: {msg}");
+    assert!(msg.contains("'KAN-999'"), "got: {msg}");
+    assert!(msg.contains("'KAN-998'"), "got: {msg}");
+    assert!(msg.contains("not found"), "got: {msg}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
