@@ -199,28 +199,22 @@ impl KanbanContext {
     /// calls this automatically.  Idempotent if called more than once.
     pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
-            if self.backend.persists_commands() {
-                // Cross-session undo (SQLite): the entity tables already
-                // reflect every command in the persisted log. To undo we
-                // wipe back to an empty baseline and replay [0..cursor].
-                // baseline = Snapshot::new() so apply + replay-all reproduces
-                // current state exactly.
-                let count = self.backend.command_count()?;
-                self.baseline_snapshot = Some(Snapshot::new());
-                self.command_count = count as usize;
-                self.undo_cursor = count as usize;
-            } else {
-                // Per-session undo (JSON, in-memory): baseline is the
-                // current entity state at session start. Defensive truncate
-                // discards any stray persisted commands.
-                let baseline = self.backend.snapshot()?;
-                if self.backend.command_count()? > 0 {
-                    self.backend.truncate_commands_after(0)?;
-                }
-                self.baseline_snapshot = Some(baseline);
-                self.command_count = 0;
-                self.undo_cursor = 0;
+            // Undo is per-session for every backend. The persisted command
+            // log (SQLite) is an audit trail, not an undo source. Cross-
+            // session undo is deferred to a separate card — it needs
+            // conflict-invalidation between sessions.
+            //
+            // Baseline = current entity state at session start. The
+            // defensive truncate discards any persisted commands so they
+            // don't pollute the in-session undo cursor; SQLite still
+            // re-records new commands to disk for the audit log.
+            let baseline = self.backend.snapshot()?;
+            if self.backend.command_count()? > 0 {
+                self.backend.truncate_commands_after(0)?;
             }
+            self.baseline_snapshot = Some(baseline);
+            self.command_count = 0;
+            self.undo_cursor = 0;
         }
         Ok(())
     }

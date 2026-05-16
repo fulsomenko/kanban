@@ -46,17 +46,6 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         false
     }
 
-    /// Whether this backend persists the command log to durable storage
-    /// (i.e. across process restarts).
-    ///
-    /// When `true`, [`KanbanContext::initialize_undo_state`] keeps the existing
-    /// command log on open so undo can rewind across sessions. When `false`
-    /// (the default — JSON, in-memory) the log is per-session and the context
-    /// truncates it at start.
-    fn persists_commands(&self) -> bool {
-        false
-    }
-
     /// Stable instance UUID used for own-write detection in file watchers.
     fn instance_id(&self) -> Uuid {
         Uuid::nil()
