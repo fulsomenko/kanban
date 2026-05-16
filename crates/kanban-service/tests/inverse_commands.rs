@@ -15,10 +15,10 @@
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, AssignCardsToSprint,
-    BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command, CompleteSprint, CreateBoard,
-    CreateColumn, DeleteColumn, DependencyCommand, MoveCard, RemoveParentCommand,
-    SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
+    ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, ApplyBoardSettings,
+    AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command,
+    CompleteSprint, CreateBoard, CreateColumn, DeleteColumn, DependencyCommand, MoveCard,
+    RemoveParentCommand, SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
     UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn,
 };
 use kanban_domain::{
@@ -516,6 +516,47 @@ async fn test_inverse_set_board_task_list_view_reverts() -> KanbanResult<()> {
     assert_eq!(
         ctx.boards()?.into_iter().next().unwrap().task_list_view,
         original
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_apply_board_settings_restores_prior_settings() -> KanbanResult<()> {
+    use kanban_domain::editable::BoardSettingsDto;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), Some("KAN".into()))?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Board(BoardCommand::ApplySettings(
+        ApplyBoardSettings {
+            board_id: board.id,
+            dto: BoardSettingsDto {
+                sprint_prefix: Some("SP".into()),
+                card_prefix: Some("KAN".into()),
+                sprint_duration_days: Some(21),
+                sprint_names: vec!["alpha".into(), "beta".into()],
+                completion_column_id: None,
+            },
+        },
+    ))])?;
+    let after = ctx.boards()?.into_iter().next().unwrap();
+    assert_eq!(after.sprint_prefix, Some("SP".into()));
+    assert_eq!(after.sprint_duration_days, Some(21));
+    assert_eq!(after.sprint_names, vec!["alpha", "beta"]);
+
+    assert!(ctx.undo()?);
+    let restored = ctx.boards()?.into_iter().next().unwrap();
+    assert_eq!(
+        restored.sprint_prefix, None,
+        "sprint_prefix restored to initial None"
+    );
+    assert_eq!(
+        restored.sprint_duration_days, None,
+        "sprint_duration_days restored"
+    );
+    assert!(
+        restored.sprint_names.is_empty(),
+        "sprint_names restored to initial empty"
     );
     Ok(())
 }

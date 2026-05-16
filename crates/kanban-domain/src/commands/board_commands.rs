@@ -50,7 +50,8 @@ impl BoardCommand {
             BoardCommand::Update(c) => c.capture_inverse(store),
             BoardCommand::SetTaskSort(c) => c.capture_inverse(store),
             BoardCommand::SetTaskListView(c) => c.capture_inverse(store),
-            // Other variants land in later phases (KAN-191 Tier 3).
+            BoardCommand::ApplySettings(c) => c.capture_inverse(store),
+            // Delete, Import: Tier 3 (cascade-aware).
             _ => Ok(None),
         }
     }
@@ -286,6 +287,24 @@ impl ApplyBoardSettings {
 
     pub fn description(&self) -> String {
         format!("Apply board settings for {}", self.board_id)
+    }
+
+    /// Inverse: snapshot the current board into a `BoardSettingsDto` via the
+    /// `Editable::from_entity` impl, then re-apply that DTO via another
+    /// `ApplyBoardSettings`. The DTO covers exactly the fields this command
+    /// writes, so the round-trip is symmetric.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        let prior_dto = crate::editable::BoardSettingsDto::from_entity(&board);
+        Ok(Some(vec![Command::Board(BoardCommand::ApplySettings(
+            ApplyBoardSettings {
+                board_id: self.board_id,
+                dto: prior_dto,
+            },
+        ))]))
     }
 }
 
