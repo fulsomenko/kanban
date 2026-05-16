@@ -107,7 +107,7 @@ kanban sprint carry-over --from <ID> --to <ID>
 kanban init [FILE] [--board <NAME>]
 ```
 
-Create a board file and an initial board, then exit without opening the TUI. Does not open the TUI.
+Create a board file and an initial board, then exit without opening the TUI.
 
 - `FILE` — target file path (default: uses KANBAN_FILE env var, then config storage_location, then boards.json)
 - `--board` — name of the first board to create (default: "My Board")
