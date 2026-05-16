@@ -1,8 +1,10 @@
 use crate::cli::{Cli, Commands};
 use crate::context::CliContext;
 use crate::handlers;
+use crate::output;
 use clap::{CommandFactory, FromArgMatches};
 use kanban_core::AppConfig;
+use kanban_domain::KanbanOperations;
 use kanban_persistence::{StoreFactory, StoreRegistry};
 use kanban_service::StoreManager;
 #[cfg(feature = "tui")]
@@ -128,7 +130,7 @@ async fn dispatch_subcommand(ctx: &mut CliContext, cmd: Commands) -> anyhow::Res
         Commands::Import(args) => {
             handlers::export::handle_import(ctx, args).await?;
         }
-        Commands::Completions { .. } | Commands::Migrate(_) => unreachable!(),
+        Commands::Completions { .. } | Commands::Migrate(_) | Commands::Init { .. } => unreachable!(),
     }
     Ok(())
 }
@@ -264,7 +266,7 @@ impl CliApp {
 
         let needs_data_file = !matches!(
             &command,
-            None | Some(Commands::Completions { .. }) | Some(Commands::Migrate(_))
+            None | Some(Commands::Completions { .. }) | Some(Commands::Migrate(_)) | Some(Commands::Init { .. })
         );
         if needs_data_file && validated_file.is_none() && config.storage_location.is_none() {
             anyhow::bail!(
@@ -322,6 +324,14 @@ Provide the file path in one of these ways:
             Some(Commands::Migrate(args)) => {
                 init_tracing_cli();
                 handlers::migrate::handle(&store_manager, args).await?;
+            }
+            Some(Commands::Init { board }) => {
+                init_tracing_cli();
+                let board_name = board.unwrap_or_else(|| "My Board".to_string());
+                let mut ctx = CliContext::load(&store_manager, &effective_file, config).await?;
+                let created = ctx.create_board(board_name, None)?;
+                ctx.save().await?;
+                output::output_success(&created);
             }
             Some(cmd) => {
                 init_tracing_cli();
