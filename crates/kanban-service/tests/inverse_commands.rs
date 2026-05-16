@@ -14,8 +14,10 @@
 //!    have nothing to replay because cursor is 0) is a no-op).
 
 use kanban_core::AppConfig;
-use kanban_domain::commands::{BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn};
-use kanban_domain::{InMemoryStore, KanbanResult};
+use kanban_domain::commands::{
+    BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn, UpdateColumn,
+};
+use kanban_domain::{ColumnUpdate, FieldUpdate, InMemoryStore, KanbanResult};
 use kanban_service::KanbanContext;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -82,6 +84,44 @@ async fn test_inverse_create_column_restores_state() -> KanbanResult<()> {
     );
     // Board still present — only the column was undone.
     assert_eq!(ctx.boards()?.len(), 1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_update_column_restores_prior_fields() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board_id = Uuid::new_v4();
+    let col_id = Uuid::new_v4();
+    ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: board_id,
+        name: "Host".into(),
+        card_prefix: None,
+        position: 0,
+    }))])?;
+    ctx.execute(vec![Command::Column(ColumnCommand::Create(CreateColumn {
+        id: col_id,
+        board_id,
+        name: "Original".into(),
+        position: 5,
+    }))])?;
+
+    // Update both name and position; leave wip_limit unchanged.
+    ctx.execute(vec![Command::Column(ColumnCommand::Update(UpdateColumn {
+        column_id: col_id,
+        updates: ColumnUpdate {
+            name: Some("Renamed".into()),
+            position: Some(99),
+            wip_limit: FieldUpdate::NoChange,
+        },
+    }))])?;
+    let after = &ctx.columns()?[0];
+    assert_eq!(after.name, "Renamed");
+    assert_eq!(after.position, 99);
+
+    assert!(ctx.undo()?, "undo via inverse-command path");
+    let restored = &ctx.columns()?[0];
+    assert_eq!(restored.name, "Original", "name restored");
+    assert_eq!(restored.position, 5, "position restored");
     Ok(())
 }
 

@@ -1,5 +1,6 @@
 use super::{Command, CommandContext};
 use crate::data_store::DataStore;
+use crate::field_update::FieldUpdate;
 use crate::ColumnUpdate;
 use crate::KanbanResult;
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,7 @@ impl ColumnCommand {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
         match self {
             ColumnCommand::Create(c) => c.capture_inverse(store),
+            ColumnCommand::Update(c) => c.capture_inverse(store),
             // Other variants land in later phases.
             _ => Ok(None),
         }
@@ -56,6 +58,38 @@ impl UpdateColumn {
 
     pub fn description(&self) -> String {
         "Update column".to_string()
+    }
+
+    /// Inverse: read the column's current state and synthesise an
+    /// `UpdateColumn` whose `updates` field-by-field set each touched
+    /// field back to its prior value. Untouched fields stay `None` /
+    /// `NoChange` so the inverse is minimal.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let column = match store.get_column(self.column_id)? {
+            Some(c) => c,
+            // The column doesn't exist — execute() will fail with NotFound
+            // and rollback will take over. No inverse to capture.
+            None => return Ok(None),
+        };
+
+        let inverse_updates = ColumnUpdate {
+            name: self.updates.name.as_ref().map(|_| column.name.clone()),
+            position: self.updates.position.map(|_| column.position),
+            wip_limit: match self.updates.wip_limit {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                FieldUpdate::Set(_) | FieldUpdate::Clear => match column.wip_limit {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+        };
+
+        Ok(Some(vec![Command::Column(ColumnCommand::Update(
+            UpdateColumn {
+                column_id: self.column_id,
+                updates: inverse_updates,
+            },
+        ))]))
     }
 }
 
