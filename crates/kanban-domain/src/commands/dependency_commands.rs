@@ -40,8 +40,16 @@ impl DependencyCommand {
         }
     }
 
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(None)
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        match self {
+            DependencyCommand::AddBlocks(c) => c.capture_inverse(store),
+            DependencyCommand::AddRelatesTo(c) => c.capture_inverse(store),
+            DependencyCommand::RemoveParent(c) => c.capture_inverse(store),
+            // SetParent, Remove, CreateSubcard land in later tiers
+            // (CreateSubcard needs a struct enrichment to bake the new
+            // card's UUID; Remove needs edge-type capture).
+            _ => Ok(None),
+        }
     }
 }
 
@@ -68,6 +76,16 @@ impl AddBlocksDependencyCommand {
             self.blocker_id, self.blocked_id
         )
     }
+
+    /// Inverse: remove the just-added edge.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Dependency(DependencyCommand::Remove(
+            RemoveDependencyCommand {
+                source_id: self.blocker_id,
+                target_id: self.blocked_id,
+            },
+        ))]))
+    }
 }
 
 /// Add a relates-to dependency between two cards
@@ -92,6 +110,16 @@ impl AddRelatesToDependencyCommand {
             "Add relates-to dependency: {} <-> {}",
             self.card_a_id, self.card_b_id
         )
+    }
+
+    /// Inverse: remove the just-added edge.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Dependency(DependencyCommand::Remove(
+            RemoveDependencyCommand {
+                source_id: self.card_a_id,
+                target_id: self.card_b_id,
+            },
+        ))]))
     }
 }
 
@@ -167,6 +195,17 @@ impl RemoveParentCommand {
             "Remove parent: {} is no longer parent of {}",
             self.parent_id, self.child_id
         )
+    }
+
+    /// Inverse: re-establish the parent relationship. Both IDs are in
+    /// the forward command — no pre-state read needed.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Dependency(
+            DependencyCommand::SetParent(SetParentCommand {
+                child_id: self.child_id,
+                parent_id: self.parent_id,
+            }),
+        )]))
     }
 }
 

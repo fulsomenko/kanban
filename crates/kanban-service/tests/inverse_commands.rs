@@ -15,9 +15,10 @@
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    ActivateSprint, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand,
-    Command, CompleteSprint, CreateBoard, CreateColumn, MoveCard, SprintCommand,
-    UnassignCardFromSprint, UpdateCard, UpdateColumn,
+    ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, AssignCardsToSprint,
+    BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command, CompleteSprint, CreateBoard,
+    CreateColumn, DependencyCommand, MoveCard, RemoveParentCommand, SetParentCommand,
+    SprintCommand, UnassignCardFromSprint, UpdateCard, UpdateColumn,
 };
 use kanban_domain::{
     CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore, KanbanOperations,
@@ -312,6 +313,96 @@ async fn test_inverse_cancel_sprint_reverts_to_prior_status() -> KanbanResult<()
         ctx.get_sprint(sprint.id)?.unwrap().status,
         SprintStatus::Planning,
         "Cancel undo reverts to Planning"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_add_blocks_removes_edge() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
+    let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
+        AddBlocksDependencyCommand {
+            blocker_id: a.id,
+            blocked_id: b.id,
+        },
+    ))])?;
+    assert!(
+        ctx.graph()?.cards.has_edge(a.id, b.id),
+        "edge added by forward"
+    );
+
+    assert!(ctx.undo()?);
+    assert!(
+        !ctx.graph()?.cards.has_edge(a.id, b.id),
+        "edge removed by inverse"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_add_relates_to_removes_edge() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
+    let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddRelatesTo(
+        AddRelatesToDependencyCommand {
+            card_a_id: a.id,
+            card_b_id: b.id,
+        },
+    ))])?;
+    assert!(
+        ctx.graph()?.cards.has_edge(a.id, b.id),
+        "relates edge added by forward"
+    );
+
+    assert!(ctx.undo()?);
+    assert!(
+        !ctx.graph()?.cards.has_edge(a.id, b.id),
+        "relates edge removed by inverse"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let parent = ctx.create_card(board.id, col.id, "Parent".into(), Default::default())?;
+    let child = ctx.create_card(board.id, col.id, "Child".into(), Default::default())?;
+    ctx.execute(vec![Command::Dependency(DependencyCommand::SetParent(
+        SetParentCommand {
+            child_id: child.id,
+            parent_id: parent.id,
+        },
+    ))])?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveParent(
+        RemoveParentCommand {
+            child_id: child.id,
+            parent_id: parent.id,
+        },
+    ))])?;
+    assert!(
+        !ctx.graph()?.cards.has_edge(parent.id, child.id),
+        "parent edge removed by forward"
+    );
+
+    assert!(ctx.undo()?);
+    assert!(
+        ctx.graph()?.cards.has_edge(parent.id, child.id),
+        "parent edge re-established by inverse"
     );
     Ok(())
 }
