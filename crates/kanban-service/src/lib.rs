@@ -8,6 +8,7 @@ mod path;
 #[cfg(feature = "sqlite")]
 pub mod sqlite_backend;
 mod store_manager;
+pub mod undo_stack;
 pub use backend::KanbanBackend;
 pub use config::AppConfigDto;
 pub use context::{BatchOperationFailure, BatchOperationResult, KanbanContext};
