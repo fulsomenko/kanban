@@ -47,7 +47,10 @@ impl BoardCommand {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
         match self {
             BoardCommand::Create(c) => c.capture_inverse(store),
-            // Other variants land in later phases (KAN-191 Tiers 2-3).
+            BoardCommand::Update(c) => c.capture_inverse(store),
+            BoardCommand::SetTaskSort(c) => c.capture_inverse(store),
+            BoardCommand::SetTaskListView(c) => c.capture_inverse(store),
+            // Other variants land in later phases (KAN-191 Tier 3).
             _ => Ok(None),
         }
     }
@@ -109,6 +112,71 @@ impl UpdateBoard {
     pub fn description(&self) -> String {
         "Update board".to_string()
     }
+
+    /// Inverse: read the board's current state and build a BoardUpdate
+    /// that reverses every field the forward command touched.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        let upd = &self.updates;
+        let inverse = crate::BoardUpdate {
+            name: upd.name.as_ref().map(|_| board.name.clone()),
+            description: match upd.description {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.description {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            sprint_prefix: match upd.sprint_prefix {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.sprint_prefix {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            card_prefix: match upd.card_prefix {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.card_prefix {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            task_sort_field: upd.task_sort_field.map(|_| board.task_sort_field),
+            task_sort_order: upd.task_sort_order.map(|_| board.task_sort_order),
+            sprint_duration_days: match upd.sprint_duration_days {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.sprint_duration_days {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            task_list_view: upd.task_list_view.map(|_| board.task_list_view),
+            active_sprint_id: match upd.active_sprint_id {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.active_sprint_id {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            completion_column_id: match upd.completion_column_id {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.completion_column_id {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            position: upd.position.map(|_| board.position),
+        };
+        Ok(Some(vec![Command::Board(BoardCommand::Update(
+            UpdateBoard {
+                board_id: self.board_id,
+                updates: inverse,
+            },
+        ))]))
+    }
 }
 
 /// Update board's task sorting preference
@@ -130,6 +198,21 @@ impl SetBoardTaskSort {
     pub fn description(&self) -> String {
         format!("Set board task sort to {:?} {:?}", self.field, self.order)
     }
+
+    /// Inverse: another SetBoardTaskSort with the prior values.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        Ok(Some(vec![Command::Board(BoardCommand::SetTaskSort(
+            SetBoardTaskSort {
+                board_id: self.board_id,
+                field: board.task_sort_field,
+                order: board.task_sort_order,
+            },
+        ))]))
+    }
 }
 
 /// Update board's task list view
@@ -149,6 +232,20 @@ impl SetBoardTaskListView {
 
     pub fn description(&self) -> String {
         format!("Set board task list view to {:?}", self.view)
+    }
+
+    /// Inverse: another SetBoardTaskListView with the prior view.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        Ok(Some(vec![Command::Board(BoardCommand::SetTaskListView(
+            SetBoardTaskListView {
+                board_id: self.board_id,
+                view: board.task_list_view,
+            },
+        ))]))
     }
 }
 

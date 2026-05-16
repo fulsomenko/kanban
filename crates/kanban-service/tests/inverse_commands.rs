@@ -17,12 +17,13 @@ use kanban_core::AppConfig;
 use kanban_domain::commands::{
     ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, AssignCardsToSprint,
     BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command, CompleteSprint, CreateBoard,
-    CreateColumn, DeleteColumn, DependencyCommand, MoveCard, RemoveParentCommand, SetParentCommand,
-    SprintCommand, UnassignCardFromSprint, UpdateCard, UpdateColumn,
+    CreateColumn, DeleteColumn, DependencyCommand, MoveCard, RemoveParentCommand,
+    SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
+    UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn,
 };
 use kanban_domain::{
-    CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore, KanbanOperations,
-    KanbanResult, SprintStatus,
+    BoardUpdate, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
+    KanbanOperations, KanbanResult, SortField, SortOrder, SprintStatus, TaskListView,
 };
 use kanban_service::KanbanContext;
 use std::sync::Arc;
@@ -434,6 +435,88 @@ async fn test_inverse_delete_column_recreates_with_fields() -> KanbanResult<()> 
     assert_eq!(restored.name, "Reborn", "name restored");
     assert_eq!(restored.position, original_pos, "position restored");
     assert_eq!(restored.wip_limit, Some(7), "wip_limit restored");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_update_board_restores_fields() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("Original".into(), None)?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Board(BoardCommand::Update(UpdateBoard {
+        board_id: board.id,
+        updates: BoardUpdate {
+            name: Some("Renamed".into()),
+            description: FieldUpdate::Set("A new description".into()),
+            ..Default::default()
+        },
+    }))])?;
+    let after = ctx.boards()?.into_iter().next().unwrap();
+    assert_eq!(after.name, "Renamed");
+    assert_eq!(after.description, Some("A new description".into()));
+
+    assert!(ctx.undo()?);
+    let restored = ctx.boards()?.into_iter().next().unwrap();
+    assert_eq!(restored.name, "Original");
+    assert_eq!(restored.description, None);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_set_board_task_sort_reverts() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let before = ctx.boards()?.into_iter().next().unwrap();
+    let original_field = before.task_sort_field;
+    let original_order = before.task_sort_order;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Board(BoardCommand::SetTaskSort(
+        SetBoardTaskSort {
+            board_id: board.id,
+            field: SortField::Priority,
+            order: SortOrder::Descending,
+        },
+    ))])?;
+    let after = ctx.boards()?.into_iter().next().unwrap();
+    assert_eq!(after.task_sort_field, SortField::Priority);
+
+    assert!(ctx.undo()?);
+    let restored = ctx.boards()?.into_iter().next().unwrap();
+    assert_eq!(restored.task_sort_field, original_field);
+    assert_eq!(restored.task_sort_order, original_order);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_set_board_task_list_view_reverts() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let original = ctx.boards()?.into_iter().next().unwrap().task_list_view;
+    ctx.clear_history()?;
+
+    let target = if original == TaskListView::Flat {
+        TaskListView::ColumnView
+    } else {
+        TaskListView::Flat
+    };
+    ctx.execute(vec![Command::Board(BoardCommand::SetTaskListView(
+        SetBoardTaskListView {
+            board_id: board.id,
+            view: target,
+        },
+    ))])?;
+    assert_eq!(
+        ctx.boards()?.into_iter().next().unwrap().task_list_view,
+        target
+    );
+
+    assert!(ctx.undo()?);
+    assert_eq!(
+        ctx.boards()?.into_iter().next().unwrap().task_list_view,
+        original
+    );
     Ok(())
 }
 
