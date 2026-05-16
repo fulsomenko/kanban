@@ -219,7 +219,9 @@ impl KanbanContext {
         Ok(())
     }
 
-    /// Execute a batch of commands as a single undo unit.
+    /// Execute a batch of commands as a single undo unit. Atomic via
+    /// [`KanbanBackend::with_transaction`][crate::backend::KanbanBackend::with_transaction]:
+    /// if any command in the batch fails the whole batch rolls back.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         if self.baseline_snapshot.is_none() {
             return Err(KanbanError::Internal(
@@ -232,20 +234,13 @@ impl KanbanContext {
                 .truncate_commands_after(self.undo_cursor as u64)?;
         }
 
-        let before = self.backend.snapshot()?;
-        let result = {
-            let store: &dyn DataStore = self.backend.as_data_store();
+        let backend = Arc::clone(&self.backend);
+        let cmds = &commands;
+        self.backend.with_transaction(&mut || {
+            let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
-            commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
-        };
-        if let Err(e) = result {
-            if let Err(rollback_err) = self.backend.apply_snapshot(before) {
-                return Err(KanbanError::Internal(format!(
-                    "Command failed ({e}) and rollback also failed ({rollback_err}). State may be inconsistent."
-                )));
-            }
-            return Err(e);
-        }
+            cmds.iter().try_for_each(|cmd| cmd.execute(&ctx))
+        })?;
 
         self.backend.append_commands(&commands)?;
         self.undo_cursor += 1;

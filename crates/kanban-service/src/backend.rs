@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use kanban_domain::command_store::CommandStore;
 use kanban_domain::data_store::DataStore;
-use kanban_domain::{InMemoryStore, KanbanResult};
+use kanban_domain::{InMemoryStore, KanbanError, KanbanResult};
 use uuid::Uuid;
 
 /// Combines the entity-level CRUD interface (`DataStore`) with the command
@@ -49,6 +49,42 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
     /// Stable instance UUID used for own-write detection in file watchers.
     fn instance_id(&self) -> Uuid {
         Uuid::nil()
+    }
+
+    /// Run a closure as an atomic batch: every mutation in `f` either commits
+    /// together or rolls back together. The default implementation snapshots
+    /// the entire backend state before `f` runs and restores it on failure —
+    /// correct but expensive for backends with on-disk state. Backends with
+    /// native transaction support (SQLite, future networked stores) should
+    /// override with a cheaper implementation.
+    ///
+    /// `KanbanContext::execute` is the only caller today; it uses this to
+    /// roll back partial batches when a command in the middle of a batch
+    /// fails.
+    ///
+    /// # When the default impl is the right answer
+    ///
+    /// - In-memory backends (`InMemoryStore`, JSON) where `snapshot()` is a
+    ///   cheap state clone.
+    ///
+    /// # When to override
+    ///
+    /// - Disk-backed CRUD stores where reading every entity to take a
+    ///   snapshot is significant overhead per execute. Native transactions
+    ///   eliminate the per-execute read cost.
+    fn with_transaction(&self, f: &mut dyn FnMut() -> KanbanResult<()>) -> KanbanResult<()> {
+        let before = self.snapshot()?;
+        match f() {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                if let Err(rollback_err) = self.apply_snapshot(before) {
+                    return Err(KanbanError::Internal(format!(
+                        "Batch failed ({e}) and rollback also failed ({rollback_err}). State may be inconsistent."
+                    )));
+                }
+                Err(e)
+            }
+        }
     }
 }
 
