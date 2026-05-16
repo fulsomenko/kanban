@@ -19,11 +19,11 @@ use kanban_domain::commands::{
     AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command,
     CompleteSprint, CreateBoard, CreateColumn, DeleteColumn, DependencyCommand, MoveCard,
     RemoveParentCommand, SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
-    UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn,
+    UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
     BoardUpdate, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
-    KanbanOperations, KanbanResult, SortField, SortOrder, SprintStatus, TaskListView,
+    KanbanOperations, KanbanResult, SortField, SortOrder, SprintStatus, SprintUpdate, TaskListView,
 };
 use kanban_service::KanbanContext;
 use std::sync::Arc;
@@ -558,6 +558,30 @@ async fn test_inverse_apply_board_settings_restores_prior_settings() -> KanbanRe
         restored.sprint_names.is_empty(),
         "sprint_names restored to initial empty"
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_update_sprint_restores_prefix() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.clear_history()?;
+    let before_prefix = sprint.prefix.clone();
+
+    ctx.execute(vec![Command::Sprint(SprintCommand::Update(UpdateSprint {
+        sprint_id: sprint.id,
+        updates: SprintUpdate {
+            prefix: FieldUpdate::Set("SPR".into()),
+            ..Default::default()
+        },
+    }))])?;
+    let after = ctx.get_sprint(sprint.id)?.unwrap();
+    assert_eq!(after.prefix, Some("SPR".into()));
+
+    assert!(ctx.undo()?, "undo via inverse-command path");
+    let restored = ctx.get_sprint(sprint.id)?.unwrap();
+    assert_eq!(restored.prefix, before_prefix, "prefix restored");
     Ok(())
 }
 

@@ -44,7 +44,8 @@ impl SprintCommand {
             SprintCommand::Activate(c) => c.capture_inverse(store),
             SprintCommand::Complete(c) => c.capture_inverse(store),
             SprintCommand::Cancel(c) => c.capture_inverse(store),
-            // Other variants land in later phases.
+            SprintCommand::Update(c) => c.capture_inverse(store),
+            // Create / Delete land in Tier 3 (need board-state capture).
             _ => Ok(None),
         }
     }
@@ -81,6 +82,73 @@ impl UpdateSprint {
 
     pub fn description(&self) -> String {
         "Update sprint".to_string()
+    }
+
+    /// Inverse: read the current Sprint and build a `SprintUpdate` whose
+    /// fields reverse every touched field of the forward update.
+    ///
+    /// Caveat — if the forward command sets `name`, the inverse can't be
+    /// captured cleanly: the board's `sprint_names` pool and
+    /// `sprint_name_used_count` are mutated as side effects of name
+    /// allocation, which a simple per-sprint `SprintUpdate` can't reverse.
+    /// In that case we return `Ok(None)` and let the legacy replay path
+    /// handle it. Tier 3 (KAN-191 Phase 6) will add a multi-entity inverse
+    /// covering the board-side bookkeeping.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        use crate::field_update::FieldUpdate;
+        if self.updates.name.is_some() {
+            return Ok(None);
+        }
+        let sprint = match store.get_sprint(self.sprint_id)? {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+        let upd = &self.updates;
+        let inverse = SprintUpdate {
+            name: None,
+            name_index: match upd.name_index {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match sprint.name_index {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            prefix: match upd.prefix {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match sprint.prefix.clone() {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            card_prefix: match upd.card_prefix {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match sprint.card_prefix.clone() {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            status: upd.status.map(|_| sprint.status),
+            start_date: match upd.start_date {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match sprint.start_date {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            end_date: match upd.end_date {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match sprint.end_date {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+        };
+        Ok(Some(vec![Command::Sprint(SprintCommand::Update(
+            UpdateSprint {
+                sprint_id: self.sprint_id,
+                updates: inverse,
+            },
+        ))]))
     }
 }
 
