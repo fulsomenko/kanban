@@ -52,6 +52,29 @@ impl Command {
             Command::Cascade(cmd) => cmd.description(),
         }
     }
+
+    /// Capture the inverse of this command — the forward CRUD operations
+    /// that, applied to the current entity state, undo this command's
+    /// effect. Called by `KanbanContext::execute` **before** the forward
+    /// command runs, so pre-state can be read from `store` and embedded in
+    /// the inverse.
+    ///
+    /// Returns `Ok(None)` for commands that don't yet have an inverse
+    /// implementation. `KanbanContext::undo` falls back to the legacy
+    /// `apply_snapshot(baseline) + replay` path when the captured inverse is
+    /// `None`. As each command tier lands (KAN-191 Phases 4-6) the `None`
+    /// branch becomes unreachable for that command.
+    ///
+    /// Returning `Ok(Some(vec![]))` means "this command is a no-op for
+    /// undo" — the stack still records it but the inverse pass is empty.
+    ///
+    /// Returning `Err` is a hard error and should never happen in normal
+    /// operation; it indicates the pre-state read itself failed.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        // Default: no inverse known yet. Per-variant implementations land in
+        // KAN-191 Phases 4-6 (Tiers 1-3).
+        Ok(None)
+    }
 }
 
 /// Context passed to commands for mutation.
