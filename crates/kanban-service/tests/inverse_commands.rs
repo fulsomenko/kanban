@@ -14,7 +14,7 @@
 //!    have nothing to replay because cursor is 0) is a no-op).
 
 use kanban_core::AppConfig;
-use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
+use kanban_domain::commands::{BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn};
 use kanban_domain::{InMemoryStore, KanbanResult};
 use kanban_service::KanbanContext;
 use std::sync::Arc;
@@ -50,6 +50,38 @@ async fn test_inverse_create_board_restores_state() -> KanbanResult<()> {
 
     // After undoing the only command in the session, no further undo work.
     assert!(!ctx.can_undo());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_create_column_restores_state() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    // Need a board first to host the column.
+    let board_id = Uuid::new_v4();
+    ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
+        id: board_id,
+        name: "Host".into(),
+        card_prefix: None,
+        position: 0,
+    }))])?;
+
+    let col_id = Uuid::new_v4();
+    ctx.execute(vec![Command::Column(ColumnCommand::Create(CreateColumn {
+        id: col_id,
+        board_id,
+        name: "TODO".into(),
+        position: 0,
+    }))])?;
+    assert_eq!(ctx.columns()?.len(), 1, "forward execute creates column");
+
+    assert!(ctx.undo()?, "undo via inverse-command path");
+    assert_eq!(
+        ctx.columns()?.len(),
+        0,
+        "undo of CreateColumn via inverse removes the column"
+    );
+    // Board still present — only the column was undone.
+    assert_eq!(ctx.boards()?.len(), 1);
     Ok(())
 }
 

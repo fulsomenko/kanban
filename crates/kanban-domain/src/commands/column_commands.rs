@@ -30,9 +30,12 @@ impl ColumnCommand {
         }
     }
 
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        // Per-variant implementations land in later KAN-191 Tier phases.
-        Ok(None)
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        match self {
+            ColumnCommand::Create(c) => c.capture_inverse(store),
+            // Other variants land in later phases.
+            _ => Ok(None),
+        }
     }
 }
 
@@ -75,6 +78,14 @@ impl CreateColumn {
 
     pub fn description(&self) -> String {
         format!("Create column: '{}'", self.name)
+    }
+
+    /// Inverse: delete the newly-created column. The `id` is in the
+    /// command — no pre-state read needed.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Column(ColumnCommand::Delete(
+            DeleteColumn { column_id: self.id },
+        ))]))
     }
 }
 
