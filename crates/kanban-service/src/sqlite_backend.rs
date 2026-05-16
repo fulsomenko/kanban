@@ -4,8 +4,8 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::commands::Command;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
-    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanResult,
-    Snapshot, Sprint,
+    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanError,
+    KanbanResult, Snapshot, Sprint,
 };
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_sqlite::SqliteStore;
@@ -18,10 +18,28 @@ pub struct SqliteBackend {
 
 impl SqliteBackend {
     pub async fn open(locator: &str) -> KanbanResult<Self> {
-        Ok(Self {
-            db: SqliteStore::open(locator).await?,
-            mem: InMemoryStore::new(),
-        })
+        let db = SqliteStore::open(locator).await?;
+        let mem = InMemoryStore::new();
+
+        // Load persisted command log into the in-memory mirror so reads
+        // (command_count, load_commands) stay synchronous.
+        let batches_json = db.load_all_command_batches().await?;
+        for json in batches_json {
+            let cmds: Vec<Command> = serde_json::from_str(&json).map_err(|e| {
+                KanbanError::Serialization(format!("failed to deserialise command_log batch: {e}"))
+            })?;
+            mem.append_commands(&cmds)?;
+        }
+
+        Ok(Self { db, mem })
+    }
+
+    fn block_on<F, T>(&self, f: F) -> T
+    where
+        F: std::future::Future<Output = T>,
+    {
+        let handle = tokio::runtime::Handle::current();
+        tokio::task::block_in_place(|| handle.block_on(f))
     }
 }
 
@@ -170,7 +188,16 @@ impl DataStore for SqliteBackend {
 
 impl CommandStore for SqliteBackend {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
-        self.mem.append_commands(cmds)
+        // Persist to disk before mirroring in memory. The in-memory cursor
+        // (`new_index`) is computed from the post-append memory count so the
+        // logical index returned to callers is stable across both stores.
+        let new_index = self.mem.append_commands(cmds)?;
+        let batch_index = new_index - 1; // 0-indexed logical position
+        let json = serde_json::to_string(cmds).map_err(|e| {
+            KanbanError::Serialization(format!("failed to serialise command batch: {e}"))
+        })?;
+        self.block_on(self.db.append_command_batch(batch_index, &json))?;
+        Ok(new_index)
     }
     fn command_count(&self) -> KanbanResult<u64> {
         self.mem.command_count()
@@ -179,10 +206,14 @@ impl CommandStore for SqliteBackend {
         self.mem.load_commands(from, to)
     }
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        self.mem.truncate_commands_after(after)
+        self.mem.truncate_commands_after(after)?;
+        self.block_on(self.db.truncate_command_log_after(after))?;
+        Ok(())
     }
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        self.mem.shift_commands(drop_count)
+        self.mem.shift_commands(drop_count)?;
+        self.block_on(self.db.shift_command_log(drop_count))?;
+        Ok(())
     }
 }
 
@@ -196,6 +227,13 @@ impl crate::backend::KanbanBackend for SqliteBackend {
 
     async fn flush(&self) -> KanbanResult<()> {
         self.db.checkpoint().await
+    }
+
+    /// SQLite persists the command log → undo survives session close
+    /// (KAN-191). `KanbanContext::initialize_undo_state` keys off this flag
+    /// to skip the per-session truncate that JSON still does.
+    fn persists_commands(&self) -> bool {
+        true
     }
 
     fn instance_id(&self) -> Uuid {
