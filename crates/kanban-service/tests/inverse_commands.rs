@@ -17,7 +17,7 @@ use kanban_core::AppConfig;
 use kanban_domain::commands::{
     ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, AssignCardsToSprint,
     BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command, CompleteSprint, CreateBoard,
-    CreateColumn, DependencyCommand, MoveCard, RemoveParentCommand, SetParentCommand,
+    CreateColumn, DeleteColumn, DependencyCommand, MoveCard, RemoveParentCommand, SetParentCommand,
     SprintCommand, UnassignCardFromSprint, UpdateCard, UpdateColumn,
 };
 use kanban_domain::{
@@ -404,6 +404,36 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
         ctx.graph()?.cards.has_edge(parent.id, child.id),
         "parent edge re-established by inverse"
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_delete_column_recreates_with_fields() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "Reborn".into(), None)?;
+    // Set a wip_limit so the inverse needs to chain CreateColumn + UpdateColumn.
+    ctx.execute(vec![Command::Column(ColumnCommand::Update(UpdateColumn {
+        column_id: col.id,
+        updates: ColumnUpdate {
+            wip_limit: FieldUpdate::Set(7),
+            ..Default::default()
+        },
+    }))])?;
+    let original_pos = ctx.columns()?[0].position;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Column(ColumnCommand::Delete(DeleteColumn {
+        column_id: col.id,
+    }))])?;
+    assert_eq!(ctx.columns()?.len(), 0, "column deleted by forward");
+
+    assert!(ctx.undo()?);
+    let restored = &ctx.columns()?[0];
+    assert_eq!(restored.id, col.id, "id restored");
+    assert_eq!(restored.name, "Reborn", "name restored");
+    assert_eq!(restored.position, original_pos, "position restored");
+    assert_eq!(restored.wip_limit, Some(7), "wip_limit restored");
     Ok(())
 }
 

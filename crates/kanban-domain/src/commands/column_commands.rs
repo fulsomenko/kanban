@@ -35,8 +35,7 @@ impl ColumnCommand {
         match self {
             ColumnCommand::Create(c) => c.capture_inverse(store),
             ColumnCommand::Update(c) => c.capture_inverse(store),
-            // Other variants land in later phases.
-            _ => Ok(None),
+            ColumnCommand::Delete(c) => c.capture_inverse(store),
         }
     }
 }
@@ -130,6 +129,32 @@ pub struct DeleteColumn {
 }
 
 impl DeleteColumn {
+    /// Inverse: re-create the deleted column with its prior id, board, name,
+    /// and position. If the column had a non-default wip_limit, follow up
+    /// with an UpdateColumn that restores it.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let column = match store.get_column(self.column_id)? {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+        let mut commands = vec![Command::Column(ColumnCommand::Create(CreateColumn {
+            id: column.id,
+            board_id: column.board_id,
+            name: column.name.clone(),
+            position: column.position,
+        }))];
+        if let Some(wip) = column.wip_limit {
+            commands.push(Command::Column(ColumnCommand::Update(UpdateColumn {
+                column_id: column.id,
+                updates: ColumnUpdate {
+                    wip_limit: FieldUpdate::Set(wip),
+                    ..Default::default()
+                },
+            })));
+        }
+        Ok(Some(commands))
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let has_cards = context.store.count_cards_in_column(self.column_id)? > 0;
         if has_cards {

@@ -254,13 +254,20 @@ impl KanbanContext {
         // (no inverse implementation yet), we skip pushing onto UndoStack
         // for the whole batch — undo for it falls back to the legacy
         // replay path.
-        let mut inverses: Vec<Command> = Vec::new();
+        //
+        // Composition order: forward [F1, F2, ...] produces per-command
+        // inverse batches [F1_inv..., F2_inv..., ...]. To undo, we run
+        // each command's inverse in the REVERSE order of the forwards so
+        // that later commands' undo logic sees the state they left behind.
+        // Within a single command's inverse batch the order is preserved
+        // (the inverse author chose it).
+        let mut per_cmd_inverses: Vec<Vec<Command>> = Vec::new();
         let mut all_inverses_available = true;
         {
             let store: &dyn DataStore = self.backend.as_data_store();
             for cmd in &commands {
                 match cmd.capture_inverse(store)? {
-                    Some(mut batch) => inverses.append(&mut batch),
+                    Some(batch) => per_cmd_inverses.push(batch),
                     None => {
                         all_inverses_available = false;
                         break;
@@ -268,11 +275,11 @@ impl KanbanContext {
                 }
             }
         }
-        // The inverse batch must run in reverse order of the forwards so
-        // that later commands' undo logic sees the state they left behind.
-        if all_inverses_available {
-            inverses.reverse();
-        }
+        let inverses: Vec<Command> = if all_inverses_available {
+            per_cmd_inverses.into_iter().rev().flatten().collect()
+        } else {
+            Vec::new()
+        };
 
         let backend = Arc::clone(&self.backend);
         let cmds = &commands;
