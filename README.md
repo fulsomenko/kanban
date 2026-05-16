@@ -47,6 +47,14 @@ kanban sprint activate yarara-release --duration-days 14
 kanban card assign-sprint KAN-5 --sprint yarara-release
 ```
 
+### Init (non-interactive setup)
+
+```bash
+kanban init boards.json --board "My Project"  # create file + first board, exit
+kanban init --board "My Project"              # uses KANBAN_FILE or boards.json
+kanban init                                   # creates boards.json with "My Board"
+```
+
 Every entity argument accepts either a UUID or a human-readable name (sprint
 numbers also work for sprints; cards accept their `KAN-N` identifier). When a
 name doesn't match, the error lists what's available.
