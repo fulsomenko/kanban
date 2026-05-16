@@ -36,6 +36,12 @@ pub enum Commands {
     },
     /// Migrate data between storage backends
     Migrate(MigrateArgs),
+    /// Initialize a new board file with an optional first board
+    Init {
+        /// Name of the first board to create
+        #[arg(long)]
+        board: Option<String>,
+    },
 }
 
 // Board commands
