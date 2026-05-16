@@ -3293,7 +3293,12 @@ mod init_tests {
     #[test]
     fn test_init_fails_cleanly_on_bad_path() {
         let dir = tempdir().unwrap();
-        let bad = dir.path().join("no").join("such").join("dir").join("x.json");
+        let bad = dir
+            .path()
+            .join("no")
+            .join("such")
+            .join("dir")
+            .join("x.json");
 
         kanban()
             .args([bad.to_str().unwrap(), "init"])

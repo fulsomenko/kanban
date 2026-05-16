@@ -130,7 +130,9 @@ async fn dispatch_subcommand(ctx: &mut CliContext, cmd: Commands) -> anyhow::Res
         Commands::Import(args) => {
             handlers::export::handle_import(ctx, args).await?;
         }
-        Commands::Completions { .. } | Commands::Migrate(_) | Commands::Init { .. } => unreachable!(),
+        Commands::Completions { .. } | Commands::Migrate(_) | Commands::Init { .. } => {
+            unreachable!()
+        }
     }
     Ok(())
 }
@@ -266,7 +268,9 @@ impl CliApp {
 
         let needs_data_file = !matches!(
             &command,
-            None | Some(Commands::Completions { .. }) | Some(Commands::Migrate(_)) | Some(Commands::Init { .. })
+            None | Some(Commands::Completions { .. })
+                | Some(Commands::Migrate(_))
+                | Some(Commands::Init { .. })
         );
         if needs_data_file && validated_file.is_none() && config.storage_location.is_none() {
             anyhow::bail!(
