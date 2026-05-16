@@ -190,7 +190,7 @@ jobs:
           chmod 600 ~/.ssh/homebrew_tap_key
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Bump formula in homebrew-kanban tap
+      - name: Bump formula in homebrew-tap
         if: steps.check.outputs.has_changesets == 'true'
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/homebrew_tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
@@ -199,10 +199,10 @@ jobs:
           URL: ${{ steps.brew-sha.outputs.url }}
         run: |
           set -euo pipefail
-          git clone git@github.com:fulsomenko/homebrew-kanban.git /tmp/homebrew-kanban
-          sed -i "s|^  url \".*\"|  url \"${URL}\"|" /tmp/homebrew-kanban/Formula/kanban.rb
-          sed -i "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" /tmp/homebrew-kanban/Formula/kanban.rb
-          cd /tmp/homebrew-kanban
+          git clone git@github.com:fulsomenko/homebrew-tap.git /tmp/homebrew-tap
+          sed -i "s|^  url \".*\"|  url \"${URL}\"|" /tmp/homebrew-tap/Formula/kanban.rb
+          sed -i "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" /tmp/homebrew-tap/Formula/kanban.rb
+          cd /tmp/homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Formula/kanban.rb
