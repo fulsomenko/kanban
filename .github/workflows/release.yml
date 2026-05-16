@@ -170,6 +170,49 @@ jobs:
           updpkgsums: false
           allow_empty_commits: false
 
+      - name: Compute upstream tarball SHA256 for Homebrew
+        if: steps.check.outputs.has_changesets == 'true'
+        id: brew-sha
+        env:
+          VERSION: ${{ steps.release.outputs.new }}
+        run: |
+          set -euo pipefail
+          URL="https://github.com/fulsomenko/kanban/archive/refs/tags/v${VERSION}.tar.gz"
+          SHA256=$(curl -fsL "$URL" | sha256sum | cut -d' ' -f1)
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Homebrew tap SSH key
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}" > ~/.ssh/homebrew_tap_key
+          chmod 600 ~/.ssh/homebrew_tap_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Bump formula in homebrew-tap
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/homebrew_tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+          VERSION: ${{ steps.release.outputs.new }}
+          SHA: ${{ steps.brew-sha.outputs.sha256 }}
+          URL: ${{ steps.brew-sha.outputs.url }}
+        run: |
+          set -euo pipefail
+          git clone git@github.com:fulsomenko/homebrew-tap.git /tmp/homebrew-tap
+          sed -i "s|^  url \".*\"|  url \"${URL}\"|" /tmp/homebrew-tap/Formula/kanban.rb
+          sed -i "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" /tmp/homebrew-tap/Formula/kanban.rb
+          cd /tmp/homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/kanban.rb
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "kanban ${VERSION}"
+            git push origin master
+          fi
+
       - name: Sync develop with master
         if: steps.check.outputs.has_changesets == 'true'
         env:
