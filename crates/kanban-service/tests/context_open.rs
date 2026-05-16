@@ -367,14 +367,15 @@ async fn test_replace_backend_clears_dirty_flag() -> KanbanResult<()> {
     Ok(())
 }
 
-// ─── Bug A: initialize_undo_state uses empty baseline for JSON after restart ──
+// ─── initialize_undo_state baseline: JSON sessions must restore on-disk state ──
 
-/// When a JSON file was previously saved with a non-empty baseline snapshot,
-/// `initialize_undo_state` must restore that baseline — not fall back to an
-/// empty `Snapshot::default()`.
+/// When a JSON file was previously saved with a non-empty state, opening a
+/// new session must use the current on-disk state as `baseline_snapshot` —
+/// not an empty `Snapshot::default()`. Otherwise undo within the new session
+/// would wipe pre-existing data.
 ///
-/// Failure mode before the fix: undo reverts to `[B1]` instead of `[B0, B1]`
-/// because `load_snapshot_at(0)` returned `None` and the empty default was used.
+/// Failure mode: undo reverts to `[B1]` instead of `[B0, B1]` because the
+/// baseline used in the new session was empty.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_initialize_undo_state_restores_correct_baseline_after_restart() -> KanbanResult<()> {
     let dir = tempdir().unwrap();
@@ -388,20 +389,20 @@ async fn test_initialize_undo_state_restores_correct_baseline_after_restart() ->
         jds.flush().await?;
     }
 
-    // Session 1: open the pre-populated file, create B1, and save.
+    // Session 1: open the pre-populated file, create B1, save.
     // After initialize_undo_state: count=0, baseline = backend.snapshot() = {B0}.
-    // After create_board("B1"): command log = [CreateBoard(B1)], baseline = {B0}.
+    // After create_board("B1"): in-memory command log = [CreateBoard(B1)],
+    // baseline still {B0}. JSON is per-session, so the command log dies on close.
     {
         let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
         assert_eq!(ctx.boards()?.len(), 1, "pre-condition: B0 must be present");
         ctx.create_board("B1".into(), None)?;
         ctx.save().await?;
     }
-    // File now: snapshot={B0,B1}, command_log=[CreateBoard(B1)], baseline={B0}.
+    // File now: snapshot = {B0, B1}. No command log on disk (JSON is per-session).
 
-    // Session 2: open_deferred + initialize_undo_state.
-    // Before fix: load_snapshot_at(0) → None → baseline = empty.
-    // After fix:  load_snapshot_at(0) → Some({B0}) → baseline = {B0}.
+    // Session 2: open_deferred + initialize_undo_state. JSON is in-memory →
+    // baseline = backend.snapshot() = {B0, B1}, count = 0.
     let mut ctx = KanbanContext::open_deferred(make_json_backend(&path), AppConfig::default());
     ctx.initialize_undo_state()?;
 
@@ -410,8 +411,8 @@ async fn test_initialize_undo_state_restores_correct_baseline_after_restart() ->
 
     assert!(ctx.undo()?);
     let boards = ctx.boards()?;
-    // Before fix: baseline=empty → apply empty → []; replay [CreateBoard(B1)] → [B1]. Missing B0!
-    // After fix:  baseline={B0} → apply {B0} → [B0]; replay [CreateBoard(B1)] → [B0, B1].
+    // Baseline = {B0, B1}, undo applies it (no commands to replay) → {B0, B1}.
+    // If baseline had been wrongly captured as empty, we'd end up with [].
     assert_eq!(
         boards.len(),
         2,

@@ -32,6 +32,23 @@ pub struct BatchOperationFailure {
 /// Construction is always zero-I/O — data is fetched lazily on the first
 /// read, either directly (SQLite, reads are always live) or via a one-time
 /// cache-fill on first access (JSON).
+///
+/// # Undo / Redo model
+///
+/// Pure command-replay (KAN-191). The context holds a single
+/// `baseline_snapshot` plus an append-only log of command batches managed by
+/// the backend's [`CommandStore`][kanban_domain::command_store::CommandStore]
+/// impl. Undo applies the baseline, then re-executes batches 0..cursor.
+/// Redo re-executes a single batch at cursor. There is no indexed-snapshot
+/// fast path — every step pays the cost of a snapshot apply plus replay,
+/// in exchange for O(1) per-step memory.
+///
+/// Persistence of the log is decided by the backend via
+/// [`KanbanBackend::persists_commands`][crate::backend::KanbanBackend::persists_commands]:
+/// - **In-memory (JSON, InMemoryStore)**: log is per-session. `baseline_snapshot`
+///   is set to the current entity state at session start.
+/// - **Persistent (SQLite)**: log survives across sessions. `baseline_snapshot`
+///   is `Snapshot::new()` and undo can rewind through every persisted command.
 pub struct KanbanContext {
     backend: Arc<dyn KanbanBackend>,
     app_config: AppConfig,
