@@ -16,6 +16,15 @@ fn extract_id(json: &Value) -> String {
     json["data"]["id"].as_str().unwrap().to_string()
 }
 
+fn kanban_no_config(dir: &std::path::Path) -> Command {
+    let mut cmd = kanban();
+    cmd.current_dir(dir)
+        .env_remove("KANBAN_FILE")
+        .env_remove("XDG_CONFIG_HOME")
+        .env("HOME", dir);
+    cmd
+}
+
 mod board_tests {
     use super::*;
 
@@ -3224,5 +3233,71 @@ mod missing_file_tests {
             file.exists(),
             "kanban <file> must create the file when missing"
         );
+    }
+}
+
+mod init_tests {
+    use super::*;
+
+    #[test]
+    fn test_init_creates_file_with_default_board() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("boards.json");
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        assert!(file.exists());
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["name"], "My Board");
+    }
+
+    #[test]
+    fn test_init_creates_file_with_named_board() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("boards.json");
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "init", "--board", "Sprint 1"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        assert!(file.exists());
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["name"], "Sprint 1");
+    }
+
+    #[test]
+    fn test_init_via_kanban_file_env() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("env-board.json");
+
+        kanban_no_config(dir.path())
+            .env("KANBAN_FILE", file.to_str().unwrap())
+            .args(["init", "--board", "Env Board"])
+            .assert()
+            .success();
+
+        assert!(file.exists());
+    }
+
+    #[test]
+    fn test_init_fails_cleanly_on_bad_path() {
+        let dir = tempdir().unwrap();
+        let bad = dir.path().join("no").join("such").join("dir").join("x.json");
+
+        kanban()
+            .args([bad.to_str().unwrap(), "init"])
+            .assert()
+            .failure();
     }
 }
