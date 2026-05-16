@@ -69,7 +69,6 @@ impl StoreState {
 pub struct InMemoryStore {
     state: RwLock<StoreState>,
     command_log: RwLock<Vec<Vec<Command>>>,
-    snapshots: RwLock<HashMap<u64, Snapshot>>,
 }
 
 impl InMemoryStore {
@@ -77,7 +76,6 @@ impl InMemoryStore {
         Self {
             state: RwLock::new(StoreState::new()),
             command_log: RwLock::new(Vec::new()),
-            snapshots: RwLock::new(HashMap::new()),
         }
     }
 
@@ -103,14 +101,6 @@ impl InMemoryStore {
         self.command_log
             .write()
             .map_err(|e| KanbanError::Internal(format!("Command log RwLock poisoned (write): {e}")))
-    }
-
-    fn write_snapshots(
-        &self,
-    ) -> KanbanResult<std::sync::RwLockWriteGuard<'_, HashMap<u64, Snapshot>>> {
-        self.snapshots
-            .write()
-            .map_err(|e| KanbanError::Internal(format!("Snapshots RwLock poisoned (write): {e}")))
     }
 }
 
@@ -496,9 +486,6 @@ impl CommandStore for InMemoryStore {
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
         let mut log = self.write_log()?;
         log.truncate(after as usize);
-
-        let mut snaps = self.write_snapshots()?;
-        snaps.retain(|&idx, _| idx <= after);
         Ok(())
     }
 
@@ -509,14 +496,6 @@ impl CommandStore for InMemoryStore {
             log.clear();
         } else {
             log.drain(..drop);
-        }
-
-        let mut snaps = self.write_snapshots()?;
-        let old_snaps: HashMap<u64, Snapshot> = snaps.drain().collect();
-        for (idx, snap) in old_snaps {
-            if idx > drop_count {
-                snaps.insert(idx - drop_count, snap);
-            }
         }
         Ok(())
     }
