@@ -105,14 +105,6 @@ impl InMemoryStore {
             .map_err(|e| KanbanError::Internal(format!("Command log RwLock poisoned (write): {e}")))
     }
 
-    fn read_snapshots(
-        &self,
-    ) -> KanbanResult<std::sync::RwLockReadGuard<'_, HashMap<u64, Snapshot>>> {
-        self.snapshots
-            .read()
-            .map_err(|e| KanbanError::Internal(format!("Snapshots RwLock poisoned (read): {e}")))
-    }
-
     fn write_snapshots(
         &self,
     ) -> KanbanResult<std::sync::RwLockWriteGuard<'_, HashMap<u64, Snapshot>>> {
@@ -508,21 +500,6 @@ impl CommandStore for InMemoryStore {
         let mut snaps = self.write_snapshots()?;
         snaps.retain(|&idx, _| idx <= after);
         Ok(())
-    }
-
-    fn supports_indexed_snapshots(&self) -> bool {
-        true
-    }
-
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        let mut snaps = self.write_snapshots()?;
-        snaps.insert(idx, snapshot.clone());
-        Ok(())
-    }
-
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        let snaps = self.read_snapshots()?;
-        Ok(snaps.get(&idx).cloned())
     }
 
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
@@ -1434,64 +1411,7 @@ mod tests {
         assert_eq!(boards.len(), 10);
     }
 
-    // Indexed snapshot tests (Fix 1)
-
-    #[test]
-    fn test_in_memory_store_supports_indexed_snapshots() {
-        let store = InMemoryStore::new();
-        assert!(
-            store.supports_indexed_snapshots(),
-            "InMemoryStore should support indexed snapshots for O(1) undo"
-        );
-    }
-
-    #[test]
-    fn test_in_memory_store_indexed_snapshot_store_and_load() {
-        let store = InMemoryStore::new();
-        let board = make_board("B");
-        store.upsert_board(board).unwrap();
-
-        let snap = store.snapshot().unwrap();
-        store.store_snapshot_at(1, &snap).unwrap();
-
-        let loaded = store.load_snapshot_at(1).unwrap();
-        assert!(loaded.is_some(), "stored snapshot should be loadable");
-        assert_eq!(loaded.unwrap().boards.len(), 1);
-    }
-
-    #[test]
-    fn test_in_memory_store_load_snapshot_at_missing_returns_none() {
-        let store = InMemoryStore::new();
-        let loaded = store.load_snapshot_at(42).unwrap();
-        assert!(loaded.is_none());
-    }
-
-    #[test]
-    fn test_in_memory_store_truncate_removes_snapshots() {
-        let store = InMemoryStore::new();
-        let snap = Snapshot::new();
-
-        store.store_snapshot_at(1, &snap).unwrap();
-        store.store_snapshot_at(2, &snap).unwrap();
-        store.store_snapshot_at(3, &snap).unwrap();
-
-        store.truncate_commands_after(1).unwrap();
-
-        assert!(
-            store.load_snapshot_at(1).unwrap().is_some(),
-            "snapshot at 1 should survive truncation after 1"
-        );
-        assert!(
-            store.load_snapshot_at(2).unwrap().is_none(),
-            "snapshot at 2 should be removed after truncation"
-        );
-        assert!(
-            store.load_snapshot_at(3).unwrap().is_none(),
-            "snapshot at 3 should be removed after truncation"
-        );
-    }
-
-    // shift_commands tests (Fix 2)
+    // shift_commands tests
 
     #[test]
     fn test_in_memory_store_shift_commands_removes_oldest() {
@@ -1538,41 +1458,6 @@ mod tests {
         } else {
             panic!("unexpected command variant");
         }
-    }
-
-    #[test]
-    fn test_in_memory_store_shift_commands_also_removes_snapshots() {
-        let store = InMemoryStore::new();
-        let snap = Snapshot::new();
-
-        let cmd = crate::commands::Command::Board(crate::commands::BoardCommand::Delete(
-            crate::commands::DeleteBoard {
-                board_id: Uuid::new_v4(),
-            },
-        ));
-        store.append_commands(std::slice::from_ref(&cmd)).unwrap();
-        store.append_commands(std::slice::from_ref(&cmd)).unwrap();
-        store.append_commands(&[cmd]).unwrap();
-
-        store.store_snapshot_at(1, &snap).unwrap();
-        store.store_snapshot_at(2, &snap).unwrap();
-        store.store_snapshot_at(3, &snap).unwrap();
-
-        store.shift_commands(2).unwrap();
-
-        // Old snapshot at index 3 should be renumbered to index 1
-        assert!(
-            store.load_snapshot_at(1).unwrap().is_some(),
-            "snapshot formerly at index 3 should now be at index 1"
-        );
-        assert!(
-            store.load_snapshot_at(2).unwrap().is_none(),
-            "no snapshot should exist at index 2 after shift"
-        );
-        assert!(
-            store.load_snapshot_at(3).unwrap().is_none(),
-            "no snapshot should exist at old index 3 after shift"
-        );
     }
 
     #[test]

@@ -209,37 +209,14 @@ impl KanbanContext {
                 .truncate_commands_after(self.undo_cursor as u64)?;
         }
 
-        let before = if self.backend.supports_indexed_snapshots() {
-            None
-        } else {
-            Some(self.backend.snapshot()?)
-        };
+        let before = self.backend.snapshot()?;
         let result = {
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
             commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
         };
         if let Err(e) = result {
-            let rollback_snap = if let Some(snap) = before {
-                snap
-            } else if self.undo_cursor > 0 {
-                self.backend
-                    .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| {
-                        debug_assert!(
-                            self.baseline_snapshot.is_some(),
-                            "baseline must be Some after guard"
-                        );
-                        self.baseline_snapshot.clone().unwrap_or_default()
-                    })
-            } else {
-                debug_assert!(
-                    self.baseline_snapshot.is_some(),
-                    "baseline must be Some after guard"
-                );
-                self.baseline_snapshot.clone().unwrap_or_default()
-            };
-            if let Err(rollback_err) = self.backend.apply_snapshot(rollback_snap) {
+            if let Err(rollback_err) = self.backend.apply_snapshot(before) {
                 return Err(KanbanError::Internal(format!(
                     "Command failed ({e}) and rollback also failed ({rollback_err}). State may be inconsistent."
                 )));
@@ -251,18 +228,37 @@ impl KanbanContext {
         self.undo_cursor += 1;
         self.command_count = self.undo_cursor;
 
-        if self.backend.supports_indexed_snapshots() {
-            let snap = self.backend.snapshot()?;
-            self.backend
-                .store_snapshot_at(self.undo_cursor as u64, &snap)?;
-        }
-
         if self.undo_cursor > MAX_UNDO_DEPTH {
             let excess = self.undo_cursor - MAX_UNDO_DEPTH;
-            if let Some(new_baseline) = self.backend.load_snapshot_at(excess as u64)? {
-                self.baseline_snapshot = Some(new_baseline);
+            // Compute new baseline by replaying the oldest `excess` batches
+            // onto the current baseline. With command-replay there is no
+            // indexed snapshot to load — only the command log.
+            let baseline = self.baseline_snapshot.clone().unwrap_or_default();
+            self.backend.apply_snapshot(baseline)?;
+            let old_batches = self.backend.load_commands(0, excess as u64)?;
+            {
+                let store: &dyn DataStore = self.backend.as_data_store();
+                let ctx = CommandContext { store };
+                for batch in &old_batches {
+                    for cmd in batch {
+                        cmd.execute(&ctx)?;
+                    }
+                }
             }
+            self.baseline_snapshot = Some(self.backend.snapshot()?);
             self.backend.shift_commands(excess as u64)?;
+            // Re-apply the remaining commands so the live state matches
+            // what the user expects after the prune.
+            let remaining = self.backend.load_commands(0, MAX_UNDO_DEPTH as u64)?;
+            {
+                let store: &dyn DataStore = self.backend.as_data_store();
+                let ctx = CommandContext { store };
+                for batch in &remaining {
+                    for cmd in batch {
+                        cmd.execute(&ctx)?;
+                    }
+                }
+            }
             self.undo_cursor = MAX_UNDO_DEPTH;
             self.command_count = MAX_UNDO_DEPTH;
         }
@@ -281,32 +277,15 @@ impl KanbanContext {
         }
         self.undo_cursor -= 1;
 
-        if self.backend.supports_indexed_snapshots() {
-            let snap = if self.undo_cursor == 0 {
-                debug_assert!(
-                    self.baseline_snapshot.is_some(),
-                    "baseline must be Some after guard"
-                );
-                self.baseline_snapshot.clone().unwrap_or_default()
-            } else {
-                self.backend
-                    .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| {
-                        debug_assert!(
-                            self.baseline_snapshot.is_some(),
-                            "baseline must be Some after guard"
-                        );
-                        self.baseline_snapshot.clone().unwrap_or_default()
-                    })
-            };
-            self.backend.apply_snapshot(snap)?;
-        } else {
-            debug_assert!(
-                self.baseline_snapshot.is_some(),
-                "baseline must be Some after guard"
-            );
-            self.backend
-                .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
+        // Pure command-replay: restore baseline, then replay every batch up
+        // to the new cursor. Backend-agnostic — same path for all stores.
+        debug_assert!(
+            self.baseline_snapshot.is_some(),
+            "baseline must be Some after guard"
+        );
+        self.backend
+            .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
+        if self.undo_cursor > 0 {
             let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
@@ -330,19 +309,11 @@ impl KanbanContext {
             return Ok(false);
         }
 
-        let mut applied = false;
-        if self.backend.supports_indexed_snapshots() {
-            let target = self.undo_cursor as u64 + 1;
-            if let Some(snap) = self.backend.load_snapshot_at(target)? {
-                self.backend.apply_snapshot(snap)?;
-                applied = true;
-            }
-        }
-
-        if !applied {
-            let batches = self
-                .backend
-                .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
+        // Pure command-replay: re-execute the next batch.
+        let batches = self
+            .backend
+            .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
+        {
             let store: &dyn DataStore = self.backend.as_data_store();
             let ctx = CommandContext { store };
             for batch in &batches {

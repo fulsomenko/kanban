@@ -181,15 +181,6 @@ impl CommandStore for SqliteBackend {
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
         self.mem.truncate_commands_after(after)
     }
-    fn supports_indexed_snapshots(&self) -> bool {
-        self.mem.supports_indexed_snapshots()
-    }
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.mem.store_snapshot_at(idx, snapshot)
-    }
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        self.mem.load_snapshot_at(idx)
-    }
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
         self.mem.shift_commands(drop_count)
     }

@@ -308,15 +308,6 @@ impl CommandStore for JsonDataStore {
     fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
         self.with_read(|s| s.load_all_commands())
     }
-    fn supports_indexed_snapshots(&self) -> bool {
-        false
-    }
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.with_mutate(|s| s.store_snapshot_at(idx, snapshot))
-    }
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        self.with_read(|s| s.load_snapshot_at(idx))
-    }
     fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
         self.with_mutate(|s| s.shift_commands(drop_count))
     }

@@ -1,5 +1,5 @@
 use crate::commands::Command;
-use crate::{KanbanResult, Snapshot};
+use crate::KanbanResult;
 
 /// Repository for storing and replaying command batches (undo/redo log).
 ///
@@ -37,25 +37,13 @@ pub trait CommandStore: Send + Sync {
         Ok((batches, count))
     }
 
-    /// Whether this store supports O(1) snapshot lookup at a given command index.
-    /// When true, `undo()`/`redo()` load a stored snapshot instead of replaying.
-    fn supports_indexed_snapshots(&self) -> bool {
-        false
-    }
-
-    /// Stores a snapshot associated with command index `idx`.
-    fn store_snapshot_at(&self, _idx: u64, _snapshot: &Snapshot) -> KanbanResult<()> {
-        Ok(())
-    }
-
-    /// Loads the snapshot stored at command index `idx`, if any.
-    fn load_snapshot_at(&self, _idx: u64) -> KanbanResult<Option<Snapshot>> {
-        Ok(None)
-    }
-
     /// Removes the oldest `drop_count` batches and renumbers the remaining
-    /// batches so they start from index 0. Also removes any indexed snapshots
-    /// for dropped batches and renumbers surviving ones.
+    /// batches so they start from index 0.
+    ///
+    /// Provided as a default no-op for backends that don't need log pruning.
+    /// `KanbanContext` does not currently invoke this — pure command-replay
+    /// has no per-step memory cost — but the hook is kept on the trait for
+    /// future log-pruning features (e.g. an audit-log retention policy).
     fn shift_commands(&self, _drop_count: u64) -> KanbanResult<()> {
         Ok(())
     }

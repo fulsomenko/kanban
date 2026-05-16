@@ -65,16 +65,27 @@ async fn test_replay_from_baseline_reproduces_state() -> KanbanResult<()> {
     }
     let replayed = replay_backend.snapshot()?;
 
-    assert_eq!(original.boards.len(), replayed.boards.len(), "board count must match");
+    assert_eq!(
+        original.boards.len(),
+        replayed.boards.len(),
+        "board count must match"
+    );
     for (a, b) in original.boards.iter().zip(&replayed.boards) {
         assert_eq!(a.id, b.id, "board id must match");
         assert_eq!(a.name, b.name, "board name must match");
         assert_eq!(a.card_prefix, b.card_prefix, "board card_prefix must match");
         assert_eq!(a.position, b.position, "board position must match");
-        assert_eq!(a.card_counter, b.card_counter, "board card_counter must match");
+        assert_eq!(
+            a.card_counter, b.card_counter,
+            "board card_counter must match"
+        );
     }
 
-    assert_eq!(original.columns.len(), replayed.columns.len(), "column count must match");
+    assert_eq!(
+        original.columns.len(),
+        replayed.columns.len(),
+        "column count must match"
+    );
     let mut orig_cols: Vec<_> = original.columns.iter().collect();
     orig_cols.sort_by_key(|c| c.id);
     let mut rep_cols: Vec<_> = replayed.columns.iter().collect();
@@ -82,11 +93,23 @@ async fn test_replay_from_baseline_reproduces_state() -> KanbanResult<()> {
     for (a, b) in orig_cols.iter().zip(&rep_cols) {
         assert_eq!(a.id, b.id, "column id must match");
         assert_eq!(a.name, b.name, "column name must match for {}", a.id);
-        assert_eq!(a.board_id, b.board_id, "column board_id must match for {}", a.id);
-        assert_eq!(a.position, b.position, "column position must match for {}", a.id);
+        assert_eq!(
+            a.board_id, b.board_id,
+            "column board_id must match for {}",
+            a.id
+        );
+        assert_eq!(
+            a.position, b.position,
+            "column position must match for {}",
+            a.id
+        );
     }
 
-    assert_eq!(original.cards.len(), replayed.cards.len(), "card count must match");
+    assert_eq!(
+        original.cards.len(),
+        replayed.cards.len(),
+        "card count must match"
+    );
     let mut orig_cards: Vec<_> = original.cards.iter().collect();
     orig_cards.sort_by_key(|c| c.id);
     let mut rep_cards: Vec<_> = replayed.cards.iter().collect();
@@ -94,12 +117,28 @@ async fn test_replay_from_baseline_reproduces_state() -> KanbanResult<()> {
     for (a, b) in orig_cards.iter().zip(&rep_cards) {
         assert_eq!(a.id, b.id, "card id must match");
         assert_eq!(a.title, b.title, "card title must match for {}", a.id);
-        assert_eq!(a.column_id, b.column_id, "card column must match for {}", a.id);
-        assert_eq!(a.position, b.position, "card position must match for {}", a.id);
-        assert_eq!(a.sprint_id, b.sprint_id, "card sprint must match for {}", a.id);
+        assert_eq!(
+            a.column_id, b.column_id,
+            "card column must match for {}",
+            a.id
+        );
+        assert_eq!(
+            a.position, b.position,
+            "card position must match for {}",
+            a.id
+        );
+        assert_eq!(
+            a.sprint_id, b.sprint_id,
+            "card sprint must match for {}",
+            a.id
+        );
     }
 
-    assert_eq!(original.sprints.len(), replayed.sprints.len(), "sprint count must match");
+    assert_eq!(
+        original.sprints.len(),
+        replayed.sprints.len(),
+        "sprint count must match"
+    );
     let mut orig_sprints: Vec<_> = original.sprints.iter().collect();
     orig_sprints.sort_by_key(|s| s.id);
     let mut rep_sprints: Vec<_> = replayed.sprints.iter().collect();
