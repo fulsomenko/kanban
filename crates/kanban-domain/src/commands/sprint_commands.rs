@@ -39,8 +39,14 @@ impl SprintCommand {
         }
     }
 
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(None)
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        match self {
+            SprintCommand::Activate(c) => c.capture_inverse(store),
+            SprintCommand::Complete(c) => c.capture_inverse(store),
+            SprintCommand::Cancel(c) => c.capture_inverse(store),
+            // Other variants land in later phases.
+            _ => Ok(None),
+        }
     }
 }
 
@@ -225,6 +231,11 @@ impl ActivateSprint {
     pub fn description(&self) -> String {
         format!("Activate sprint {}", self.sprint_id)
     }
+
+    /// Inverse: restore the sprint's prior status, start_date, end_date.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        capture_status_revert(store, self.sprint_id)
+    }
 }
 
 /// Complete a sprint (change status to Completed)
@@ -243,6 +254,11 @@ impl CompleteSprint {
 
     pub fn description(&self) -> String {
         format!("Complete sprint {}", self.sprint_id)
+    }
+
+    /// Inverse: restore the sprint's prior status.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        capture_status_revert(store, self.sprint_id)
     }
 }
 
@@ -263,6 +279,42 @@ impl CancelSprint {
     pub fn description(&self) -> String {
         format!("Cancel sprint {}", self.sprint_id)
     }
+
+    /// Inverse: restore the sprint's prior status.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        capture_status_revert(store, self.sprint_id)
+    }
+}
+
+/// Shared helper: build an UpdateSprint that restores the prior `status`,
+/// `start_date`, and `end_date` of `sprint_id`. Used by the inverses of
+/// Activate / Complete / Cancel, which all mutate exactly these fields.
+fn capture_status_revert(
+    store: &dyn DataStore,
+    sprint_id: Uuid,
+) -> KanbanResult<Option<Vec<Command>>> {
+    use crate::field_update::FieldUpdate;
+    let sprint = match store.get_sprint(sprint_id)? {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+    Ok(Some(vec![Command::Sprint(SprintCommand::Update(
+        UpdateSprint {
+            sprint_id,
+            updates: SprintUpdate {
+                status: Some(sprint.status),
+                start_date: match sprint.start_date {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+                end_date: match sprint.end_date {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+                ..Default::default()
+            },
+        },
+    ))]))
 }
 
 /// Delete a sprint

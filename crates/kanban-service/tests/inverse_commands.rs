@@ -15,12 +15,13 @@
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    AssignCardsToSprint, BoardCommand, CardCommand, ColumnCommand, Command, CreateBoard,
-    CreateColumn, MoveCard, UnassignCardFromSprint, UpdateCard, UpdateColumn,
+    ActivateSprint, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand,
+    Command, CompleteSprint, CreateBoard, CreateColumn, MoveCard, SprintCommand,
+    UnassignCardFromSprint, UpdateCard, UpdateColumn,
 };
 use kanban_domain::{
     CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore, KanbanOperations,
-    KanbanResult,
+    KanbanResult, SprintStatus,
 };
 use kanban_service::KanbanContext;
 use std::sync::Arc;
@@ -221,6 +222,96 @@ async fn test_inverse_unassign_card_from_sprint_reassigns() -> KanbanResult<()> 
         ctx.get_card(card.id)?.unwrap().sprint_id,
         Some(sprint.id),
         "sprint_id restored"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_activate_sprint_reverts_to_planning() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.clear_history()?;
+
+    let before = ctx.get_sprint(sprint.id)?.unwrap();
+    assert_eq!(before.status, SprintStatus::Planning);
+    assert!(before.start_date.is_none());
+
+    ctx.execute(vec![Command::Sprint(SprintCommand::Activate(
+        ActivateSprint {
+            sprint_id: sprint.id,
+            duration_days: 14,
+        },
+    ))])?;
+    let after = ctx.get_sprint(sprint.id)?.unwrap();
+    assert_eq!(after.status, SprintStatus::Active);
+    assert!(after.start_date.is_some());
+    assert!(after.end_date.is_some());
+
+    assert!(ctx.undo()?);
+    let restored = ctx.get_sprint(sprint.id)?.unwrap();
+    assert_eq!(
+        restored.status,
+        SprintStatus::Planning,
+        "status reverted to Planning"
+    );
+    assert!(restored.start_date.is_none(), "start_date cleared");
+    assert!(restored.end_date.is_none(), "end_date cleared");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_complete_sprint_reverts_to_active() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.execute(vec![Command::Sprint(SprintCommand::Activate(
+        ActivateSprint {
+            sprint_id: sprint.id,
+            duration_days: 14,
+        },
+    ))])?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Sprint(SprintCommand::Complete(
+        CompleteSprint {
+            sprint_id: sprint.id,
+        },
+    ))])?;
+    assert_eq!(
+        ctx.get_sprint(sprint.id)?.unwrap().status,
+        SprintStatus::Completed
+    );
+
+    assert!(ctx.undo()?);
+    assert_eq!(
+        ctx.get_sprint(sprint.id)?.unwrap().status,
+        SprintStatus::Active,
+        "Complete undo reverts to Active"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_cancel_sprint_reverts_to_prior_status() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Sprint(SprintCommand::Cancel(CancelSprint {
+        sprint_id: sprint.id,
+    }))])?;
+    assert_eq!(
+        ctx.get_sprint(sprint.id)?.unwrap().status,
+        SprintStatus::Cancelled
+    );
+
+    assert!(ctx.undo()?);
+    assert_eq!(
+        ctx.get_sprint(sprint.id)?.unwrap().status,
+        SprintStatus::Planning,
+        "Cancel undo reverts to Planning"
     );
     Ok(())
 }
