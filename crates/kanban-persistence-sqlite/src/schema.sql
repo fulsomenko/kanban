@@ -158,3 +158,16 @@ CREATE INDEX IF NOT EXISTS idx_cards_priority ON cards(priority);
 CREATE INDEX IF NOT EXISTS idx_cards_updated_at ON cards(updated_at);
 
 CREATE INDEX IF NOT EXISTS idx_archived_cards_archived_at ON archived_cards(archived_at);
+
+-- Command log: per-batch JSON serialisation for cross-session undo (KAN-191).
+-- batch_index is a logical, dense, monotonically increasing cursor — it does
+-- not need to match SQLite's ROWID. Truncate-after-N is implemented with a
+-- DELETE WHERE batch_index >= N; pruning the oldest N is a DELETE WHERE
+-- batch_index < N followed by a renumber.
+CREATE TABLE IF NOT EXISTS command_log (
+    batch_index INTEGER PRIMARY KEY,
+    commands_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_command_log_batch ON command_log(batch_index);

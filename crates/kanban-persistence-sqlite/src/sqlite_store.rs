@@ -257,6 +257,13 @@ impl SqliteStore {
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
 
+        // Drop the legacy command_log table (pre-KAN-405 schema with
+        // columns `idx` / `cmd_json`) before SCHEMA runs, so the new
+        // command_log schema (`batch_index` / `commands_json` / `created_at`)
+        // can be created cleanly. Detected by absence of the new
+        // `batch_index` column on an existing command_log table.
+        Self::drop_legacy_command_log_if_present(&pool).await?;
+
         sqlx::raw_sql(SCHEMA)
             .execute(&pool)
             .await
@@ -297,25 +304,42 @@ impl SqliteStore {
         }
     }
 
-    async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
-        // Drop command_log and undo_state tables if they exist (legacy persistence
-        // of undo history — commands are now in-session only).
+    /// Drops the legacy command_log table if it exists and lacks the new
+    /// `batch_index` column. Called before SCHEMA so the new table can be
+    /// created cleanly via `CREATE TABLE IF NOT EXISTS`.
+    async fn drop_legacy_command_log_if_present(pool: &Pool<Sqlite>) -> KanbanResult<()> {
         let has_command_log: bool = sqlx::query_scalar(
             "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
         )
         .fetch_one(pool)
         .await
         .map_err(db_err)?;
-
-        if has_command_log {
+        if !has_command_log {
+            return Ok(());
+        }
+        let has_batch_index_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('command_log') WHERE name = 'batch_index'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+        if !has_batch_index_col {
             tracing::info!(
-                "dropping legacy command_log table: undo history is now in-session only and cannot be carried back to pre-KAN-405 builds"
+                "dropping legacy command_log table (pre-KAN-405 schema) so the KAN-191 schema can be applied"
             );
             sqlx::raw_sql("DROP TABLE IF EXISTS command_log")
                 .execute(pool)
                 .await
                 .map_err(db_err)?;
         }
+        Ok(())
+    }
+
+    async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        // KAN-191 reintroduces command_log persistence (KAN-405 had dropped it).
+        // The dense batch_index → JSON mapping is created by SCHEMA at open
+        // time; no migration of the legacy column-set is needed because the
+        // schema is owned by this crate.
 
         let has_undo_state: bool = sqlx::query_scalar(
             "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='undo_state'",
@@ -326,7 +350,7 @@ impl SqliteStore {
 
         if has_undo_state {
             tracing::info!(
-                "dropping legacy undo_state table: undo cursor is now in-session only and cannot be carried back to pre-KAN-405 builds"
+                "dropping legacy undo_state table: undo cursor stays in-session, only command_log persists"
             );
             sqlx::raw_sql("DROP TABLE IF EXISTS undo_state")
                 .execute(pool)
@@ -374,6 +398,72 @@ impl SqliteStore {
             .execute(&self.pool)
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    // ── Command log (KAN-191 cross-session undo) ──────────────────────────
+
+    /// Append a single command batch at logical index `batch_index`.
+    /// `commands_json` is the serde-JSON encoding of the `Vec<Command>` batch.
+    pub async fn append_command_batch(
+        &self,
+        batch_index: u64,
+        commands_json: &str,
+    ) -> KanbanResult<()> {
+        sqlx::query(
+            "INSERT INTO command_log (batch_index, commands_json, created_at) VALUES (?, ?, ?)",
+        )
+        .bind(batch_index as i64)
+        .bind(commands_json)
+        .bind(fmt_dt(&Utc::now()))
+        .execute(&self.pool)
+        .await
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    /// Load all persisted command batches in order. Returns the JSON strings
+    /// so callers can deserialise inside the domain layer.
+    pub async fn load_all_command_batches(&self) -> KanbanResult<Vec<String>> {
+        let rows = sqlx::query("SELECT commands_json FROM command_log ORDER BY batch_index ASC")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db_err)?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            out.push(row.try_get::<String, _>("commands_json").map_err(db_err)?);
+        }
+        Ok(out)
+    }
+
+    /// Remove batches with logical index >= `after`. Retains [0, after).
+    pub async fn truncate_command_log_after(&self, after: u64) -> KanbanResult<()> {
+        sqlx::query("DELETE FROM command_log WHERE batch_index >= ?")
+            .bind(after as i64)
+            .execute(&self.pool)
+            .await
+            .map_err(db_err)?;
+        Ok(())
+    }
+
+    /// Remove the oldest `drop_count` batches and renumber the rest so the
+    /// surviving log starts at index 0.
+    pub async fn shift_command_log(&self, drop_count: u64) -> KanbanResult<()> {
+        if drop_count == 0 {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        sqlx::query("DELETE FROM command_log WHERE batch_index < ?")
+            .bind(drop_count as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("UPDATE command_log SET batch_index = batch_index - ?")
+            .bind(drop_count as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        tx.commit().await.map_err(db_err)?;
         Ok(())
     }
 
