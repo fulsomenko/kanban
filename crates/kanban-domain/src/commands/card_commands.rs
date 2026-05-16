@@ -53,9 +53,14 @@ impl CardCommand {
         }
     }
 
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        // Per-variant implementations land in later KAN-191 Tier phases.
-        Ok(None)
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        match self {
+            CardCommand::Update(c) => c.capture_inverse(store),
+            CardCommand::Move(c) => c.capture_inverse(store),
+            CardCommand::UnassignFromSprint(c) => c.capture_inverse(store),
+            // Other variants land in later phases.
+            _ => Ok(None),
+        }
     }
 }
 
@@ -76,6 +81,60 @@ impl UpdateCard {
 
     pub fn description(&self) -> String {
         "Update card".to_string()
+    }
+
+    /// Inverse: read the card's current state and synthesise an
+    /// `UpdateCard` whose `updates` field-by-field restore each touched
+    /// field to its prior value. Fields not touched by the forward
+    /// command stay `None` / `NoChange` so the inverse is minimal.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        use crate::field_update::FieldUpdate;
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        let upd = &self.updates;
+        let inverse = CardUpdate {
+            title: upd.title.as_ref().map(|_| card.title.clone()),
+            description: match upd.description {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.description {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            priority: upd.priority.map(|_| card.priority),
+            status: upd.status.map(|_| card.status),
+            position: upd.position.map(|_| card.position),
+            column_id: upd.column_id.map(|_| card.column_id),
+            due_date: match upd.due_date {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.due_date {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            points: match upd.points {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.points {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            sprint_id: match upd.sprint_id {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.sprint_id {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+        };
+
+        Ok(Some(vec![Command::Card(CardCommand::Update(UpdateCard {
+            card_id: self.card_id,
+            updates: inverse,
+        }))]))
     }
 }
 
@@ -181,6 +240,20 @@ impl MoveCard {
             "Move card {} to column {}",
             self.card_id, self.new_column_id
         )
+    }
+
+    /// Inverse: another MoveCard pointing back to the card's current
+    /// (column_id, position).
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+        Ok(Some(vec![Command::Card(CardCommand::Move(MoveCard {
+            card_id: self.card_id,
+            new_column_id: card.column_id,
+            new_position: card.position,
+        }))]))
     }
 }
 
@@ -346,6 +419,27 @@ impl UnassignCardFromSprint {
 
     pub fn description(&self) -> String {
         format!("Unassign card {} from sprint", self.card_id)
+    }
+
+    /// Inverse: if the card currently has a sprint, re-assign it to that
+    /// sprint via AssignCardsToSprint. The sprint log gets a fresh
+    /// entry (Utc::now() inside the model layer — known timestamp drift,
+    /// out of KAN-191 scope).
+    /// If the card had no sprint, undoing is a no-op (empty inverse).
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+        match card.sprint_id {
+            Some(sprint_id) => Ok(Some(vec![Command::Card(CardCommand::AssignToSprint(
+                AssignCardsToSprint {
+                    ids: vec![self.card_id],
+                    sprint_id,
+                },
+            ))])),
+            None => Ok(Some(vec![])),
+        }
     }
 }
 

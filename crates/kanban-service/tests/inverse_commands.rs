@@ -15,9 +15,13 @@
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    BoardCommand, ColumnCommand, Command, CreateBoard, CreateColumn, UpdateColumn,
+    AssignCardsToSprint, BoardCommand, CardCommand, ColumnCommand, Command, CreateBoard,
+    CreateColumn, MoveCard, UnassignCardFromSprint, UpdateCard, UpdateColumn,
 };
-use kanban_domain::{ColumnUpdate, FieldUpdate, InMemoryStore, KanbanResult};
+use kanban_domain::{
+    CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore, KanbanOperations,
+    KanbanResult,
+};
 use kanban_service::KanbanContext;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -122,6 +126,102 @@ async fn test_inverse_update_column_restores_prior_fields() -> KanbanResult<()> 
     let restored = &ctx.columns()?[0];
     assert_eq!(restored.name, "Original", "name restored");
     assert_eq!(restored.position, 5, "position restored");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_update_card_restores_prior_fields() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "TODO".into(), None)?;
+    let card = ctx.create_card(
+        board.id,
+        col.id,
+        "Original title".into(),
+        Default::default(),
+    )?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::Update(UpdateCard {
+        card_id: card.id,
+        updates: CardUpdate {
+            title: Some("Renamed".into()),
+            priority: Some(CardPriority::High),
+            ..Default::default()
+        },
+    }))])?;
+    let after = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(after.title, "Renamed");
+    assert_eq!(after.priority, CardPriority::High);
+
+    assert!(ctx.undo()?, "undo via inverse-command path");
+    let restored = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(restored.title, "Original title", "title restored");
+    assert_eq!(
+        restored.priority,
+        CardPriority::Medium,
+        "priority restored to default"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_move_card_restores_column_and_position() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col_a = ctx.create_column(board.id, "A".into(), None)?;
+    let col_b = ctx.create_column(board.id, "B".into(), None)?;
+    let card = ctx.create_card(board.id, col_a.id, "C".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    let before_col = card.column_id;
+    let before_pos = card.position;
+
+    ctx.execute(vec![Command::Card(CardCommand::Move(MoveCard {
+        card_id: card.id,
+        new_column_id: col_b.id,
+        new_position: 7,
+    }))])?;
+    let moved = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(moved.column_id, col_b.id);
+    assert_eq!(moved.position, 7);
+
+    assert!(ctx.undo()?);
+    let restored = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(restored.column_id, before_col);
+    assert_eq!(restored.position, before_pos);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_unassign_card_from_sprint_reassigns() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "TODO".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.execute(vec![Command::Card(CardCommand::AssignToSprint(
+        AssignCardsToSprint {
+            ids: vec![card.id],
+            sprint_id: sprint.id,
+        },
+    ))])?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::UnassignFromSprint(
+        UnassignCardFromSprint {
+            card_id: card.id,
+            timestamp: chrono::Utc::now(),
+        },
+    ))])?;
+    assert!(ctx.get_card(card.id)?.unwrap().sprint_id.is_none());
+
+    assert!(ctx.undo()?, "undo re-assigns the card to its prior sprint");
+    assert_eq!(
+        ctx.get_card(card.id)?.unwrap().sprint_id,
+        Some(sprint.id),
+        "sprint_id restored"
+    );
     Ok(())
 }
 
