@@ -70,10 +70,15 @@ impl Command {
     ///
     /// Returning `Err` is a hard error and should never happen in normal
     /// operation; it indicates the pre-state read itself failed.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        // Default: no inverse known yet. Per-variant implementations land in
-        // KAN-191 Phases 4-6 (Tiers 1-3).
-        Ok(None)
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        match self {
+            Command::Board(cmd) => cmd.capture_inverse(store),
+            Command::Column(cmd) => cmd.capture_inverse(store),
+            Command::Card(cmd) => cmd.capture_inverse(store),
+            Command::Sprint(cmd) => cmd.capture_inverse(store),
+            Command::Dependency(cmd) => cmd.capture_inverse(store),
+            Command::Cascade(cmd) => cmd.capture_inverse(store),
+        }
     }
 }
 

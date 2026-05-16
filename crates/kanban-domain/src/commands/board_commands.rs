@@ -1,4 +1,5 @@
-use super::CommandContext;
+use super::{Command, CommandContext};
+use crate::data_store::DataStore;
 use crate::field_update::FieldUpdate;
 use crate::KanbanResult;
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, Sprint};
@@ -42,6 +43,14 @@ impl BoardCommand {
             BoardCommand::Import(c) => c.description(),
         }
     }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        match self {
+            BoardCommand::Create(c) => c.capture_inverse(store),
+            // Other variants land in later phases (KAN-191 Tiers 2-3).
+            _ => Ok(None),
+        }
+    }
 }
 
 /// Create a new board
@@ -65,6 +74,15 @@ impl CreateBoard {
 
     pub fn description(&self) -> String {
         format!("Create board: '{}'", self.name)
+    }
+
+    /// Inverse: delete the newly-created board. The `id` is already in the
+    /// command, so no pre-state read from the store is required — `_store`
+    /// is unused.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Board(BoardCommand::Delete(
+            DeleteBoard { board_id: self.id },
+        ))]))
     }
 }
 

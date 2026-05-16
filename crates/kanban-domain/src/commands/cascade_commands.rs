@@ -11,7 +11,8 @@
 //! ordering invariants (graph edges → cards → archived → columns → sprints →
 //! board) that make the bypassed validations safe.
 
-use super::CommandContext;
+use super::{Command, CommandContext};
+use crate::data_store::DataStore;
 use crate::dependencies::CardGraphExt;
 use crate::KanbanResult;
 use serde::{Deserialize, Serialize};
@@ -46,6 +47,10 @@ impl CascadeCommand {
             CascadeCommand::DeleteColumnsByBoard(c) => c.description(),
             CascadeCommand::DeleteSprintsByBoard(c) => c.description(),
         }
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(None)
     }
 }
 

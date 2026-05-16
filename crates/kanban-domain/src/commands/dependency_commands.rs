@@ -1,8 +1,9 @@
+use crate::data_store::DataStore;
 use crate::KanbanResult;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::CommandContext;
+use super::{Command, CommandContext};
 use crate::{dependencies::CardGraphExt, Card};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +38,10 @@ impl DependencyCommand {
             DependencyCommand::RemoveParent(c) => c.description(),
             DependencyCommand::CreateSubcard(c) => c.description(),
         }
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(None)
     }
 }
 

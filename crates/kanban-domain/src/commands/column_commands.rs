@@ -1,4 +1,5 @@
-use super::CommandContext;
+use super::{Command, CommandContext};
+use crate::data_store::DataStore;
 use crate::ColumnUpdate;
 use crate::KanbanResult;
 use serde::{Deserialize, Serialize};
@@ -27,6 +28,11 @@ impl ColumnCommand {
             ColumnCommand::Update(c) => c.description(),
             ColumnCommand::Delete(c) => c.description(),
         }
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        // Per-variant implementations land in later KAN-191 Tier phases.
+        Ok(None)
     }
 }
 

@@ -1,4 +1,5 @@
-use super::CommandContext;
+use super::{Command, CommandContext};
+use crate::data_store::DataStore;
 use crate::SprintUpdate;
 use crate::{KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,10 @@ impl SprintCommand {
             SprintCommand::Cancel(c) => c.description(),
             SprintCommand::Delete(c) => c.description(),
         }
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(None)
     }
 }
 
