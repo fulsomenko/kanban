@@ -10,7 +10,7 @@ pub mod sqlite_backend;
 mod store_manager;
 pub use backend::KanbanBackend;
 pub use config::AppConfigDto;
-pub use context::{BatchOperationFailure, BatchOperationResult, KanbanContext, MAX_UNDO_DEPTH};
+pub use context::{BatchOperationFailure, BatchOperationResult, KanbanContext};
 pub use path::validate_path;
 pub use store_manager::StoreManager;
 

@@ -959,12 +959,14 @@ async fn test_undo_history_is_not_preserved_across_sessions() -> KanbanResult<()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_undo_depth_limit_prunes_old_commands() -> KanbanResult<()> {
+async fn test_undo_extends_past_old_200_step_cap() -> KanbanResult<()> {
+    // KAN-191 dropped the MAX_UNDO_DEPTH=200 cap. With pure command-replay
+    // every undo step is `Vec<Command>` (a few hundred bytes), so the cap
+    // that protected RAM from 200 full Snapshot clones is no longer needed.
     let mut ctx = make_ctx().await;
 
-    // Execute MAX_UNDO_DEPTH + 10 commands
-    let limit = kanban_service::MAX_UNDO_DEPTH;
-    for i in 0..(limit + 10) {
+    let total = 250usize;
+    for i in 0..total {
         ctx.execute(vec![Command::Board(BoardCommand::Create(CreateBoard {
             id: uuid::Uuid::new_v4(),
             name: format!("B{i}"),
@@ -973,21 +975,25 @@ async fn test_undo_depth_limit_prunes_old_commands() -> KanbanResult<()> {
         }))])?;
     }
 
-    assert!(
-        ctx.undo_depth() <= limit,
-        "undo depth {} should be capped at MAX_UNDO_DEPTH {}",
+    assert_eq!(
         ctx.undo_depth(),
-        limit
+        total,
+        "undo depth must equal total commands executed (no cap)"
     );
+    assert_eq!(ctx.boards()?.len(), total);
 
-    // All boards should still be present in state
-    assert_eq!(ctx.boards()?.len(), limit + 10);
-
-    // We can undo up to the capped depth
-    for _ in 0..ctx.undo_depth() {
+    for _ in 0..total {
         assert!(ctx.undo()?);
     }
-    assert!(!ctx.can_undo(), "should not be able to undo past the limit");
+    assert!(
+        !ctx.can_undo(),
+        "after undoing every step, can_undo is false"
+    );
+    assert_eq!(
+        ctx.boards()?.len(),
+        0,
+        "after undoing every step, state is the initial baseline"
+    );
     Ok(())
 }
 

@@ -26,8 +26,6 @@ pub struct BatchOperationFailure {
     pub error: String,
 }
 
-pub const MAX_UNDO_DEPTH: usize = 200;
-
 /// Service layer: wraps a pluggable [`KanbanBackend`] with undo/redo history
 /// and a unified async `save()` / `reload()` interface.
 ///
@@ -227,41 +225,6 @@ impl KanbanContext {
         self.backend.append_commands(&commands)?;
         self.undo_cursor += 1;
         self.command_count = self.undo_cursor;
-
-        if self.undo_cursor > MAX_UNDO_DEPTH {
-            let excess = self.undo_cursor - MAX_UNDO_DEPTH;
-            // Compute new baseline by replaying the oldest `excess` batches
-            // onto the current baseline. With command-replay there is no
-            // indexed snapshot to load — only the command log.
-            let baseline = self.baseline_snapshot.clone().unwrap_or_default();
-            self.backend.apply_snapshot(baseline)?;
-            let old_batches = self.backend.load_commands(0, excess as u64)?;
-            {
-                let store: &dyn DataStore = self.backend.as_data_store();
-                let ctx = CommandContext { store };
-                for batch in &old_batches {
-                    for cmd in batch {
-                        cmd.execute(&ctx)?;
-                    }
-                }
-            }
-            self.baseline_snapshot = Some(self.backend.snapshot()?);
-            self.backend.shift_commands(excess as u64)?;
-            // Re-apply the remaining commands so the live state matches
-            // what the user expects after the prune.
-            let remaining = self.backend.load_commands(0, MAX_UNDO_DEPTH as u64)?;
-            {
-                let store: &dyn DataStore = self.backend.as_data_store();
-                let ctx = CommandContext { store };
-                for batch in &remaining {
-                    for cmd in batch {
-                        cmd.execute(&ctx)?;
-                    }
-                }
-            }
-            self.undo_cursor = MAX_UNDO_DEPTH;
-            self.command_count = MAX_UNDO_DEPTH;
-        }
 
         self.dirty = true;
         Ok(())
