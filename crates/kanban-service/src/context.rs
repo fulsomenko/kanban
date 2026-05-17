@@ -250,8 +250,10 @@ impl KanbanContext {
     }
 
     /// Undo the most recent batch via inverse-command execution.
+    /// The cursor advances only if the inverse commits successfully —
+    /// a failed undo leaves the stack ready to retry the same entry.
     pub fn undo(&mut self) -> KanbanResult<bool> {
-        let inverse = match self.undo_stack.pop_undo() {
+        let inverse = match self.undo_stack.peek_undo() {
             Some(entry) => entry.inverse.clone(),
             None => return Ok(false),
         };
@@ -262,13 +264,16 @@ impl KanbanContext {
             let ctx = CommandContext { store };
             inv.iter().try_for_each(|cmd| cmd.execute(&ctx))
         })?;
+        self.undo_stack.commit_undo();
         self.dirty = true;
         Ok(true)
     }
 
     /// Redo the next undone batch via forward-command execution.
+    /// The cursor advances only if the forward batch commits — a failed
+    /// redo leaves the stack ready to retry the same entry.
     pub fn redo(&mut self) -> KanbanResult<bool> {
-        let forward = match self.undo_stack.pop_redo() {
+        let forward = match self.undo_stack.peek_redo() {
             Some(entry) => entry.forward.clone(),
             None => return Ok(false),
         };
@@ -279,6 +284,7 @@ impl KanbanContext {
             let ctx = CommandContext { store };
             fwd.iter().try_for_each(|cmd| cmd.execute(&ctx))
         })?;
+        self.undo_stack.commit_redo();
         self.dirty = true;
         Ok(true)
     }

@@ -64,8 +64,8 @@ impl UndoStack {
         self.cursor = self.entries.len();
     }
 
-    /// Returns the entry that would be undone next (without mutating the
-    /// stack). `None` when there's nothing to undo.
+    /// Returns the entry that would be undone next. Does not mutate the
+    /// stack; pair with [`commit_undo`][Self::commit_undo] on success.
     pub fn peek_undo(&self) -> Option<&UndoEntry> {
         if self.cursor == 0 {
             return None;
@@ -73,25 +73,36 @@ impl UndoStack {
         self.entries.get(self.cursor - 1)
     }
 
-    /// Move the cursor back by one and return the entry that should be
-    /// applied as inverse. `None` if already at the start.
-    pub fn pop_undo(&mut self) -> Option<&UndoEntry> {
-        if self.cursor == 0 {
-            return None;
-        }
-        self.cursor -= 1;
-        self.entries.get(self.cursor)
-    }
-
-    /// Move the cursor forward by one and return the entry that should be
-    /// re-applied as forward. `None` if already at the head.
-    pub fn pop_redo(&mut self) -> Option<&UndoEntry> {
+    /// Returns the entry that would be redone next. Does not mutate the
+    /// stack; pair with [`commit_redo`][Self::commit_redo] on success.
+    pub fn peek_redo(&self) -> Option<&UndoEntry> {
         if self.cursor >= self.entries.len() {
             return None;
         }
-        let entry = self.entries.get(self.cursor);
+        self.entries.get(self.cursor)
+    }
+
+    /// Advance the cursor backward by one. Call only after the inverse
+    /// for [`peek_undo`][Self::peek_undo]'s entry has been successfully
+    /// applied. Returns `false` when there is nothing to commit.
+    pub fn commit_undo(&mut self) -> bool {
+        if self.cursor == 0 {
+            return false;
+        }
+        self.cursor -= 1;
+        true
+    }
+
+    /// Advance the cursor forward by one. Call only after the forward
+    /// batch for [`peek_redo`][Self::peek_redo]'s entry has been
+    /// successfully re-applied. Returns `false` when there is nothing
+    /// to commit.
+    pub fn commit_redo(&mut self) -> bool {
+        if self.cursor >= self.entries.len() {
+            return false;
+        }
         self.cursor += 1;
-        entry
+        true
     }
 
     /// Clear all entries and reset the cursor — used on reload, import, and
@@ -159,31 +170,66 @@ mod tests {
     }
 
     #[test]
-    fn test_pop_undo_returns_entry_in_reverse_order() {
+    fn test_peek_then_commit_walks_back_in_reverse_order() {
         let mut stack = UndoStack::new();
         stack.push(make_pair("A"));
         stack.push(make_pair("B"));
 
-        let e = stack.pop_undo().expect("should pop B");
+        let e = stack.peek_undo().expect("peek B");
         assert!(format!("{e:?}").contains("B"));
-        let e = stack.pop_undo().expect("should pop A");
+        assert!(stack.commit_undo());
+
+        let e = stack.peek_undo().expect("peek A");
         assert!(format!("{e:?}").contains("A"));
-        assert!(stack.pop_undo().is_none(), "empty stack returns None");
+        assert!(stack.commit_undo());
+
+        assert!(stack.peek_undo().is_none());
+        assert!(!stack.commit_undo());
     }
 
     #[test]
-    fn test_pop_redo_reapplies_in_forward_order_after_undo() {
+    fn test_peek_redo_walks_forward_after_undo() {
         let mut stack = UndoStack::new();
         stack.push(make_pair("A"));
         stack.push(make_pair("B"));
-        stack.pop_undo();
-        stack.pop_undo();
-        // Cursor is at 0, both A and B are available for redo.
-        let e = stack.pop_redo().expect("redo A");
+        assert!(stack.commit_undo());
+        assert!(stack.commit_undo());
+
+        let e = stack.peek_redo().expect("redo A");
         assert!(format!("{e:?}").contains("A"));
-        let e = stack.pop_redo().expect("redo B");
+        assert!(stack.commit_redo());
+
+        let e = stack.peek_redo().expect("redo B");
         assert!(format!("{e:?}").contains("B"));
-        assert!(stack.pop_redo().is_none());
+        assert!(stack.commit_redo());
+
+        assert!(stack.peek_redo().is_none());
+        assert!(!stack.commit_redo());
+    }
+
+    #[test]
+    fn test_peek_undo_does_not_mutate_cursor() {
+        let mut stack = UndoStack::new();
+        stack.push(make_pair("A"));
+        stack.push(make_pair("B"));
+        let depth = stack.undo_depth();
+        let _ = stack.peek_undo();
+        let _ = stack.peek_undo();
+        assert_eq!(stack.undo_depth(), depth);
+    }
+
+    #[test]
+    fn test_peek_undo_without_commit_lets_retry_see_same_entry() {
+        let mut stack = UndoStack::new();
+        stack.push(make_pair("A"));
+        stack.push(make_pair("B"));
+        let first = stack.peek_undo().unwrap();
+        let first_dbg = format!("{first:?}");
+        // Imagine the inverse fails; commit is not called. A retry must
+        // see the same entry on top.
+        let retry = stack.peek_undo().unwrap();
+        assert_eq!(format!("{retry:?}"), first_dbg);
+        assert_eq!(stack.undo_depth(), 2);
     }
 
     #[test]
@@ -191,12 +237,12 @@ mod tests {
         let mut stack = UndoStack::new();
         stack.push(make_pair("A"));
         stack.push(make_pair("B"));
-        stack.pop_undo(); // undo B
+        assert!(stack.commit_undo());
         assert_eq!(stack.redo_depth(), 1);
 
         stack.push(make_pair("C"));
-        assert_eq!(stack.undo_depth(), 2, "A and C are present");
-        assert_eq!(stack.redo_depth(), 0, "B was discarded by branching");
+        assert_eq!(stack.undo_depth(), 2);
+        assert_eq!(stack.redo_depth(), 0);
     }
 
     #[test]
