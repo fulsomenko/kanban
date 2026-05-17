@@ -16,11 +16,11 @@
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
     ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, ApplyBoardSettings,
-    AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command,
-    CompleteSprint, CreateBoard, CreateColumn, CreateSubcardCommand, DeleteColumn,
-    DependencyCommand, MoveCard, RemoveParentCommand, SetBoardTaskListView, SetBoardTaskSort,
-    SetParentCommand, SprintCommand, UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn,
-    UpdateSprint,
+    ApplyCardMetadata, ArchiveCards, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand,
+    ColumnCommand, Command, CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn,
+    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveParentCommand,
+    SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
+    UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
     BoardUpdate, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
@@ -652,6 +652,158 @@ async fn test_inverse_create_subcard_archives_new_card() -> KanbanResult<()> {
             .any(|ac| ac.card.id == subcard_id),
         "subcard appears in archived list"
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_apply_card_metadata_restores_fields() -> KanbanResult<()> {
+    use kanban_domain::editable::CardMetadataDto;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::ApplyMetadata(
+        ApplyCardMetadata {
+            card_id: card.id,
+            dto: CardMetadataDto {
+                priority: "High".into(),
+                status: "InProgress".into(),
+                points: Some(8),
+                due_date: None,
+            },
+        },
+    ))])?;
+    let after = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(after.priority, CardPriority::High);
+    assert_eq!(after.points, Some(8));
+
+    assert!(ctx.undo()?);
+    let restored = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(restored.priority, CardPriority::Medium);
+    assert_eq!(restored.points, None, "points cleared back to None");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_archive_cards_restores_each() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
+    let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
+    let pre_pos_a = a.position;
+    let pre_pos_b = b.position;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::Archive(ArchiveCards {
+        ids: vec![a.id, b.id],
+    }))])?;
+    assert_eq!(ctx.cards()?.len(), 0);
+    assert_eq!(ctx.archived_cards()?.len(), 2);
+
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.len(), 2, "both cards restored");
+    assert_eq!(ctx.archived_cards()?.len(), 0);
+    let restored_a = ctx.get_card(a.id)?.unwrap();
+    let restored_b = ctx.get_card(b.id)?.unwrap();
+    assert_eq!(restored_a.column_id, col.id);
+    assert_eq!(restored_a.position, pre_pos_a);
+    assert_eq!(restored_b.position, pre_pos_b);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_assign_cards_to_sprint_restores_prior_bindings() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card_unassigned = ctx.create_card(board.id, col.id, "U".into(), Default::default())?;
+    let card_other = ctx.create_card(board.id, col.id, "O".into(), Default::default())?;
+    let s1 = ctx.create_sprint(board.id, None, None)?;
+    let s2 = ctx.create_sprint(board.id, None, None)?;
+    // Put card_other into s1 first; card_unassigned has no sprint.
+    ctx.execute(vec![Command::Card(CardCommand::AssignToSprint(
+        AssignCardsToSprint {
+            ids: vec![card_other.id],
+            sprint_id: s1.id,
+        },
+    ))])?;
+    ctx.clear_history()?;
+
+    // Now assign both to s2.
+    ctx.execute(vec![Command::Card(CardCommand::AssignToSprint(
+        AssignCardsToSprint {
+            ids: vec![card_unassigned.id, card_other.id],
+            sprint_id: s2.id,
+        },
+    ))])?;
+    assert_eq!(
+        ctx.get_card(card_unassigned.id)?.unwrap().sprint_id,
+        Some(s2.id)
+    );
+    assert_eq!(ctx.get_card(card_other.id)?.unwrap().sprint_id, Some(s2.id));
+
+    assert!(ctx.undo()?);
+    assert!(
+        ctx.get_card(card_unassigned.id)?
+            .unwrap()
+            .sprint_id
+            .is_none(),
+        "unassigned card returns to no sprint"
+    );
+    assert_eq!(
+        ctx.get_card(card_other.id)?.unwrap().sprint_id,
+        Some(s1.id),
+        "other card returns to its prior sprint s1"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_compact_column_positions_restores_gaps() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
+    let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
+    let c = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    // Create a gap by moving b out then back at a non-sequential pos.
+    ctx.execute(vec![Command::Card(CardCommand::Move(MoveCard {
+        card_id: b.id,
+        new_column_id: col.id,
+        new_position: 100,
+    }))])?;
+    ctx.execute(vec![Command::Card(CardCommand::Move(MoveCard {
+        card_id: c.id,
+        new_column_id: col.id,
+        new_position: 200,
+    }))])?;
+    let pre_pos_a = ctx.get_card(a.id)?.unwrap().position;
+    let pre_pos_b = ctx.get_card(b.id)?.unwrap().position;
+    let pre_pos_c = ctx.get_card(c.id)?.unwrap().position;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::CompactPositions(
+        CompactColumnPositions { column_id: col.id },
+    ))])?;
+    // After compact, positions are 0, 1, 2.
+    let mut cards: Vec<_> = ctx
+        .cards()?
+        .into_iter()
+        .filter(|c| c.column_id == col.id)
+        .collect();
+    cards.sort_by_key(|c| c.position);
+    assert_eq!(
+        cards.iter().map(|c| c.position).collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.get_card(a.id)?.unwrap().position, pre_pos_a);
+    assert_eq!(ctx.get_card(b.id)?.unwrap().position, pre_pos_b);
+    assert_eq!(ctx.get_card(c.id)?.unwrap().position, pre_pos_c);
     Ok(())
 }
 

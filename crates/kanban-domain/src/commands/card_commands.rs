@@ -58,7 +58,11 @@ impl CardCommand {
             CardCommand::Update(c) => c.capture_inverse(store),
             CardCommand::Move(c) => c.capture_inverse(store),
             CardCommand::UnassignFromSprint(c) => c.capture_inverse(store),
-            // Other variants land in later phases.
+            CardCommand::ApplyMetadata(c) => c.capture_inverse(store),
+            CardCommand::Archive(c) => c.capture_inverse(store),
+            CardCommand::AssignToSprint(c) => c.capture_inverse(store),
+            CardCommand::CompactPositions(c) => c.capture_inverse(store),
+            // Create / Restore / Delete land in later commits.
             _ => Ok(None),
         }
     }
@@ -324,6 +328,26 @@ pub struct ArchiveCards {
 }
 
 impl ArchiveCards {
+    /// Inverse: one `RestoreCard` per archived card, restoring each to its
+    /// original column and position read from the live card BEFORE the
+    /// archive runs.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let mut commands: Vec<Command> = Vec::new();
+        for id in &self.ids {
+            let card = match store.get_card(*id)? {
+                Some(c) => c,
+                None => continue, // skipped (matches ArchiveCards::execute's filter)
+            };
+            commands.push(Command::Card(CardCommand::Restore(RestoreCard {
+                card_id: card.id,
+                column_id: card.column_id,
+                position: card.position,
+                timestamp: chrono::Utc::now(),
+            })));
+        }
+        Ok(Some(commands))
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let valid_ids = context.filter_valid_card_ids(&self.ids, "ArchiveCards");
         if valid_ids.is_empty() && !self.ids.is_empty() {
@@ -364,6 +388,44 @@ pub struct AssignCardsToSprint {
 }
 
 impl AssignCardsToSprint {
+    /// Inverse: per-card restore of the prior sprint binding. For each
+    /// card that had a different sprint before, emit
+    /// `AssignCardsToSprint([card], old_sprint)`. For each card that had
+    /// no sprint, emit `UnassignCardFromSprint(card)`. Cards skipped by
+    /// the forward (not found) are also skipped here.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let mut commands: Vec<Command> = Vec::new();
+        for id in &self.ids {
+            let card = match store.get_card(*id)? {
+                Some(c) => c,
+                None => continue,
+            };
+            match card.sprint_id {
+                Some(old_sprint_id) if old_sprint_id != self.sprint_id => {
+                    commands.push(Command::Card(CardCommand::AssignToSprint(
+                        AssignCardsToSprint {
+                            ids: vec![card.id],
+                            sprint_id: old_sprint_id,
+                        },
+                    )));
+                }
+                Some(_) => {
+                    // Same sprint as the forward — forward was a no-op for
+                    // this card; no inverse needed.
+                }
+                None => {
+                    commands.push(Command::Card(CardCommand::UnassignFromSprint(
+                        UnassignCardFromSprint {
+                            card_id: card.id,
+                            timestamp: chrono::Utc::now(),
+                        },
+                    )));
+                }
+            }
+        }
+        Ok(Some(commands))
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let sprint = context.get_sprint(self.sprint_id)?;
         let board = context.get_board(sprint.board_id)?;
@@ -461,6 +523,41 @@ impl ApplyCardMetadata {
     pub fn description(&self) -> String {
         format!("Apply card metadata for {}", self.card_id)
     }
+
+    /// Inverse: emit an `UpdateCard` (not another `ApplyCardMetadata`)
+    /// because `CardMetadataDto.apply_to` is asymmetric — it can set
+    /// `points` / `due_date` but `None` in the DTO means "don't change",
+    /// so it can't clear those fields. `UpdateCard` with
+    /// `FieldUpdate::Set`/`FieldUpdate::Clear` covers the full reversal.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        use crate::field_update::FieldUpdate;
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+        let updates = CardUpdate {
+            // priority / status are always written by apply_to (when the
+            // DTO string parses); restore them unconditionally.
+            priority: Some(card.priority),
+            status: Some(card.status),
+            // points / due_date are only written by apply_to when Some
+            // in the DTO. Restore unconditionally too — it's cheap and
+            // correct.
+            points: match card.points {
+                Some(v) => FieldUpdate::Set(v),
+                None => FieldUpdate::Clear,
+            },
+            due_date: match card.due_date {
+                Some(v) => FieldUpdate::Set(v),
+                None => FieldUpdate::Clear,
+            },
+            ..Default::default()
+        };
+        Ok(Some(vec![Command::Card(CardCommand::Update(UpdateCard {
+            card_id: self.card_id,
+            updates,
+        }))]))
+    }
 }
 
 /// Compact card positions in a column to be sequential (0, 1, 2, ...).
@@ -483,6 +580,23 @@ impl CompactColumnPositions {
 
     pub fn description(&self) -> String {
         format!("Compact positions in column {}", self.column_id)
+    }
+
+    /// Inverse: for each card in the column, emit a MoveCard back to its
+    /// original position. Compaction is lossy without pre-state capture
+    /// (multiple gappy arrangements compact to the same result), so this
+    /// is the only way to reverse it.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let cards = store.list_cards_by_column(self.column_id)?;
+        let mut commands: Vec<Command> = Vec::new();
+        for card in cards {
+            commands.push(Command::Card(CardCommand::Move(MoveCard {
+                card_id: card.id,
+                new_column_id: card.column_id,
+                new_position: card.position,
+            })));
+        }
+        Ok(Some(commands))
     }
 }
 
