@@ -214,16 +214,7 @@ impl KanbanContext {
             let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
             for cmd in cmds.iter() {
-                match cmd.capture_inverse(store)? {
-                    Some(batch) => per_cmd_inverses.push(batch),
-                    None => {
-                        return Err(KanbanError::Internal(format!(
-                            "command {} returned no inverse — every command must \
-                             implement Command::capture_inverse",
-                            cmd.description()
-                        )));
-                    }
-                }
+                per_cmd_inverses.push(cmd.capture_inverse(store)?);
                 cmd.execute(&ctx)?;
             }
             Ok(())

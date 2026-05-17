@@ -59,7 +59,7 @@ impl CascadeCommand {
         }
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
             CascadeCommand::DeleteCardEdges(c) => c.capture_inverse(store),
             CascadeCommand::DeleteCardsByColumns(c) => c.capture_inverse(store),
@@ -94,7 +94,7 @@ impl DeleteCardEdges {
 
     /// Inverse: capture every active edge involving any id in self.ids and
     /// emit the matching Add* / SetParent command for each.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let id_set: std::collections::HashSet<_> = self.ids.iter().copied().collect();
         let graph = store.get_graph()?;
         let mut commands: Vec<Command> = Vec::new();
@@ -122,7 +122,7 @@ impl DeleteCardEdges {
             };
             commands.push(Command::Dependency(cmd));
         }
-        Ok(Some(commands))
+        Ok(commands)
     }
 }
 
@@ -147,17 +147,15 @@ impl DeleteCardsByColumns {
     /// Inverse: capture every live card in the target columns and emit an
     /// `ImportEntities` that re-inserts them (the cascade's outer
     /// transaction already removed them by the time undo runs).
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let cards = store.list_cards_by_columns(&self.column_ids)?;
         if cards.is_empty() {
-            return Ok(Some(Vec::new()));
+            return Ok(Vec::new());
         }
-        Ok(Some(vec![Command::Board(BoardCommand::Import(
-            ImportEntities {
-                cards,
-                ..Default::default()
-            },
-        ))]))
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            cards,
+            ..Default::default()
+        }))])
     }
 }
 
@@ -185,17 +183,15 @@ impl DeleteArchivedCardsByColumns {
         )
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let archived_cards = store.list_archived_cards_by_columns(&self.column_ids)?;
         if archived_cards.is_empty() {
-            return Ok(Some(Vec::new()));
+            return Ok(Vec::new());
         }
-        Ok(Some(vec![Command::Board(BoardCommand::Import(
-            ImportEntities {
-                archived_cards,
-                ..Default::default()
-            },
-        ))]))
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            archived_cards,
+            ..Default::default()
+        }))])
     }
 }
 
@@ -217,17 +213,15 @@ impl DeleteColumnsByBoard {
         format!("Delete all columns in board {}", self.board_id)
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let columns = store.list_columns_by_board(self.board_id)?;
         if columns.is_empty() {
-            return Ok(Some(Vec::new()));
+            return Ok(Vec::new());
         }
-        Ok(Some(vec![Command::Board(BoardCommand::Import(
-            ImportEntities {
-                columns,
-                ..Default::default()
-            },
-        ))]))
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            columns,
+            ..Default::default()
+        }))])
     }
 }
 
@@ -246,17 +240,15 @@ impl DeleteSprintsByBoard {
         format!("Delete all sprints in board {}", self.board_id)
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let sprints = store.list_sprints_by_board(self.board_id)?;
         if sprints.is_empty() {
-            return Ok(Some(Vec::new()));
+            return Ok(Vec::new());
         }
-        Ok(Some(vec![Command::Board(BoardCommand::Import(
-            ImportEntities {
-                sprints,
-                ..Default::default()
-            },
-        ))]))
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            sprints,
+            ..Default::default()
+        }))])
     }
 }
 
@@ -298,7 +290,7 @@ impl SetArchivedCardsSprint {
     /// the user's redo of the resulting undo would silently do nothing
     /// because no honest inverse exists. Surface that misuse loudly
     /// instead.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         Err(KanbanError::Internal(format!(
             "SetArchivedCardsSprint is a synthetic command — it must only \
              appear inside an inverse batch (DeleteSprint undo), never as a \

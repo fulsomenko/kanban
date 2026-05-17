@@ -2,7 +2,7 @@ use super::{Command, CommandContext};
 use crate::data_store::DataStore;
 use crate::field_update::FieldUpdate;
 use crate::ColumnUpdate;
-use crate::KanbanResult;
+use crate::{KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -31,7 +31,7 @@ impl ColumnCommand {
         }
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
             ColumnCommand::Create(c) => c.capture_inverse(store),
             ColumnCommand::Update(c) => c.capture_inverse(store),
@@ -63,12 +63,12 @@ impl UpdateColumn {
     /// `UpdateColumn` whose `updates` field-by-field set each touched
     /// field back to its prior value. Untouched fields stay `None` /
     /// `NoChange` so the inverse is minimal.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let column = match store.get_column(self.column_id)? {
             Some(c) => c,
             // The column doesn't exist — execute() will fail with NotFound
             // and rollback will take over. No inverse to capture.
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("column", self.column_id)),
         };
 
         let inverse_updates = ColumnUpdate {
@@ -83,12 +83,10 @@ impl UpdateColumn {
             },
         };
 
-        Ok(Some(vec![Command::Column(ColumnCommand::Update(
-            UpdateColumn {
-                column_id: self.column_id,
-                updates: inverse_updates,
-            },
-        ))]))
+        Ok(vec![Command::Column(ColumnCommand::Update(UpdateColumn {
+            column_id: self.column_id,
+            updates: inverse_updates,
+        }))])
     }
 }
 
@@ -115,10 +113,10 @@ impl CreateColumn {
 
     /// Inverse: delete the newly-created column. The `id` is in the
     /// command — no pre-state read needed.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Column(ColumnCommand::Delete(
-            DeleteColumn { column_id: self.id },
-        ))]))
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Column(ColumnCommand::Delete(DeleteColumn {
+            column_id: self.id,
+        }))])
     }
 }
 
@@ -132,10 +130,10 @@ impl DeleteColumn {
     /// Inverse: re-create the deleted column with its prior id, board, name,
     /// and position. If the column had a non-default wip_limit, follow up
     /// with an UpdateColumn that restores it.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let column = match store.get_column(self.column_id)? {
             Some(c) => c,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("column", self.column_id)),
         };
         let mut commands = vec![Command::Column(ColumnCommand::Create(CreateColumn {
             id: column.id,
@@ -152,7 +150,7 @@ impl DeleteColumn {
                 },
             })));
         }
-        Ok(Some(commands))
+        Ok(commands)
     }
 
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {

@@ -40,7 +40,7 @@ impl DependencyCommand {
         }
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
             DependencyCommand::AddBlocks(c) => c.capture_inverse(store),
             DependencyCommand::AddRelatesTo(c) => c.capture_inverse(store),
@@ -77,13 +77,13 @@ impl AddBlocksDependencyCommand {
     }
 
     /// Inverse: remove the just-added edge.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Dependency(DependencyCommand::Remove(
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::Remove(
             RemoveDependencyCommand {
                 source_id: self.blocker_id,
                 target_id: self.blocked_id,
             },
-        ))]))
+        ))])
     }
 }
 
@@ -112,13 +112,13 @@ impl AddRelatesToDependencyCommand {
     }
 
     /// Inverse: remove the just-added edge.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Dependency(DependencyCommand::Remove(
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::Remove(
             RemoveDependencyCommand {
                 source_id: self.card_a_id,
                 target_id: self.card_b_id,
             },
-        ))]))
+        ))])
     }
 }
 
@@ -151,7 +151,7 @@ impl RemoveDependencyCommand {
     /// regardless of type, so the capture must walk the graph and
     /// remember each edge's type. The inverse then emits one Add* or
     /// SetParent command per captured edge.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         use crate::dependencies::CardEdgeType;
         let graph = store.get_graph()?;
         let mut commands: Vec<Command> = Vec::new();
@@ -182,7 +182,7 @@ impl RemoveDependencyCommand {
             };
             commands.push(cmd);
         }
-        Ok(Some(commands))
+        Ok(commands)
     }
 }
 
@@ -213,13 +213,13 @@ impl SetParentCommand {
     /// Inverse: remove the parent edge we just added. set_parent doesn't
     /// remove pre-existing parent edges before adding (the verb is
     /// overloaded), so the inverse just removes the specific edge.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Dependency(
-            DependencyCommand::RemoveParent(RemoveParentCommand {
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::RemoveParent(
+            RemoveParentCommand {
                 child_id: self.child_id,
                 parent_id: self.parent_id,
-            }),
-        )]))
+            },
+        ))])
     }
 }
 
@@ -249,13 +249,13 @@ impl RemoveParentCommand {
 
     /// Inverse: re-establish the parent relationship. Both IDs are in
     /// the forward command — no pre-state read needed.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Dependency(
-            DependencyCommand::SetParent(SetParentCommand {
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::SetParent(
+            SetParentCommand {
                 child_id: self.child_id,
                 parent_id: self.parent_id,
-            }),
-        )]))
+            },
+        ))])
     }
 }
 
@@ -317,12 +317,12 @@ impl CreateSubcardCommand {
     ///
     /// The parent edge is automatically cleaned up by the archive flow
     /// (it archives all graph edges incident on the card).
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Card(
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Card(
             super::card_commands::CardCommand::Archive(super::card_commands::ArchiveCards {
                 ids: vec![self.id],
             }),
-        )]))
+        )])
     }
 }
 

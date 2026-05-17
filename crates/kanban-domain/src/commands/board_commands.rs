@@ -44,7 +44,7 @@ impl BoardCommand {
         }
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
             BoardCommand::Create(c) => c.capture_inverse(store),
             BoardCommand::Update(c) => c.capture_inverse(store),
@@ -83,10 +83,10 @@ impl CreateBoard {
     /// Inverse: delete the newly-created board. The `id` is already in the
     /// command, so no pre-state read from the store is required — `_store`
     /// is unused.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Board(BoardCommand::Delete(
-            DeleteBoard { board_id: self.id },
-        ))]))
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Board(BoardCommand::Delete(DeleteBoard {
+            board_id: self.id,
+        }))])
     }
 }
 
@@ -116,10 +116,10 @@ impl UpdateBoard {
 
     /// Inverse: read the board's current state and build a BoardUpdate
     /// that reverses every field the forward command touched.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("board", self.board_id)),
         };
         let upd = &self.updates;
         let inverse = crate::BoardUpdate {
@@ -179,12 +179,10 @@ impl UpdateBoard {
                 .as_ref()
                 .map(|_| board.sprint_name_used_count),
         };
-        Ok(Some(vec![Command::Board(BoardCommand::Update(
-            UpdateBoard {
-                board_id: self.board_id,
-                updates: inverse,
-            },
-        ))]))
+        Ok(vec![Command::Board(BoardCommand::Update(UpdateBoard {
+            board_id: self.board_id,
+            updates: inverse,
+        }))])
     }
 }
 
@@ -209,18 +207,18 @@ impl SetBoardTaskSort {
     }
 
     /// Inverse: another SetBoardTaskSort with the prior values.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("board", self.board_id)),
         };
-        Ok(Some(vec![Command::Board(BoardCommand::SetTaskSort(
+        Ok(vec![Command::Board(BoardCommand::SetTaskSort(
             SetBoardTaskSort {
                 board_id: self.board_id,
                 field: board.task_sort_field,
                 order: board.task_sort_order,
             },
-        ))]))
+        ))])
     }
 }
 
@@ -244,17 +242,17 @@ impl SetBoardTaskListView {
     }
 
     /// Inverse: another SetBoardTaskListView with the prior view.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("board", self.board_id)),
         };
-        Ok(Some(vec![Command::Board(BoardCommand::SetTaskListView(
+        Ok(vec![Command::Board(BoardCommand::SetTaskListView(
             SetBoardTaskListView {
                 board_id: self.board_id,
                 view: board.task_list_view,
             },
-        ))]))
+        ))])
     }
 }
 
@@ -281,17 +279,15 @@ impl DeleteBoard {
     /// cascade siblings (DeleteColumnsByBoard, DeleteSprintsByBoard,
     /// DeleteCardsByColumns, DeleteCardEdges) capture their own
     /// entities, so undoing the full cascade restores everything.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("board", self.board_id)),
         };
-        Ok(Some(vec![Command::Board(BoardCommand::Import(
-            ImportEntities {
-                boards: vec![board],
-                ..Default::default()
-            },
-        ))]))
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            boards: vec![board],
+            ..Default::default()
+        }))])
     }
 }
 
@@ -318,18 +314,18 @@ impl ApplyBoardSettings {
     /// `Editable::from_entity` impl, then re-apply that DTO via another
     /// `ApplyBoardSettings`. The DTO covers exactly the fields this command
     /// writes, so the round-trip is symmetric.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("board", self.board_id)),
         };
         let prior_dto = crate::editable::BoardSettingsDto::from_entity(&board);
-        Ok(Some(vec![Command::Board(BoardCommand::ApplySettings(
+        Ok(vec![Command::Board(BoardCommand::ApplySettings(
             ApplyBoardSettings {
                 board_id: self.board_id,
                 dto: prior_dto,
             },
-        ))]))
+        ))])
     }
 }
 
@@ -448,7 +444,7 @@ impl ImportEntities {
     /// Order matters: delete cards before columns before boards so
     /// foreign-key-style invariants stay satisfied (the in-memory store
     /// doesn't enforce them, but downstream backends may).
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let mut commands: Vec<Command> = Vec::new();
 
         // Cards first.
@@ -494,7 +490,7 @@ impl ImportEntities {
             })));
         }
 
-        Ok(Some(commands))
+        Ok(commands)
     }
 }
 

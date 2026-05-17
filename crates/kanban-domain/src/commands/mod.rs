@@ -59,18 +59,14 @@ impl Command {
     /// command runs, so pre-state can be read from `store` and embedded in
     /// the inverse.
     ///
-    /// Returns `Ok(None)` for commands that don't yet have an inverse
-    /// implementation. `KanbanContext::undo` falls back to the legacy
-    /// `apply_snapshot(baseline) + replay` path when the captured inverse is
-    /// `None`. As each command tier lands (KAN-191 Phases 4-6) the `None`
-    /// branch becomes unreachable for that command.
+    /// Returns the inverse batch on success. An empty `Vec` means "this
+    /// command is a no-op for undo" — the stack still records it but the
+    /// inverse pass is empty.
     ///
-    /// Returning `Ok(Some(vec![]))` means "this command is a no-op for
-    /// undo" — the stack still records it but the inverse pass is empty.
-    ///
-    /// Returning `Err` is a hard error and should never happen in normal
-    /// operation; it indicates the pre-state read itself failed.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    /// Returns `Err` if the pre-state read fails (the targeted entity
+    /// does not exist, the underlying store errors, or the command is
+    /// synthetic and not meant to appear as a top-level forward batch).
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
             Command::Board(cmd) => cmd.capture_inverse(store),
             Command::Column(cmd) => cmd.capture_inverse(store),

@@ -39,7 +39,7 @@ impl SprintCommand {
         }
     }
 
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
             SprintCommand::Activate(c) => c.capture_inverse(store),
             SprintCommand::Complete(c) => c.capture_inverse(store),
@@ -94,18 +94,18 @@ impl UpdateSprint {
     /// that restores the board's pool first (UpdateBoard with the
     /// internal sprint_names / sprint_name_used_count fields) and then
     /// restores the sprint's `name_index`.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         use crate::field_update::FieldUpdate;
         let sprint = match store.get_sprint(self.sprint_id)? {
             Some(s) => s,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("sprint", self.sprint_id)),
         };
 
         // If the forward sets `name`, capture board pool pre-state too.
         let board_restore: Option<Command> = if self.updates.name.is_some() {
             let board = match store.get_board(sprint.board_id)? {
                 Some(b) => b,
-                None => return Ok(None),
+                None => return Err(KanbanError::not_found("board", sprint.board_id)),
             };
             Some(Command::Board(super::BoardCommand::Update(
                 super::UpdateBoard {
@@ -184,7 +184,7 @@ impl UpdateSprint {
             commands.push(board_cmd);
         }
         commands.push(sprint_restore);
-        Ok(Some(commands))
+        Ok(commands)
     }
 }
 
@@ -325,13 +325,11 @@ impl CreateSprint {
     /// (which this command does) still produces the same sprint id, so
     /// the only drift is in display-side numbering of FUTURE sprints,
     /// not the undone/redone one. Out of KAN-191 scope.
-    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        Ok(Some(vec![Command::Sprint(SprintCommand::Delete(
-            DeleteSprint {
-                sprint_id: self.id,
-                timestamp: chrono::Utc::now(),
-            },
-        ))]))
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Sprint(SprintCommand::Delete(DeleteSprint {
+            sprint_id: self.id,
+            timestamp: chrono::Utc::now(),
+        }))])
     }
 }
 
@@ -355,7 +353,7 @@ impl ActivateSprint {
     }
 
     /// Inverse: restore the sprint's prior status, start_date, end_date.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         capture_status_revert(store, self.sprint_id)
     }
 }
@@ -379,7 +377,7 @@ impl CompleteSprint {
     }
 
     /// Inverse: restore the sprint's prior status.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         capture_status_revert(store, self.sprint_id)
     }
 }
@@ -403,7 +401,7 @@ impl CancelSprint {
     }
 
     /// Inverse: restore the sprint's prior status.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         capture_status_revert(store, self.sprint_id)
     }
 }
@@ -411,32 +409,27 @@ impl CancelSprint {
 /// Shared helper: build an UpdateSprint that restores the prior `status`,
 /// `start_date`, and `end_date` of `sprint_id`. Used by the inverses of
 /// Activate / Complete / Cancel, which all mutate exactly these fields.
-fn capture_status_revert(
-    store: &dyn DataStore,
-    sprint_id: Uuid,
-) -> KanbanResult<Option<Vec<Command>>> {
+fn capture_status_revert(store: &dyn DataStore, sprint_id: Uuid) -> KanbanResult<Vec<Command>> {
     use crate::field_update::FieldUpdate;
     let sprint = match store.get_sprint(sprint_id)? {
         Some(s) => s,
-        None => return Ok(None),
+        None => return Err(KanbanError::not_found("sprint", sprint_id)),
     };
-    Ok(Some(vec![Command::Sprint(SprintCommand::Update(
-        UpdateSprint {
-            sprint_id,
-            updates: SprintUpdate {
-                status: Some(sprint.status),
-                start_date: match sprint.start_date {
-                    Some(v) => FieldUpdate::Set(v),
-                    None => FieldUpdate::Clear,
-                },
-                end_date: match sprint.end_date {
-                    Some(v) => FieldUpdate::Set(v),
-                    None => FieldUpdate::Clear,
-                },
-                ..Default::default()
+    Ok(vec![Command::Sprint(SprintCommand::Update(UpdateSprint {
+        sprint_id,
+        updates: SprintUpdate {
+            status: Some(sprint.status),
+            start_date: match sprint.start_date {
+                Some(v) => FieldUpdate::Set(v),
+                None => FieldUpdate::Clear,
             },
+            end_date: match sprint.end_date {
+                Some(v) => FieldUpdate::Set(v),
+                None => FieldUpdate::Clear,
+            },
+            ..Default::default()
         },
-    ))]))
+    }))])
 }
 
 /// Delete a sprint
@@ -471,10 +464,10 @@ impl DeleteSprint {
     /// 3. Re-attach the sprint binding to archived cards via the
     ///    internal `SetArchivedCardsSprint` cascade primitive (there's
     ///    no other command that sets `sprint_id` on an archived card).
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let sprint = match store.get_sprint(self.sprint_id)? {
             Some(s) => s,
-            None => return Ok(None),
+            None => return Err(KanbanError::not_found("sprint", self.sprint_id)),
         };
         let assigned_card_ids: Vec<Uuid> = store
             .list_cards_by_sprint(self.sprint_id)?
@@ -510,7 +503,7 @@ impl DeleteSprint {
                 }),
             ));
         }
-        Ok(Some(commands))
+        Ok(commands)
     }
 }
 
