@@ -51,8 +51,8 @@ impl BoardCommand {
             BoardCommand::SetTaskSort(c) => c.capture_inverse(store),
             BoardCommand::SetTaskListView(c) => c.capture_inverse(store),
             BoardCommand::ApplySettings(c) => c.capture_inverse(store),
-            // Delete, Import: Tier 3 (cascade-aware).
-            _ => Ok(None),
+            BoardCommand::Delete(c) => c.capture_inverse(store),
+            BoardCommand::Import(c) => c.capture_inverse(store),
         }
     }
 }
@@ -268,6 +268,23 @@ impl DeleteBoard {
     pub fn description(&self) -> String {
         format!("Delete board: {}", self.board_id)
     }
+
+    /// Inverse: re-insert the deleted Board via ImportEntities. The
+    /// cascade siblings (DeleteColumnsByBoard, DeleteSprintsByBoard,
+    /// DeleteCardsByColumns, DeleteCardEdges) capture their own
+    /// entities, so undoing the full cascade restores everything.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        Ok(Some(vec![Command::Board(BoardCommand::Import(
+            ImportEntities {
+                boards: vec![board],
+                ..Default::default()
+            },
+        ))]))
+    }
 }
 
 /// Apply board settings from a DTO (used by JSON editor).
@@ -415,6 +432,61 @@ impl ImportEntities {
 
     pub fn description(&self) -> String {
         format!("Import {} board(s)", self.boards.len())
+    }
+
+    /// Inverse: emit one delete command per imported entity. The IDs are
+    /// in the forward command, so no pre-state read needed.
+    ///
+    /// Order matters: delete cards before columns before boards so
+    /// foreign-key-style invariants stay satisfied (the in-memory store
+    /// doesn't enforce them, but downstream backends may).
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let mut commands: Vec<Command> = Vec::new();
+
+        // Cards first.
+        if !self.cards.is_empty() {
+            commands.push(Command::Card(crate::commands::CardCommand::Archive(
+                crate::commands::ArchiveCards {
+                    ids: self.cards.iter().map(|c| c.id).collect(),
+                },
+            )));
+        }
+
+        // Archived cards: per-card permanent delete.
+        for ac in &self.archived_cards {
+            commands.push(Command::Card(crate::commands::CardCommand::Delete(
+                crate::commands::DeleteCard {
+                    card_id: ac.card.id,
+                },
+            )));
+        }
+
+        // Sprints: per-sprint delete.
+        for s in &self.sprints {
+            commands.push(Command::Sprint(crate::commands::SprintCommand::Delete(
+                crate::commands::DeleteSprint {
+                    sprint_id: s.id,
+                    timestamp: chrono::Utc::now(),
+                },
+            )));
+        }
+
+        // Columns: per-column delete (must be empty by the time we get
+        // here — cards above were archived first).
+        for c in &self.columns {
+            commands.push(Command::Column(crate::commands::ColumnCommand::Delete(
+                crate::commands::DeleteColumn { column_id: c.id },
+            )));
+        }
+
+        // Boards last.
+        for b in &self.boards {
+            commands.push(Command::Board(BoardCommand::Delete(DeleteBoard {
+                board_id: b.id,
+            })));
+        }
+
+        Ok(Some(commands))
     }
 }
 
