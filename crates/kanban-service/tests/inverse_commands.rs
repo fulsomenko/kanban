@@ -922,3 +922,26 @@ async fn test_inverse_create_board_redo_round_trip() -> KanbanResult<()> {
     assert_eq!(boards[0].position, 7);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_set_archived_cards_sprint_rejects_top_level_execute() {
+    use kanban_domain::commands::{CascadeCommand, SetArchivedCardsSprint};
+
+    let mut ctx = make_ctx().await;
+    let cmd = Command::Cascade(CascadeCommand::SetArchivedCardsSprint(
+        SetArchivedCardsSprint {
+            archived_card_ids: vec![Uuid::new_v4()],
+            sprint_id: Uuid::new_v4(),
+        },
+    ));
+
+    let result = ctx.execute(vec![cmd]);
+    let err = result.expect_err(
+        "SetArchivedCardsSprint is synthetic-only and must not accept a top-level execute",
+    );
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("SetArchivedCardsSprint"),
+        "error must name the offending command, got: {msg}"
+    );
+}

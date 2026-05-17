@@ -17,7 +17,7 @@ use super::{
 };
 use crate::data_store::DataStore;
 use crate::dependencies::{CardEdgeType, CardGraphExt};
-use crate::KanbanResult;
+use crate::{KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -290,19 +290,22 @@ impl SetArchivedCardsSprint {
         )
     }
 
-    /// Inverse: clear the sprint binding on every targeted archived card.
-    /// Captured at the moment forward runs — at capture time the card
-    /// has its old binding still; at undo time after this forward has
-    /// applied, the cards have `sprint_id = Some(self.sprint_id)`.
+    /// Reject capture: this command is synthetic. It is only ever
+    /// emitted from inside `DeleteSprint::capture_inverse` as part of
+    /// an inverse batch — never a top-level forward command — so its
+    /// own inverse is never meaningfully consulted. If `execute()` is
+    /// ever called with a `SetArchivedCardsSprint` at the top level,
+    /// the user's redo of the resulting undo would silently do nothing
+    /// because no honest inverse exists. Surface that misuse loudly
+    /// instead.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
-        // The inverse of "set sprint to S on N cards" is "set sprint to
-        // their prior values" — but those prior values were captured by
-        // DeleteSprint at its own capture time. The forward of this
-        // command runs as part of an inverse batch, so it never needs
-        // its own inverse used in practice. Returning Ok(Some(vec![])) is
-        // safe: undo of an inverse-execution is the redo, which the
-        // higher-level UndoStack handles via the forward batch.
-        Ok(Some(Vec::new()))
+        Err(KanbanError::Internal(format!(
+            "SetArchivedCardsSprint is a synthetic command — it must only \
+             appear inside an inverse batch (DeleteSprint undo), never as a \
+             top-level forward command. Got {} card id(s) bound to sprint {}.",
+            self.archived_card_ids.len(),
+            self.sprint_id
+        )))
     }
 }
 
