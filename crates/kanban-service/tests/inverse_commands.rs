@@ -17,9 +17,10 @@ use kanban_core::AppConfig;
 use kanban_domain::commands::{
     ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, ApplyBoardSettings,
     AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command,
-    CompleteSprint, CreateBoard, CreateColumn, DeleteColumn, DependencyCommand, MoveCard,
-    RemoveParentCommand, SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
-    UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
+    CompleteSprint, CreateBoard, CreateColumn, CreateSubcardCommand, DeleteColumn,
+    DependencyCommand, MoveCard, RemoveParentCommand, SetBoardTaskListView, SetBoardTaskSort,
+    SetParentCommand, SprintCommand, UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn,
+    UpdateSprint,
 };
 use kanban_domain::{
     BoardUpdate, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
@@ -609,6 +610,47 @@ async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
     assert!(
         !ctx.graph()?.cards.has_edge(parent.id, child.id),
         "parent edge removed by inverse"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_create_subcard_archives_new_card() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let parent = ctx.create_card(board.id, col.id, "Parent".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    let subcard_id = Uuid::new_v4();
+    ctx.execute(vec![Command::Dependency(DependencyCommand::CreateSubcard(
+        CreateSubcardCommand {
+            id: subcard_id,
+            parent_id: parent.id,
+            board_id: board.id,
+            column_id: col.id,
+            title: "Subcard".into(),
+            description: None,
+            position: 1,
+        },
+    ))])?;
+    assert_eq!(ctx.cards()?.len(), 2, "subcard created");
+    assert!(
+        ctx.graph()?.cards.has_edge(parent.id, subcard_id),
+        "parent edge added"
+    );
+
+    assert!(ctx.undo()?);
+    assert_eq!(
+        ctx.cards()?.len(),
+        1,
+        "subcard archived (removed from live cards)"
+    );
+    assert!(
+        ctx.archived_cards()?
+            .iter()
+            .any(|ac| ac.card.id == subcard_id),
+        "subcard appears in archived list"
     );
     Ok(())
 }

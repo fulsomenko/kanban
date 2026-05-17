@@ -46,9 +46,8 @@ impl DependencyCommand {
             DependencyCommand::AddRelatesTo(c) => c.capture_inverse(store),
             DependencyCommand::RemoveParent(c) => c.capture_inverse(store),
             DependencyCommand::SetParent(c) => c.capture_inverse(store),
-            // Remove / CreateSubcard land in later tiers
-            // (Remove needs an edge-type field on the command struct;
-            // CreateSubcard needs a baked-in card id).
+            DependencyCommand::CreateSubcard(c) => c.capture_inverse(store),
+            // Remove needs an edge-type field on the struct (Tier 3).
             _ => Ok(None),
         }
     }
@@ -225,6 +224,11 @@ impl RemoveParentCommand {
 /// Create a new card as a subcard of a parent card
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSubcardCommand {
+    /// Stable id for the new subcard, baked in at construction so undo
+    /// (KAN-191) can target a DeleteCard at the right id without needing
+    /// to read post-execute state.
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub parent_id: Uuid,
     pub board_id: Uuid,
     pub column_id: Uuid,
@@ -243,6 +247,7 @@ impl CreateSubcardCommand {
             self.title.clone(),
             self.position,
         );
+        card.id = self.id;
 
         if let Some(desc) = &self.description {
             card.description = Some(desc.clone());
@@ -264,6 +269,22 @@ impl CreateSubcardCommand {
             "Create subcard '{}' under parent {}",
             self.title, self.parent_id
         )
+    }
+
+    /// Inverse: archive the new card (its `id` is in this command so we
+    /// can target it directly). Archive (not Delete) so the card_counter
+    /// on the board stays advanced — undo of CreateSubcard is meant to
+    /// hide the card, not roll back the board's counter and risk
+    /// recycling the id on a future Create.
+    ///
+    /// The parent edge is automatically cleaned up by the archive flow
+    /// (it archives all graph edges incident on the card).
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Card(
+            super::card_commands::CardCommand::Archive(super::card_commands::ArchiveCards {
+                ids: vec![self.id],
+            }),
+        )]))
     }
 }
 
@@ -437,6 +458,7 @@ mod tests {
 
         let context = tc.as_command_context();
         let cmd = CreateSubcardCommand {
+            id: Uuid::new_v4(),
             parent_id,
             board_id,
             column_id,
@@ -476,6 +498,7 @@ mod tests {
 
         let context = tc.as_command_context();
         let cmd = CreateSubcardCommand {
+            id: Uuid::new_v4(),
             parent_id,
             board_id,
             column_id,
@@ -506,6 +529,7 @@ mod tests {
 
         let context = tc.as_command_context();
         let cmd = CreateSubcardCommand {
+            id: Uuid::new_v4(),
             parent_id: Uuid::new_v4(),
             board_id,
             column_id,
