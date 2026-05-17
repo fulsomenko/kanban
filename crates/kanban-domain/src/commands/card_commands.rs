@@ -62,7 +62,9 @@ impl CardCommand {
             CardCommand::Archive(c) => c.capture_inverse(store),
             CardCommand::AssignToSprint(c) => c.capture_inverse(store),
             CardCommand::CompactPositions(c) => c.capture_inverse(store),
-            // Create / Restore / Delete land in later commits.
+            CardCommand::Create(c) => c.capture_inverse(store),
+            CardCommand::Restore(c) => c.capture_inverse(store),
+            // Delete lands in a later commit (needs archived-card capture).
             _ => Ok(None),
         }
     }
@@ -220,6 +222,15 @@ impl CreateCard {
     pub fn description(&self) -> String {
         format!("Create card: '{}'", self.title)
     }
+
+    /// Inverse: archive the new card. Same reasoning as CreateSubcard —
+    /// archive keeps the card_counter advanced so the id slot isn't
+    /// recycled. The graph edges are auto-archived by the archive flow.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Card(CardCommand::Archive(
+            ArchiveCards { ids: vec![self.id] },
+        ))]))
+    }
 }
 
 /// Move card to a different column
@@ -272,6 +283,19 @@ pub struct RestoreCard {
 }
 
 impl RestoreCard {
+    /// Inverse: archive the card again. The card id is in the forward
+    /// command. ArchiveCards captures original column/position from the
+    /// live card at capture time — by the time this runs the card has
+    /// been restored to (self.column_id, self.position), so the
+    /// re-archive will use those values as the new "original" location.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Card(CardCommand::Archive(
+            ArchiveCards {
+                ids: vec![self.card_id],
+            },
+        ))]))
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let archived = context

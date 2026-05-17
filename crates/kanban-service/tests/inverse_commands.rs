@@ -839,6 +839,69 @@ async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_create_card_archives_new_card() -> KanbanResult<()> {
+    use kanban_domain::commands::CreateCard;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), Some("KAN".into()))?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    ctx.clear_history()?;
+
+    let card_id = Uuid::new_v4();
+    ctx.execute(vec![Command::Card(CardCommand::Create(CreateCard {
+        id: card_id,
+        card_number: 1,
+        board_id: board.id,
+        column_id: col.id,
+        title: "Foo".into(),
+        position: 0,
+        options: Default::default(),
+        timestamp: chrono::Utc::now(),
+    }))])?;
+    assert_eq!(ctx.cards()?.len(), 1);
+
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.len(), 0, "card archived on undo");
+    assert!(
+        ctx.archived_cards()?.iter().any(|ac| ac.card.id == card_id),
+        "appears in archive list"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_restore_card_archives_it() -> KanbanResult<()> {
+    use kanban_domain::commands::RestoreCard;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "Reborn".into(), Default::default())?;
+    ctx.execute(vec![Command::Card(CardCommand::Archive(ArchiveCards {
+        ids: vec![card.id],
+    }))])?;
+    assert_eq!(ctx.cards()?.len(), 0);
+    assert_eq!(ctx.archived_cards()?.len(), 1);
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::Restore(RestoreCard {
+        card_id: card.id,
+        column_id: col.id,
+        position: 0,
+        timestamp: chrono::Utc::now(),
+    }))])?;
+    assert_eq!(ctx.cards()?.len(), 1);
+    assert_eq!(ctx.archived_cards()?.len(), 0);
+
+    assert!(ctx.undo()?);
+    assert_eq!(
+        ctx.cards()?.len(),
+        0,
+        "RestoreCard undo re-archives the card"
+    );
+    assert_eq!(ctx.archived_cards()?.len(), 1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_inverse_create_board_redo_round_trip() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let id = Uuid::new_v4();
