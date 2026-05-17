@@ -309,18 +309,15 @@ impl CreateSubcardCommand {
         )
     }
 
-    /// Inverse: archive the new card (its `id` is in this command so we
-    /// can target it directly). Archive (not Delete) so the card_counter
-    /// on the board stays advanced — undo of CreateSubcard is meant to
-    /// hide the card, not roll back the board's counter and risk
-    /// recycling the id on a future Create.
-    ///
-    /// The parent edge is automatically cleaned up by the archive flow
-    /// (it archives all graph edges incident on the card).
+    /// Inverse: delete the new card. `DeleteCard` is polymorphic over
+    /// live / archived and strips incident graph edges, so the parent
+    /// edge added by the forward is cleaned up in the same step. The
+    /// board's `card_counter` stays bumped; redo reproduces the same
+    /// id and number.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         Ok(vec![Command::Card(
-            super::card_commands::CardCommand::Archive(super::card_commands::ArchiveCards {
-                ids: vec![self.id],
+            super::card_commands::CardCommand::Delete(super::card_commands::DeleteCard {
+                card_id: self.id,
             }),
         )])
     }

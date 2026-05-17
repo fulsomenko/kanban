@@ -604,7 +604,7 @@ async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_inverse_create_subcard_archives_new_card() -> KanbanResult<()> {
+async fn test_inverse_create_subcard_removes_card_and_archive_trail() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
     let col = ctx.create_column(board.id, "C".into(), None)?;
@@ -623,23 +623,18 @@ async fn test_inverse_create_subcard_archives_new_card() -> KanbanResult<()> {
             position: 1,
         },
     ))])?;
-    assert_eq!(ctx.cards()?.len(), 2, "subcard created");
-    assert!(
-        ctx.graph()?.cards.has_edge(parent.id, subcard_id),
-        "parent edge added"
-    );
+    assert_eq!(ctx.cards()?.len(), 2);
+    assert!(ctx.graph()?.cards.has_edge(parent.id, subcard_id));
 
     assert!(ctx.undo()?);
-    assert_eq!(
-        ctx.cards()?.len(),
-        1,
-        "subcard archived (removed from live cards)"
+    assert_eq!(ctx.cards()?.len(), 1, "subcard gone");
+    assert!(
+        ctx.archived_cards()?.is_empty(),
+        "no archive trail — undoing CreateSubcard fully removes the card"
     );
     assert!(
-        ctx.archived_cards()?
-            .iter()
-            .any(|ac| ac.card.id == subcard_id),
-        "subcard appears in archived list"
+        !ctx.graph()?.cards.has_edge(parent.id, subcard_id),
+        "parent edge cleaned up by the archive step in the inverse batch"
     );
     Ok(())
 }
@@ -915,7 +910,7 @@ async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_inverse_create_card_archives_new_card() -> KanbanResult<()> {
+async fn test_inverse_create_card_removes_card_and_archive_trail() -> KanbanResult<()> {
     use kanban_domain::commands::CreateCard;
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), Some("KAN".into()))?;
@@ -936,11 +931,18 @@ async fn test_inverse_create_card_archives_new_card() -> KanbanResult<()> {
     assert_eq!(ctx.cards()?.len(), 1);
 
     assert!(ctx.undo()?);
-    assert_eq!(ctx.cards()?.len(), 0, "card archived on undo");
+    assert_eq!(ctx.cards()?.len(), 0, "live card gone after undo");
     assert!(
-        ctx.archived_cards()?.iter().any(|ac| ac.card.id == card_id),
-        "appears in archive list"
+        ctx.archived_cards()?.is_empty(),
+        "no archive trail left behind — undoing a create must allow the \
+         enclosing column to be deleted afterwards"
     );
+
+    // Verify the no-trail invariant: deleting the column now succeeds.
+    ctx.execute(vec![Command::Column(ColumnCommand::Delete(DeleteColumn {
+        column_id: col.id,
+    }))])?;
+    assert_eq!(ctx.columns()?.len(), 0);
     Ok(())
 }
 
@@ -1261,6 +1263,47 @@ async fn test_failed_redo_leaves_undo_stack_pinned_for_retry() -> KanbanResult<(
         "failed redo must leave the cursor where it was"
     );
     assert!(ctx.can_redo(), "retry path must still see the same entry");
+    Ok(())
+}
+
+/// Regression: create board, create card, archive card, then undo
+/// three times. The third undo (of the create-card) used to leave an
+/// archived card stranded, which then blocked the column-delete
+/// inverse. The fixed CreateCard inverse archives + deletes so no
+/// archive trail remains.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_undo_chain_through_archive_create_create_column_succeeds() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "TODO".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "C1".into(), Default::default())?;
+    ctx.archive_cards(vec![card.id])?;
+    assert_eq!(ctx.archived_cards()?.len(), 1);
+
+    // Undo archive — card is live again.
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.len(), 1);
+    assert_eq!(ctx.archived_cards()?.len(), 0);
+
+    // Undo create_card — card is gone with no archive trail.
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.cards()?.len(), 0);
+    assert_eq!(
+        ctx.archived_cards()?.len(),
+        0,
+        "CreateCard inverse must leave no archive trail"
+    );
+
+    // Undo create_column — column delete should not be blocked by a
+    // stale archive entry.
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.columns()?.len(), 0);
+
+    // Undo create_board.
+    assert!(ctx.undo()?);
+    assert_eq!(ctx.boards()?.len(), 0);
+
+    assert!(!ctx.can_undo());
     Ok(())
 }
 

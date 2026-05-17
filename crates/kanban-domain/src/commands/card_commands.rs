@@ -264,12 +264,14 @@ impl CreateCard {
         format!("Create card: '{}'", self.title)
     }
 
-    /// Inverse: archive the new card. Same reasoning as CreateSubcard —
-    /// archive keeps the card_counter advanced so the id slot isn't
-    /// recycled. The graph edges are auto-archived by the archive flow.
+    /// Inverse: delete the new card. `DeleteCard` is polymorphic over
+    /// live / archived so it cleanly removes a freshly-created live
+    /// card without leaving an archive trail. The board's
+    /// `card_counter` stays bumped; redo via the original forward
+    /// reproduces the same id and number.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        Ok(vec![Command::Card(CardCommand::Archive(ArchiveCards {
-            ids: vec![self.id],
+        Ok(vec![Command::Card(CardCommand::Delete(DeleteCard {
+            card_id: self.id,
         }))])
     }
 }
@@ -362,7 +364,8 @@ impl RestoreCard {
     }
 }
 
-/// Permanently delete an archived card
+/// Permanently delete a card. Operates on whichever list the card is
+/// in — live or archived. Strips incident graph edges.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteCard {
     pub card_id: Uuid,
@@ -370,6 +373,9 @@ pub struct DeleteCard {
 
 impl DeleteCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        // Both store ops are idempotent on missing — calling both
+        // covers a card in either list.
+        context.store.delete_card(self.card_id)?;
         context.store.delete_archived_card(self.card_id)?;
         let card_id = self.card_id;
         context.store.modify_graph(Box::new(move |graph| {
@@ -383,17 +389,20 @@ impl DeleteCard {
         format!("Delete card {}", self.card_id)
     }
 
-    /// Inverse: re-insert the archived card via `ImportEntities`, then
-    /// re-add every graph edge that was incident on it.
+    /// Inverse: re-insert whichever state the card was in (live,
+    /// archived, or — defensively — both) via `ImportEntities`, then
+    /// re-add every incident graph edge.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         use crate::dependencies::CardEdgeType;
-        let archived = match store.get_archived_card(self.card_id)? {
-            Some(ac) => ac,
-            None => return Err(KanbanError::not_found("archived_card", self.card_id)),
-        };
+        let live = store.get_card(self.card_id)?;
+        let archived = store.get_archived_card(self.card_id)?;
+        if live.is_none() && archived.is_none() {
+            return Err(KanbanError::not_found("card", self.card_id));
+        }
         let mut commands: Vec<Command> = vec![Command::Board(super::BoardCommand::Import(
             super::ImportEntities {
-                archived_cards: vec![archived],
+                cards: live.into_iter().collect(),
+                archived_cards: archived.into_iter().collect(),
                 ..Default::default()
             },
         ))];
