@@ -310,7 +310,7 @@ impl ApplyBoardSettings {
 
 /// Import entities (boards, columns, cards, etc.) into the context.
 /// Used by TUI import functionality. Appends without replacing existing data.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ImportEntities {
     pub boards: Vec<Board>,
     pub columns: Vec<Column>,
