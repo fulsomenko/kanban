@@ -2,27 +2,39 @@
 bump: minor
 ---
 
-Undo and redo now work the same way for every storage backend, and SQLite
-files remember their undo history across sessions.
+Undo and redo are now implemented as **inverse-command CRUD operations**
+against current state — no more whole-board snapshot clones held in RAM,
+no more wipe-and-replay when you press `u`.
 
 **Unlimited undo within a session.** The previous 200-step cap is gone.
 Undo can rewind through every change you've made since opening the file,
 whether that's 5 edits or 5,000.
 
-**SQLite: undo survives closing and reopening the file.** Close the app,
-open the same `.sqlite3` file again, and your undo stack is still
-intact — keep pressing `u` to rewind exactly as you did before. JSON
-files continue to scope undo to the current session, by design.
+**Lower memory and CPU during heavy editing.** Each undo step now costs
+the size of the commands that produced it (a few hundred bytes) instead
+of a full clone of the entire board state. Sessions no longer accumulate
+snapshot copies in RAM. The pre-execute snapshot that used to run before
+every command — even for safe operations — is gone too; rollback on a
+failed batch now uses the backend's native transaction (SQLite) or a
+cheap in-memory state copy (JSON in-memory; in-process JSON files).
 
-**Lower memory use during long sessions.** Each undo step now costs the
-size of the commands that produced it (typically a few hundred bytes)
-instead of a full clone of the entire board state, so heavy editing
-sessions no longer pile up snapshot copies in RAM.
+**Two stories, properly separated.** The previous design conflated two
+concerns under a single "command store":
 
-**Compatibility note.** SQLite databases created before this release will
-have their internal command-log layout transparently upgraded the first
-time they are opened. No user action is required and your data is not
-touched. JSON files are unaffected.
+- **UndoStack** lives in memory for the duration of a session and drives
+  `u` / `Ctrl+R`. Closing the app discards it.
+- **CommandLog** is the persisted audit history of every action — what
+  happened, when, by which forward command. This is now distinct
+  infrastructure, kept on disk for SQLite files, and lays the
+  foundation for the upcoming audit-log UI (KAN-36).
 
-This release also lays the foundation for an upcoming audit-log feature
-that will expose the persisted command history through the UI and MCP.
+**Compatibility note.** SQLite databases created before this release
+will have their internal command-log layout transparently re-keyed on
+open. No user action is required; your entity data is not modified.
+JSON files are unaffected.
+
+**Cross-session undo is deferred.** The previous attempt at making undo
+survive `close → reopen` shipped a `apply_snapshot(empty) + replay`
+flow that conflicted with treating SQLite as a CRUD store. Cross-
+session undo needs a separate design with conflict invalidation — it
+will return as its own feature once that design lands.
