@@ -45,8 +45,8 @@ impl SprintCommand {
             SprintCommand::Complete(c) => c.capture_inverse(store),
             SprintCommand::Cancel(c) => c.capture_inverse(store),
             SprintCommand::Update(c) => c.capture_inverse(store),
-            // Create / Delete land in Tier 3 (need board-state capture).
-            _ => Ok(None),
+            SprintCommand::Create(c) => c.capture_inverse(store),
+            SprintCommand::Delete(c) => c.capture_inverse(store),
         }
     }
 }
@@ -279,6 +279,24 @@ impl CreateSprint {
     pub fn description(&self) -> String {
         format!("Create sprint for board {}", self.board_id)
     }
+
+    /// Inverse: delete the newly-created sprint.
+    ///
+    /// Known limitation: the board's sprint_counter / sprint_name_used_count
+    /// stay bumped after undo — these mirror the existing
+    /// "ids/counters don't roll back" behaviour the system already has
+    /// elsewhere. Redoing a CreateSprint with an `id` field baked in
+    /// (which this command does) still produces the same sprint id, so
+    /// the only drift is in display-side numbering of FUTURE sprints,
+    /// not the undone/redone one. Out of KAN-191 scope.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Sprint(SprintCommand::Delete(
+            DeleteSprint {
+                sprint_id: self.id,
+                timestamp: chrono::Utc::now(),
+            },
+        ))]))
+    }
 }
 
 /// Activate a sprint (change status to Active and set dates)
@@ -407,6 +425,49 @@ impl DeleteSprint {
 
     pub fn description(&self) -> String {
         format!("Delete sprint {}", self.sprint_id)
+    }
+
+    /// Inverse: capture the Sprint + every live card currently assigned to
+    /// it, then on undo re-insert the sprint and re-assign those cards.
+    ///
+    /// Limitation: if any **archived** card had this sprint_id, we return
+    /// `Ok(None)` and fall back to the legacy replay path — there's no
+    /// command to set `sprint_id` on archived cards without
+    /// delete+re-insert. Common-case undo (no archived cards with the
+    /// sprint) takes the inverse path; rare-case keeps using replay.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        let sprint = match store.get_sprint(self.sprint_id)? {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+        let archived_with_sprint = store
+            .list_archived_cards()?
+            .into_iter()
+            .any(|ac| ac.card.sprint_id == Some(self.sprint_id));
+        if archived_with_sprint {
+            return Ok(None);
+        }
+        let assigned_card_ids: Vec<Uuid> = store
+            .list_cards_by_sprint(self.sprint_id)?
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+
+        let mut commands: Vec<Command> = vec![Command::Board(super::BoardCommand::Import(
+            super::ImportEntities {
+                sprints: vec![sprint],
+                ..Default::default()
+            },
+        ))];
+        if !assigned_card_ids.is_empty() {
+            commands.push(Command::Card(super::CardCommand::AssignToSprint(
+                super::AssignCardsToSprint {
+                    ids: assigned_card_ids,
+                    sprint_id: self.sprint_id,
+                },
+            )));
+        }
+        Ok(Some(commands))
     }
 }
 
