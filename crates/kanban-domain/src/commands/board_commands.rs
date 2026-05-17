@@ -170,6 +170,14 @@ impl UpdateBoard {
                 },
             },
             position: upd.position.map(|_| board.position),
+            sprint_names: upd
+                .sprint_names
+                .as_ref()
+                .map(|_| board.sprint_names.clone()),
+            sprint_name_used_count: upd
+                .sprint_name_used_count
+                .as_ref()
+                .map(|_| board.sprint_name_used_count),
         };
         Ok(Some(vec![Command::Board(BoardCommand::Update(
             UpdateBoard {

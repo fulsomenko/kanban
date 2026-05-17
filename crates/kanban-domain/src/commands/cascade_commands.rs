@@ -29,6 +29,11 @@ pub enum CascadeCommand {
     DeleteArchivedCardsByColumns(DeleteArchivedCardsByColumns),
     DeleteColumnsByBoard(DeleteColumnsByBoard),
     DeleteSprintsByBoard(DeleteSprintsByBoard),
+    /// Internal: set `sprint_id` on a list of archived cards. Used by
+    /// `DeleteSprint`'s inverse to restore the binding that
+    /// `clear_sprint_from_archived_cards` cleared. Not a user-facing
+    /// command — accessed only via the inverse-capture path.
+    SetArchivedCardsSprint(SetArchivedCardsSprint),
 }
 
 impl CascadeCommand {
@@ -39,6 +44,7 @@ impl CascadeCommand {
             CascadeCommand::DeleteArchivedCardsByColumns(c) => c.execute(context),
             CascadeCommand::DeleteColumnsByBoard(c) => c.execute(context),
             CascadeCommand::DeleteSprintsByBoard(c) => c.execute(context),
+            CascadeCommand::SetArchivedCardsSprint(c) => c.execute(context),
         }
     }
 
@@ -49,6 +55,7 @@ impl CascadeCommand {
             CascadeCommand::DeleteArchivedCardsByColumns(c) => c.description(),
             CascadeCommand::DeleteColumnsByBoard(c) => c.description(),
             CascadeCommand::DeleteSprintsByBoard(c) => c.description(),
+            CascadeCommand::SetArchivedCardsSprint(c) => c.description(),
         }
     }
 
@@ -59,6 +66,7 @@ impl CascadeCommand {
             CascadeCommand::DeleteArchivedCardsByColumns(c) => c.capture_inverse(store),
             CascadeCommand::DeleteColumnsByBoard(c) => c.capture_inverse(store),
             CascadeCommand::DeleteSprintsByBoard(c) => c.capture_inverse(store),
+            CascadeCommand::SetArchivedCardsSprint(c) => c.capture_inverse(store),
         }
     }
 }
@@ -249,6 +257,52 @@ impl DeleteSprintsByBoard {
                 ..Default::default()
             },
         ))]))
+    }
+}
+
+/// Set `sprint_id` on every archived card in `archived_card_ids`.
+/// Internal — only used by KAN-191 inverse-command capture (DeleteSprint
+/// undo) to restore the binding that `clear_sprint_from_archived_cards`
+/// cleared during forward execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetArchivedCardsSprint {
+    pub archived_card_ids: Vec<Uuid>,
+    pub sprint_id: Uuid,
+}
+
+impl SetArchivedCardsSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        for id in &self.archived_card_ids {
+            if let Some(mut ac) = context.store.get_archived_card(*id)? {
+                ac.card.sprint_id = Some(self.sprint_id);
+                context.store.delete_archived_card(ac.card.id)?;
+                context.store.insert_archived_card(ac)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Re-attach sprint {} to {} archived card(s)",
+            self.sprint_id,
+            self.archived_card_ids.len()
+        )
+    }
+
+    /// Inverse: clear the sprint binding on every targeted archived card.
+    /// Captured at the moment forward runs — at capture time the card
+    /// has its old binding still; at undo time after this forward has
+    /// applied, the cards have `sprint_id = Some(self.sprint_id)`.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        // The inverse of "set sprint to S on N cards" is "set sprint to
+        // their prior values" — but those prior values were captured by
+        // DeleteSprint at its own capture time. The forward of this
+        // command runs as part of an inverse batch, so it never needs
+        // its own inverse used in practice. Returning Ok(Some(vec![])) is
+        // safe: undo of an inverse-execution is the redo, which the
+        // higher-level UndoStack handles via the forward batch.
+        Ok(Some(Vec::new()))
     }
 }
 

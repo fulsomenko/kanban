@@ -84,34 +84,62 @@ impl UpdateSprint {
         "Update sprint".to_string()
     }
 
-    /// Inverse: read the current Sprint and build a `SprintUpdate` whose
-    /// fields reverse every touched field of the forward update.
+    /// Inverse: read the current Sprint (and Board if the forward
+    /// touches `name`) and build a `SprintUpdate` whose fields reverse
+    /// every touched field of the forward update.
     ///
-    /// Caveat — if the forward command sets `name`, the inverse can't be
-    /// captured cleanly: the board's `sprint_names` pool and
-    /// `sprint_name_used_count` are mutated as side effects of name
-    /// allocation, which a simple per-sprint `SprintUpdate` can't reverse.
-    /// In that case we return `Ok(None)` and let the legacy replay path
-    /// handle it. Tier 3 (KAN-191 Phase 6) will add a multi-entity inverse
-    /// covering the board-side bookkeeping.
+    /// When the forward command sets `name`, the board's `sprint_names`
+    /// pool and `sprint_name_used_count` are mutated as a side effect.
+    /// We capture the pre-state of both and emit a multi-command inverse
+    /// that restores the board's pool first (UpdateBoard with the
+    /// internal sprint_names / sprint_name_used_count fields) and then
+    /// restores the sprint's `name_index`.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
         use crate::field_update::FieldUpdate;
-        if self.updates.name.is_some() {
-            return Ok(None);
-        }
         let sprint = match store.get_sprint(self.sprint_id)? {
             Some(s) => s,
             None => return Ok(None),
         };
+
+        // If the forward sets `name`, capture board pool pre-state too.
+        let board_restore: Option<Command> = if self.updates.name.is_some() {
+            let board = match store.get_board(sprint.board_id)? {
+                Some(b) => b,
+                None => return Ok(None),
+            };
+            Some(Command::Board(super::BoardCommand::Update(
+                super::UpdateBoard {
+                    board_id: board.id,
+                    updates: crate::BoardUpdate {
+                        sprint_names: Some(board.sprint_names.clone()),
+                        sprint_name_used_count: Some(board.sprint_name_used_count),
+                        ..Default::default()
+                    },
+                },
+            )))
+        } else {
+            None
+        };
+
         let upd = &self.updates;
         let inverse = SprintUpdate {
+            // The forward `name` allocation only mutates name_index on
+            // the sprint. The board-side restore above handles the pool;
+            // we restore the sprint's prior name_index here.
             name: None,
-            name_index: match upd.name_index {
-                FieldUpdate::NoChange => FieldUpdate::NoChange,
-                _ => match sprint.name_index {
+            // When forward.name is set, allocate_sprint_name mutates
+            // name_index. When forward.name_index is set, it's mutated
+            // directly. Either way, the inverse needs to restore the
+            // prior name_index from the captured sprint snapshot.
+            name_index: if upd.name.is_some()
+                || matches!(upd.name_index, FieldUpdate::Set(_) | FieldUpdate::Clear)
+            {
+                match sprint.name_index {
                     Some(v) => FieldUpdate::Set(v),
                     None => FieldUpdate::Clear,
-                },
+                }
+            } else {
+                FieldUpdate::NoChange
             },
             prefix: match upd.prefix {
                 FieldUpdate::NoChange => FieldUpdate::NoChange,
@@ -143,12 +171,20 @@ impl UpdateSprint {
                 },
             },
         };
-        Ok(Some(vec![Command::Sprint(SprintCommand::Update(
-            UpdateSprint {
-                sprint_id: self.sprint_id,
-                updates: inverse,
-            },
-        ))]))
+        let sprint_restore = Command::Sprint(SprintCommand::Update(UpdateSprint {
+            sprint_id: self.sprint_id,
+            updates: inverse,
+        }));
+
+        // Order matters: restore the board pool first so any
+        // dependencies on the name pool index see the right state, then
+        // restore the sprint's name_index.
+        let mut commands = Vec::new();
+        if let Some(board_cmd) = board_restore {
+            commands.push(board_cmd);
+        }
+        commands.push(sprint_restore);
+        Ok(Some(commands))
     }
 }
 
@@ -427,30 +463,29 @@ impl DeleteSprint {
         format!("Delete sprint {}", self.sprint_id)
     }
 
-    /// Inverse: capture the Sprint + every live card currently assigned to
-    /// it, then on undo re-insert the sprint and re-assign those cards.
+    /// Inverse: capture the Sprint, every live card assigned to it, and
+    /// every archived card assigned to it. On undo:
     ///
-    /// Limitation: if any **archived** card had this sprint_id, we return
-    /// `Ok(None)` and fall back to the legacy replay path — there's no
-    /// command to set `sprint_id` on archived cards without
-    /// delete+re-insert. Common-case undo (no archived cards with the
-    /// sprint) takes the inverse path; rare-case keeps using replay.
+    /// 1. Re-insert the Sprint via `ImportEntities`.
+    /// 2. Re-assign live cards via `AssignCardsToSprint`.
+    /// 3. Re-attach the sprint binding to archived cards via the
+    ///    internal `SetArchivedCardsSprint` cascade primitive (there's
+    ///    no other command that sets `sprint_id` on an archived card).
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
         let sprint = match store.get_sprint(self.sprint_id)? {
             Some(s) => s,
             None => return Ok(None),
         };
-        let archived_with_sprint = store
-            .list_archived_cards()?
-            .into_iter()
-            .any(|ac| ac.card.sprint_id == Some(self.sprint_id));
-        if archived_with_sprint {
-            return Ok(None);
-        }
         let assigned_card_ids: Vec<Uuid> = store
             .list_cards_by_sprint(self.sprint_id)?
             .into_iter()
             .map(|c| c.id)
+            .collect();
+        let archived_with_sprint: Vec<Uuid> = store
+            .list_archived_cards()?
+            .into_iter()
+            .filter(|ac| ac.card.sprint_id == Some(self.sprint_id))
+            .map(|ac| ac.card.id)
             .collect();
 
         let mut commands: Vec<Command> = vec![Command::Board(super::BoardCommand::Import(
@@ -466,6 +501,14 @@ impl DeleteSprint {
                     sprint_id: self.sprint_id,
                 },
             )));
+        }
+        if !archived_with_sprint.is_empty() {
+            commands.push(Command::Cascade(
+                super::CascadeCommand::SetArchivedCardsSprint(super::SetArchivedCardsSprint {
+                    archived_card_ids: archived_with_sprint,
+                    sprint_id: self.sprint_id,
+                }),
+            ));
         }
         Ok(Some(commands))
     }

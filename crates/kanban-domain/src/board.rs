@@ -394,6 +394,12 @@ impl Board {
         if let Some(position) = updates.position {
             self.position = position;
         }
+        if let Some(sprint_names) = updates.sprint_names {
+            self.sprint_names = sprint_names;
+        }
+        if let Some(used) = updates.sprint_name_used_count {
+            self.sprint_name_used_count = used;
+        }
         self.updated_at = Utc::now();
     }
 }
@@ -415,6 +421,15 @@ pub struct BoardUpdate {
     pub active_sprint_id: FieldUpdate<Uuid>,
     pub completion_column_id: FieldUpdate<Uuid>,
     pub position: Option<i32>,
+    /// Internal: replace the board's sprint-name pool. Used by KAN-191
+    /// inverse-command capture when UpdateSprint or CreateSprint mutates
+    /// the pool. Not surfaced through user-facing CLI/MCP commands.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint_names: Option<Vec<String>>,
+    /// Internal: replace the board's `sprint_name_used_count`. See
+    /// `sprint_names` doc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint_name_used_count: Option<usize>,
 }
 
 /// Get the active sprint's card prefix override if one exists.

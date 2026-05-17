@@ -12,7 +12,7 @@ pub mod sprint_commands;
 
 pub use board_commands::*;
 pub use card_commands::*;
-pub use cascade_commands::CascadeCommand;
+pub use cascade_commands::{CascadeCommand, SetArchivedCardsSprint};
 pub use column_commands::*;
 pub use dependency_commands::*;
 pub use sprint_commands::*;
