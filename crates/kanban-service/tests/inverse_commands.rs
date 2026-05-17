@@ -923,6 +923,169 @@ async fn test_inverse_create_board_redo_round_trip() -> KanbanResult<()> {
     Ok(())
 }
 
+/// Composite end-to-end inverse-command round-trip.
+///
+/// The per-command tests above exercise each `capture_inverse` in
+/// isolation. This test composes them: a varied sequence of operations
+/// touches the same cards, moves them between columns, swaps sprint
+/// bindings, archives and restores. Verifies that undoing every step
+/// drives state all the way back to the pre-execute fixture — catching
+/// ordering bugs across batches and between commands that share state
+/// (e.g. an UpdateCard's inverse seeing the state left by a prior
+/// MoveCard) that single-command tests miss.
+///
+/// The fixture (board + columns + cards) is created up-front and not
+/// part of the round-trip. `CreateCard`'s inverse archives rather than
+/// deletes (so card-counter ids aren't recycled), which combines with
+/// `DeleteColumn`'s archived-cards-protection to make undo-to-empty
+/// non-symmetric — see KAN-191 review for the orthogonal followup.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_composite_round_trip_undo_returns_to_baseline() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+
+    // Fixture: not part of the round-trip.
+    let board = ctx.create_board("Composite".into(), Some("CMP".into()))?;
+    let todo = ctx.create_column(board.id, "TODO".into(), None)?;
+    let done = ctx.create_column(board.id, "Done".into(), None)?;
+    let c1 = ctx.create_card(board.id, todo.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, todo.id, "Card 2".into(), Default::default())?;
+    let c3 = ctx.create_card(board.id, todo.id, "Card 3".into(), Default::default())?;
+    let sprint_a = ctx.create_sprint(board.id, None, None)?;
+    let sprint_b = ctx.create_sprint(board.id, None, None)?;
+
+    ctx.clear_history()?;
+
+    // Baseline snapshot — what we expect to see after undoing the
+    // round-trip sequence below.
+    let baseline = ctx.snapshot()?;
+    let baseline_card_count = baseline.cards.len();
+    let baseline_archived = baseline.archived_cards.len();
+    let baseline_card_columns: std::collections::HashMap<_, _> =
+        baseline.cards.iter().map(|c| (c.id, c.column_id)).collect();
+    let baseline_card_sprints: std::collections::HashMap<_, _> =
+        baseline.cards.iter().map(|c| (c.id, c.sprint_id)).collect();
+    let baseline_card_priorities: std::collections::HashMap<_, _> =
+        baseline.cards.iter().map(|c| (c.id, c.priority)).collect();
+
+    // Round-trip sequence — varied operations against fixture entities.
+    ctx.move_card(c1.id, done.id, Some(0))?;
+    ctx.assign_card_to_sprint(c1.id, sprint_a.id)?;
+    ctx.assign_card_to_sprint(c2.id, sprint_a.id)?;
+    ctx.update_card(
+        c3.id,
+        CardUpdate {
+            priority: Some(CardPriority::High),
+            ..Default::default()
+        },
+    )?;
+    ctx.move_card(c2.id, done.id, Some(1))?;
+    ctx.assign_card_to_sprint(c1.id, sprint_b.id)?; // re-assign to a different sprint
+    ctx.archive_cards(vec![c3.id])?;
+    ctx.update_card(
+        c1.id,
+        CardUpdate {
+            priority: Some(CardPriority::Critical),
+            ..Default::default()
+        },
+    )?;
+
+    const ROUND_TRIP_STEPS: usize = 8;
+    assert_eq!(ctx.undo_depth(), ROUND_TRIP_STEPS);
+
+    // Mid-sequence state visibly differs from baseline.
+    assert_eq!(ctx.cards()?.len(), baseline_card_count - 1, "c3 archived");
+    assert_eq!(ctx.archived_cards()?.len(), baseline_archived + 1);
+
+    // Undo every step.
+    for step in (1..=ROUND_TRIP_STEPS).rev() {
+        assert!(
+            ctx.undo()?,
+            "undo step {step} must succeed; undo_depth = {}",
+            ctx.undo_depth()
+        );
+    }
+
+    // Structural assertions: counts, column membership, sprint
+    // bindings, priorities. updated_at drift is out of scope (see the
+    // module docstring on command_replay.rs).
+    let restored = ctx.snapshot()?;
+    assert_eq!(restored.boards.len(), baseline.boards.len());
+    assert_eq!(restored.columns.len(), baseline.columns.len());
+    assert_eq!(restored.cards.len(), baseline_card_count);
+    assert_eq!(restored.archived_cards.len(), baseline_archived);
+    assert_eq!(restored.sprints.len(), baseline.sprints.len());
+
+    for card in &restored.cards {
+        assert_eq!(
+            card.column_id, baseline_card_columns[&card.id],
+            "card {} column must match baseline after undo",
+            card.id
+        );
+        assert_eq!(
+            card.sprint_id, baseline_card_sprints[&card.id],
+            "card {} sprint must match baseline after undo",
+            card.id
+        );
+        assert_eq!(
+            card.priority, baseline_card_priorities[&card.id],
+            "card {} priority must match baseline after undo",
+            card.id
+        );
+    }
+
+    assert!(!ctx.can_undo(), "round-trip exhausted the undo stack");
+    assert_eq!(ctx.redo_depth(), ROUND_TRIP_STEPS);
+    Ok(())
+}
+
+/// After a full undo, redoing every step should return state to the
+/// same shape as the original forward sequence produced. Pins the
+/// symmetry of the inverse-command model.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_composite_round_trip_redo_restores_forward_state() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+
+    let board = ctx.create_board("Composite".into(), Some("CMP".into()))?;
+    let todo = ctx.create_column(board.id, "TODO".into(), None)?;
+    let done = ctx.create_column(board.id, "Done".into(), None)?;
+    let c1 = ctx.create_card(board.id, todo.id, "Card 1".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    // Round-trip-able sequence on the existing card.
+    ctx.move_card(c1.id, done.id, Some(0))?;
+    ctx.update_card(
+        c1.id,
+        CardUpdate {
+            priority: Some(CardPriority::High),
+            ..Default::default()
+        },
+    )?;
+
+    let forward_snapshot = ctx.snapshot()?;
+
+    // Undo all
+    while ctx.can_undo() {
+        ctx.undo()?;
+    }
+    // Redo all
+    while ctx.can_redo() {
+        assert!(ctx.redo()?, "redo must succeed during full replay");
+    }
+
+    let replayed = ctx.snapshot()?;
+    assert_eq!(replayed.cards.len(), forward_snapshot.cards.len());
+    let replayed_c1 = replayed.cards.iter().find(|c| c.id == c1.id).unwrap();
+    let forward_c1 = forward_snapshot
+        .cards
+        .iter()
+        .find(|c| c.id == c1.id)
+        .unwrap();
+    assert_eq!(replayed_c1.column_id, forward_c1.column_id);
+    assert_eq!(replayed_c1.priority, forward_c1.priority);
+    assert!(!ctx.can_redo(), "redo stack exhausted after full replay");
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_set_archived_cards_sprint_rejects_top_level_execute() {
     use kanban_domain::commands::{CascadeCommand, SetArchivedCardsSprint};
