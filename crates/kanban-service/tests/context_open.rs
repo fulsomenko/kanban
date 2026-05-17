@@ -426,28 +426,13 @@ async fn test_initialize_undo_state_restores_correct_baseline_after_restart() ->
 
 // ─── Gap E: replace_backend + execute contract ───────────────────────────────
 
-/// `execute()` must return an error when `baseline_snapshot` is `None` —
-/// i.e. after `replace_backend` without a subsequent `initialize_undo_state`.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_replace_backend_then_execute_fails_without_reinit() -> KanbanResult<()> {
-    let dir = tempdir().unwrap();
-    let mut ctx = KanbanContext::open(
-        make_json_backend(&dir.path().join("a.json")),
-        AppConfig::default(),
-    )
-    .await?;
-
-    ctx.replace_backend(make_json_backend(&dir.path().join("b.json")));
-
-    let result = ctx.create_board("B".into(), None);
-    assert!(
-        result.is_err(),
-        "execute must fail after replace_backend without calling initialize_undo_state"
-    );
-    Ok(())
-}
-
 /// After `replace_backend` + `initialize_undo_state`, `execute()` must succeed.
+///
+/// KAN-191 note: the previous companion test (execute-fails-without-reinit)
+/// guarded against a baseline-snapshot precondition that no longer exists
+/// — execute now works directly against the backend regardless of
+/// initialize_undo_state, since the UndoStack lives independently and
+/// is reset by replace_backend.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_replace_backend_then_reinit_then_execute_succeeds() -> KanbanResult<()> {
     let dir = tempdir().unwrap();

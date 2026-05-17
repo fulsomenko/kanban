@@ -68,10 +68,13 @@ mod sqlite_tests {
     }
 }
 
-/// `KanbanContext::open_deferred` without `initialize_undo_state` must return an error
-/// on the first `execute()` call.
+/// `KanbanContext::open_deferred` without `initialize_undo_state` is now
+/// fine to execute against — the undo state lives in `UndoStack` and is
+/// initialised in `open_deferred`. The previous test guarded a
+/// baseline-snapshot precondition that no longer exists (KAN-191 Phase 7
+/// dropped it).
 #[tokio::test(flavor = "multi_thread")]
-async fn test_execute_without_initialize_returns_error() {
+async fn test_execute_without_initialize_succeeds() {
     use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
     use kanban_domain::InMemoryStore;
     use std::sync::Arc;
@@ -86,11 +89,8 @@ async fn test_execute_without_initialize_returns_error() {
         card_prefix: None,
         position: 0,
     }));
-    let result = ctx.execute(vec![cmd]);
-    assert!(
-        result.is_err(),
-        "execute() without initialize_undo_state() must return an error"
-    );
+    ctx.execute(vec![cmd]).expect("execute should succeed");
+    assert_eq!(ctx.boards().unwrap().len(), 1);
 }
 
 /// A non-existent path produces an empty context (no boards).

@@ -33,39 +33,20 @@ pub struct BatchOperationFailure {
 /// read, either directly (SQLite, reads are always live) or via a one-time
 /// cache-fill on first access (JSON).
 ///
-/// # Undo / Redo model — transition state (KAN-191)
+/// # Undo / Redo model
 ///
-/// Two systems coexist during the inverse-command migration:
+/// Every undoable command captures an **inverse** at execute time. The
+/// `(forward, inverse)` pair lives on the per-session [`UndoStack`].
+/// Undo executes the inverse against current state through the normal
+/// command-execute path — no snapshot apply, no replay. Redo re-executes
+/// the forward batch.
 ///
-/// 1. **Inverse-command undo** (the destination): each command's
-///    `capture_inverse` records a forward CRUD operation that undoes it.
-///    The `(forward, inverse)` pair lives on the per-session [`UndoStack`].
-///    Undo executes the inverse against current state — no snapshot, no
-///    replay.
-///
-/// 2. **Replay-based undo** (the legacy fallback): for commands that
-///    haven't yet implemented `capture_inverse`, undo falls back to
-///    applying `baseline_snapshot` and replaying every batch up to the
-///    new cursor. This is the path the snapshot-style PR shipped under.
-///
-/// `execute` always pushes onto the legacy replay log (via
-/// `backend.append_commands`) and, when the captured inverse is `Some`,
-/// **also** onto the `UndoStack`. `undo` prefers the stack and falls back
-/// to replay when the next entry's inverse isn't present.
-///
-/// Phase 7 of KAN-191 removes the replay fallback (and `baseline_snapshot`)
-/// once every command implements `capture_inverse`.
+/// `execute` also appends the forward batch to the `CommandStore` audit
+/// log (`backend.append_commands`). The audit log is informational — it
+/// records what happened; it does not drive undo. Audit-log UI is KAN-36.
 pub struct KanbanContext {
     backend: Arc<dyn KanbanBackend>,
     app_config: AppConfig,
-    /// `None` until [`initialize_undo_state`][Self::initialize_undo_state] is called.
-    /// Used only by the legacy replay-based undo fallback (Phase 7 removes
-    /// this).
-    baseline_snapshot: Option<Snapshot>,
-    /// Replay-based undo cursor (legacy; Phase 7 removes).
-    undo_cursor: usize,
-    /// Replay-based command count (legacy; Phase 7 removes).
-    command_count: usize,
     /// Per-session inverse-command undo state.
     undo_stack: crate::undo_stack::UndoStack,
     dirty: bool,
@@ -82,9 +63,6 @@ impl KanbanContext {
         Self {
             backend,
             app_config: config,
-            baseline_snapshot: None,
-            undo_cursor: 0,
-            command_count: 0,
             undo_stack: crate::undo_stack::UndoStack::new(),
             dirty: false,
             conflict_pending: false,
@@ -117,16 +95,9 @@ impl KanbanContext {
     }
 
     /// Replace the active backend, discarding all undo/redo history.
-    ///
-    /// **Destructive**: resets `baseline_snapshot`, `undo_cursor`, `command_count`,
-    /// and `dirty`. The caller is responsible for re-initialising undo state via
-    /// [`initialize_undo_state`][Self::initialize_undo_state] if needed.
     pub fn replace_backend(&mut self, backend: Arc<dyn KanbanBackend>) {
         tracing::info!("Replacing backend; undo/redo history discarded");
         self.backend = backend;
-        self.baseline_snapshot = None;
-        self.undo_cursor = 0;
-        self.command_count = 0;
         self.undo_stack.clear();
         self.dirty = false;
     }
@@ -186,14 +157,11 @@ impl KanbanContext {
         let count =
             kanban_domain::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
         if count > 0 {
-            // Invalidate any pending redo: a data migration mutates state
-            // outside the command log, so replaying recorded commands against
-            // the post-migration backend could yield incoherent results.
-            if self.undo_cursor < self.command_count {
-                self.backend
-                    .truncate_commands_after(self.undo_cursor as u64)?;
-                self.command_count = self.undo_cursor;
-            }
+            // Invalidate the entire undo history — a data migration
+            // mutates state outside the command pipeline, so any
+            // inverse captured before the migration would now reference
+            // stale entity values.
+            self.undo_stack.clear();
             tracing::info!("Migrated sprint logs for {} card(s)", count);
             for (card, before) in cards.into_iter().zip(before_logs) {
                 if card.sprint_logs != before {
@@ -207,28 +175,15 @@ impl KanbanContext {
 
     // ── Undo / Redo ───────────────────────────────────────────────────────────
 
-    /// Loads the pre-existing command count and baseline snapshot from the backend.
-    /// Must be called once after [`open_deferred`][Self::open_deferred] before any call to
-    /// [`execute`], [`undo`], or [`redo`].  [`open`][Self::open]
-    /// calls this automatically.  Idempotent if called more than once.
+    /// Idempotent session-start hook. Truncates any persisted command-log
+    /// entries from a prior session so a fresh session starts clean.
+    ///
+    /// Now that undo is fully inverse-driven and the `UndoStack` lives
+    /// only in memory, there is no longer a baseline snapshot to take —
+    /// this is a no-op other than the defensive truncate.
     pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
-        if self.baseline_snapshot.is_none() {
-            // Undo is per-session for every backend. The persisted command
-            // log (SQLite) is an audit trail, not an undo source. Cross-
-            // session undo is deferred to a separate card — it needs
-            // conflict-invalidation between sessions.
-            //
-            // Baseline = current entity state at session start. The
-            // defensive truncate discards any persisted commands so they
-            // don't pollute the in-session undo cursor; SQLite still
-            // re-records new commands to disk for the audit log.
-            let baseline = self.backend.snapshot()?;
-            if self.backend.command_count()? > 0 {
-                self.backend.truncate_commands_after(0)?;
-            }
-            self.baseline_snapshot = Some(baseline);
-            self.command_count = 0;
-            self.undo_cursor = 0;
+        if self.backend.command_count()? > 0 {
+            self.backend.truncate_commands_after(0)?;
         }
         Ok(())
     }
@@ -237,207 +192,111 @@ impl KanbanContext {
     /// [`KanbanBackend::with_transaction`][crate::backend::KanbanBackend::with_transaction]:
     /// if any command in the batch fails the whole batch rolls back.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
-        if self.baseline_snapshot.is_none() {
-            return Err(KanbanError::Internal(
-                "undo state not initialized — call initialize_undo_state() or open()".into(),
-            ));
-        }
-
-        if self.undo_cursor < self.command_count {
-            self.backend
-                .truncate_commands_after(self.undo_cursor as u64)?;
-        }
-
-        // Capture inverses incrementally — each command's inverse must
-        // observe the state left behind by every PREVIOUS command in the
-        // batch, otherwise a later command's inverse could reference
-        // entities that no longer exist (e.g. CompactColumnPositions
-        // capturing positions of a card that an earlier ArchiveCards
-        // removed).
-        //
-        // If any command's inverse comes back as None, the whole batch
-        // falls back to the legacy replay path — we still run the
-        // forwards (inside the same transaction) but don't push onto the
-        // UndoStack.
+        // Capture inverses incrementally inside the transaction — each
+        // command's inverse must observe the state left behind by every
+        // PREVIOUS command in the batch, otherwise a later command's
+        // inverse could reference entities that no longer exist (e.g.
+        // CompactColumnPositions capturing positions of a card that an
+        // earlier ArchiveCards removed).
         //
         // Composition order at undo time: for forward [F1, F2, ...] we
         // execute inverses in REVERSE order [Fn_inv, ..., F1_inv], so
         // the state each Fk_inv runs against matches the state Fk saw at
         // capture time (post-F(k-1) forward).
+        //
+        // If a command's capture_inverse returns None we abort: every
+        // command is now expected to provide an inverse. None is a
+        // programming error, not a fallback signal.
         let backend = Arc::clone(&self.backend);
         let cmds = &commands;
         let mut per_cmd_inverses: Vec<Vec<Command>> = Vec::new();
-        let mut all_inverses_available = true;
         self.backend.with_transaction(&mut || {
             let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
             for cmd in cmds.iter() {
-                if all_inverses_available {
-                    match cmd.capture_inverse(store)? {
-                        Some(batch) => per_cmd_inverses.push(batch),
-                        None => all_inverses_available = false,
+                match cmd.capture_inverse(store)? {
+                    Some(batch) => per_cmd_inverses.push(batch),
+                    None => {
+                        return Err(KanbanError::Internal(format!(
+                            "command {} returned no inverse — every command must \
+                             implement Command::capture_inverse",
+                            cmd.description()
+                        )));
                     }
                 }
                 cmd.execute(&ctx)?;
             }
             Ok(())
         })?;
-        let inverses: Vec<Command> = if all_inverses_available {
-            per_cmd_inverses.into_iter().rev().flatten().collect()
-        } else {
-            Vec::new()
-        };
+        let inverses: Vec<Command> = per_cmd_inverses.into_iter().rev().flatten().collect();
 
-        // Append to the replay log (legacy path) AND, when inverses are
-        // available, push onto the UndoStack.
+        // Append to the audit log (CommandStore — Phase 8 reframes the
+        // trait name) and push the (forward, inverse) pair onto the
+        // per-session UndoStack.
         self.backend.append_commands(&commands)?;
-        self.undo_cursor += 1;
-        self.command_count = self.undo_cursor;
-
-        if all_inverses_available {
-            self.undo_stack.push(crate::undo_stack::UndoEntry {
-                forward: commands,
-                inverse: inverses,
-            });
-        } else {
-            // Branching: legacy replay-based undo is going to run for the
-            // next undo step. The UndoStack must not carry forward
-            // entries it can't pair with the legacy cursor, so clear it.
-            // The legacy path will fully handle the unwind.
-            self.undo_stack.clear();
-        }
+        self.undo_stack.push(crate::undo_stack::UndoEntry {
+            forward: commands,
+            inverse: inverses,
+        });
 
         self.dirty = true;
         Ok(())
     }
 
-    /// Undo the most recent batch. Prefers the inverse-command path via the
-    /// per-session [`UndoStack`][crate::undo_stack::UndoStack]; falls back
-    /// to legacy snapshot+replay when no inverse was captured.
+    /// Undo the most recent batch via inverse-command execution.
     pub fn undo(&mut self) -> KanbanResult<bool> {
-        if self.baseline_snapshot.is_none() {
-            return Ok(false); // nothing to undo in an uninitialized context
-        }
-        if self.undo_cursor == 0 {
-            return Ok(false);
-        }
-
-        // Prefer inverse-command undo via UndoStack. The stack and the
-        // legacy log run in lockstep when both contain the batch; falling
-        // back to replay only happens when no inverse is captured.
-        let inverse_cmds: Option<Vec<Command>> = self
-            .undo_stack
-            .pop_undo()
-            .map(|entry| entry.inverse.clone());
-
-        if let Some(inverse) = inverse_cmds {
-            // Inverse-command path: execute the inverse as a normal batch
-            // under the transactional rollback umbrella.
-            let backend = Arc::clone(&self.backend);
-            let inv = &inverse;
-            self.backend.with_transaction(&mut || {
-                let store: &dyn DataStore = backend.as_data_store();
-                let ctx = CommandContext { store };
-                inv.iter().try_for_each(|cmd| cmd.execute(&ctx))
-            })?;
-            self.undo_cursor -= 1;
-            self.dirty = true;
-            return Ok(true);
-        }
-
-        // Legacy replay fallback — used until every command implements
-        // `capture_inverse`. KAN-191 Phase 7 removes this branch.
-        self.undo_cursor -= 1;
-        debug_assert!(
-            self.baseline_snapshot.is_some(),
-            "baseline must be Some after guard"
-        );
-        self.backend
-            .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
-        if self.undo_cursor > 0 {
-            let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
-            let store: &dyn DataStore = self.backend.as_data_store();
+        let inverse = match self.undo_stack.pop_undo() {
+            Some(entry) => entry.inverse.clone(),
+            None => return Ok(false),
+        };
+        let backend = Arc::clone(&self.backend);
+        let inv = &inverse;
+        self.backend.with_transaction(&mut || {
+            let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
-            for batch in &batches {
-                for cmd in batch {
-                    cmd.execute(&ctx)?;
-                }
-            }
-        }
-
+            inv.iter().try_for_each(|cmd| cmd.execute(&ctx))
+        })?;
         self.dirty = true;
         Ok(true)
     }
 
-    /// Redo the next undone batch. Prefers UndoStack; falls back to replay.
+    /// Redo the next undone batch via forward-command execution.
     pub fn redo(&mut self) -> KanbanResult<bool> {
-        if self.baseline_snapshot.is_none() {
-            return Ok(false); // nothing to redo in an uninitialized context
-        }
-        if self.undo_cursor >= self.command_count {
-            return Ok(false);
-        }
-
-        let forward_cmds: Option<Vec<Command>> = self
-            .undo_stack
-            .pop_redo()
-            .map(|entry| entry.forward.clone());
-
-        if let Some(forward) = forward_cmds {
-            let backend = Arc::clone(&self.backend);
-            let fwd = &forward;
-            self.backend.with_transaction(&mut || {
-                let store: &dyn DataStore = backend.as_data_store();
-                let ctx = CommandContext { store };
-                fwd.iter().try_for_each(|cmd| cmd.execute(&ctx))
-            })?;
-            self.undo_cursor += 1;
-            self.dirty = true;
-            return Ok(true);
-        }
-
-        // Legacy replay fallback (KAN-191 Phase 7 removes).
-        let batches = self
-            .backend
-            .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
-        {
-            let store: &dyn DataStore = self.backend.as_data_store();
+        let forward = match self.undo_stack.pop_redo() {
+            Some(entry) => entry.forward.clone(),
+            None => return Ok(false),
+        };
+        let backend = Arc::clone(&self.backend);
+        let fwd = &forward;
+        self.backend.with_transaction(&mut || {
+            let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
-            for batch in &batches {
-                for cmd in batch {
-                    cmd.execute(&ctx)?;
-                }
-            }
-        }
-
-        self.undo_cursor += 1;
+            fwd.iter().try_for_each(|cmd| cmd.execute(&ctx))
+        })?;
         self.dirty = true;
         Ok(true)
     }
 
     pub fn can_undo(&self) -> bool {
-        self.baseline_snapshot.is_some() && self.undo_cursor > 0
+        self.undo_stack.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        self.baseline_snapshot.is_some() && self.undo_cursor < self.command_count
+        self.undo_stack.can_redo()
     }
 
     pub fn clear_history(&mut self) -> KanbanResult<()> {
-        self.baseline_snapshot = Some(self.backend.snapshot()?);
         self.backend.truncate_commands_after(0)?;
-        self.undo_cursor = 0;
-        self.command_count = 0;
         self.undo_stack.clear();
         Ok(())
     }
 
     pub fn undo_depth(&self) -> usize {
-        self.undo_cursor
+        self.undo_stack.undo_depth()
     }
 
     pub fn redo_depth(&self) -> usize {
-        self.command_count.saturating_sub(self.undo_cursor)
+        self.undo_stack.redo_depth()
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -477,16 +336,11 @@ impl KanbanContext {
     /// [`initialize_undo_state`][Self::initialize_undo_state] is required.
     pub async fn reload(&mut self) -> KanbanResult<()> {
         self.backend.reload().await?;
-        self.baseline_snapshot = None;
-        self.undo_cursor = 0;
-        self.command_count = 0;
         self.undo_stack.clear();
         self.dirty = false;
-        // Read the fresh snapshot as the new baseline and discard the command
-        // log so undo cannot reach across the reload boundary.
-        let baseline = self.backend.snapshot()?;
+        // Discard the persisted command log so the next session starts
+        // with a clean audit history.
         self.backend.truncate_commands_after(0)?;
-        self.baseline_snapshot = Some(baseline);
         Ok(())
     }
 
@@ -1490,10 +1344,7 @@ impl KanbanOperations for KanbanContext {
             }
         }
 
-        self.baseline_snapshot = Some(self.backend.snapshot()?);
         self.backend.truncate_commands_after(0)?;
-        self.undo_cursor = 0;
-        self.command_count = 0;
         self.undo_stack.clear();
         self.dirty = true;
 
