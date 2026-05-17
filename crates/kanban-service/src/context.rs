@@ -175,12 +175,8 @@ impl KanbanContext {
 
     // ── Undo / Redo ───────────────────────────────────────────────────────────
 
-    /// Idempotent session-start hook. Truncates any persisted command-log
-    /// entries from a prior session so a fresh session starts clean.
-    ///
-    /// Now that undo is fully inverse-driven and the `UndoStack` lives
-    /// only in memory, there is no longer a baseline snapshot to take —
-    /// this is a no-op other than the defensive truncate.
+    /// Idempotent session-start hook. Discards any persisted audit-log
+    /// entries from a prior session so the new session opens clean.
     pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
         if self.backend.command_count()? > 0 {
             self.backend.truncate_commands_after(0)?;
@@ -188,42 +184,14 @@ impl KanbanContext {
         Ok(())
     }
 
-    /// Execute a batch of commands as a single undo unit. Atomic via
-    /// [`KanbanBackend::with_transaction`][crate::backend::KanbanBackend::with_transaction]:
-    /// if any command in the batch fails the whole batch rolls back.
+    /// Execute a batch as one undo unit. Entity mutations, inverse
+    /// capture, and audit-log append run inside one transaction —
+    /// either all commit or all roll back.
     ///
-    /// # Consistency model
-    ///
-    /// The closure does, in order:
-    ///   1. Capture the inverse of each command (read pre-state).
-    ///   2. Execute the forward command.
-    ///   3. After the loop, append the forward batch to the audit log.
-    ///
-    /// The audit append lives **inside** the transaction so its
-    /// success/failure is tied to the entity transaction: if step 3
-    /// fails, step 2's entity changes roll back too. The alternative —
-    /// appending after the transaction commits — would leave a gap in
-    /// the audit log on the rare disk-failure path while letting entity
-    /// state move ahead. Wrapping makes "what happened" and "what we
-    /// recorded that happened" succeed or fail together.
-    ///
-    /// `UndoStack::push` runs **outside** the transaction. It is
-    /// infallible (a `Vec::push` on owned in-memory state) and reaching
-    /// it means the transaction committed.
-    ///
-    /// # Inverse-capture ordering
-    ///
-    /// Inverses are captured **incrementally** during the forward
-    /// execute loop — each command's inverse must observe the state
-    /// left by every PREVIOUS command in the batch, otherwise a later
-    /// command's inverse could reference entities an earlier command
-    /// removed (e.g. `CompactColumnPositions` capturing positions of a
-    /// card that an earlier `ArchiveCards` already moved out).
-    ///
-    /// Composition at undo time: for forward `[F1, F2, ...]` we execute
-    /// inverses in REVERSE order `[Fn_inv, ..., F1_inv]`, so the state
-    /// each `Fk_inv` runs against matches the state `Fk` saw at
-    /// capture time.
+    /// Each command's inverse is captured against the state the
+    /// previous command left behind. The composed inverse is the
+    /// per-command inverses in reverse order, so undoing each `Fk_inv`
+    /// runs against the state `Fk` itself saw at capture time.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
         let backend = Arc::clone(&self.backend);
         let cmds = &commands;

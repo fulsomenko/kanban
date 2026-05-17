@@ -13,10 +13,8 @@ use uuid::Uuid;
 
 pub struct SqliteBackend {
     db: SqliteStore,
-    /// In-session command log. The on-disk `command_log` table is the audit
-    /// log foundation — it exists in the schema but is not currently written
-    /// to or read from. Phase 8 of KAN-191 will repopulate it as a proper
-    /// audit log decoupled from the undo cursor.
+    /// In-session command log. The on-disk `command_log` table exists
+    /// in the schema but is not yet wired through this backend.
     mem: InMemoryStore,
 }
 
@@ -172,10 +170,8 @@ impl DataStore for SqliteBackend {
 
 // ─── CommandStore ─────────────────────────────────────────────────────────────
 
-// Per-session undo state only. The on-disk `command_log` table is the audit
-// log foundation — it stays present in the schema but is not currently
-// written. Phase 8 of KAN-191 will repopulate it as an audit log decoupled
-// from the undo cursor.
+// Routes to the in-memory mirror; the on-disk command_log table stays
+// unwritten until a separate piece of work wires it up.
 impl CommandStore for SqliteBackend {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
         self.mem.append_commands(cmds)

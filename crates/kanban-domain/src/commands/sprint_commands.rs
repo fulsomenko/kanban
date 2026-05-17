@@ -313,15 +313,10 @@ impl CreateSprint {
         format!("Create sprint for board {}", self.board_id)
     }
 
-    /// Inverse: delete the newly-created sprint.
-    ///
-    /// Known limitation: the board's sprint_counter / sprint_name_used_count
-    /// stay bumped after undo — these mirror the existing
-    /// "ids/counters don't roll back" behaviour the system already has
-    /// elsewhere. Redoing a CreateSprint with an `id` field baked in
-    /// (which this command does) still produces the same sprint id, so
-    /// the only drift is in display-side numbering of FUTURE sprints,
-    /// not the undone/redone one. Out of KAN-191 scope.
+    /// Inverse: delete the newly-created sprint. The board's
+    /// sprint_counter and sprint_name_used_count stay bumped — display
+    /// numbering drifts for *future* sprints only, redo of this one
+    /// reproduces the same sprint id.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         Ok(vec![Command::Sprint(SprintCommand::Delete(DeleteSprint {
             sprint_id: self.id,

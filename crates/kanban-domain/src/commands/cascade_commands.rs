@@ -282,14 +282,8 @@ impl SetArchivedCardsSprint {
         )
     }
 
-    /// Reject capture: this command is synthetic. It is only ever
-    /// emitted from inside `DeleteSprint::capture_inverse` as part of
-    /// an inverse batch — never a top-level forward command — so its
-    /// own inverse is never meaningfully consulted. If `execute()` is
-    /// ever called with a `SetArchivedCardsSprint` at the top level,
-    /// the user's redo of the resulting undo would silently do nothing
-    /// because no honest inverse exists. Surface that misuse loudly
-    /// instead.
+    /// Synthetic-only. Rejects top-level execute so misuse fails
+    /// loudly instead of producing a silently-broken undo entry.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         Err(KanbanError::Internal(format!(
             "SetArchivedCardsSprint is a synthetic command — it must only \

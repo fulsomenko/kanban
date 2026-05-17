@@ -1,17 +1,6 @@
-//! Per-command inverse contract tests.
-//!
-//! KAN-191 Phases 4-6 — each commit lands a `capture_inverse` impl for one
-//! command (or close-related group). A test here verifies that:
-//!
-//! 1. Executing the forward command leaves the entity in the expected state.
-//! 2. Undoing afterwards reaches the pre-execute state.
-//! 3. The undo went through the inverse-command path, not the legacy
-//!    snapshot+replay fallback (asserted indirectly: the `UndoStack` would
-//!    be empty if no inverse was captured, and the legacy fallback would
-//!    apply baseline + replay 0 commands — same outcome but different
-//!    mechanism. We sanity-check by observing that `can_undo` is true
-//!    immediately after execute, and that the second undo (which would
-//!    have nothing to replay because cursor is 0) is a no-op).
+//! Per-command inverse contract tests. Each test executes a forward
+//! command, verifies the visible state, undoes, and asserts the
+//! pre-execute state is restored.
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{

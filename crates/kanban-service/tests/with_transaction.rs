@@ -1,10 +1,5 @@
-//! Contract tests for `KanbanBackend::with_transaction`.
-//!
-//! Verifies the atomic-batch semantics: every mutation in the closure either
-//! commits together or rolls back together. KAN-191 Phase 2 introduced this
-//! as the OCP-friendly extension point for backend-native transactions —
-//! today every backend uses the default snapshot-based impl; later phases
-//! can swap in native transactions for SQLite without touching callers.
+//! `KanbanBackend::with_transaction` atomicity contract: every
+//! mutation in the closure commits together or rolls back together.
 
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{Board, InMemoryStore, KanbanError, KanbanResult};

@@ -51,27 +51,11 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         Uuid::nil()
     }
 
-    /// Run a closure as an atomic batch: every mutation in `f` either commits
-    /// together or rolls back together. The default implementation snapshots
-    /// the entire backend state before `f` runs and restores it on failure —
-    /// correct but expensive for backends with on-disk state. Backends with
-    /// native transaction support (SQLite, future networked stores) should
-    /// override with a cheaper implementation.
-    ///
-    /// `KanbanContext::execute` is the only caller today; it uses this to
-    /// roll back partial batches when a command in the middle of a batch
-    /// fails.
-    ///
-    /// # When the default impl is the right answer
-    ///
-    /// - In-memory backends (`InMemoryStore`, JSON) where `snapshot()` is a
-    ///   cheap state clone.
-    ///
-    /// # When to override
-    ///
-    /// - Disk-backed CRUD stores where reading every entity to take a
-    ///   snapshot is significant overhead per execute. Native transactions
-    ///   eliminate the per-execute read cost.
+    /// Run `f` as an atomic batch: every mutation commits or rolls
+    /// back together. The default impl snapshots state before `f`
+    /// runs and restores it on failure — cheap for in-memory backends,
+    /// expensive on disk. Disk-backed backends should override with a
+    /// native transaction.
     fn with_transaction(&self, f: &mut dyn FnMut() -> KanbanResult<()>) -> KanbanResult<()> {
         let before = self.snapshot()?;
         match f() {

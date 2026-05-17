@@ -1,21 +1,7 @@
-//! Replay-determinism contract for the command log.
-//!
-//! Proves that re-executing every command from a clean baseline reproduces the
-//! same business state (ids, content, structure, relationships) as the original
-//! sequence of operations. This is the foundational invariant for KAN-191
-//! (pure command-replay undo/redo) — once snapshots are removed, every undo
-//! and redo step relies on the replay path that this test exercises.
-//!
-//! ## Scope: "functional equivalence", not bit-equivalence
-//!
-//! Some model-layer methods (`Card::assign_to_sprint`, `Sprint::complete`,
-//! etc.) stamp `updated_at = Utc::now()` directly. On replay these methods
-//! produce different timestamps than the original execution. That drift is
-//! out-of-scope for KAN-191 and tracked separately — see the followup card.
-//!
-//! Assertions therefore compare ids, titles, positions, column membership,
-//! sprint membership, and structural fields — not `updated_at` on touched
-//! entities.
+//! Replay determinism: re-executing the recorded command log from a
+//! clean baseline reproduces the same business state. Compares ids,
+//! content, structure, and relationships — not `updated_at`, which
+//! drifts because some model methods stamp `Utc::now()` on each call.
 
 use kanban_domain::commands::CommandContext;
 use kanban_domain::data_store::DataStore;

@@ -1,53 +1,31 @@
 use crate::commands::Command;
 use crate::KanbanResult;
 
-/// Append-only audit log of every command batch the system has executed.
-///
-/// KAN-191 split the previous "CommandStore" role into two concerns:
-///
-/// 1. **Audit log** (this trait): a chronological record of what
-///    happened, intended for the audit-log UI (KAN-36) and any future
-///    cross-session inspection or replay-from-zero analysis. Persistence
-///    is backend-defined — JSON keeps it in memory per session, SQLite
-///    persists it in a `command_log` table.
-///
-/// 2. **UndoStack** (`crate::commands`-aware, lives in `KanbanContext`):
-///    per-session, transient, with `(forward, inverse)` pairs. This is
-///    what drives `undo()` / `redo()`.
-///
-/// Today's name (`CommandStore`) is kept for compatibility; a future
-/// rename to `AuditLog` is on the table.
-///
-/// # Index semantics
-///
-/// Indices are **logical**, not physical. After `shift_commands(n)` the
-/// surviving batches are renumbered so that the first one becomes index 0.
+/// Chronological log of executed command batches. Backend-defined
+/// persistence (JSON in-memory, SQLite on disk).
 pub trait CommandStore: Send + Sync {
-    /// Appends a batch of commands as one audit entry. Returns the new
-    /// logical batch count.
+    /// Append one batch as a single entry. Returns the new entry count.
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64>;
 
-    /// Returns the number of batches currently stored (logical count).
     fn command_count(&self) -> KanbanResult<u64>;
 
-    /// Returns batches in the half-open logical range `[from, to)`.
-    /// `from` is 0-indexed; `to` is exclusive.
+    /// Half-open range `[from, to)`.
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>>;
 
-    /// Removes all batches with index >= after (i.e. retains batches 0..after).
+    /// Truncate entries from `after` onward. Indices remap after a
+    /// `shift_commands` so the surviving prefix starts at 0.
     fn truncate_commands_after(&self, after: u64) -> KanbanResult<()>;
 
-    /// Atomically loads all command batches and the count.
-    /// Default implementation calls `command_count()` then `load_commands()`,
-    /// which is not atomic. Backends with interior locks should override.
+    /// Atomic count + load. Default is non-atomic; backends with
+    /// interior locks should override.
     fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
         let count = self.command_count()?;
         let batches = self.load_commands(0, count)?;
         Ok((batches, count))
     }
 
-    /// Removes the oldest `drop_count` batches and renumbers the remaining
-    /// batches so they start from index 0.
+    /// Drop the oldest `drop_count` entries and renumber surviving
+    /// indices to start at 0.
     ///
     /// Provided as a default no-op for backends that don't need log pruning.
     /// `KanbanContext` does not currently invoke this — pure command-replay

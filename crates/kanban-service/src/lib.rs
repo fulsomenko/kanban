@@ -1,37 +1,14 @@
-//! # kanban-service — orchestration layer
+//! Orchestration layer between persistence backends and interactive
+//! frontends. [`KanbanContext`] owns per-session undo state
+//! ([`undo_stack::UndoStack`]) and runs every command batch through
+//! [`backend::KanbanBackend::with_transaction`].
 //!
-//! The service crate sits between the persistence backends and the
-//! interactive frontends (CLI, TUI, MCP). It owns the
-//! [`KanbanContext`] which:
-//!
-//! - delegates entity CRUD to a pluggable [`backend::KanbanBackend`];
-//! - runs every command batch in a transactional scope via
-//!   [`backend::KanbanBackend::with_transaction`];
-//! - tracks per-session undo/redo state in an
-//!   [`undo_stack::UndoStack`].
-//!
-//! ## Undo / Redo model (KAN-191)
-//!
-//! Every undoable [`kanban_domain::commands::Command`] implements
-//! `capture_inverse`, which produces the forward CRUD operations that
-//! reverse its effect. The `(forward, inverse)` pair is pushed onto
-//! [`undo_stack::UndoStack`] at execute time; `undo()` pops the inverse
-//! and executes it against current state through the normal command
-//! pipeline.
-//!
-//! There is no snapshot-and-replay path. The previous `baseline_snapshot`
-//! and replay-on-undo machinery were removed in KAN-191 Phase 7.
-//!
-//! ## Two stories, two lifetimes
-//!
-//! | Concept       | Lifetime              | Owner            | Purpose                    |
-//! |---------------|-----------------------|------------------|----------------------------|
-//! | **UndoStack** | Per-session, in-RAM   | `KanbanContext`  | User "take back / reapply" |
-//! | **CommandLog**| Append-only, persisted| `KanbanBackend`  | Audit history (KAN-36)     |
-//!
-//! `KanbanContext::execute` pushes onto BOTH: the UndoStack gets the
-//! `(forward, inverse)` pair; the audit log (via
-//! `backend.append_commands`) gets the forward batch.
+//! Undo and redo are inverse-command CRUD against current state.
+//! [`kanban_domain::commands::Command::capture_inverse`] produces the
+//! inverse batch at execute time; the `(forward, inverse)` pair lives
+//! on the in-RAM `UndoStack`. The audit log (via
+//! [`backend::KanbanBackend::append_commands`]) is a separate
+//! append-only record of executed batches.
 
 pub mod backend;
 mod cascade;

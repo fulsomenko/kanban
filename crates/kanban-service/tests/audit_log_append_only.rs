@@ -1,16 +1,6 @@
-//! Audit-log append-only invariant.
-//!
-//! KAN-191's two-entity model splits "what the user can take back"
-//! (`UndoStack`, in-memory, with cursor + redo tail) from "what
-//! actually happened" (`CommandStore` audit log, append-only). The
-//! UndoStack rewinds on undo and truncates its redo tail when the
-//! user makes a new edit after partial undo. The audit log must do
-//! neither: every forward `execute()` appends one entry, and nothing
-//! through `KanbanContext` removes entries.
-//!
-//! This test pins that contract through the "execute → undo → execute"
-//! flow, which is exactly the case that prunes a non-empty redo tail
-//! from the UndoStack.
+//! Audit log invariants: every forward `execute()` appends one entry,
+//! and no `KanbanContext` path removes one. The UndoStack rewinds and
+//! truncates its redo tail independently; the audit log does not.
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{BoardCommand, Command, CreateBoard};

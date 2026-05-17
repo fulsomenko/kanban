@@ -17,8 +17,7 @@ pub use column_commands::*;
 pub use dependency_commands::*;
 pub use sprint_commands::*;
 
-/// Serializable command enum that represents all possible domain mutations.
-/// Replaces the former `Command` trait with a concrete, serde-friendly hierarchy.
+/// Every domain mutation flows through this enum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "domain", rename_all = "snake_case")]
 pub enum Command {
@@ -53,19 +52,12 @@ impl Command {
         }
     }
 
-    /// Capture the inverse of this command — the forward CRUD operations
-    /// that, applied to the current entity state, undo this command's
-    /// effect. Called by `KanbanContext::execute` **before** the forward
-    /// command runs, so pre-state can be read from `store` and embedded in
-    /// the inverse.
+    /// Build the inverse batch by reading pre-state from `store`.
+    /// Called before the forward `execute` runs.
     ///
-    /// Returns the inverse batch on success. An empty `Vec` means "this
-    /// command is a no-op for undo" — the stack still records it but the
-    /// inverse pass is empty.
-    ///
-    /// Returns `Err` if the pre-state read fails (the targeted entity
-    /// does not exist, the underlying store errors, or the command is
-    /// synthetic and not meant to appear as a top-level forward batch).
+    /// An empty `Vec` is "this forward is a no-op; nothing to undo."
+    /// `Err` means the inverse cannot be captured (entity missing,
+    /// store error, or the command is synthetic-only).
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
             Command::Board(cmd) => cmd.capture_inverse(store),
