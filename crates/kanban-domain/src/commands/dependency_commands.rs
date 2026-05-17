@@ -45,9 +45,10 @@ impl DependencyCommand {
             DependencyCommand::AddBlocks(c) => c.capture_inverse(store),
             DependencyCommand::AddRelatesTo(c) => c.capture_inverse(store),
             DependencyCommand::RemoveParent(c) => c.capture_inverse(store),
-            // SetParent, Remove, CreateSubcard land in later tiers
-            // (CreateSubcard needs a struct enrichment to bake the new
-            // card's UUID; Remove needs edge-type capture).
+            DependencyCommand::SetParent(c) => c.capture_inverse(store),
+            // Remove / CreateSubcard land in later tiers
+            // (Remove needs an edge-type field on the command struct;
+            // CreateSubcard needs a baked-in card id).
             _ => Ok(None),
         }
     }
@@ -170,6 +171,18 @@ impl SetParentCommand {
             "Set parent: {} is parent of {}",
             self.parent_id, self.child_id
         )
+    }
+
+    /// Inverse: remove the parent edge we just added. set_parent doesn't
+    /// remove pre-existing parent edges before adding (the verb is
+    /// overloaded), so the inverse just removes the specific edge.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        Ok(Some(vec![Command::Dependency(
+            DependencyCommand::RemoveParent(RemoveParentCommand {
+                child_id: self.child_id,
+                parent_id: self.parent_id,
+            }),
+        )]))
     }
 }
 

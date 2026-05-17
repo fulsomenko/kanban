@@ -586,6 +586,34 @@ async fn test_inverse_update_sprint_restores_prefix() -> KanbanResult<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let parent = ctx.create_card(board.id, col.id, "P".into(), Default::default())?;
+    let child = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Dependency(DependencyCommand::SetParent(
+        SetParentCommand {
+            child_id: child.id,
+            parent_id: parent.id,
+        },
+    ))])?;
+    assert!(
+        ctx.graph()?.cards.has_edge(parent.id, child.id),
+        "parent edge added"
+    );
+
+    assert!(ctx.undo()?);
+    assert!(
+        !ctx.graph()?.cards.has_edge(parent.id, child.id),
+        "parent edge removed by inverse"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_inverse_create_board_redo_round_trip() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let id = Uuid::new_v4();
