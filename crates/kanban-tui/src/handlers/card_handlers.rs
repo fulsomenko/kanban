@@ -354,36 +354,34 @@ impl App {
                     .unwrap_or(false);
 
                 let card_id = uuid::Uuid::new_v4();
-                let create_cmd = Command::Card(CardCommand::Create(CreateCard {
-                    id: card_id,
-                    card_number,
-                    board_id: bid,
-                    column_id: column.id,
-                    title: self.input.as_str().to_string(),
-                    position,
-                    options: kanban_domain::CreateCardOptions::default(),
-                    timestamp: chrono::Utc::now(),
-                }));
-
-                if let Err(e) = self.execute_command(create_cmd) {
-                    tracing::error!("Failed to create card: {}", e);
-                    self.set_error(format!("Failed to create card: {}", e));
-                    return;
-                }
+                let mut commands: Vec<Command> =
+                    vec![Command::Card(CardCommand::Create(CreateCard {
+                        id: card_id,
+                        card_number,
+                        board_id: bid,
+                        column_id: column.id,
+                        title: self.input.as_str().to_string(),
+                        position,
+                        options: kanban_domain::CreateCardOptions::default(),
+                        timestamp: chrono::Utc::now(),
+                    }))];
 
                 if mark_as_complete {
-                    let update_cmd = Command::Card(CardCommand::Update(UpdateCard {
+                    commands.push(Command::Card(CardCommand::Update(UpdateCard {
                         card_id,
                         updates: CardUpdate {
                             status: Some(CardStatus::Done),
                             ..Default::default()
                         },
-                    }));
+                    })));
+                }
 
-                    if let Err(e) = self.execute_command(update_cmd) {
-                        tracing::error!("Failed to update card status: {}", e);
-                        self.set_error(format!("Failed to update card status: {}", e));
-                    }
+                // Single batch so a single undo reverses the whole
+                // "create card" action even when auto-complete fires.
+                if let Err(e) = self.execute_commands_batch(commands) {
+                    tracing::error!("Failed to create card: {}", e);
+                    self.set_error(format!("Failed to create card: {}", e));
+                    return;
                 }
 
                 // Refresh the view-layer task list so the new card's ID is
