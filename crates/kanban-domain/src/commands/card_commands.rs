@@ -64,8 +64,7 @@ impl CardCommand {
             CardCommand::CompactPositions(c) => c.capture_inverse(store),
             CardCommand::Create(c) => c.capture_inverse(store),
             CardCommand::Restore(c) => c.capture_inverse(store),
-            // Delete lands in a later commit (needs archived-card capture).
-            _ => Ok(None),
+            CardCommand::Delete(c) => c.capture_inverse(store),
         }
     }
 }
@@ -342,6 +341,50 @@ impl DeleteCard {
 
     pub fn description(&self) -> String {
         format!("Delete card {}", self.card_id)
+    }
+
+    /// Inverse: re-insert the archived card via `ImportEntities`, then
+    /// re-add every graph edge that was incident on it.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        use crate::dependencies::CardEdgeType;
+        let archived = match store.get_archived_card(self.card_id)? {
+            Some(ac) => ac,
+            None => return Ok(None),
+        };
+        let mut commands: Vec<Command> = vec![Command::Board(super::BoardCommand::Import(
+            super::ImportEntities {
+                archived_cards: vec![archived],
+                ..Default::default()
+            },
+        ))];
+        let graph = store.get_graph()?;
+        for edge in graph.cards.edges() {
+            if !edge.involves(self.card_id) {
+                continue;
+            }
+            let cmd = match edge.edge_type {
+                CardEdgeType::Blocks => {
+                    super::DependencyCommand::AddBlocks(super::AddBlocksDependencyCommand {
+                        blocker_id: edge.source,
+                        blocked_id: edge.target,
+                    })
+                }
+                CardEdgeType::RelatesTo => {
+                    super::DependencyCommand::AddRelatesTo(super::AddRelatesToDependencyCommand {
+                        card_a_id: edge.source,
+                        card_b_id: edge.target,
+                    })
+                }
+                CardEdgeType::ParentOf => {
+                    super::DependencyCommand::SetParent(super::SetParentCommand {
+                        child_id: edge.target,
+                        parent_id: edge.source,
+                    })
+                }
+            };
+            commands.push(Command::Dependency(cmd));
+        }
+        Ok(Some(commands))
     }
 }
 
