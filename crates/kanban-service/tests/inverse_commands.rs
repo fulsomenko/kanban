@@ -761,6 +761,93 @@ async fn test_inverse_assign_cards_to_sprint_restores_prior_bindings() -> Kanban
     Ok(())
 }
 
+/// Undo of AssignCardsToSprint must restore `sprint_logs` to its
+/// exact pre-forward contents — pushing more entries (the previous
+/// behaviour) would bloat the card's sprint history on every
+/// undo/redo cycle.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_assign_cards_to_sprint_restores_sprint_logs() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    let s1 = ctx.create_sprint(board.id, None, None)?;
+    let s2 = ctx.create_sprint(board.id, None, None)?;
+    ctx.execute(vec![Command::Card(CardCommand::AssignToSprint(
+        AssignCardsToSprint {
+            ids: vec![card.id],
+            sprint_id: s1.id,
+        },
+    ))])?;
+    let baseline_logs = ctx.get_card(card.id)?.unwrap().sprint_logs.clone();
+    assert_eq!(baseline_logs.len(), 1, "fixture: one log entry on s1");
+
+    ctx.execute(vec![Command::Card(CardCommand::AssignToSprint(
+        AssignCardsToSprint {
+            ids: vec![card.id],
+            sprint_id: s2.id,
+        },
+    ))])?;
+    assert_eq!(
+        ctx.get_card(card.id)?.unwrap().sprint_logs.len(),
+        2,
+        "forward appends a log for s2"
+    );
+
+    assert!(ctx.undo()?);
+    let restored = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(restored.sprint_id, Some(s1.id), "sprint_id restored to s1");
+    assert_eq!(
+        restored.sprint_logs, baseline_logs,
+        "sprint_logs restored verbatim — no closing entry, no new entry"
+    );
+
+    // Redo + undo again must be idempotent.
+    assert!(ctx.redo()?);
+    assert!(ctx.undo()?);
+    let restored = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(
+        restored.sprint_logs, baseline_logs,
+        "sprint_logs stays clean through a full redo + undo cycle"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_unassign_card_from_sprint_restores_sprint_logs() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let card = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    let sprint = ctx.create_sprint(board.id, None, None)?;
+    ctx.assign_card_to_sprint(card.id, sprint.id)?;
+    let baseline_logs = ctx.get_card(card.id)?.unwrap().sprint_logs.clone();
+    assert_eq!(baseline_logs.len(), 1);
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::UnassignFromSprint(
+        UnassignCardFromSprint {
+            card_id: card.id,
+            timestamp: chrono::Utc::now(),
+        },
+    ))])?;
+    let after_forward = ctx.get_card(card.id)?.unwrap();
+    assert!(after_forward.sprint_id.is_none());
+    assert!(
+        after_forward.sprint_logs[0].ended_at.is_some(),
+        "forward closes the current log"
+    );
+
+    assert!(ctx.undo()?);
+    let restored = ctx.get_card(card.id)?.unwrap();
+    assert_eq!(restored.sprint_id, Some(sprint.id));
+    assert_eq!(
+        restored.sprint_logs, baseline_logs,
+        "sprint_logs restored verbatim — closing entry undone, not appended"
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_inverse_compact_column_positions_restores_gaps() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;

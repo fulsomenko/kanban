@@ -1,7 +1,7 @@
 use super::{Command, CommandContext};
 use crate::data_store::DataStore;
 use crate::dependencies::card_graph::CardGraphExt;
-use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult};
+use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult, SprintLog};
 use chrono::{DateTime, Utc};
 use kanban_core::Editable;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,10 @@ pub enum CardCommand {
     UnassignFromSprint(UnassignCardFromSprint),
     ApplyMetadata(ApplyCardMetadata),
     CompactPositions(CompactColumnPositions),
+    /// Synthetic: restore a card's sprint binding and sprint_logs to a
+    /// captured pre-state. Emitted by Assign/Unassign inverses; not a
+    /// user-facing command.
+    RestoreSprintAttachment(RestoreCardSprintAttachment),
 }
 
 impl CardCommand {
@@ -35,6 +39,7 @@ impl CardCommand {
             CardCommand::UnassignFromSprint(c) => c.execute(context),
             CardCommand::ApplyMetadata(c) => c.execute(context),
             CardCommand::CompactPositions(c) => c.execute(context),
+            CardCommand::RestoreSprintAttachment(c) => c.execute(context),
         }
     }
 
@@ -50,6 +55,7 @@ impl CardCommand {
             CardCommand::UnassignFromSprint(c) => c.description(),
             CardCommand::ApplyMetadata(c) => c.description(),
             CardCommand::CompactPositions(c) => c.description(),
+            CardCommand::RestoreSprintAttachment(c) => c.description(),
         }
     }
 
@@ -65,7 +71,43 @@ impl CardCommand {
             CardCommand::Create(c) => c.capture_inverse(store),
             CardCommand::Restore(c) => c.capture_inverse(store),
             CardCommand::Delete(c) => c.capture_inverse(store),
+            CardCommand::RestoreSprintAttachment(c) => c.capture_inverse(store),
         }
+    }
+}
+
+/// Restore a card's `sprint_id`, `sprint_logs`, and `updated_at` to a
+/// captured pre-state. Emitted by `AssignCardsToSprint` and
+/// `UnassignCardFromSprint` inverses to round-trip the sprint-history
+/// log cleanly — otherwise the inverse would push a new log entry
+/// instead of removing the one the forward added.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreCardSprintAttachment {
+    pub card_id: Uuid,
+    pub sprint_id: Option<Uuid>,
+    pub sprint_logs: Vec<SprintLog>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl RestoreCardSprintAttachment {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut card = context.get_card(self.card_id)?;
+        card.sprint_id = self.sprint_id;
+        card.sprint_logs = self.sprint_logs.clone();
+        card.updated_at = self.updated_at;
+        context.store.upsert_card(card)?;
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!("Restore sprint attachment for card {}", self.card_id)
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Err(KanbanError::Internal(format!(
+            "RestoreCardSprintAttachment is a synthetic command — it must only appear inside an inverse batch (Assign/Unassign undo), never as a top-level forward command. Card id: {}",
+            self.card_id
+        )))
     }
 }
 
@@ -453,11 +495,12 @@ pub struct AssignCardsToSprint {
 }
 
 impl AssignCardsToSprint {
-    /// Inverse: per-card restore of the prior sprint binding. For each
-    /// card that had a different sprint before, emit
-    /// `AssignCardsToSprint([card], old_sprint)`. For each card that had
-    /// no sprint, emit `UnassignCardFromSprint(card)`. Cards skipped by
-    /// the forward (not found) are also skipped here.
+    /// Inverse: per-card restore of pre-state — `sprint_id` AND
+    /// `sprint_logs`. Using `RestoreSprintAttachment` instead of
+    /// re-emitting Assign/Unassign avoids pushing new log entries that
+    /// would bloat the card's sprint history on every undo/redo cycle.
+    /// Cards skipped by the forward (not found, or already on the
+    /// target sprint) are also skipped here.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let mut commands: Vec<Command> = Vec::new();
         for id in &self.ids {
@@ -465,28 +508,17 @@ impl AssignCardsToSprint {
                 Some(c) => c,
                 None => continue,
             };
-            match card.sprint_id {
-                Some(old_sprint_id) if old_sprint_id != self.sprint_id => {
-                    commands.push(Command::Card(CardCommand::AssignToSprint(
-                        AssignCardsToSprint {
-                            ids: vec![card.id],
-                            sprint_id: old_sprint_id,
-                        },
-                    )));
-                }
-                Some(_) => {
-                    // Same sprint as the forward — forward was a no-op for
-                    // this card; no inverse needed.
-                }
-                None => {
-                    commands.push(Command::Card(CardCommand::UnassignFromSprint(
-                        UnassignCardFromSprint {
-                            card_id: card.id,
-                            timestamp: chrono::Utc::now(),
-                        },
-                    )));
-                }
+            if card.sprint_id == Some(self.sprint_id) {
+                continue;
             }
+            commands.push(Command::Card(CardCommand::RestoreSprintAttachment(
+                RestoreCardSprintAttachment {
+                    card_id: card.id,
+                    sprint_id: card.sprint_id,
+                    sprint_logs: card.sprint_logs.clone(),
+                    updated_at: card.updated_at,
+                },
+            )));
         }
         Ok(commands)
     }
@@ -550,23 +582,28 @@ impl UnassignCardFromSprint {
 
     /// Inverse: if the card currently has a sprint, re-assign it to that
     /// sprint via AssignCardsToSprint. The sprint log gets a fresh
-    /// entry (Utc::now() inside the model layer — known timestamp drift,
-    /// out of KAN-191 scope).
-    /// If the card had no sprint, undoing is a no-op (empty inverse).
+    /// Inverse: restore `sprint_id`, `sprint_logs`, and `updated_at` to
+    /// their pre-execute values via `RestoreSprintAttachment`. The card
+    /// is captured before the forward closes the current sprint log,
+    /// so the restored log vec is intact (no phantom closing entry).
+    /// If the card had no sprint to begin with, the forward is a no-op
+    /// and the inverse is empty.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let card = match store.get_card(self.card_id)? {
             Some(c) => c,
             None => return Err(KanbanError::not_found("card", self.card_id)),
         };
-        match card.sprint_id {
-            Some(sprint_id) => Ok(vec![Command::Card(CardCommand::AssignToSprint(
-                AssignCardsToSprint {
-                    ids: vec![self.card_id],
-                    sprint_id,
-                },
-            ))]),
-            None => Ok(vec![]),
+        if card.sprint_id.is_none() {
+            return Ok(vec![]);
         }
+        Ok(vec![Command::Card(CardCommand::RestoreSprintAttachment(
+            RestoreCardSprintAttachment {
+                card_id: self.card_id,
+                sprint_id: card.sprint_id,
+                sprint_logs: card.sprint_logs.clone(),
+                updated_at: card.updated_at,
+            },
+        ))])
     }
 }
 
