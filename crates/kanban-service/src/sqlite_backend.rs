@@ -182,12 +182,6 @@ impl CommandStore for SqliteBackend {
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
         self.mem.load_commands(from, to)
     }
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        self.mem.truncate_commands_after(after)
-    }
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        self.mem.shift_commands(drop_count)
-    }
 }
 
 // ─── KanbanBackend ────────────────────────────────────────────────────────────

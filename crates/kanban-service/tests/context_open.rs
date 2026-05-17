@@ -436,9 +436,9 @@ async fn test_open_context_with_corrupt_json_returns_error_on_first_read() {
     );
 }
 
-/// After `reload()`, the backend must not be marked dirty. With the unfixed
-/// code, `truncate_commands_after(0)` routes through `with_mutate` which sets
-/// `dirty = true`, causing a spurious save after every external-change reload.
+/// After `reload()`, the backend must not be marked dirty. A dirty
+/// reload would cause a spurious save after every external-change
+/// reload.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_reload_does_not_mark_backend_dirty() {
     let dir = tempdir().unwrap();

@@ -39,48 +39,6 @@ macro_rules! contract_tests {
             let batches = store.load_commands(0, 1).unwrap();
             assert_eq!(batches.len(), 1);
         }
-
-        #[test]
-        fn test_truncate_commands_after() {
-            let store = $make_store;
-            store.append_commands(&[make_cmd("B1")]).unwrap();
-            store.append_commands(&[make_cmd("B2")]).unwrap();
-            store.append_commands(&[make_cmd("B3")]).unwrap();
-
-            store.truncate_commands_after(2).unwrap();
-            assert_eq!(store.command_count().unwrap(), 2);
-
-            let batches = store.load_commands(0, 2).unwrap();
-            assert_eq!(batches.len(), 2);
-        }
-
-        #[test]
-        fn test_truncate_commands_after_zero_clears_all() {
-            let store = $make_store;
-            store.append_commands(&[make_cmd("B1")]).unwrap();
-            store.append_commands(&[make_cmd("B2")]).unwrap();
-
-            store.truncate_commands_after(0).unwrap();
-            assert_eq!(store.command_count().unwrap(), 0);
-        }
-
-        #[test]
-        fn test_shift_commands_renumbers() {
-            let store = $make_store;
-            store.append_commands(&[make_cmd("B1")]).unwrap();
-            store.append_commands(&[make_cmd("B2")]).unwrap();
-            store.append_commands(&[make_cmd("B3")]).unwrap();
-
-            store.shift_commands(1).unwrap();
-            assert_eq!(
-                store.command_count().unwrap(),
-                2,
-                "shift_commands(1) should drop the first batch"
-            );
-
-            let batches = store.load_commands(0, 2).unwrap();
-            assert_eq!(batches.len(), 2);
-        }
     };
 }
 

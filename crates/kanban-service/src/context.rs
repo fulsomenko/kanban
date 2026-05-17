@@ -252,8 +252,9 @@ impl KanbanContext {
         self.undo_stack.can_redo()
     }
 
+    /// Drop the per-session undo/redo history. The audit log is
+    /// append-only and is not touched.
     pub fn clear_history(&mut self) -> KanbanResult<()> {
-        self.backend.truncate_commands_after(0)?;
         self.undo_stack.clear();
         Ok(())
     }
@@ -1308,7 +1309,6 @@ impl KanbanOperations for KanbanContext {
             }
         }
 
-        self.backend.truncate_commands_after(0)?;
         self.undo_stack.clear();
         self.dirty = true;
 

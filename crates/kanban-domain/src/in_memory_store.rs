@@ -482,23 +482,6 @@ impl CommandStore for InMemoryStore {
         let log = self.read_log()?;
         Ok((log.clone(), log.len() as u64))
     }
-
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        let mut log = self.write_log()?;
-        log.truncate(after as usize);
-        Ok(())
-    }
-
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        let drop = drop_count as usize;
-        let mut log = self.write_log()?;
-        if drop >= log.len() {
-            log.clear();
-        } else {
-            log.drain(..drop);
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -1345,9 +1328,6 @@ mod tests {
 
         assert!(store.load_commands(0, 1).is_ok());
         assert_eq!(store.load_commands(0, 1).unwrap().len(), 1);
-
-        assert!(store.truncate_commands_after(0).is_ok());
-        assert_eq!(store.command_count().unwrap(), 0);
     }
 
     // Concurrency test
@@ -1388,55 +1368,6 @@ mod tests {
 
         let boards = store.list_boards().unwrap();
         assert_eq!(boards.len(), 10);
-    }
-
-    // shift_commands tests
-
-    #[test]
-    fn test_in_memory_store_shift_commands_removes_oldest() {
-        let store = InMemoryStore::new();
-        let cmd1 = crate::commands::Command::Board(crate::commands::BoardCommand::Create(
-            crate::commands::CreateBoard {
-                id: Uuid::new_v4(),
-                name: "B1".into(),
-                card_prefix: None,
-                position: 0,
-            },
-        ));
-        let cmd2 = crate::commands::Command::Board(crate::commands::BoardCommand::Create(
-            crate::commands::CreateBoard {
-                id: Uuid::new_v4(),
-                name: "B2".into(),
-                card_prefix: None,
-                position: 1,
-            },
-        ));
-        let cmd3 = crate::commands::Command::Board(crate::commands::BoardCommand::Create(
-            crate::commands::CreateBoard {
-                id: Uuid::new_v4(),
-                name: "B3".into(),
-                card_prefix: None,
-                position: 2,
-            },
-        ));
-
-        store.append_commands(&[cmd1]).unwrap();
-        store.append_commands(&[cmd2]).unwrap();
-        store.append_commands(&[cmd3]).unwrap();
-        assert_eq!(store.command_count().unwrap(), 3);
-
-        store.shift_commands(2).unwrap();
-        assert_eq!(store.command_count().unwrap(), 1);
-
-        let batches = store.load_commands(0, 1).unwrap();
-        assert_eq!(batches.len(), 1);
-        if let crate::commands::Command::Board(crate::commands::BoardCommand::Create(ref cb)) =
-            batches[0][0]
-        {
-            assert_eq!(cb.name, "B3", "only the last command should remain");
-        } else {
-            panic!("unexpected command variant");
-        }
     }
 
     #[test]
