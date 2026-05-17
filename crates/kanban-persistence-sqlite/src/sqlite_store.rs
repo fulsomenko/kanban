@@ -401,7 +401,7 @@ impl SqliteStore {
         Ok(())
     }
 
-    // ── Command log (KAN-191 cross-session undo) ──────────────────────────
+    // ── Command log (audit foundation; not yet wired through SqliteBackend) ──
 
     /// Append a single command batch at logical index `batch_index`.
     /// `commands_json` is the serde-JSON encoding of the `Vec<Command>` batch.

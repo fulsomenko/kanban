@@ -444,7 +444,7 @@ async fn test_sqlite_open_creates_command_log_on_fresh_database() {
     .unwrap();
     assert!(
         has_command_log,
-        "KAN-191: fresh database must contain a command_log table for cross-session undo"
+        "fresh database must contain a command_log table for the audit log"
     );
 }
 
