@@ -18,8 +18,8 @@ use kanban_domain::commands::{
     ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, ApplyBoardSettings,
     ApplyCardMetadata, ArchiveCards, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand,
     ColumnCommand, Command, CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn,
-    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveParentCommand,
-    SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
+    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveDependencyCommand,
+    RemoveParentCommand, SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
     UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
@@ -804,6 +804,37 @@ async fn test_inverse_compact_column_positions_restores_gaps() -> KanbanResult<(
     assert_eq!(ctx.get_card(a.id)?.unwrap().position, pre_pos_a);
     assert_eq!(ctx.get_card(b.id)?.unwrap().position, pre_pos_b);
     assert_eq!(ctx.get_card(c.id)?.unwrap().position, pre_pos_c);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
+    let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
+        AddBlocksDependencyCommand {
+            blocker_id: a.id,
+            blocked_id: b.id,
+        },
+    ))])?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Dependency(DependencyCommand::Remove(
+        RemoveDependencyCommand {
+            source_id: a.id,
+            target_id: b.id,
+        },
+    ))])?;
+    assert!(!ctx.graph()?.cards.has_edge(a.id, b.id));
+
+    assert!(ctx.undo()?);
+    assert!(
+        ctx.graph()?.cards.has_edge(a.id, b.id),
+        "edge restored by inverse"
+    );
     Ok(())
 }
 

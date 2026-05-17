@@ -47,8 +47,7 @@ impl DependencyCommand {
             DependencyCommand::RemoveParent(c) => c.capture_inverse(store),
             DependencyCommand::SetParent(c) => c.capture_inverse(store),
             DependencyCommand::CreateSubcard(c) => c.capture_inverse(store),
-            // Remove needs an edge-type field on the struct (Tier 3).
-            _ => Ok(None),
+            DependencyCommand::Remove(c) => c.capture_inverse(store),
         }
     }
 }
@@ -145,6 +144,45 @@ impl RemoveDependencyCommand {
             "Remove dependency: {} -> {}",
             self.source_id, self.target_id
         )
+    }
+
+    /// Inverse: re-add every edge that connects (source_id, target_id).
+    /// The underlying `remove_edge` strips ALL edges between the pair
+    /// regardless of type, so the capture must walk the graph and
+    /// remember each edge's type. The inverse then emits one Add* or
+    /// SetParent command per captured edge.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Option<Vec<Command>>> {
+        use crate::dependencies::CardEdgeType;
+        let graph = store.get_graph()?;
+        let mut commands: Vec<Command> = Vec::new();
+        for edge in graph.cards.edges() {
+            if !edge.connects(self.source_id, self.target_id) {
+                continue;
+            }
+            let cmd = match edge.edge_type {
+                CardEdgeType::Blocks => {
+                    Command::Dependency(DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
+                        blocker_id: edge.source,
+                        blocked_id: edge.target,
+                    }))
+                }
+                CardEdgeType::RelatesTo => Command::Dependency(DependencyCommand::AddRelatesTo(
+                    AddRelatesToDependencyCommand {
+                        card_a_id: edge.source,
+                        card_b_id: edge.target,
+                    },
+                )),
+                CardEdgeType::ParentOf => {
+                    // Edge: source = parent, target = child.
+                    Command::Dependency(DependencyCommand::SetParent(SetParentCommand {
+                        child_id: edge.target,
+                        parent_id: edge.source,
+                    }))
+                }
+            };
+            commands.push(cmd);
+        }
+        Ok(Some(commands))
     }
 }
 
