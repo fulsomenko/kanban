@@ -248,46 +248,45 @@ impl KanbanContext {
                 .truncate_commands_after(self.undo_cursor as u64)?;
         }
 
-        // Capture inverses BEFORE running the forward batch. Each command
-        // reads pre-state from the DataStore and yields the CRUD operations
-        // that would undo it. If any command in the batch returns `None`
-        // (no inverse implementation yet), we skip pushing onto UndoStack
-        // for the whole batch — undo for it falls back to the legacy
-        // replay path.
+        // Capture inverses incrementally — each command's inverse must
+        // observe the state left behind by every PREVIOUS command in the
+        // batch, otherwise a later command's inverse could reference
+        // entities that no longer exist (e.g. CompactColumnPositions
+        // capturing positions of a card that an earlier ArchiveCards
+        // removed).
         //
-        // Composition order: forward [F1, F2, ...] produces per-command
-        // inverse batches [F1_inv..., F2_inv..., ...]. To undo, we run
-        // each command's inverse in the REVERSE order of the forwards so
-        // that later commands' undo logic sees the state they left behind.
-        // Within a single command's inverse batch the order is preserved
-        // (the inverse author chose it).
+        // If any command's inverse comes back as None, the whole batch
+        // falls back to the legacy replay path — we still run the
+        // forwards (inside the same transaction) but don't push onto the
+        // UndoStack.
+        //
+        // Composition order at undo time: for forward [F1, F2, ...] we
+        // execute inverses in REVERSE order [Fn_inv, ..., F1_inv], so
+        // the state each Fk_inv runs against matches the state Fk saw at
+        // capture time (post-F(k-1) forward).
+        let backend = Arc::clone(&self.backend);
+        let cmds = &commands;
         let mut per_cmd_inverses: Vec<Vec<Command>> = Vec::new();
         let mut all_inverses_available = true;
-        {
-            let store: &dyn DataStore = self.backend.as_data_store();
-            for cmd in &commands {
-                match cmd.capture_inverse(store)? {
-                    Some(batch) => per_cmd_inverses.push(batch),
-                    None => {
-                        all_inverses_available = false;
-                        break;
+        self.backend.with_transaction(&mut || {
+            let store: &dyn DataStore = backend.as_data_store();
+            let ctx = CommandContext { store };
+            for cmd in cmds.iter() {
+                if all_inverses_available {
+                    match cmd.capture_inverse(store)? {
+                        Some(batch) => per_cmd_inverses.push(batch),
+                        None => all_inverses_available = false,
                     }
                 }
+                cmd.execute(&ctx)?;
             }
-        }
+            Ok(())
+        })?;
         let inverses: Vec<Command> = if all_inverses_available {
             per_cmd_inverses.into_iter().rev().flatten().collect()
         } else {
             Vec::new()
         };
-
-        let backend = Arc::clone(&self.backend);
-        let cmds = &commands;
-        self.backend.with_transaction(&mut || {
-            let store: &dyn DataStore = backend.as_data_store();
-            let ctx = CommandContext { store };
-            cmds.iter().try_for_each(|cmd| cmd.execute(&ctx))
-        })?;
 
         // Append to the replay log (legacy path) AND, when inverses are
         // available, push onto the UndoStack.
