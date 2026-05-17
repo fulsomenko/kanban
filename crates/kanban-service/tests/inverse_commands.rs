@@ -1195,3 +1195,102 @@ async fn test_set_archived_cards_sprint_rejects_top_level_execute() {
         "error must name the offending command, got: {msg}"
     );
 }
+
+/// Undo of `KanbanContext::delete_board` must restore the full cascade:
+/// the board itself, its columns, live and archived cards, sprints,
+/// and dependency-graph edges that lived among those cards. Pins the
+/// composition of the 6-command DeleteBoard cascade through its
+/// reverse-order inverse batch.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
+    use kanban_domain::dependencies::CardGraphExt;
+
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("Cascade".into(), Some("CSC".into()))?;
+    let todo = ctx.create_column(board.id, "TODO".into(), None)?;
+    let done = ctx.create_column(board.id, "Done".into(), None)?;
+    let c1 = ctx.create_card(board.id, todo.id, "C1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, todo.id, "C2".into(), Default::default())?;
+    let c3 = ctx.create_card(board.id, done.id, "C3".into(), Default::default())?;
+    let sprint_a = ctx.create_sprint(board.id, None, None)?;
+    let _sprint_b = ctx.create_sprint(board.id, None, None)?;
+    ctx.assign_card_to_sprint(c1.id, sprint_a.id)?;
+    ctx.archive_cards(vec![c2.id])?;
+
+    // Add a graph edge so the cascade has something to clean up.
+    let mut graph = ctx.graph()?;
+    graph.cards.add_blocks(c1.id, c3.id).unwrap();
+    ctx.backend().set_graph(graph)?;
+    ctx.clear_history()?;
+
+    let baseline = ctx.snapshot()?;
+    let baseline_board_ids: std::collections::HashSet<_> =
+        baseline.boards.iter().map(|b| b.id).collect();
+    let baseline_column_ids: std::collections::HashSet<_> =
+        baseline.columns.iter().map(|c| c.id).collect();
+    let baseline_card_ids: std::collections::HashSet<_> =
+        baseline.cards.iter().map(|c| c.id).collect();
+    let baseline_archived_ids: std::collections::HashSet<_> = baseline
+        .archived_cards
+        .iter()
+        .map(|ac| ac.card.id)
+        .collect();
+    let baseline_sprint_ids: std::collections::HashSet<_> =
+        baseline.sprints.iter().map(|s| s.id).collect();
+    let baseline_edge_count = baseline.graph.cards.edges().len();
+    assert!(baseline_edge_count > 0, "fixture must include graph edges");
+
+    ctx.delete_board(board.id)?;
+
+    assert!(ctx.boards()?.is_empty(), "board deleted");
+    assert!(ctx.columns()?.is_empty(), "columns deleted");
+    assert!(ctx.cards()?.is_empty(), "live cards deleted");
+    assert!(ctx.archived_cards()?.is_empty(), "archived cards deleted");
+    assert!(ctx.sprints()?.is_empty(), "sprints deleted");
+    assert_eq!(
+        ctx.graph()?.cards.edges().len(),
+        0,
+        "card graph edges deleted"
+    );
+
+    assert!(ctx.undo()?, "cascade undo must succeed");
+
+    let restored = ctx.snapshot()?;
+    let restored_board_ids: std::collections::HashSet<_> =
+        restored.boards.iter().map(|b| b.id).collect();
+    let restored_column_ids: std::collections::HashSet<_> =
+        restored.columns.iter().map(|c| c.id).collect();
+    let restored_card_ids: std::collections::HashSet<_> =
+        restored.cards.iter().map(|c| c.id).collect();
+    let restored_archived_ids: std::collections::HashSet<_> = restored
+        .archived_cards
+        .iter()
+        .map(|ac| ac.card.id)
+        .collect();
+    let restored_sprint_ids: std::collections::HashSet<_> =
+        restored.sprints.iter().map(|s| s.id).collect();
+
+    assert_eq!(restored_board_ids, baseline_board_ids, "board restored");
+    assert_eq!(restored_column_ids, baseline_column_ids, "columns restored");
+    assert_eq!(restored_card_ids, baseline_card_ids, "live cards restored");
+    assert_eq!(
+        restored_archived_ids, baseline_archived_ids,
+        "archived cards restored"
+    );
+    assert_eq!(restored_sprint_ids, baseline_sprint_ids, "sprints restored");
+    assert_eq!(
+        restored.graph.cards.edges().len(),
+        baseline_edge_count,
+        "graph edges restored"
+    );
+
+    // Verify a per-card invariant beyond just id presence: c1's sprint
+    // binding must be intact.
+    let c1_restored = restored.cards.iter().find(|c| c.id == c1.id).unwrap();
+    assert_eq!(
+        c1_restored.sprint_id,
+        Some(sprint_a.id),
+        "card sprint binding survives cascade undo"
+    );
+    Ok(())
+}
