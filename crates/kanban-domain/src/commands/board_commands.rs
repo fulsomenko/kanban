@@ -17,6 +17,11 @@ pub enum BoardCommand {
     Delete(DeleteBoard),
     ApplySettings(ApplyBoardSettings),
     Import(ImportEntities),
+    /// Internal: replace a board's sprint-name pool wholesale. Used by
+    /// `UpdateSprint`'s inverse to restore the pool that name allocation
+    /// mutated. Not a user-facing command — accessed only via the
+    /// inverse-capture path.
+    RestoreSprintPool(RestoreSprintPool),
 }
 
 impl BoardCommand {
@@ -29,6 +34,7 @@ impl BoardCommand {
             BoardCommand::Delete(c) => c.execute(context),
             BoardCommand::ApplySettings(c) => c.execute(context),
             BoardCommand::Import(c) => c.execute(context),
+            BoardCommand::RestoreSprintPool(c) => c.execute(context),
         }
     }
 
@@ -41,6 +47,7 @@ impl BoardCommand {
             BoardCommand::Delete(c) => c.description(),
             BoardCommand::ApplySettings(c) => c.description(),
             BoardCommand::Import(c) => c.description(),
+            BoardCommand::RestoreSprintPool(c) => c.description(),
         }
     }
 
@@ -53,7 +60,42 @@ impl BoardCommand {
             BoardCommand::ApplySettings(c) => c.capture_inverse(store),
             BoardCommand::Delete(c) => c.capture_inverse(store),
             BoardCommand::Import(c) => c.capture_inverse(store),
+            BoardCommand::RestoreSprintPool(c) => c.capture_inverse(store),
         }
+    }
+}
+
+/// Internal — replace a board's sprint-name pool and used-count
+/// wholesale. Emitted by `UpdateSprint::capture_inverse` to restore
+/// pool state that the forward command's name allocation mutated.
+///
+/// Not exposed to user-facing CLI/MCP commands. `capture_inverse`
+/// rejects top-level execute (the command is synthetic-only).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreSprintPool {
+    pub board_id: Uuid,
+    pub sprint_names: Vec<String>,
+    pub sprint_name_used_count: usize,
+}
+
+impl RestoreSprintPool {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut board = context.get_board(self.board_id)?;
+        board.sprint_names = self.sprint_names.clone();
+        board.sprint_name_used_count = self.sprint_name_used_count;
+        context.store.upsert_board(board)?;
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!("Restore sprint-name pool for board {}", self.board_id)
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Err(KanbanError::Internal(format!(
+            "RestoreSprintPool is a synthetic command — it must only appear inside an inverse batch (UpdateSprint undo), never as a top-level forward command. Board id: {}",
+            self.board_id
+        )))
     }
 }
 
@@ -170,14 +212,6 @@ impl UpdateBoard {
                 },
             },
             position: upd.position.map(|_| board.position),
-            sprint_names: upd
-                .sprint_names
-                .as_ref()
-                .map(|_| board.sprint_names.clone()),
-            sprint_name_used_count: upd
-                .sprint_name_used_count
-                .as_ref()
-                .map(|_| board.sprint_name_used_count),
         };
         Ok(vec![Command::Board(BoardCommand::Update(UpdateBoard {
             board_id: self.board_id,

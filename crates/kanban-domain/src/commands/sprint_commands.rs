@@ -91,9 +91,9 @@ impl UpdateSprint {
     /// When the forward command sets `name`, the board's `sprint_names`
     /// pool and `sprint_name_used_count` are mutated as a side effect.
     /// We capture the pre-state of both and emit a multi-command inverse
-    /// that restores the board's pool first (UpdateBoard with the
-    /// internal sprint_names / sprint_name_used_count fields) and then
-    /// restores the sprint's `name_index`.
+    /// that restores the board's pool first (via the synthetic
+    /// `RestoreSprintPool` command) and then restores the sprint's
+    /// `name_index`.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         use crate::field_update::FieldUpdate;
         let sprint = match store.get_sprint(self.sprint_id)? {
@@ -107,14 +107,11 @@ impl UpdateSprint {
                 Some(b) => b,
                 None => return Err(KanbanError::not_found("board", sprint.board_id)),
             };
-            Some(Command::Board(super::BoardCommand::Update(
-                super::UpdateBoard {
+            Some(Command::Board(super::BoardCommand::RestoreSprintPool(
+                super::RestoreSprintPool {
                     board_id: board.id,
-                    updates: crate::BoardUpdate {
-                        sprint_names: Some(board.sprint_names.clone()),
-                        sprint_name_used_count: Some(board.sprint_name_used_count),
-                        ..Default::default()
-                    },
+                    sprint_names: board.sprint_names.clone(),
+                    sprint_name_used_count: board.sprint_name_used_count,
                 },
             )))
         } else {

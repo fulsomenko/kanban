@@ -57,8 +57,6 @@ pub async fn test_board_update_all_optional_fields_roundtrip(factory: &BackendFa
             active_sprint_id: FieldUpdate::Set(sprint.id),
             completion_column_id: FieldUpdate::Set(col.id),
             position: None,
-            sprint_names: None,
-            sprint_name_used_count: None,
         },
     )
     .unwrap();
