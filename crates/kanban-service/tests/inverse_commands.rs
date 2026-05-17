@@ -1185,6 +1185,85 @@ async fn test_set_archived_cards_sprint_rejects_top_level_execute() {
     );
 }
 
+/// A failed undo (inverse rejected by the backend) must leave the
+/// UndoStack pinned on the same entry — the user's next attempt should
+/// see the same work to do. Engineered by directly deleting the
+/// targeted card out from under the command pipeline so the inverse
+/// `MoveCard` lookup fails with `NotFound`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_failed_undo_leaves_undo_stack_pinned_for_retry() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col_a = ctx.create_column(board.id, "A".into(), None)?;
+    let col_b = ctx.create_column(board.id, "B".into(), None)?;
+    let card = ctx.create_card(board.id, col_a.id, "C".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::Move(MoveCard {
+        card_id: card.id,
+        new_column_id: col_b.id,
+        new_position: 0,
+    }))])?;
+    assert_eq!(ctx.undo_depth(), 1);
+
+    // Side-channel mutation: delete the card directly so the inverse
+    // MoveCard's `get_card` lookup fails inside with_transaction.
+    ctx.backend().delete_card(card.id)?;
+
+    let result = ctx.undo();
+    assert!(
+        result.is_err(),
+        "undo should fail when the inverse target is missing"
+    );
+
+    assert_eq!(
+        ctx.undo_depth(),
+        1,
+        "failed undo must leave the cursor where it was"
+    );
+    assert!(
+        ctx.can_undo(),
+        "retry path must still see the same entry available"
+    );
+    Ok(())
+}
+
+/// Same invariant for redo: a failed redo leaves the cursor pinned.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_failed_redo_leaves_undo_stack_pinned_for_retry() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col_a = ctx.create_column(board.id, "A".into(), None)?;
+    let col_b = ctx.create_column(board.id, "B".into(), None)?;
+    let card = ctx.create_card(board.id, col_a.id, "C".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    ctx.execute(vec![Command::Card(CardCommand::Move(MoveCard {
+        card_id: card.id,
+        new_column_id: col_b.id,
+        new_position: 0,
+    }))])?;
+    ctx.undo()?;
+    assert_eq!(ctx.redo_depth(), 1);
+
+    // Side-channel: delete the card so the forward MoveCard fails on redo.
+    ctx.backend().delete_card(card.id)?;
+
+    let result = ctx.redo();
+    assert!(
+        result.is_err(),
+        "redo should fail when the forward target is missing"
+    );
+
+    assert_eq!(
+        ctx.redo_depth(),
+        1,
+        "failed redo must leave the cursor where it was"
+    );
+    assert!(ctx.can_redo(), "retry path must still see the same entry");
+    Ok(())
+}
+
 /// Undo of `KanbanContext::delete_board` must restore the full cascade:
 /// the board itself, its columns, live and archived cards, sprints,
 /// and dependency-graph edges that lived among those cards. Pins the
