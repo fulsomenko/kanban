@@ -1,21 +1,30 @@
 use crate::commands::Command;
 use crate::KanbanResult;
 
-/// Repository for storing and replaying command batches (undo/redo log).
+/// Append-only audit log of every command batch the system has executed.
 ///
-/// Each entry in the log is one "undo unit" — a batch of commands that were
-/// executed together via a single `execute(cmds)` call. Undo replays batches
-/// 0..cursor from the baseline snapshot; redo applies batch[cursor].
+/// KAN-191 split the previous "CommandStore" role into two concerns:
+///
+/// 1. **Audit log** (this trait): a chronological record of what
+///    happened, intended for the audit-log UI (KAN-36) and any future
+///    cross-session inspection or replay-from-zero analysis. Persistence
+///    is backend-defined — JSON keeps it in memory per session, SQLite
+///    persists it in a `command_log` table.
+///
+/// 2. **UndoStack** (`crate::commands`-aware, lives in `KanbanContext`):
+///    per-session, transient, with `(forward, inverse)` pairs. This is
+///    what drives `undo()` / `redo()`.
+///
+/// Today's name (`CommandStore`) is kept for compatibility; a future
+/// rename to `AuditLog` is on the table.
 ///
 /// # Index semantics
 ///
 /// Indices are **logical**, not physical. After `shift_commands(n)` the
 /// surviving batches are renumbered so that the first one becomes index 0.
-/// Callers (e.g. `KanbanContext`) track `undo_cursor` as a logical offset
-/// from the current baseline, so they are unaffected by the renumbering.
 pub trait CommandStore: Send + Sync {
-    /// Appends a batch of commands as one undo unit. Returns the new logical
-    /// batch count (which equals the new cursor position after execute).
+    /// Appends a batch of commands as one audit entry. Returns the new
+    /// logical batch count.
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64>;
 
     /// Returns the number of batches currently stored (logical count).
