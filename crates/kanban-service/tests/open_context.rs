@@ -68,13 +68,10 @@ mod sqlite_tests {
     }
 }
 
-/// `KanbanContext::open_deferred` without `initialize_undo_state` is now
-/// fine to execute against — the undo state lives in `UndoStack` and is
-/// initialised in `open_deferred`. The previous test guarded a
-/// baseline-snapshot precondition that no longer exists (KAN-191 Phase 7
-/// dropped it).
+/// A context from `open_deferred` is immediately ready to execute
+/// against. The UndoStack starts empty; no extra setup step needed.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_execute_without_initialize_succeeds() {
+async fn test_open_deferred_context_executes_immediately() {
     use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
     use kanban_domain::InMemoryStore;
     use std::sync::Arc;

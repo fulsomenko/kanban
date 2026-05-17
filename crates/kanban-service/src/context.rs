@@ -55,10 +55,8 @@ pub struct KanbanContext {
 
 impl KanbanContext {
     /// Zero-I/O constructor. Wraps `backend` without reading any data.
-    /// Call [`initialize_undo_state`][Self::initialize_undo_state] before the
-    /// first [`execute`][Self::execute], [`undo`][Self::undo], or
-    /// [`redo`][Self::redo], or use [`open`][Self::open]
-    /// which calls it automatically.
+    /// Use [`open`][Self::open] instead when a lazy backend's load
+    /// errors should surface at construction time.
     pub fn open_deferred(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> Self {
         Self {
             backend,
@@ -69,14 +67,12 @@ impl KanbanContext {
         }
     }
 
-    /// Wraps `backend` and eagerly initializes the undo cursor so that
-    /// `can_undo()` / `can_redo()` return correct values before the first
-    /// mutation. Use this instead of [`open_deferred`][Self::open_deferred]
-    /// wherever the caller needs undo state to be populated immediately
-    /// (CLI, MCP, TUI startup).
+    /// Wraps `backend` and forces a lazy backend's I/O so any
+    /// deserialization or read failure surfaces here, before the
+    /// caller starts mutating.
     pub async fn open(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> KanbanResult<Self> {
-        let mut ctx = Self::open_deferred(backend, config);
-        ctx.initialize_undo_state()?;
+        let ctx = Self::open_deferred(backend, config);
+        ctx.backend.command_count()?;
         Ok(ctx)
     }
 
@@ -174,15 +170,6 @@ impl KanbanContext {
     }
 
     // ── Undo / Redo ───────────────────────────────────────────────────────────
-
-    /// Idempotent session-start hook. Discards any persisted audit-log
-    /// entries from a prior session so the new session opens clean.
-    pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
-        if self.backend.command_count()? > 0 {
-            self.backend.truncate_commands_after(0)?;
-        }
-        Ok(())
-    }
 
     /// Execute a batch as one undo unit. Entity mutations, inverse
     /// capture, and audit-log append run inside one transaction —
@@ -309,18 +296,15 @@ impl KanbanContext {
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
-    /// Reload state from durable storage, discarding any uncommitted data cache.
-    /// After reloading, the context is immediately ready for mutations — the
-    /// baseline snapshot is refreshed from the freshly-loaded data and the
-    /// command log is truncated, so no separate call to
-    /// [`initialize_undo_state`][Self::initialize_undo_state] is required.
+    /// Reload state from durable storage, discarding any uncommitted
+    /// data cache. Drops the per-session `UndoStack` (entity ids from
+    /// before the reload may no longer exist). The audit log is left
+    /// untouched — it records what happened, and a reload does not
+    /// unhappen it.
     pub async fn reload(&mut self) -> KanbanResult<()> {
         self.backend.reload().await?;
         self.undo_stack.clear();
         self.dirty = false;
-        // Discard the persisted command log so the next session starts
-        // with a clean audit history.
-        self.backend.truncate_commands_after(0)?;
         Ok(())
     }
 

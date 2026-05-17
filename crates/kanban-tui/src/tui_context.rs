@@ -106,10 +106,6 @@ impl TuiContext {
         self.inner.clear_history()
     }
 
-    pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
-        self.inner.initialize_undo_state()
-    }
-
     pub fn clear_conflict(&mut self) {
         self.inner.clear_conflict()
     }
