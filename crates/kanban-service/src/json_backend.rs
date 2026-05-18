@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use kanban_domain::commands::Command;
 use kanban_domain::data_store::GraphMutFn;
 use kanban_domain::{
-    ArchivedCard, Board, Card, Column, CommandStore, DataStore, DependencyGraph, InMemoryStore,
-    KanbanError, KanbanResult, Snapshot, Sprint,
+    ArchivedCard, Board, Card, Column, CommandBatch, CommandStore, DataStore, DependencyGraph,
+    InMemoryStore, KanbanError, KanbanResult, Snapshot, Sprint,
 };
 use kanban_persistence::{
     snapshot_from_json_bytes, snapshot_to_json_bytes, PersistenceMetadata, PersistenceStore,
@@ -289,11 +289,8 @@ impl CommandStore for JsonDataStore {
     fn command_count(&self) -> KanbanResult<u64> {
         self.with_read(|s| s.command_count())
     }
-    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
         self.with_read(|s| s.load_commands(from, to))
-    }
-    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
-        self.with_read(|s| s.load_all_commands())
     }
 }
 

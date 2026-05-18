@@ -1,5 +1,43 @@
 use crate::commands::Command;
 use crate::KanbanResult;
+use serde::{Deserialize, Serialize};
+
+/// One audit-log entry — the commands submitted as a single
+/// `KanbanContext::execute` call.
+///
+/// Most user actions are a single command; some (animated archive,
+/// cascade flows) are multiple. The batch boundary distinguishes
+/// "one user action" from "many user actions" and is what an
+/// audit-log UI renders per row.
+///
+/// `#[serde(transparent)]` keeps the on-disk JSON encoding identical
+/// to a bare `Vec<Command>`, so existing SQLite `command_log` rows
+/// deserialize unchanged.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CommandBatch {
+    pub commands: Vec<Command>,
+}
+
+impl CommandBatch {
+    pub fn new(commands: Vec<Command>) -> Self {
+        Self { commands }
+    }
+
+    pub fn len(&self) -> usize {
+        self.commands.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+}
+
+impl From<Vec<Command>> for CommandBatch {
+    fn from(commands: Vec<Command>) -> Self {
+        Self { commands }
+    }
+}
 
 /// Append-only chronological log of executed command batches.
 /// Backend-defined persistence (JSON in-memory, SQLite on disk).
@@ -10,15 +48,7 @@ pub trait CommandStore: Send + Sync {
     fn command_count(&self) -> KanbanResult<u64>;
 
     /// Half-open range `[from, to)`.
-    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>>;
-
-    /// Atomic count + load. Default is non-atomic; backends with
-    /// interior locks should override.
-    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
-        let count = self.command_count()?;
-        let batches = self.load_commands(0, count)?;
-        Ok((batches, count))
-    }
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>>;
 }
 
 #[cfg(test)]
@@ -78,18 +108,6 @@ mod tests {
 
         let batches = store.load_commands(0, 2).unwrap();
         assert_eq!(batches.len(), 2);
-    }
-
-    #[test]
-    fn test_load_all_commands_returns_consistent_count_and_data() {
-        let store = InMemoryStore::new();
-        store.append_commands(&[make_board_cmd("B1")]).unwrap();
-        store.append_commands(&[make_board_cmd("B2")]).unwrap();
-        store.append_commands(&[make_board_cmd("B3")]).unwrap();
-
-        let (batches, count) = store.load_all_commands().unwrap();
-        assert_eq!(count, 3);
-        assert_eq!(batches.len(), 3);
     }
 
     #[test]
