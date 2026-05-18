@@ -1,6 +1,7 @@
-use super::CommandContext;
+use super::{Command, CommandContext};
+use crate::data_store::DataStore;
 use crate::dependencies::card_graph::CardGraphExt;
-use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult};
+use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult, SprintLog};
 use chrono::{DateTime, Utc};
 use kanban_core::Editable;
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,10 @@ pub enum CardCommand {
     UnassignFromSprint(UnassignCardFromSprint),
     ApplyMetadata(ApplyCardMetadata),
     CompactPositions(CompactColumnPositions),
+    /// Synthetic: restore a card's sprint binding and sprint_logs to a
+    /// captured pre-state. Emitted by Assign/Unassign inverses; not a
+    /// user-facing command.
+    RestoreSprintAttachment(RestoreCardSprintAttachment),
 }
 
 impl CardCommand {
@@ -34,6 +39,7 @@ impl CardCommand {
             CardCommand::UnassignFromSprint(c) => c.execute(context),
             CardCommand::ApplyMetadata(c) => c.execute(context),
             CardCommand::CompactPositions(c) => c.execute(context),
+            CardCommand::RestoreSprintAttachment(c) => c.execute(context),
         }
     }
 
@@ -49,7 +55,59 @@ impl CardCommand {
             CardCommand::UnassignFromSprint(c) => c.description(),
             CardCommand::ApplyMetadata(c) => c.description(),
             CardCommand::CompactPositions(c) => c.description(),
+            CardCommand::RestoreSprintAttachment(c) => c.description(),
         }
+    }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        match self {
+            CardCommand::Update(c) => c.capture_inverse(store),
+            CardCommand::Move(c) => c.capture_inverse(store),
+            CardCommand::UnassignFromSprint(c) => c.capture_inverse(store),
+            CardCommand::ApplyMetadata(c) => c.capture_inverse(store),
+            CardCommand::Archive(c) => c.capture_inverse(store),
+            CardCommand::AssignToSprint(c) => c.capture_inverse(store),
+            CardCommand::CompactPositions(c) => c.capture_inverse(store),
+            CardCommand::Create(c) => c.capture_inverse(store),
+            CardCommand::Restore(c) => c.capture_inverse(store),
+            CardCommand::Delete(c) => c.capture_inverse(store),
+            CardCommand::RestoreSprintAttachment(c) => c.capture_inverse(store),
+        }
+    }
+}
+
+/// Restore a card's `sprint_id`, `sprint_logs`, and `updated_at` to a
+/// captured pre-state. Emitted by `AssignCardsToSprint` and
+/// `UnassignCardFromSprint` inverses to round-trip the sprint-history
+/// log cleanly — otherwise the inverse would push a new log entry
+/// instead of removing the one the forward added.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreCardSprintAttachment {
+    pub card_id: Uuid,
+    pub sprint_id: Option<Uuid>,
+    pub sprint_logs: Vec<SprintLog>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl RestoreCardSprintAttachment {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut card = context.get_card(self.card_id)?;
+        card.sprint_id = self.sprint_id;
+        card.sprint_logs = self.sprint_logs.clone();
+        card.updated_at = self.updated_at;
+        context.store.upsert_card(card)?;
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!("Restore sprint attachment for card {}", self.card_id)
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Err(KanbanError::Internal(format!(
+            "RestoreCardSprintAttachment is a synthetic command — it must only appear inside an inverse batch (Assign/Unassign undo), never as a top-level forward command. Card id: {}",
+            self.card_id
+        )))
     }
 }
 
@@ -70,6 +128,60 @@ impl UpdateCard {
 
     pub fn description(&self) -> String {
         "Update card".to_string()
+    }
+
+    /// Inverse: read the card's current state and synthesise an
+    /// `UpdateCard` whose `updates` field-by-field restore each touched
+    /// field to its prior value. Fields not touched by the forward
+    /// command stay `None` / `NoChange` so the inverse is minimal.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        use crate::field_update::FieldUpdate;
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Err(KanbanError::not_found("card", self.card_id)),
+        };
+
+        let upd = &self.updates;
+        let inverse = CardUpdate {
+            title: upd.title.as_ref().map(|_| card.title.clone()),
+            description: match upd.description {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.description {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            priority: upd.priority.map(|_| card.priority),
+            status: upd.status.map(|_| card.status),
+            position: upd.position.map(|_| card.position),
+            column_id: upd.column_id.map(|_| card.column_id),
+            due_date: match upd.due_date {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.due_date {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            points: match upd.points {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.points {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            sprint_id: match upd.sprint_id {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match card.sprint_id {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+        };
+
+        Ok(vec![Command::Card(CardCommand::Update(UpdateCard {
+            card_id: self.card_id,
+            updates: inverse,
+        }))])
     }
 }
 
@@ -151,6 +263,17 @@ impl CreateCard {
     pub fn description(&self) -> String {
         format!("Create card: '{}'", self.title)
     }
+
+    /// Inverse: delete the new card. `DeleteCard` is polymorphic over
+    /// live / archived so it cleanly removes a freshly-created live
+    /// card without leaving an archive trail. The board's
+    /// `card_counter` stays bumped; redo via the original forward
+    /// reproduces the same id and number.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Card(CardCommand::Delete(DeleteCard {
+            card_id: self.id,
+        }))])
+    }
 }
 
 /// Move card to a different column
@@ -176,6 +299,20 @@ impl MoveCard {
             self.card_id, self.new_column_id
         )
     }
+
+    /// Inverse: another MoveCard pointing back to the card's current
+    /// (column_id, position).
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Err(KanbanError::not_found("card", self.card_id)),
+        };
+        Ok(vec![Command::Card(CardCommand::Move(MoveCard {
+            card_id: self.card_id,
+            new_column_id: card.column_id,
+            new_position: card.position,
+        }))])
+    }
 }
 
 /// Restore an archived card
@@ -189,6 +326,17 @@ pub struct RestoreCard {
 }
 
 impl RestoreCard {
+    /// Inverse: archive the card again. The card id is in the forward
+    /// command. ArchiveCards captures original column/position from the
+    /// live card at capture time — by the time this runs the card has
+    /// been restored to (self.column_id, self.position), so the
+    /// re-archive will use those values as the new "original" location.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Card(CardCommand::Archive(ArchiveCards {
+            ids: vec![self.card_id],
+        }))])
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         context.check_wip_limit(self.column_id, 1, &[])?;
         let archived = context
@@ -216,7 +364,8 @@ impl RestoreCard {
     }
 }
 
-/// Permanently delete an archived card
+/// Permanently delete a card. Operates on whichever list the card is
+/// in — live or archived. Strips incident graph edges.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteCard {
     pub card_id: Uuid,
@@ -224,6 +373,9 @@ pub struct DeleteCard {
 
 impl DeleteCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        // Both store ops are idempotent on missing — calling both
+        // covers a card in either list.
+        context.store.delete_card(self.card_id)?;
         context.store.delete_archived_card(self.card_id)?;
         let card_id = self.card_id;
         context.store.modify_graph(Box::new(move |graph| {
@@ -236,6 +388,53 @@ impl DeleteCard {
     pub fn description(&self) -> String {
         format!("Delete card {}", self.card_id)
     }
+
+    /// Inverse: re-insert whichever state the card was in (live,
+    /// archived, or — defensively — both) via `ImportEntities`, then
+    /// re-add every incident graph edge.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        use crate::dependencies::CardEdgeType;
+        let live = store.get_card(self.card_id)?;
+        let archived = store.get_archived_card(self.card_id)?;
+        if live.is_none() && archived.is_none() {
+            return Err(KanbanError::not_found("card", self.card_id));
+        }
+        let mut commands: Vec<Command> = vec![Command::Board(super::BoardCommand::Import(
+            super::ImportEntities {
+                cards: live.into_iter().collect(),
+                archived_cards: archived.into_iter().collect(),
+                ..Default::default()
+            },
+        ))];
+        let graph = store.get_graph()?;
+        for edge in graph.cards.edges() {
+            if !edge.involves(self.card_id) {
+                continue;
+            }
+            let cmd = match edge.edge_type {
+                CardEdgeType::Blocks => {
+                    super::DependencyCommand::AddBlocks(super::AddBlocksDependencyCommand {
+                        blocker_id: edge.source,
+                        blocked_id: edge.target,
+                    })
+                }
+                CardEdgeType::RelatesTo => {
+                    super::DependencyCommand::AddRelatesTo(super::AddRelatesToDependencyCommand {
+                        card_a_id: edge.source,
+                        card_b_id: edge.target,
+                    })
+                }
+                CardEdgeType::ParentOf => {
+                    super::DependencyCommand::SetParent(super::SetParentCommand {
+                        child_id: edge.target,
+                        parent_id: edge.source,
+                    })
+                }
+            };
+            commands.push(Command::Dependency(cmd));
+        }
+        Ok(commands)
+    }
 }
 
 /// Archive one or more cards in a single command (single undo entry)
@@ -245,6 +444,26 @@ pub struct ArchiveCards {
 }
 
 impl ArchiveCards {
+    /// Inverse: one `RestoreCard` per archived card, restoring each to its
+    /// original column and position read from the live card BEFORE the
+    /// archive runs.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let mut commands: Vec<Command> = Vec::new();
+        for id in &self.ids {
+            let card = match store.get_card(*id)? {
+                Some(c) => c,
+                None => continue, // skipped (matches ArchiveCards::execute's filter)
+            };
+            commands.push(Command::Card(CardCommand::Restore(RestoreCard {
+                card_id: card.id,
+                column_id: card.column_id,
+                position: card.position,
+                timestamp: chrono::Utc::now(),
+            })));
+        }
+        Ok(commands)
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let valid_ids = context.filter_valid_card_ids(&self.ids, "ArchiveCards");
         if valid_ids.is_empty() && !self.ids.is_empty() {
@@ -285,6 +504,34 @@ pub struct AssignCardsToSprint {
 }
 
 impl AssignCardsToSprint {
+    /// Inverse: per-card restore of pre-state — `sprint_id` AND
+    /// `sprint_logs`. Using `RestoreSprintAttachment` instead of
+    /// re-emitting Assign/Unassign avoids pushing new log entries that
+    /// would bloat the card's sprint history on every undo/redo cycle.
+    /// Cards skipped by the forward (not found, or already on the
+    /// target sprint) are also skipped here.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let mut commands: Vec<Command> = Vec::new();
+        for id in &self.ids {
+            let card = match store.get_card(*id)? {
+                Some(c) => c,
+                None => continue,
+            };
+            if card.sprint_id == Some(self.sprint_id) {
+                continue;
+            }
+            commands.push(Command::Card(CardCommand::RestoreSprintAttachment(
+                RestoreCardSprintAttachment {
+                    card_id: card.id,
+                    sprint_id: card.sprint_id,
+                    sprint_logs: card.sprint_logs.clone(),
+                    updated_at: card.updated_at,
+                },
+            )));
+        }
+        Ok(commands)
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let sprint = context.get_sprint(self.sprint_id)?;
         let board = context.get_board(sprint.board_id)?;
@@ -341,6 +588,32 @@ impl UnassignCardFromSprint {
     pub fn description(&self) -> String {
         format!("Unassign card {} from sprint", self.card_id)
     }
+
+    /// Inverse: if the card currently has a sprint, re-assign it to that
+    /// sprint via AssignCardsToSprint. The sprint log gets a fresh
+    /// Inverse: restore `sprint_id`, `sprint_logs`, and `updated_at` to
+    /// their pre-execute values via `RestoreSprintAttachment`. The card
+    /// is captured before the forward closes the current sprint log,
+    /// so the restored log vec is intact (no phantom closing entry).
+    /// If the card had no sprint to begin with, the forward is a no-op
+    /// and the inverse is empty.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Err(KanbanError::not_found("card", self.card_id)),
+        };
+        if card.sprint_id.is_none() {
+            return Ok(vec![]);
+        }
+        Ok(vec![Command::Card(CardCommand::RestoreSprintAttachment(
+            RestoreCardSprintAttachment {
+                card_id: self.card_id,
+                sprint_id: card.sprint_id,
+                sprint_logs: card.sprint_logs.clone(),
+                updated_at: card.updated_at,
+            },
+        ))])
+    }
 }
 
 /// Apply card metadata from a DTO (used by JSON editor).
@@ -360,6 +633,41 @@ impl ApplyCardMetadata {
 
     pub fn description(&self) -> String {
         format!("Apply card metadata for {}", self.card_id)
+    }
+
+    /// Inverse: emit an `UpdateCard` (not another `ApplyCardMetadata`)
+    /// because `CardMetadataDto.apply_to` is asymmetric — it can set
+    /// `points` / `due_date` but `None` in the DTO means "don't change",
+    /// so it can't clear those fields. `UpdateCard` with
+    /// `FieldUpdate::Set`/`FieldUpdate::Clear` covers the full reversal.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        use crate::field_update::FieldUpdate;
+        let card = match store.get_card(self.card_id)? {
+            Some(c) => c,
+            None => return Err(KanbanError::not_found("card", self.card_id)),
+        };
+        let updates = CardUpdate {
+            // priority / status are always written by apply_to (when the
+            // DTO string parses); restore them unconditionally.
+            priority: Some(card.priority),
+            status: Some(card.status),
+            // points / due_date are only written by apply_to when Some
+            // in the DTO. Restore unconditionally too — it's cheap and
+            // correct.
+            points: match card.points {
+                Some(v) => FieldUpdate::Set(v),
+                None => FieldUpdate::Clear,
+            },
+            due_date: match card.due_date {
+                Some(v) => FieldUpdate::Set(v),
+                None => FieldUpdate::Clear,
+            },
+            ..Default::default()
+        };
+        Ok(vec![Command::Card(CardCommand::Update(UpdateCard {
+            card_id: self.card_id,
+            updates,
+        }))])
     }
 }
 
@@ -383,6 +691,23 @@ impl CompactColumnPositions {
 
     pub fn description(&self) -> String {
         format!("Compact positions in column {}", self.column_id)
+    }
+
+    /// Inverse: for each card in the column, emit a MoveCard back to its
+    /// original position. Compaction is lossy without pre-state capture
+    /// (multiple gappy arrangements compact to the same result), so this
+    /// is the only way to reverse it.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let cards = store.list_cards_by_column(self.column_id)?;
+        let mut commands: Vec<Command> = Vec::new();
+        for card in cards {
+            commands.push(Command::Card(CardCommand::Move(MoveCard {
+                card_id: card.id,
+                new_column_id: card.column_id,
+                new_position: card.position,
+            })));
+        }
+        Ok(commands)
     }
 }
 

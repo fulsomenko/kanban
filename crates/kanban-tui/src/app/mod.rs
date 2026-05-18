@@ -622,8 +622,8 @@ impl App {
                     self.set_error(format!("Could not seed \"{}\": {}", filename, e));
                     return false;
                 }
-                // Probe the read paths initialize_undo_state will exercise so
-                // a failure surfaces before any commit on KanbanContext.
+                // Probe the read paths so any backend failure surfaces
+                // before we commit by swapping the backend in.
                 if let Err(e) = backend.snapshot() {
                     self.set_error(format!(
                         "Could not read seeded snapshot from \"{}\": {}",
@@ -638,12 +638,7 @@ impl App {
                     ));
                     return false;
                 }
-                // ── commit point: every operation below is infallible for a
-                // backend that just passed the probes above.
                 self.ctx.replace_backend(backend);
-                self.ctx
-                    .initialize_undo_state()
-                    .expect("backend was validated immediately before replace_backend");
                 let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
                 self.persistence.save_file = Some(path.clone());
                 self.persistence.save_completion_rx = Some(completion_rx);
@@ -1903,9 +1898,6 @@ impl App {
             self.set_error(format!("Failed to read data file: {e}"));
             return;
         }
-        if let Err(e) = self.ctx.initialize_undo_state() {
-            tracing::warn!("Failed to initialize undo state: {e}");
-        }
         self.migrate_sprint_logs();
         // Migration is a transparent startup operation, not a user change.
         // mark_clean so the startup flush doesn't trigger the conflict popup.
@@ -2422,13 +2414,10 @@ impl App {
     #[doc(hidden)]
     pub fn test_default() -> Self {
         let backend = std::sync::Arc::new(kanban_domain::InMemoryStore::new());
-        let mut inner = kanban_service::KanbanContext::open_deferred(
+        let inner = kanban_service::KanbanContext::open_deferred(
             backend,
             kanban_core::AppConfig::default(),
         );
-        inner
-            .initialize_undo_state()
-            .expect("initialize_undo_state failed in test_default");
         let (ctx, _save_rx, save_completion_rx) =
             crate::tui_context::TuiContext::new(inner).expect("TuiContext::new failed");
         Self {
@@ -2524,11 +2513,10 @@ mod tests {
             .upsert_board(kanban_domain::Board::new("B".into(), None))
             .unwrap();
 
-        let mut inner = kanban_service::KanbanContext::open_deferred(
+        let inner = kanban_service::KanbanContext::open_deferred(
             Arc::clone(&backend) as Arc<dyn kanban_service::backend::KanbanBackend>,
             kanban_core::AppConfig::default(),
         );
-        inner.initialize_undo_state().unwrap();
 
         let (ctx, save_rx, save_completion_rx) =
             crate::tui_context::TuiContext::new(inner).expect("TuiContext::new failed");

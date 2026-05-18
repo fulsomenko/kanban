@@ -1,4 +1,5 @@
-use super::CommandContext;
+use super::{Command, CommandContext};
+use crate::data_store::DataStore;
 use crate::field_update::FieldUpdate;
 use crate::KanbanResult;
 use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, Sprint};
@@ -16,6 +17,11 @@ pub enum BoardCommand {
     Delete(DeleteBoard),
     ApplySettings(ApplyBoardSettings),
     Import(ImportEntities),
+    /// Internal: replace a board's sprint-name pool wholesale. Used by
+    /// `UpdateSprint`'s inverse to restore the pool that name allocation
+    /// mutated. Not a user-facing command — accessed only via the
+    /// inverse-capture path.
+    RestoreSprintPool(RestoreSprintPool),
 }
 
 impl BoardCommand {
@@ -28,6 +34,7 @@ impl BoardCommand {
             BoardCommand::Delete(c) => c.execute(context),
             BoardCommand::ApplySettings(c) => c.execute(context),
             BoardCommand::Import(c) => c.execute(context),
+            BoardCommand::RestoreSprintPool(c) => c.execute(context),
         }
     }
 
@@ -40,7 +47,55 @@ impl BoardCommand {
             BoardCommand::Delete(c) => c.description(),
             BoardCommand::ApplySettings(c) => c.description(),
             BoardCommand::Import(c) => c.description(),
+            BoardCommand::RestoreSprintPool(c) => c.description(),
         }
+    }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        match self {
+            BoardCommand::Create(c) => c.capture_inverse(store),
+            BoardCommand::Update(c) => c.capture_inverse(store),
+            BoardCommand::SetTaskSort(c) => c.capture_inverse(store),
+            BoardCommand::SetTaskListView(c) => c.capture_inverse(store),
+            BoardCommand::ApplySettings(c) => c.capture_inverse(store),
+            BoardCommand::Delete(c) => c.capture_inverse(store),
+            BoardCommand::Import(c) => c.capture_inverse(store),
+            BoardCommand::RestoreSprintPool(c) => c.capture_inverse(store),
+        }
+    }
+}
+
+/// Internal — replace a board's sprint-name pool and used-count
+/// wholesale. Emitted by `UpdateSprint::capture_inverse` to restore
+/// pool state that the forward command's name allocation mutated.
+///
+/// Not exposed to user-facing CLI/MCP commands. `capture_inverse`
+/// rejects top-level execute (the command is synthetic-only).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreSprintPool {
+    pub board_id: Uuid,
+    pub sprint_names: Vec<String>,
+    pub sprint_name_used_count: usize,
+}
+
+impl RestoreSprintPool {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let mut board = context.get_board(self.board_id)?;
+        board.sprint_names = self.sprint_names.clone();
+        board.sprint_name_used_count = self.sprint_name_used_count;
+        context.store.upsert_board(board)?;
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!("Restore sprint-name pool for board {}", self.board_id)
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Err(KanbanError::Internal(format!(
+            "RestoreSprintPool is a synthetic command — it must only appear inside an inverse batch (UpdateSprint undo), never as a top-level forward command. Board id: {}",
+            self.board_id
+        )))
     }
 }
 
@@ -65,6 +120,15 @@ impl CreateBoard {
 
     pub fn description(&self) -> String {
         format!("Create board: '{}'", self.name)
+    }
+
+    /// Inverse: delete the newly-created board. The `id` is already in the
+    /// command, so no pre-state read from the store is required — `_store`
+    /// is unused.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Board(BoardCommand::Delete(DeleteBoard {
+            board_id: self.id,
+        }))])
     }
 }
 
@@ -91,6 +155,69 @@ impl UpdateBoard {
     pub fn description(&self) -> String {
         "Update board".to_string()
     }
+
+    /// Inverse: read the board's current state and build a BoardUpdate
+    /// that reverses every field the forward command touched.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Err(KanbanError::not_found("board", self.board_id)),
+        };
+        let upd = &self.updates;
+        let inverse = crate::BoardUpdate {
+            name: upd.name.as_ref().map(|_| board.name.clone()),
+            description: match upd.description {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.description {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            sprint_prefix: match upd.sprint_prefix {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.sprint_prefix {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            card_prefix: match upd.card_prefix {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.card_prefix {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            task_sort_field: upd.task_sort_field.map(|_| board.task_sort_field),
+            task_sort_order: upd.task_sort_order.map(|_| board.task_sort_order),
+            sprint_duration_days: match upd.sprint_duration_days {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.sprint_duration_days {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            task_list_view: upd.task_list_view.map(|_| board.task_list_view),
+            active_sprint_id: match upd.active_sprint_id {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.active_sprint_id {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            completion_column_id: match upd.completion_column_id {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                _ => match board.completion_column_id {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+            position: upd.position.map(|_| board.position),
+        };
+        Ok(vec![Command::Board(BoardCommand::Update(UpdateBoard {
+            board_id: self.board_id,
+            updates: inverse,
+        }))])
+    }
 }
 
 /// Update board's task sorting preference
@@ -112,6 +239,21 @@ impl SetBoardTaskSort {
     pub fn description(&self) -> String {
         format!("Set board task sort to {:?} {:?}", self.field, self.order)
     }
+
+    /// Inverse: another SetBoardTaskSort with the prior values.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Err(KanbanError::not_found("board", self.board_id)),
+        };
+        Ok(vec![Command::Board(BoardCommand::SetTaskSort(
+            SetBoardTaskSort {
+                board_id: self.board_id,
+                field: board.task_sort_field,
+                order: board.task_sort_order,
+            },
+        ))])
+    }
 }
 
 /// Update board's task list view
@@ -131,6 +273,20 @@ impl SetBoardTaskListView {
 
     pub fn description(&self) -> String {
         format!("Set board task list view to {:?}", self.view)
+    }
+
+    /// Inverse: another SetBoardTaskListView with the prior view.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Err(KanbanError::not_found("board", self.board_id)),
+        };
+        Ok(vec![Command::Board(BoardCommand::SetTaskListView(
+            SetBoardTaskListView {
+                board_id: self.board_id,
+                view: board.task_list_view,
+            },
+        ))])
     }
 }
 
@@ -152,6 +308,21 @@ impl DeleteBoard {
     pub fn description(&self) -> String {
         format!("Delete board: {}", self.board_id)
     }
+
+    /// Inverse: re-insert the deleted Board via ImportEntities. The
+    /// cascade siblings (DeleteColumnsByBoard, DeleteSprintsByBoard,
+    /// DeleteCardsByColumns, DeleteCardEdges) capture their own
+    /// entities, so undoing the full cascade restores everything.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Err(KanbanError::not_found("board", self.board_id)),
+        };
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            boards: vec![board],
+            ..Default::default()
+        }))])
+    }
 }
 
 /// Apply board settings from a DTO (used by JSON editor).
@@ -172,11 +343,29 @@ impl ApplyBoardSettings {
     pub fn description(&self) -> String {
         format!("Apply board settings for {}", self.board_id)
     }
+
+    /// Inverse: snapshot the current board into a `BoardSettingsDto` via the
+    /// `Editable::from_entity` impl, then re-apply that DTO via another
+    /// `ApplyBoardSettings`. The DTO covers exactly the fields this command
+    /// writes, so the round-trip is symmetric.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let board = match store.get_board(self.board_id)? {
+            Some(b) => b,
+            None => return Err(KanbanError::not_found("board", self.board_id)),
+        };
+        let prior_dto = crate::editable::BoardSettingsDto::from_entity(&board);
+        Ok(vec![Command::Board(BoardCommand::ApplySettings(
+            ApplyBoardSettings {
+                board_id: self.board_id,
+                dto: prior_dto,
+            },
+        ))])
+    }
 }
 
 /// Import entities (boards, columns, cards, etc.) into the context.
 /// Used by TUI import functionality. Appends without replacing existing data.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ImportEntities {
     pub boards: Vec<Board>,
     pub columns: Vec<Column>,
@@ -281,6 +470,61 @@ impl ImportEntities {
 
     pub fn description(&self) -> String {
         format!("Import {} board(s)", self.boards.len())
+    }
+
+    /// Inverse: emit one delete command per imported entity. The IDs are
+    /// in the forward command, so no pre-state read needed.
+    ///
+    /// Order matters: delete cards before columns before boards so
+    /// foreign-key-style invariants stay satisfied (the in-memory store
+    /// doesn't enforce them, but downstream backends may).
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let mut commands: Vec<Command> = Vec::new();
+
+        // Cards first.
+        if !self.cards.is_empty() {
+            commands.push(Command::Card(crate::commands::CardCommand::Archive(
+                crate::commands::ArchiveCards {
+                    ids: self.cards.iter().map(|c| c.id).collect(),
+                },
+            )));
+        }
+
+        // Archived cards: per-card permanent delete.
+        for ac in &self.archived_cards {
+            commands.push(Command::Card(crate::commands::CardCommand::Delete(
+                crate::commands::DeleteCard {
+                    card_id: ac.card.id,
+                },
+            )));
+        }
+
+        // Sprints: per-sprint delete.
+        for s in &self.sprints {
+            commands.push(Command::Sprint(crate::commands::SprintCommand::Delete(
+                crate::commands::DeleteSprint {
+                    sprint_id: s.id,
+                    timestamp: chrono::Utc::now(),
+                },
+            )));
+        }
+
+        // Columns: per-column delete (must be empty by the time we get
+        // here — cards above were archived first).
+        for c in &self.columns {
+            commands.push(Command::Column(crate::commands::ColumnCommand::Delete(
+                crate::commands::DeleteColumn { column_id: c.id },
+            )));
+        }
+
+        // Boards last.
+        for b in &self.boards {
+            commands.push(Command::Board(BoardCommand::Delete(DeleteBoard {
+                board_id: b.id,
+            })));
+        }
+
+        Ok(commands)
     }
 }
 

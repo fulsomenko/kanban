@@ -27,10 +27,6 @@ pub struct JsonDataStore {
     /// `None` until first access. Populated by `ensure_loaded()`.
     inner: RwLock<Option<InMemoryStore>>,
     dirty: AtomicBool,
-    /// Set by `reload()` to suppress the dirty flag from the first
-    /// `with_mutate()` call that follows (internal housekeeping, not a user
-    /// mutation). Consumed atomically by `with_mutate()`.
-    suppress_next_dirty: AtomicBool,
 }
 
 impl JsonDataStore {
@@ -39,7 +35,6 @@ impl JsonDataStore {
             file_store,
             inner: RwLock::new(None),
             dirty: AtomicBool::new(false),
-            suppress_next_dirty: AtomicBool::new(false),
         }
     }
 
@@ -142,12 +137,7 @@ impl JsonDataStore {
             .read()
             .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
         let result = f(guard.as_ref().expect("ensure_loaded guarantees Some"))?;
-        // Consume the suppression flag set by reload(). If it was set, this
-        // is internal housekeeping (e.g. truncate_commands_after(0)) and must
-        // not mark the backend dirty.
-        if !self.suppress_next_dirty.swap(false, Ordering::AcqRel) {
-            self.dirty.store(true, Ordering::Release);
-        }
+        self.dirty.store(true, Ordering::Release);
         Ok(result)
     }
 }
@@ -302,23 +292,8 @@ impl CommandStore for JsonDataStore {
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
         self.with_read(|s| s.load_commands(from, to))
     }
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        self.with_mutate(|s| s.truncate_commands_after(after))
-    }
     fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
         self.with_read(|s| s.load_all_commands())
-    }
-    fn supports_indexed_snapshots(&self) -> bool {
-        false
-    }
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.with_mutate(|s| s.store_snapshot_at(idx, snapshot))
-    }
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        self.with_read(|s| s.load_snapshot_at(idx))
-    }
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        self.with_mutate(|s| s.shift_commands(drop_count))
     }
 }
 
@@ -350,10 +325,6 @@ impl KanbanBackend for JsonDataStore {
             *guard = None;
         } // inner write lock released — mirrors ensure_loaded's ordering
         self.dirty.store(false, Ordering::Release);
-        // Suppress the dirty flag from the first with_mutate() after reload.
-        // KanbanContext::reload() calls truncate_commands_after(0) for
-        // internal housekeeping; that must not mark the backend dirty.
-        self.suppress_next_dirty.store(true, Ordering::Release);
         Ok(())
     }
 

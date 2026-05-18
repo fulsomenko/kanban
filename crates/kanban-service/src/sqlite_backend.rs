@@ -13,6 +13,8 @@ use uuid::Uuid;
 
 pub struct SqliteBackend {
     db: SqliteStore,
+    /// In-session command log. The on-disk `command_log` table exists
+    /// in the schema but is not yet wired through this backend.
     mem: InMemoryStore,
 }
 
@@ -168,6 +170,8 @@ impl DataStore for SqliteBackend {
 
 // ─── CommandStore ─────────────────────────────────────────────────────────────
 
+// Routes to the in-memory mirror; the on-disk command_log table stays
+// unwritten until a separate piece of work wires it up.
 impl CommandStore for SqliteBackend {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
         self.mem.append_commands(cmds)
@@ -177,21 +181,6 @@ impl CommandStore for SqliteBackend {
     }
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
         self.mem.load_commands(from, to)
-    }
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        self.mem.truncate_commands_after(after)
-    }
-    fn supports_indexed_snapshots(&self) -> bool {
-        self.mem.supports_indexed_snapshots()
-    }
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.mem.store_snapshot_at(idx, snapshot)
-    }
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        self.mem.load_snapshot_at(idx)
-    }
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        self.mem.shift_commands(drop_count)
     }
 }
 

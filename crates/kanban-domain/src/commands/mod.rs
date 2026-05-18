@@ -12,13 +12,12 @@ pub mod sprint_commands;
 
 pub use board_commands::*;
 pub use card_commands::*;
-pub use cascade_commands::CascadeCommand;
+pub use cascade_commands::{CascadeCommand, SetArchivedCardsSprint};
 pub use column_commands::*;
 pub use dependency_commands::*;
 pub use sprint_commands::*;
 
-/// Serializable command enum that represents all possible domain mutations.
-/// Replaces the former `Command` trait with a concrete, serde-friendly hierarchy.
+/// Every domain mutation flows through this enum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "domain", rename_all = "snake_case")]
 pub enum Command {
@@ -50,6 +49,23 @@ impl Command {
             Command::Sprint(cmd) => cmd.description(),
             Command::Dependency(cmd) => cmd.description(),
             Command::Cascade(cmd) => cmd.description(),
+        }
+    }
+
+    /// Build the inverse batch by reading pre-state from `store`.
+    /// Called before the forward `execute` runs.
+    ///
+    /// An empty `Vec` is "this forward is a no-op; nothing to undo."
+    /// `Err` means the inverse cannot be captured (entity missing,
+    /// store error, or the command is synthetic-only).
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        match self {
+            Command::Board(cmd) => cmd.capture_inverse(store),
+            Command::Column(cmd) => cmd.capture_inverse(store),
+            Command::Card(cmd) => cmd.capture_inverse(store),
+            Command::Sprint(cmd) => cmd.capture_inverse(store),
+            Command::Dependency(cmd) => cmd.capture_inverse(store),
+            Command::Cascade(cmd) => cmd.capture_inverse(store),
         }
     }
 }

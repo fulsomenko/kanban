@@ -11,9 +11,13 @@
 //! ordering invariants (graph edges → cards → archived → columns → sprints →
 //! board) that make the bypassed validations safe.
 
-use super::CommandContext;
-use crate::dependencies::CardGraphExt;
-use crate::KanbanResult;
+use super::{
+    AddBlocksDependencyCommand, AddRelatesToDependencyCommand, BoardCommand, Command,
+    CommandContext, ImportEntities, SetParentCommand,
+};
+use crate::data_store::DataStore;
+use crate::dependencies::{CardEdgeType, CardGraphExt};
+use crate::{KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -25,6 +29,11 @@ pub enum CascadeCommand {
     DeleteArchivedCardsByColumns(DeleteArchivedCardsByColumns),
     DeleteColumnsByBoard(DeleteColumnsByBoard),
     DeleteSprintsByBoard(DeleteSprintsByBoard),
+    /// Internal: set `sprint_id` on a list of archived cards. Used by
+    /// `DeleteSprint`'s inverse to restore the binding that
+    /// `clear_sprint_from_archived_cards` cleared. Not a user-facing
+    /// command — accessed only via the inverse-capture path.
+    SetArchivedCardsSprint(SetArchivedCardsSprint),
 }
 
 impl CascadeCommand {
@@ -35,6 +44,7 @@ impl CascadeCommand {
             CascadeCommand::DeleteArchivedCardsByColumns(c) => c.execute(context),
             CascadeCommand::DeleteColumnsByBoard(c) => c.execute(context),
             CascadeCommand::DeleteSprintsByBoard(c) => c.execute(context),
+            CascadeCommand::SetArchivedCardsSprint(c) => c.execute(context),
         }
     }
 
@@ -45,6 +55,18 @@ impl CascadeCommand {
             CascadeCommand::DeleteArchivedCardsByColumns(c) => c.description(),
             CascadeCommand::DeleteColumnsByBoard(c) => c.description(),
             CascadeCommand::DeleteSprintsByBoard(c) => c.description(),
+            CascadeCommand::SetArchivedCardsSprint(c) => c.description(),
+        }
+    }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        match self {
+            CascadeCommand::DeleteCardEdges(c) => c.capture_inverse(store),
+            CascadeCommand::DeleteCardsByColumns(c) => c.capture_inverse(store),
+            CascadeCommand::DeleteArchivedCardsByColumns(c) => c.capture_inverse(store),
+            CascadeCommand::DeleteColumnsByBoard(c) => c.capture_inverse(store),
+            CascadeCommand::DeleteSprintsByBoard(c) => c.capture_inverse(store),
+            CascadeCommand::SetArchivedCardsSprint(c) => c.capture_inverse(store),
         }
     }
 }
@@ -69,6 +91,39 @@ impl DeleteCardEdges {
     pub fn description(&self) -> String {
         format!("Remove {} card(s) from dependency graph", self.ids.len())
     }
+
+    /// Inverse: capture every active edge involving any id in self.ids and
+    /// emit the matching Add* / SetParent command for each.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let id_set: std::collections::HashSet<_> = self.ids.iter().copied().collect();
+        let graph = store.get_graph()?;
+        let mut commands: Vec<Command> = Vec::new();
+        for edge in graph.cards.edges() {
+            if !id_set.contains(&edge.source) && !id_set.contains(&edge.target) {
+                continue;
+            }
+            let cmd = match edge.edge_type {
+                CardEdgeType::Blocks => {
+                    super::DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
+                        blocker_id: edge.source,
+                        blocked_id: edge.target,
+                    })
+                }
+                CardEdgeType::RelatesTo => {
+                    super::DependencyCommand::AddRelatesTo(AddRelatesToDependencyCommand {
+                        card_a_id: edge.source,
+                        card_b_id: edge.target,
+                    })
+                }
+                CardEdgeType::ParentOf => super::DependencyCommand::SetParent(SetParentCommand {
+                    child_id: edge.target,
+                    parent_id: edge.source,
+                }),
+            };
+            commands.push(Command::Dependency(cmd));
+        }
+        Ok(commands)
+    }
 }
 
 /// Delete all active cards belonging to the given columns.
@@ -87,6 +142,20 @@ impl DeleteCardsByColumns {
 
     pub fn description(&self) -> String {
         format!("Delete all cards in {} column(s)", self.column_ids.len())
+    }
+
+    /// Inverse: capture every live card in the target columns and emit an
+    /// `ImportEntities` that re-inserts them (the cascade's outer
+    /// transaction already removed them by the time undo runs).
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let cards = store.list_cards_by_columns(&self.column_ids)?;
+        if cards.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            cards,
+            ..Default::default()
+        }))])
     }
 }
 
@@ -113,6 +182,17 @@ impl DeleteArchivedCardsByColumns {
             self.column_ids.len()
         )
     }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let archived_cards = store.list_archived_cards_by_columns(&self.column_ids)?;
+        if archived_cards.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            archived_cards,
+            ..Default::default()
+        }))])
+    }
 }
 
 /// Delete all columns belonging to the given board.
@@ -132,6 +212,17 @@ impl DeleteColumnsByBoard {
     pub fn description(&self) -> String {
         format!("Delete all columns in board {}", self.board_id)
     }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let columns = store.list_columns_by_board(self.board_id)?;
+        if columns.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            columns,
+            ..Default::default()
+        }))])
+    }
 }
 
 /// Delete all sprints belonging to the given board.
@@ -147,6 +238,60 @@ impl DeleteSprintsByBoard {
 
     pub fn description(&self) -> String {
         format!("Delete all sprints in board {}", self.board_id)
+    }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let sprints = store.list_sprints_by_board(self.board_id)?;
+        if sprints.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
+            sprints,
+            ..Default::default()
+        }))])
+    }
+}
+
+/// Set `sprint_id` on every archived card in `archived_card_ids`.
+/// Internal — only used by KAN-191 inverse-command capture (DeleteSprint
+/// undo) to restore the binding that `clear_sprint_from_archived_cards`
+/// cleared during forward execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetArchivedCardsSprint {
+    pub archived_card_ids: Vec<Uuid>,
+    pub sprint_id: Uuid,
+}
+
+impl SetArchivedCardsSprint {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        for id in &self.archived_card_ids {
+            if let Some(mut ac) = context.store.get_archived_card(*id)? {
+                ac.card.sprint_id = Some(self.sprint_id);
+                context.store.delete_archived_card(ac.card.id)?;
+                context.store.insert_archived_card(ac)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Re-attach sprint {} to {} archived card(s)",
+            self.sprint_id,
+            self.archived_card_ids.len()
+        )
+    }
+
+    /// Synthetic-only. Rejects top-level execute so misuse fails
+    /// loudly instead of producing a silently-broken undo entry.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Err(KanbanError::Internal(format!(
+            "SetArchivedCardsSprint is a synthetic command — it must only \
+             appear inside an inverse batch (DeleteSprint undo), never as a \
+             top-level forward command. Got {} card id(s) bound to sprint {}.",
+            self.archived_card_ids.len(),
+            self.sprint_id
+        )))
     }
 }
 

@@ -1,3 +1,15 @@
+//! Orchestration layer between persistence backends and interactive
+//! frontends. [`KanbanContext`] owns per-session undo state
+//! ([`undo_stack::UndoStack`]) and runs every command batch through
+//! [`backend::KanbanBackend::with_transaction`].
+//!
+//! Undo and redo are inverse-command CRUD against current state.
+//! [`kanban_domain::commands::Command::capture_inverse`] produces the
+//! inverse batch at execute time; the `(forward, inverse)` pair lives
+//! on the in-RAM `UndoStack`. The audit log (via
+//! [`backend::KanbanBackend::append_commands`]) is a separate
+//! append-only record of executed batches.
+
 pub mod backend;
 mod cascade;
 pub mod config;
@@ -8,9 +20,10 @@ mod path;
 #[cfg(feature = "sqlite")]
 pub mod sqlite_backend;
 mod store_manager;
+pub mod undo_stack;
 pub use backend::KanbanBackend;
 pub use config::AppConfigDto;
-pub use context::{BatchOperationFailure, BatchOperationResult, KanbanContext, MAX_UNDO_DEPTH};
+pub use context::{BatchOperationFailure, BatchOperationResult, KanbanContext};
 pub use path::validate_path;
 pub use store_manager::StoreManager;
 

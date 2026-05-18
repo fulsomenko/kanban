@@ -74,47 +74,34 @@ impl App {
         let position = self.model.boards().len() as i32;
         let new_index = position as usize;
 
-        let create_board_cmd = Command::Board(BoardCommand::Create(CreateBoard {
+        let mut commands: Vec<Command> = vec![Command::Board(BoardCommand::Create(CreateBoard {
             id: board_id,
             name: board_name.clone(),
             card_prefix: None,
             position,
-        }));
+        }))];
 
-        if let Err(e) = self.execute_command(create_board_cmd) {
+        for (name, position) in [("TODO", 0i32), ("Doing", 1i32), ("Complete", 2i32)] {
+            commands.push(Command::Column(ColumnCommand::Create(CreateColumn {
+                id: uuid::Uuid::new_v4(),
+                board_id,
+                name: name.to_string(),
+                position,
+            })));
+        }
+
+        // Single batch so undo reverses the whole "create a board"
+        // action in one step.
+        if let Err(e) = self.execute_commands_batch(commands) {
             tracing::error!("Failed to create board: {}", e);
             self.set_error(format!("Failed to create board: {}", e));
             return;
         }
 
-        // Now batch the column creation commands
-        let mut column_commands: Vec<Command> = Vec::new();
-        let default_columns = vec![("TODO", 0i32), ("Doing", 1i32), ("Complete", 2i32)];
-
-        for (name, position) in default_columns {
-            let create_col_cmd = Command::Column(ColumnCommand::Create(CreateColumn {
-                id: uuid::Uuid::new_v4(),
-                board_id,
-                name: name.to_string(),
-                position,
-            }));
-            column_commands.push(create_col_cmd);
-        }
-
-        // Execute all column creation commands as a batch (single pause/resume cycle)
-        if let Err(e) = self.execute_commands_batch(column_commands) {
-            tracing::error!("Failed to create default columns: {}", e);
-            self.set_error(format!("Failed to create default columns: {}", e));
-            return;
-        }
-
-        let task_list_view = TaskListView::default(); // Default view for new boards
-
         tracing::info!("Created board: {} (id: {})", board_name, board_id);
-        tracing::info!("Created default columns: TODO, Doing, Complete");
 
         self.selection.board.set(Some(new_index));
-        self.switch_view_strategy(task_list_view);
+        self.switch_view_strategy(TaskListView::default());
     }
 
     pub fn rename_board(&mut self) {
