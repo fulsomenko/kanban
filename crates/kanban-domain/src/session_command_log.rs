@@ -48,11 +48,6 @@ impl SessionCommandLog {
         let to = (to as usize).min(log.len());
         Ok(log[from..to].to_vec())
     }
-
-    pub fn load_all(&self) -> KanbanResult<(Vec<CommandBatch>, u64)> {
-        let log = self.read()?;
-        Ok((log.clone(), log.len() as u64))
-    }
 }
 
 #[cfg(test)]
@@ -99,15 +94,5 @@ mod tests {
         log.append(&[make_create("A")]).unwrap();
         assert!(log.load(10, 20).unwrap().is_empty());
         assert_eq!(log.load(0, 99).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn test_load_all_returns_count_and_data() {
-        let log = SessionCommandLog::new();
-        log.append(&[make_create("A")]).unwrap();
-        log.append(&[make_create("B")]).unwrap();
-        let (batches, count) = log.load_all().unwrap();
-        assert_eq!(count, 2);
-        assert_eq!(batches.len(), 2);
     }
 }

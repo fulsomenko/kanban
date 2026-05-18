@@ -292,9 +292,6 @@ impl CommandStore for JsonDataStore {
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
         self.with_read(|s| s.load_commands(from, to))
     }
-    fn load_all_commands(&self) -> KanbanResult<(Vec<CommandBatch>, u64)> {
-        self.with_read(|s| s.load_all_commands())
-    }
 }
 
 // ─── KanbanBackend ────────────────────────────────────────────────────────────

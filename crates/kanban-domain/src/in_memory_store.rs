@@ -461,10 +461,6 @@ impl CommandStore for InMemoryStore {
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
         self.command_log.load(from, to)
     }
-
-    fn load_all_commands(&self) -> KanbanResult<(Vec<CommandBatch>, u64)> {
-        self.command_log.load_all()
-    }
 }
 
 #[cfg(test)]

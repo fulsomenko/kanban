@@ -49,14 +49,6 @@ pub trait CommandStore: Send + Sync {
 
     /// Half-open range `[from, to)`.
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>>;
-
-    /// Atomic count + load. Default is non-atomic; backends with
-    /// interior locks should override.
-    fn load_all_commands(&self) -> KanbanResult<(Vec<CommandBatch>, u64)> {
-        let count = self.command_count()?;
-        let batches = self.load_commands(0, count)?;
-        Ok((batches, count))
-    }
 }
 
 #[cfg(test)]
@@ -116,18 +108,6 @@ mod tests {
 
         let batches = store.load_commands(0, 2).unwrap();
         assert_eq!(batches.len(), 2);
-    }
-
-    #[test]
-    fn test_load_all_commands_returns_consistent_count_and_data() {
-        let store = InMemoryStore::new();
-        store.append_commands(&[make_board_cmd("B1")]).unwrap();
-        store.append_commands(&[make_board_cmd("B2")]).unwrap();
-        store.append_commands(&[make_board_cmd("B3")]).unwrap();
-
-        let (batches, count) = store.load_all_commands().unwrap();
-        assert_eq!(count, 3);
-        assert_eq!(batches.len(), 3);
     }
 
     #[test]
