@@ -74,6 +74,15 @@ kanban-mcp /path/to/boards.sqlite
 
 ## Tools Reference
 
+### Identifiers
+
+Most tool inputs accept either an opaque UUID or a friendlier reference, resolved server-side:
+
+- `board`, `column`: UUID or the entity's name.
+- `sprint`: UUID, name, or sprint number.
+- `card`: UUID or a short identifier like `KAN-5`. If the identifier matches multiple cards, the tool returns the full list for disambiguation.
+- `cards` (bulk operations): array of UUIDs or card identifiers (for example `["KAN-1", "KAN-2", "42"]`); all referenced cards must share a board.
+
 ### Boards (5 tools)
 
 | Tool | Description | Required params | Optional params |
@@ -108,13 +117,6 @@ kanban-mcp /path/to/boards.sqlite
 | `tool_restore_card` | Restore an archived card | `card: String` | `column: String` |
 | `tool_delete_card` | Delete a card permanently | `card: String` | — |
 | `tool_list_archived_cards` | Returns ArchivedCardSummary (title, archived_at, original column — use tool_get_card for full detail) | — | `page: u32`, `page_size: u32` |
-
-### Identifiers
-
-- `board`, `column` — UUID or the entity's name.
-- `sprint` — UUID, name, or sprint number.
-- `card` — UUID or a short identifier like `KAN-5`. If the identifier matches multiple cards, the tool returns the full list for disambiguation.
-- `cards` (bulk operations) — array of UUIDs or card identifiers (e.g. `["KAN-1", "KAN-2", "42"]`); all referenced cards must share a board.
 
 ### Card–Sprint (2 tools)
 
