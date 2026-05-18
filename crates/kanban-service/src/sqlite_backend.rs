@@ -4,8 +4,7 @@ use kanban_domain::command_store::{CommandBatch, CommandStore};
 use kanban_domain::commands::Command;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
-    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanResult,
-    Snapshot, Sprint,
+    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, KanbanResult, Snapshot, Sprint,
 };
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_sqlite::SqliteStore;
@@ -13,16 +12,12 @@ use uuid::Uuid;
 
 pub struct SqliteBackend {
     db: SqliteStore,
-    /// In-session command log. The on-disk `command_log` table exists
-    /// in the schema but is not yet wired through this backend.
-    mem: InMemoryStore,
 }
 
 impl SqliteBackend {
     pub async fn open(locator: &str) -> KanbanResult<Self> {
         Ok(Self {
             db: SqliteStore::open(locator).await?,
-            mem: InMemoryStore::new(),
         })
     }
 }
@@ -168,19 +163,15 @@ impl DataStore for SqliteBackend {
     }
 }
 
-// ─── CommandStore ─────────────────────────────────────────────────────────────
-
-// Routes to the in-memory mirror; the on-disk command_log table stays
-// unwritten until a separate piece of work wires it up.
 impl CommandStore for SqliteBackend {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
-        self.mem.append_commands(cmds)
+        self.db.append_commands(cmds)
     }
     fn command_count(&self) -> KanbanResult<u64> {
-        self.mem.command_count()
+        self.db.command_count()
     }
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
-        self.mem.load_commands(from, to)
+        self.db.load_commands(from, to)
     }
 }
 

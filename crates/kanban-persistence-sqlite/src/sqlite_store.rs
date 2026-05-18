@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use kanban_core::graph::{Edge, Graph};
+use kanban_domain::command_store::{CommandBatch, CommandStore};
+use kanban_domain::commands::Command;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
@@ -401,70 +403,52 @@ impl SqliteStore {
         Ok(())
     }
 
-    // ── Command log (audit foundation; not yet wired through SqliteBackend) ──
+    // ── Command log (audit) ───────────────────────────────────────────────
+    //
+    // `batch_index` is `INTEGER PRIMARY KEY` so `INSERT ... VALUES (NULL, ...)`
+    // lets SQLite assign the next auto-incremented value atomically — no
+    // pre-read of `MAX(batch_index)`. The `CommandStore` impl below is the
+    // only writer; the log is never truncated or pruned through this API.
 
-    /// Append a single command batch at logical index `batch_index`.
-    /// `commands_json` is the serde-JSON encoding of the `Vec<Command>` batch.
-    pub async fn append_command_batch(
-        &self,
-        batch_index: u64,
-        commands_json: &str,
-    ) -> KanbanResult<()> {
-        sqlx::query(
-            "INSERT INTO command_log (batch_index, commands_json, created_at) VALUES (?, ?, ?)",
+    async fn insert_command_log_row(&self, commands_json: &str) -> KanbanResult<u64> {
+        let res = sqlx::query(
+            "INSERT INTO command_log (batch_index, commands_json, created_at)
+             VALUES (NULL, ?, ?)",
         )
-        .bind(batch_index as i64)
         .bind(commands_json)
         .bind(fmt_dt(&Utc::now()))
         .execute(&self.pool)
         .await
         .map_err(db_err)?;
-        Ok(())
+        Ok(res.last_insert_rowid() as u64)
     }
 
-    /// Load all persisted command batches in order. Returns the JSON strings
-    /// so callers can deserialise inside the domain layer.
-    pub async fn load_all_command_batches(&self) -> KanbanResult<Vec<String>> {
-        let rows = sqlx::query("SELECT commands_json FROM command_log ORDER BY batch_index ASC")
-            .fetch_all(&self.pool)
+    async fn command_log_row_count(&self) -> KanbanResult<u64> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM command_log")
+            .fetch_one(&self.pool)
             .await
             .map_err(db_err)?;
+        Ok(count as u64)
+    }
+
+    async fn select_command_log_range(&self, from: u64, to: u64) -> KanbanResult<Vec<String>> {
+        if to <= from {
+            return Ok(vec![]);
+        }
+        let rows = sqlx::query(
+            "SELECT commands_json FROM command_log
+             ORDER BY batch_index ASC LIMIT ? OFFSET ?",
+        )
+        .bind((to - from) as i64)
+        .bind(from as i64)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_err)?;
         let mut out = Vec::with_capacity(rows.len());
         for row in &rows {
             out.push(row.try_get::<String, _>("commands_json").map_err(db_err)?);
         }
         Ok(out)
-    }
-
-    /// Remove batches with logical index >= `after`. Retains [0, after).
-    pub async fn truncate_command_log_after(&self, after: u64) -> KanbanResult<()> {
-        sqlx::query("DELETE FROM command_log WHERE batch_index >= ?")
-            .bind(after as i64)
-            .execute(&self.pool)
-            .await
-            .map_err(db_err)?;
-        Ok(())
-    }
-
-    /// Remove the oldest `drop_count` batches and renumber the rest so the
-    /// surviving log starts at index 0.
-    pub async fn shift_command_log(&self, drop_count: u64) -> KanbanResult<()> {
-        if drop_count == 0 {
-            return Ok(());
-        }
-        let mut tx = self.pool.begin().await.map_err(db_err)?;
-        sqlx::query("DELETE FROM command_log WHERE batch_index < ?")
-            .bind(drop_count as i64)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_err)?;
-        sqlx::query("UPDATE command_log SET batch_index = batch_index - ?")
-            .bind(drop_count as i64)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_err)?;
-        tx.commit().await.map_err(db_err)?;
-        Ok(())
     }
 
     async fn fetch_board_aux(
@@ -1574,6 +1558,31 @@ impl DataStore for SqliteStore {
     fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
         run(self.apply_snapshot_async(snapshot))
     }
+}
+
+impl CommandStore for SqliteStore {
+    fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
+        let json = serde_json::to_string(cmds).map_err(|e| {
+            KanbanError::Internal(format!("serialize command batch for audit log: {e}"))
+        })?;
+        run(self.insert_command_log_row(&json))?;
+        run(self.command_log_row_count())
+    }
+
+    fn command_count(&self) -> KanbanResult<u64> {
+        run(self.command_log_row_count())
+    }
+
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
+        let jsons = run(self.select_command_log_range(from, to))?;
+        jsons.into_iter().map(|j| parse_batch(&j)).collect()
+    }
+}
+
+fn parse_batch(json: &str) -> KanbanResult<CommandBatch> {
+    serde_json::from_str(json).map_err(|e| {
+        KanbanError::Internal(format!("deserialize command batch from audit log: {e}"))
+    })
 }
 
 #[async_trait::async_trait]
