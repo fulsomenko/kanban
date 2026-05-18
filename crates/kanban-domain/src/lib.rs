@@ -60,7 +60,7 @@ pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
 
-pub use command_store::CommandStore;
+pub use command_store::{CommandBatch, CommandStore};
 pub use data_store::{DataStore, GraphMutFn};
 pub use in_memory_store::InMemoryStore;
 pub use session_command_log::SessionCommandLog;

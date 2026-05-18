@@ -1,5 +1,43 @@
 use crate::commands::Command;
 use crate::KanbanResult;
+use serde::{Deserialize, Serialize};
+
+/// One audit-log entry — the commands submitted as a single
+/// `KanbanContext::execute` call.
+///
+/// Most user actions are a single command; some (animated archive,
+/// cascade flows) are multiple. The batch boundary distinguishes
+/// "one user action" from "many user actions" and is what an
+/// audit-log UI renders per row.
+///
+/// `#[serde(transparent)]` keeps the on-disk JSON encoding identical
+/// to a bare `Vec<Command>`, so existing SQLite `command_log` rows
+/// deserialize unchanged.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CommandBatch {
+    pub commands: Vec<Command>,
+}
+
+impl CommandBatch {
+    pub fn new(commands: Vec<Command>) -> Self {
+        Self { commands }
+    }
+
+    pub fn len(&self) -> usize {
+        self.commands.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+}
+
+impl From<Vec<Command>> for CommandBatch {
+    fn from(commands: Vec<Command>) -> Self {
+        Self { commands }
+    }
+}
 
 /// Append-only chronological log of executed command batches.
 /// Backend-defined persistence (JSON in-memory, SQLite on disk).
@@ -10,11 +48,11 @@ pub trait CommandStore: Send + Sync {
     fn command_count(&self) -> KanbanResult<u64>;
 
     /// Half-open range `[from, to)`.
-    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>>;
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>>;
 
     /// Atomic count + load. Default is non-atomic; backends with
     /// interior locks should override.
-    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
+    fn load_all_commands(&self) -> KanbanResult<(Vec<CommandBatch>, u64)> {
         let count = self.command_count()?;
         let batches = self.load_commands(0, count)?;
         Ok((batches, count))

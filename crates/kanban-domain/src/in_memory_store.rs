@@ -3,7 +3,7 @@ use std::sync::RwLock;
 
 use uuid::Uuid;
 
-use crate::command_store::CommandStore;
+use crate::command_store::{CommandBatch, CommandStore};
 use crate::commands::Command;
 use crate::data_store::DataStore;
 use crate::session_command_log::SessionCommandLog;
@@ -458,11 +458,11 @@ impl CommandStore for InMemoryStore {
         self.command_log.count()
     }
 
-    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
         self.command_log.load(from, to)
     }
 
-    fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
+    fn load_all_commands(&self) -> KanbanResult<(Vec<CommandBatch>, u64)> {
         self.command_log.load_all()
     }
 }

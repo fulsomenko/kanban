@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use kanban_domain::command_store::CommandStore;
+use kanban_domain::command_store::{CommandBatch, CommandStore};
 use kanban_domain::commands::Command;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
@@ -179,7 +179,7 @@ impl CommandStore for SqliteBackend {
     fn command_count(&self) -> KanbanResult<u64> {
         self.mem.command_count()
     }
-    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
+    fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
         self.mem.load_commands(from, to)
     }
 }

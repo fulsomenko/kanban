@@ -44,7 +44,7 @@ async fn test_replay_from_baseline_reproduces_state() -> KanbanResult<()> {
             store: replay_backend.as_ref() as &dyn DataStore,
         };
         for batch in &batches {
-            for cmd in batch {
+            for cmd in &batch.commands {
                 cmd.execute(&cmd_ctx)?;
             }
         }

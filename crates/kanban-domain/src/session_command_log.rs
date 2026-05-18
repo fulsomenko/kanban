@@ -5,13 +5,14 @@
 //! SQLite uses its own on-disk `command_log` table and does not
 //! depend on this type.
 
+use crate::command_store::CommandBatch;
 use crate::commands::Command;
 use crate::{KanbanError, KanbanResult};
 use std::sync::RwLock;
 
 #[derive(Debug, Default)]
 pub struct SessionCommandLog {
-    batches: RwLock<Vec<Vec<Command>>>,
+    batches: RwLock<Vec<CommandBatch>>,
 }
 
 impl SessionCommandLog {
@@ -19,13 +20,13 @@ impl SessionCommandLog {
         Self::default()
     }
 
-    fn read(&self) -> KanbanResult<std::sync::RwLockReadGuard<'_, Vec<Vec<Command>>>> {
+    fn read(&self) -> KanbanResult<std::sync::RwLockReadGuard<'_, Vec<CommandBatch>>> {
         self.batches.read().map_err(|e| {
             KanbanError::Internal(format!("SessionCommandLog RwLock poisoned (read): {e}"))
         })
     }
 
-    fn write(&self) -> KanbanResult<std::sync::RwLockWriteGuard<'_, Vec<Vec<Command>>>> {
+    fn write(&self) -> KanbanResult<std::sync::RwLockWriteGuard<'_, Vec<CommandBatch>>> {
         self.batches.write().map_err(|e| {
             KanbanError::Internal(format!("SessionCommandLog RwLock poisoned (write): {e}"))
         })
@@ -33,7 +34,7 @@ impl SessionCommandLog {
 
     pub fn append(&self, cmds: &[Command]) -> KanbanResult<u64> {
         let mut log = self.write()?;
-        log.push(cmds.to_vec());
+        log.push(CommandBatch::new(cmds.to_vec()));
         Ok(log.len() as u64)
     }
 
@@ -41,14 +42,14 @@ impl SessionCommandLog {
         Ok(self.read()?.len() as u64)
     }
 
-    pub fn load(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
+    pub fn load(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
         let log = self.read()?;
         let from = (from as usize).min(log.len());
         let to = (to as usize).min(log.len());
         Ok(log[from..to].to_vec())
     }
 
-    pub fn load_all(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
+    pub fn load_all(&self) -> KanbanResult<(Vec<CommandBatch>, u64)> {
         let log = self.read()?;
         Ok((log.clone(), log.len() as u64))
     }

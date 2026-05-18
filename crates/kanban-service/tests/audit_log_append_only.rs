@@ -49,7 +49,7 @@ async fn test_audit_log_records_all_forward_executes_in_order() -> KanbanResult<
     assert_eq!(batches.len(), 3);
     let names: Vec<String> = batches
         .iter()
-        .filter_map(|batch| match batch.first() {
+        .filter_map(|batch| match batch.commands.first() {
             Some(Command::Board(BoardCommand::Create(c))) => Some(c.name.clone()),
             _ => None,
         })
@@ -127,7 +127,7 @@ async fn test_audit_log_preserves_abandoned_redo_tail_on_branching_execute() -> 
     let batches = backend.load_commands(baseline, baseline + 3)?;
     let names: Vec<String> = batches
         .iter()
-        .filter_map(|batch| match batch.first() {
+        .filter_map(|batch| match batch.commands.first() {
             Some(Command::Board(BoardCommand::Create(c))) => Some(c.name.clone()),
             _ => None,
         })
