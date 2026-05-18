@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::command_store::CommandStore;
 use crate::commands::Command;
 use crate::data_store::DataStore;
+use crate::session_command_log::SessionCommandLog;
 use crate::{
     ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, KanbanResult, Snapshot, Sprint,
 };
@@ -68,14 +69,14 @@ impl StoreState {
 
 pub struct InMemoryStore {
     state: RwLock<StoreState>,
-    command_log: RwLock<Vec<Vec<Command>>>,
+    command_log: SessionCommandLog,
 }
 
 impl InMemoryStore {
     pub fn new() -> Self {
         Self {
             state: RwLock::new(StoreState::new()),
-            command_log: RwLock::new(Vec::new()),
+            command_log: SessionCommandLog::new(),
         }
     }
 
@@ -89,18 +90,6 @@ impl InMemoryStore {
         self.state
             .write()
             .map_err(|e| KanbanError::Internal(format!("State RwLock poisoned (write): {e}")))
-    }
-
-    fn read_log(&self) -> KanbanResult<std::sync::RwLockReadGuard<'_, Vec<Vec<Command>>>> {
-        self.command_log
-            .read()
-            .map_err(|e| KanbanError::Internal(format!("Command log RwLock poisoned (read): {e}")))
-    }
-
-    fn write_log(&self) -> KanbanResult<std::sync::RwLockWriteGuard<'_, Vec<Vec<Command>>>> {
-        self.command_log
-            .write()
-            .map_err(|e| KanbanError::Internal(format!("Command log RwLock poisoned (write): {e}")))
     }
 }
 
@@ -462,25 +451,19 @@ impl DataStore for InMemoryStore {
 
 impl CommandStore for InMemoryStore {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
-        let mut log = self.write_log()?;
-        log.push(cmds.to_vec());
-        Ok(log.len() as u64)
+        self.command_log.append(cmds)
     }
 
     fn command_count(&self) -> KanbanResult<u64> {
-        Ok(self.read_log()?.len() as u64)
+        self.command_log.count()
     }
 
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
-        let log = self.read_log()?;
-        let from = (from as usize).min(log.len());
-        let to = (to as usize).min(log.len());
-        Ok(log[from..to].to_vec())
+        self.command_log.load(from, to)
     }
 
     fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
-        let log = self.read_log()?;
-        Ok((log.clone(), log.len() as u64))
+        self.command_log.load_all()
     }
 }
 

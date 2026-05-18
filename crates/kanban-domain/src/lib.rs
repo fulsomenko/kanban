@@ -17,6 +17,7 @@ pub mod in_memory_store;
 pub mod operations;
 pub mod query;
 pub mod search;
+pub mod session_command_log;
 pub mod snapshot;
 pub mod sort;
 pub mod sprint;
@@ -62,6 +63,7 @@ pub use task_list_view::TaskListView;
 pub use command_store::CommandStore;
 pub use data_store::{DataStore, GraphMutFn};
 pub use in_memory_store::InMemoryStore;
+pub use session_command_log::SessionCommandLog;
 
 pub use error::{
     AmbiguousMatch, BatchResolutionCause, BatchResolutionFailure, DependencyError, DomainError,
