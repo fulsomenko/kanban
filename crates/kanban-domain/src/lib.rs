@@ -13,6 +13,7 @@ pub mod editable;
 pub mod export;
 pub mod field_update;
 pub mod filter;
+pub mod graph_operations;
 pub mod in_memory_store;
 pub mod operations;
 pub mod query;
