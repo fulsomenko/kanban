@@ -500,6 +500,36 @@ pub struct GetCardGitCheckoutRequest {
     pub card: String,
 }
 
+// Card relations (parent/child)
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SetCardParentRequest {
+    #[schemars(description = "UUID or identifier of the child card (e.g. 'KAN-5')")]
+    pub child: String,
+    #[schemars(description = "UUID or identifier of the parent card (e.g. 'KAN-2')")]
+    pub parent: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RemoveCardParentRequest {
+    #[schemars(description = "UUID or identifier of the child card")]
+    pub child: String,
+    #[schemars(description = "UUID or identifier of the parent card")]
+    pub parent: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListCardParentsRequest {
+    #[schemars(description = "UUID or identifier of the card whose parents to list")]
+    pub card: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListCardChildrenRequest {
+    #[schemars(description = "UUID or identifier of the card whose children to list")]
+    pub card: String,
+}
+
 // Multi-card operations
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -1107,6 +1137,78 @@ impl KanbanMcpServer {
         })
         .await?;
         to_call_tool_result_json(serde_json::json!({"command": command}))
+    }
+
+    // Card relations (parent/child)
+
+    #[tool(
+        description = "Add a parent -> child edge between two cards. Rejects cycles and self-references."
+    )]
+    pub async fn tool_set_card_parent(
+        &self,
+        Parameters(req): Parameters<SetCardParentRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| {
+            let child_id = ctx.mcp_resolve_card(&req.child)?;
+            let parent_id = ctx.mcp_resolve_card(&req.parent)?;
+            use kanban_domain::GraphOperations;
+            ctx.set_card_parent(child_id, parent_id)
+                .map_err(kanban_err_to_mcp)?;
+            Ok((child_id, parent_id))
+        })
+        .await?;
+        to_call_tool_result_json(serde_json::json!({
+            "parent": parent_id.to_string(),
+            "child":  child_id.to_string(),
+        }))
+    }
+
+    #[tool(description = "Remove a parent -> child edge between two cards.")]
+    pub async fn tool_remove_card_parent(
+        &self,
+        Parameters(req): Parameters<RemoveCardParentRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| {
+            let child_id = ctx.mcp_resolve_card(&req.child)?;
+            let parent_id = ctx.mcp_resolve_card(&req.parent)?;
+            use kanban_domain::GraphOperations;
+            ctx.remove_card_parent(child_id, parent_id)
+                .map_err(kanban_err_to_mcp)?;
+            Ok((child_id, parent_id))
+        })
+        .await?;
+        to_call_tool_result_json(serde_json::json!({
+            "parent": parent_id.to_string(),
+            "child":  child_id.to_string(),
+        }))
+    }
+
+    #[tool(description = "List direct parents of a card.")]
+    pub async fn tool_list_card_parents(
+        &self,
+        Parameters(req): Parameters<ListCardParentsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let parents = locked_read(&self.ctx, |ctx| {
+            let id = ctx.mcp_resolve_card(&req.card)?;
+            use kanban_domain::GraphOperations;
+            ctx.list_card_parents(id).map_err(kanban_err_to_mcp)
+        })
+        .await?;
+        to_call_tool_result(&parents)
+    }
+
+    #[tool(description = "List direct children of a card.")]
+    pub async fn tool_list_card_children(
+        &self,
+        Parameters(req): Parameters<ListCardChildrenRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let children = locked_read(&self.ctx, |ctx| {
+            let id = ctx.mcp_resolve_card(&req.card)?;
+            use kanban_domain::GraphOperations;
+            ctx.list_card_children(id).map_err(kanban_err_to_mcp)
+        })
+        .await?;
+        to_call_tool_result(&children)
     }
 
     // Multi-card operations
