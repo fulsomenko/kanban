@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use kanban_core::VERSION;
 
@@ -263,6 +263,49 @@ pub enum CardAction {
 
 // Relation commands
 
+/// Sort key for `kanban relation parents` / `children` output.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum SortKey {
+    CardNumber,
+    Priority,
+    Points,
+    CreatedAt,
+    UpdatedAt,
+    Status,
+    Position,
+}
+
+/// Sort direction.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+impl SortKey {
+    pub fn to_sort_by(self) -> kanban_domain::sort::SortBy {
+        use kanban_domain::sort::SortBy;
+        match self {
+            SortKey::CardNumber => SortBy::CardNumber,
+            SortKey::Priority => SortBy::Priority,
+            SortKey::Points => SortBy::Points,
+            SortKey::CreatedAt => SortBy::CreatedAt,
+            SortKey::UpdatedAt => SortBy::UpdatedAt,
+            SortKey::Status => SortBy::Status,
+            SortKey::Position => SortBy::Position,
+        }
+    }
+}
+
+impl SortDir {
+    pub fn to_sort_order(self) -> kanban_domain::SortOrder {
+        match self {
+            SortDir::Asc => kanban_domain::SortOrder::Ascending,
+            SortDir::Desc => kanban_domain::SortOrder::Descending,
+        }
+    }
+}
+
 #[derive(Args)]
 pub struct RelationCommand {
     #[command(subcommand)]
@@ -293,11 +336,23 @@ pub enum RelationAction {
     Parents {
         /// Card UUID or identifier
         card: String,
+        /// Sort key for the returned list
+        #[arg(long, value_enum, default_value_t = SortKey::CardNumber)]
+        sort: SortKey,
+        /// Sort direction
+        #[arg(long, value_enum, default_value_t = SortDir::Asc)]
+        order: SortDir,
     },
     /// List direct children of a card
     Children {
         /// Card UUID or identifier
         card: String,
+        /// Sort key for the returned list
+        #[arg(long, value_enum, default_value_t = SortKey::CardNumber)]
+        sort: SortKey,
+        /// Sort direction
+        #[arg(long, value_enum, default_value_t = SortDir::Asc)]
+        order: SortDir,
     },
 }
 

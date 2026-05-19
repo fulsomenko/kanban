@@ -1,19 +1,21 @@
-use crate::cli::RelationAction;
+use crate::cli::{RelationAction, SortDir, SortKey};
 use crate::context::CliContext;
 use crate::error::{KanbanCliError, KanbanCliResult};
 use crate::output;
-use kanban_domain::{CardSummary, GraphOperations, KanbanOperations};
+use kanban_domain::sort::OrderedSorter;
+use kanban_domain::{Card, CardSummary, GraphOperations, KanbanOperations};
 use uuid::Uuid;
 
-fn resolve_summaries(ctx: &CliContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
+fn resolve_cards(ctx: &CliContext, ids: Vec<Uuid>) -> Vec<Card> {
     ids.into_iter()
-        .filter_map(|id| {
-            ctx.get_card(id)
-                .ok()
-                .flatten()
-                .map(|c| CardSummary::from(&c))
-        })
+        .filter_map(|id| ctx.get_card(id).ok().flatten())
         .collect()
+}
+
+fn sort_and_summarize(mut cards: Vec<Card>, sort: SortKey, order: SortDir) -> Vec<CardSummary> {
+    let sorter = OrderedSorter::new(sort.to_sort_by(), order.to_sort_order());
+    sorter.sort_by(&mut cards);
+    cards.iter().map(CardSummary::from).collect()
 }
 
 fn resolve_card(ctx: &CliContext, raw: &str) -> KanbanCliResult<Uuid> {
@@ -56,15 +58,21 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
                 "child":  child_uuid.to_string(),
             }))
         }
-        RelationAction::Parents { card } => {
+        RelationAction::Parents { card, sort, order } => {
             let uuid = resolve_card(ctx, &card)?;
             let ids = ctx.list_card_parents(uuid)?;
-            Ok(serde_json::to_value(resolve_summaries(ctx, ids))?)
+            let cards = resolve_cards(ctx, ids);
+            Ok(serde_json::to_value(sort_and_summarize(
+                cards, sort, order,
+            ))?)
         }
-        RelationAction::Children { card } => {
+        RelationAction::Children { card, sort, order } => {
             let uuid = resolve_card(ctx, &card)?;
             let ids = ctx.list_card_children(uuid)?;
-            Ok(serde_json::to_value(resolve_summaries(ctx, ids))?)
+            let cards = resolve_cards(ctx, ids);
+            Ok(serde_json::to_value(sort_and_summarize(
+                cards, sort, order,
+            ))?)
         }
     }
 }
