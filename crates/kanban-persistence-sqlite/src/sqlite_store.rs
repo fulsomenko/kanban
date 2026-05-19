@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use kanban_core::graph::{Edge, EdgeStore};
+use kanban_core::graph::Edge;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
@@ -191,7 +191,7 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
 }
 
 fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    let mut graph: EdgeStore<CardEdgeType> = EdgeStore::new();
+    let mut graph = DependencyGraph::default();
     for row in rows {
         let source_str: String = row.try_get("source_id").map_err(db_err)?;
         let target_str: String = row.try_get("target_id").map_err(db_err)?;
@@ -201,17 +201,24 @@ fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
         let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
         let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
 
-        graph.add_edge(Edge {
+        let edge_type: CardEdgeType = p_enum(&edge_type_str, "edge_type")?;
+        let untyped: Edge<()> = Edge {
             source: p_uuid(&source_str)?,
             target: p_uuid(&target_str)?,
-            edge_type: p_enum(&edge_type_str, "edge_type")?,
+            edge_type: (),
             direction: p_enum(&direction_str, "edge direction")?,
             weight: weight.map(|w| w as f32),
             created_at: p_dt(&created_at_str)?,
             archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
-        });
+        };
+
+        match edge_type {
+            CardEdgeType::ParentOf => graph.parent_child.insert_raw_edge(untyped),
+            CardEdgeType::Blocks => graph.blocks.insert_raw_edge(untyped),
+            CardEdgeType::RelatesTo => graph.relates.insert_raw_edge(untyped),
+        }
     }
-    Ok(DependencyGraph { cards: graph })
+    Ok(graph)
 }
 
 fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
@@ -760,7 +767,28 @@ impl SqliteStore {
             .await
             .map_err(db_err)?;
 
-        for edge in graph.cards.edges() {
+        let to_write: Vec<(&kanban_core::Edge<()>, CardEdgeType)> = graph
+            .parent_child
+            .edges()
+            .iter()
+            .map(|e| (e, CardEdgeType::ParentOf))
+            .chain(
+                graph
+                    .blocks
+                    .edges()
+                    .iter()
+                    .map(|e| (e, CardEdgeType::Blocks)),
+            )
+            .chain(
+                graph
+                    .relates
+                    .edges()
+                    .iter()
+                    .map(|e| (e, CardEdgeType::RelatesTo)),
+            )
+            .collect();
+
+        for (edge, kind) in to_write {
             sqlx::query(
                 "INSERT INTO card_edges
                     (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
@@ -768,7 +796,7 @@ impl SqliteStore {
             )
             .bind(edge.source.to_string())
             .bind(edge.target.to_string())
-            .bind(format!("{:?}", edge.edge_type))
+            .bind(format!("{:?}", kind))
             .bind(format!("{:?}", edge.direction))
             .bind(edge.weight.map(|w| w as f64))
             .bind(fmt_dt(&edge.created_at))

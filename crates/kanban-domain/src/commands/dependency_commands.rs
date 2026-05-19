@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{Command, CommandContext};
-use crate::{dependencies::CardGraphExt, Card};
+use crate::Card;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -64,7 +64,7 @@ impl AddBlocksDependencyCommand {
         let blocker_id = self.blocker_id;
         let blocked_id = self.blocked_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.add_blocks(blocker_id, blocked_id)?;
+            graph.add_blocks(blocker_id, blocked_id)?;
             Ok(())
         }))
     }
@@ -99,7 +99,7 @@ impl AddRelatesToDependencyCommand {
         let card_a_id = self.card_a_id;
         let card_b_id = self.card_b_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.add_relates_to(card_a_id, card_b_id)?;
+            graph.add_relates_to(card_a_id, card_b_id)?;
             Ok(())
         }))
     }
@@ -134,7 +134,7 @@ impl RemoveDependencyCommand {
         let source_id = self.source_id;
         let target_id = self.target_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.remove_edge(source_id, target_id);
+            graph.try_remove_edge(source_id, target_id);
             Ok(())
         }))
     }
@@ -152,35 +152,39 @@ impl RemoveDependencyCommand {
     /// remember each edge's type. The inverse then emits one Add* or
     /// SetParent command per captured edge.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        use crate::dependencies::CardEdgeType;
         let graph = store.get_graph()?;
         let mut commands: Vec<Command> = Vec::new();
-        for edge in graph.cards.edges() {
-            if !edge.connects(self.source_id, self.target_id) {
-                continue;
+        let (a, b) = (self.source_id, self.target_id);
+
+        for edge in graph.parent_child.edges() {
+            if edge.connects(a, b) {
+                commands.push(Command::Dependency(DependencyCommand::SetParent(
+                    SetParentCommand {
+                        child_id: edge.target,
+                        parent_id: edge.source,
+                    },
+                )));
             }
-            let cmd = match edge.edge_type {
-                CardEdgeType::Blocks => {
-                    Command::Dependency(DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
+        }
+        for edge in graph.blocks.edges() {
+            if edge.connects(a, b) {
+                commands.push(Command::Dependency(DependencyCommand::AddBlocks(
+                    AddBlocksDependencyCommand {
                         blocker_id: edge.source,
                         blocked_id: edge.target,
-                    }))
-                }
-                CardEdgeType::RelatesTo => Command::Dependency(DependencyCommand::AddRelatesTo(
+                    },
+                )));
+            }
+        }
+        for edge in graph.relates.edges() {
+            if edge.connects(a, b) {
+                commands.push(Command::Dependency(DependencyCommand::AddRelatesTo(
                     AddRelatesToDependencyCommand {
                         card_a_id: edge.source,
                         card_b_id: edge.target,
                     },
-                )),
-                CardEdgeType::ParentOf => {
-                    // Edge: source = parent, target = child.
-                    Command::Dependency(DependencyCommand::SetParent(SetParentCommand {
-                        child_id: edge.target,
-                        parent_id: edge.source,
-                    }))
-                }
-            };
-            commands.push(cmd);
+                )));
+            }
         }
         Ok(commands)
     }
@@ -198,7 +202,7 @@ impl SetParentCommand {
         let child_id = self.child_id;
         let parent_id = self.parent_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.set_parent(child_id, parent_id)?;
+            graph.set_parent(child_id, parent_id)?;
             Ok(())
         }))
     }
@@ -235,7 +239,7 @@ impl RemoveParentCommand {
         let child_id = self.child_id;
         let parent_id = self.parent_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.remove_parent(child_id, parent_id)?;
+            graph.remove_parent(child_id, parent_id)?;
             Ok(())
         }))
     }
@@ -297,7 +301,7 @@ impl CreateSubcardCommand {
         context.store.upsert_card(card)?;
 
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.set_parent(card_id, parent_id)?;
+            graph.set_parent(card_id, parent_id)?;
             Ok(())
         }))
     }
@@ -343,7 +347,7 @@ mod tests {
 
         assert!(cmd.execute(&context).is_ok());
         let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.cards.blockers(card_b).len(), 1);
+        assert_eq!(graph.blockers(card_b).len(), 1);
     }
 
     #[test]
@@ -360,8 +364,8 @@ mod tests {
 
         assert!(cmd.execute(&context).is_ok());
         let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.cards.related(card_a).len(), 1);
-        assert_eq!(graph.cards.related(card_b).len(), 1);
+        assert_eq!(graph.related(card_a).len(), 1);
+        assert_eq!(graph.related(card_b).len(), 1);
     }
 
     #[test]
@@ -372,11 +376,11 @@ mod tests {
 
         {
             let mut graph = tc.store.get_graph().unwrap();
-            graph.cards.add_blocks(card_a, card_b).unwrap();
+            graph.add_blocks(card_a, card_b).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
         assert_eq!(
-            tc.store.get_graph().unwrap().cards.blockers(card_b).len(),
+            tc.store.get_graph().unwrap().blockers(card_b).len(),
             1
         );
 
@@ -388,7 +392,7 @@ mod tests {
 
         assert!(cmd.execute(&context).is_ok());
         let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.cards.blockers(card_b).len(), 0);
+        assert_eq!(graph.blockers(card_b).len(), 0);
     }
 
     #[test]
@@ -405,9 +409,9 @@ mod tests {
 
         assert!(cmd.execute(&context).is_ok());
         let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.cards.children(parent_id).len(), 1);
-        assert_eq!(graph.cards.parents(child_id).len(), 1);
-        assert!(graph.cards.children(parent_id).contains(&child_id));
+        assert_eq!(graph.children(parent_id).len(), 1);
+        assert_eq!(graph.parents(child_id).len(), 1);
+        assert!(graph.children(parent_id).contains(&child_id));
     }
 
     #[test]
@@ -438,14 +442,13 @@ mod tests {
 
         {
             let mut graph = tc.store.get_graph().unwrap();
-            graph.cards.set_parent(child_id, parent_id).unwrap();
+            graph.set_parent(child_id, parent_id).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
         assert_eq!(
             tc.store
                 .get_graph()
                 .unwrap()
-                .cards
                 .children(parent_id)
                 .len(),
             1
@@ -458,8 +461,8 @@ mod tests {
         };
         assert!(cmd.execute(&context).is_ok());
         let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.cards.children(parent_id).len(), 0);
-        assert_eq!(graph.cards.parents(child_id).len(), 0);
+        assert_eq!(graph.children(parent_id).len(), 0);
+        assert_eq!(graph.parents(child_id).len(), 0);
     }
 
     #[test]
@@ -511,9 +514,9 @@ mod tests {
         assert_eq!(card.column_id, column_id);
 
         let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.cards.children(parent_id).len(), 1);
-        assert_eq!(graph.cards.parents(card.id).len(), 1);
-        assert!(graph.cards.children(parent_id).contains(&card.id));
+        assert_eq!(graph.children(parent_id).len(), 1);
+        assert_eq!(graph.parents(card.id).len(), 1);
+        assert!(graph.children(parent_id).contains(&card.id));
     }
 
     #[test]

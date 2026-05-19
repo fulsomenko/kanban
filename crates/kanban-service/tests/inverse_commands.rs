@@ -324,13 +324,13 @@ async fn test_inverse_add_blocks_removes_edge() -> KanbanResult<()> {
         },
     ))])?;
     assert!(
-        ctx.graph()?.cards.has_edge(a.id, b.id),
+        ctx.graph()?.has_edge(a.id, b.id),
         "edge added by forward"
     );
 
     assert!(ctx.undo()?);
     assert!(
-        !ctx.graph()?.cards.has_edge(a.id, b.id),
+        !ctx.graph()?.has_edge(a.id, b.id),
         "edge removed by inverse"
     );
     Ok(())
@@ -352,13 +352,13 @@ async fn test_inverse_add_relates_to_removes_edge() -> KanbanResult<()> {
         },
     ))])?;
     assert!(
-        ctx.graph()?.cards.has_edge(a.id, b.id),
+        ctx.graph()?.has_edge(a.id, b.id),
         "relates edge added by forward"
     );
 
     assert!(ctx.undo()?);
     assert!(
-        !ctx.graph()?.cards.has_edge(a.id, b.id),
+        !ctx.graph()?.has_edge(a.id, b.id),
         "relates edge removed by inverse"
     );
     Ok(())
@@ -386,13 +386,13 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
         },
     ))])?;
     assert!(
-        !ctx.graph()?.cards.has_edge(parent.id, child.id),
+        !ctx.graph()?.has_edge(parent.id, child.id),
         "parent edge removed by forward"
     );
 
     assert!(ctx.undo()?);
     assert!(
-        ctx.graph()?.cards.has_edge(parent.id, child.id),
+        ctx.graph()?.has_edge(parent.id, child.id),
         "parent edge re-established by inverse"
     );
     Ok(())
@@ -591,13 +591,13 @@ async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
         },
     ))])?;
     assert!(
-        ctx.graph()?.cards.has_edge(parent.id, child.id),
+        ctx.graph()?.has_edge(parent.id, child.id),
         "parent edge added"
     );
 
     assert!(ctx.undo()?);
     assert!(
-        !ctx.graph()?.cards.has_edge(parent.id, child.id),
+        !ctx.graph()?.has_edge(parent.id, child.id),
         "parent edge removed by inverse"
     );
     Ok(())
@@ -624,7 +624,7 @@ async fn test_inverse_create_subcard_removes_card_and_archive_trail() -> KanbanR
         },
     ))])?;
     assert_eq!(ctx.cards()?.len(), 2);
-    assert!(ctx.graph()?.cards.has_edge(parent.id, subcard_id));
+    assert!(ctx.graph()?.has_edge(parent.id, subcard_id));
 
     assert!(ctx.undo()?);
     assert_eq!(ctx.cards()?.len(), 1, "subcard gone");
@@ -633,7 +633,7 @@ async fn test_inverse_create_subcard_removes_card_and_archive_trail() -> KanbanR
         "no archive trail — undoing CreateSubcard fully removes the card"
     );
     assert!(
-        !ctx.graph()?.cards.has_edge(parent.id, subcard_id),
+        !ctx.graph()?.has_edge(parent.id, subcard_id),
         "parent edge cleaned up by the archive step in the inverse batch"
     );
     Ok(())
@@ -899,11 +899,11 @@ async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<(
             target_id: b.id,
         },
     ))])?;
-    assert!(!ctx.graph()?.cards.has_edge(a.id, b.id));
+    assert!(!ctx.graph()?.has_edge(a.id, b.id));
 
     assert!(ctx.undo()?);
     assert!(
-        ctx.graph()?.cards.has_edge(a.id, b.id),
+        ctx.graph()?.has_edge(a.id, b.id),
         "edge restored by inverse"
     );
     Ok(())
@@ -1314,8 +1314,6 @@ async fn test_undo_chain_through_archive_create_create_column_succeeds() -> Kanb
 /// reverse-order inverse batch.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
-    use kanban_domain::dependencies::CardGraphExt;
-
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("Cascade".into(), Some("CSC".into()))?;
     let todo = ctx.create_column(board.id, "TODO".into(), None)?;
@@ -1330,7 +1328,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
 
     // Add a graph edge so the cascade has something to clean up.
     let mut graph = ctx.graph()?;
-    graph.cards.add_blocks(c1.id, c3.id).unwrap();
+    graph.add_blocks(c1.id, c3.id).unwrap();
     ctx.backend().set_graph(graph)?;
     ctx.clear_history()?;
 
@@ -1348,7 +1346,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
         .collect();
     let baseline_sprint_ids: std::collections::HashSet<_> =
         baseline.sprints.iter().map(|s| s.id).collect();
-    let baseline_edge_count = baseline.graph.cards.edges().len();
+    let baseline_edge_count = baseline.graph.edge_count();
     assert!(baseline_edge_count > 0, "fixture must include graph edges");
 
     ctx.delete_board(board.id)?;
@@ -1358,11 +1356,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
     assert!(ctx.cards()?.is_empty(), "live cards deleted");
     assert!(ctx.archived_cards()?.is_empty(), "archived cards deleted");
     assert!(ctx.sprints()?.is_empty(), "sprints deleted");
-    assert_eq!(
-        ctx.graph()?.cards.edges().len(),
-        0,
-        "card graph edges deleted"
-    );
+    assert_eq!(ctx.graph()?.edge_count(), 0, "card graph edges deleted");
 
     assert!(ctx.undo()?, "cascade undo must succeed");
 
@@ -1390,7 +1384,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
     );
     assert_eq!(restored_sprint_ids, baseline_sprint_ids, "sprints restored");
     assert_eq!(
-        restored.graph.cards.edges().len(),
+        restored.graph.edge_count(),
         baseline_edge_count,
         "graph edges restored"
     );

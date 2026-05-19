@@ -48,6 +48,25 @@ impl DagGraph {
         self.store.active_edge_count()
     }
 
+    /// Borrow the raw underlying edge list (active + archived).
+    pub fn edges(&self) -> &[Edge<()>] {
+        self.store.edges()
+    }
+
+    /// True if a (possibly archived) edge `source -> target` exists.
+    pub fn has_edge(&self, source: Uuid, target: Uuid) -> bool {
+        self.store
+            .edges()
+            .iter()
+            .any(|e| e.connects(source, target))
+    }
+
+    /// Insert a raw edge without DAG validation. Use only for
+    /// migrations and test fixtures.
+    pub fn insert_raw_edge(&mut self, edge: Edge<()>) {
+        self.store.add_edge(edge);
+    }
+
     /// Transitive successors of `node` (descendants).
     pub fn descendants(&self, node: Uuid) -> Vec<Uuid> {
         let mut out = Vec::new();

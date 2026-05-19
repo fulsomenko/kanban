@@ -6,7 +6,20 @@ use tempfile::TempDir;
 
 fn add_edge(ctx: &KanbanContext, edge: Edge<CardEdgeType>) {
     let mut graph = ctx.data_store().get_graph().unwrap();
-    graph.cards.add_edge(edge);
+    let untyped: Edge<()> = Edge {
+        source: edge.source,
+        target: edge.target,
+        edge_type: (),
+        direction: edge.direction,
+        weight: edge.weight,
+        created_at: edge.created_at,
+        archived_at: edge.archived_at,
+    };
+    match edge.edge_type {
+        CardEdgeType::ParentOf => graph.parent_child.insert_raw_edge(untyped),
+        CardEdgeType::Blocks => graph.blocks.insert_raw_edge(untyped),
+        CardEdgeType::RelatesTo => graph.relates.insert_raw_edge(untyped),
+    }
     ctx.data_store().set_graph(graph).unwrap();
 }
 
@@ -55,12 +68,11 @@ pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResul
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.blocks.edges();
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
     assert_eq!(e.source, card_a.id);
     assert_eq!(e.target, card_b.id);
-    assert_eq!(e.edge_type, CardEdgeType::Blocks);
     assert_eq!(e.direction, EdgeDirection::Directed);
     assert!((e.weight.unwrap() - 1.0).abs() < f32::EPSILON);
     assert!(e.archived_at.is_none());
@@ -102,10 +114,9 @@ pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanR
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.relates.edges();
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
-    assert_eq!(e.edge_type, CardEdgeType::RelatesTo);
     assert_eq!(e.direction, EdgeDirection::Bidirectional);
     assert!(e.weight.is_none());
     Ok(())
@@ -156,9 +167,8 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.parent_child.edges();
     assert_eq!(edges.len(), 1);
-    assert_eq!(edges[0].edge_type, CardEdgeType::ParentOf);
     Ok(())
 }
 
@@ -197,7 +207,7 @@ pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanRes
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.blocks.edges();
     assert_eq!(edges.len(), 1);
     assert!(edges[0].archived_at.is_some());
     assert!((edges[0].weight.unwrap() - 2.5).abs() < f32::EPSILON);
@@ -265,7 +275,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     ctx.save().await.unwrap();
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
-    assert_eq!(ctx.graph()?.cards.edges().len(), 3);
+    assert_eq!(ctx.graph()?.edge_count(), 3);
     Ok(())
 }
 
@@ -280,6 +290,6 @@ pub async fn test_empty_graph_roundtrip(factory: &BackendFactory) -> KanbanResul
     ctx.save().await.unwrap();
 
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
-    assert!(ctx.graph()?.cards.edges().is_empty());
+    assert_eq!(ctx.graph()?.edge_count(), 0);
     Ok(())
 }

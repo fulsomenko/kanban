@@ -42,6 +42,22 @@ impl UndirectedGraph {
         self.store.active_edge_count()
     }
 
+    /// Borrow the raw underlying edge list (active + archived).
+    pub fn edges(&self) -> &[Edge<()>] {
+        self.store.edges()
+    }
+
+    /// True if a (possibly archived) edge between `a` and `b` exists.
+    pub fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
+        self.store.edges().iter().any(|e| e.connects(a, b))
+    }
+
+    /// Insert a raw edge without validation. Use only for migrations
+    /// and test fixtures.
+    pub fn insert_raw_edge(&mut self, edge: Edge<()>) {
+        self.store.add_edge(edge);
+    }
+
     /// Neighbours of `node` from any active edge (either endpoint).
     pub fn neighbors(&self, node: Uuid) -> Vec<Uuid> {
         let mut out = Vec::new();

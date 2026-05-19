@@ -281,28 +281,28 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
     let now = chrono::Utc::now();
     {
         let mut graph = ctx.data_store().get_graph().unwrap();
-        graph.cards.add_edge(Edge {
+        graph.blocks.insert_raw_edge(Edge {
             source: card1.id,
             target: card2.id,
-            edge_type: CardEdgeType::Blocks,
+            edge_type: (),
             direction: EdgeDirection::Directed,
             weight: Some(1.0_f32),
             created_at: now,
             archived_at: None,
         });
-        graph.cards.add_edge(Edge {
+        graph.relates.insert_raw_edge(Edge {
             source: card1.id,
             target: card3.id,
-            edge_type: CardEdgeType::RelatesTo,
+            edge_type: (),
             direction: EdgeDirection::Bidirectional,
             weight: None,
             created_at: now,
             archived_at: Some(now),
         });
-        graph.cards.add_edge(Edge {
+        graph.parent_child.insert_raw_edge(Edge {
             source: card2.id,
             target: card3.id,
-            edge_type: CardEdgeType::ParentOf,
+            edge_type: (),
             direction: EdgeDirection::Directed,
             weight: Some(0.5_f32),
             created_at: now,
@@ -366,8 +366,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
     assert_eq!(archived[0].original_column_id, col_todo.id);
 
     let graph = loaded.graph()?;
-    let edges = graph.cards.edges();
-    assert_eq!(edges.len(), 3, "expected 3 edges, got {:?}", edges);
+    assert_eq!(graph.edge_count(), 3, "expected 3 edges total");
     Ok(())
 }
 

@@ -113,19 +113,19 @@ pub fn fully_populated_snapshot() -> Snapshot {
     };
 
     let mut graph = DependencyGraph::new();
-    graph.cards.add_edge(Edge {
+    graph.blocks.insert_raw_edge(Edge {
         source: card_id,
         target: archived_card_inner_id,
-        edge_type: CardEdgeType::Blocks,
+        edge_type: (),
         direction: EdgeDirection::Directed,
         weight: Some(1.5),
         created_at: now,
         archived_at: None,
     });
-    graph.cards.add_edge(Edge {
+    graph.relates.insert_raw_edge(Edge {
         source: card_id,
         target: archived_card_inner_id,
-        edge_type: CardEdgeType::RelatesTo,
+        edge_type: (),
         direction: EdgeDirection::Bidirectional,
         weight: None,
         created_at: now,

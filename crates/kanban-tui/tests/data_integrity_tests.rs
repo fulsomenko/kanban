@@ -1,5 +1,4 @@
 use kanban_domain::commands::*;
-use kanban_domain::dependencies::CardGraphExt;
 use kanban_domain::*;
 
 #[test]
@@ -42,15 +41,15 @@ fn test_delete_card_cleans_dependencies() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(card_a, card_b).unwrap();
+        graph.add_blocks(card_a, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
 
     let cmd = DeleteCard { card_id: card_a };
     cmd.execute(&ctx).unwrap();
 
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 0);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 0);
 }
 
 #[test]
@@ -233,15 +232,15 @@ fn test_archive_card_preserves_edges() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(card_a, card_b).unwrap();
+        graph.add_blocks(card_a, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
 
     let cmd = ArchiveCards { ids: vec![card_a] };
     cmd.execute(&ctx).unwrap();
 
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 0);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 0);
 
     let cmd = RestoreCard {
         card_id: card_a,
@@ -251,7 +250,7 @@ fn test_archive_card_preserves_edges() {
     };
     cmd.execute(&ctx).unwrap();
 
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
 }
 
 #[test]
@@ -325,14 +324,14 @@ fn test_cycle_detection_parent_child() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.set_parent(card_b, card_a).unwrap();
-        graph.cards.set_parent(card_c, card_b).unwrap();
+        graph.set_parent(card_b, card_a).unwrap();
+        graph.set_parent(card_c, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
 
     {
         let mut graph = store.get_graph().unwrap();
-        let result = graph.cards.set_parent(card_a, card_c);
+        let result = graph.set_parent(card_a, card_c);
         assert!(result.unwrap_err().is_cycle_detected());
     }
 }
@@ -390,14 +389,14 @@ fn test_cycle_detection_blocks() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(card_a, card_b).unwrap();
-        graph.cards.add_blocks(card_b, card_c).unwrap();
+        graph.add_blocks(card_a, card_b).unwrap();
+        graph.add_blocks(card_b, card_c).unwrap();
         store.set_graph(graph).unwrap();
     }
 
     {
         let mut graph = store.get_graph().unwrap();
-        let result = graph.cards.add_blocks(card_c, card_a);
+        let result = graph.add_blocks(card_c, card_a);
         assert!(result.unwrap_err().is_cycle_detected());
     }
 }

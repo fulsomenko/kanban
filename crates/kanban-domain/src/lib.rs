@@ -35,7 +35,7 @@ pub use card::{
     CreateCardOptions,
 };
 pub use column::{Column, ColumnId, ColumnUpdate};
-pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, DependencyGraph};
+pub use dependencies::{CardEdgeType, DependencyGraph};
 pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities};
 pub use field_update::FieldUpdate;

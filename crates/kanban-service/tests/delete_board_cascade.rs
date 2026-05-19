@@ -5,7 +5,6 @@
 
 use kanban_domain::{
     commands::{Command, MoveCard},
-    dependencies::CardGraphExt,
     ArchivedCard, Board, Card, Column, Sprint,
 };
 use kanban_persistence_json::JsonFileStore;
@@ -89,14 +88,14 @@ macro_rules! cascade_tests {
                 backend.upsert_card(card_b).unwrap();
 
                 let mut graph = backend.get_graph().unwrap();
-                graph.cards.add_blocks(card_a_id, card_b_id).unwrap();
+                graph.add_blocks(card_a_id, card_b_id).unwrap();
                 backend.set_graph(graph).unwrap();
-                assert_eq!(backend.get_graph().unwrap().cards.edges().len(), 1);
+                assert_eq!(backend.get_graph().unwrap().edge_count(), 1);
 
                 ctx.delete_board(board_id).unwrap();
 
                 assert_eq!(
-                    backend.get_graph().unwrap().cards.edges().len(),
+                    backend.get_graph().unwrap().edge_count(),
                     0,
                     "service delete_board must clean dependency-graph edges for all deleted cards"
                 );

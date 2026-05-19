@@ -5,9 +5,9 @@ use kanban_domain::commands::{
     RemoveParentCommand, SetParentCommand, SprintCommand,
 };
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardGraphExt, CardListFilter, CardStatus,
-    CardSummary, CardUpdate, Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate,
-    GraphOperations, KanbanOperations, Snapshot, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardStatus, CardSummary,
+    CardUpdate, Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, GraphOperations,
+    KanbanOperations, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -1359,9 +1359,9 @@ impl GraphOperations for KanbanContext {
     ) -> KanbanResult<Vec<CardSummary>> {
         let graph = self.backend.get_graph()?;
         let ids: Vec<Uuid> = match kind {
-            CardEdgeType::ParentOf => graph.cards.children(node),
-            CardEdgeType::Blocks => graph.cards.blocked_by(node),
-            CardEdgeType::RelatesTo => graph.cards.related(node),
+            CardEdgeType::ParentOf => graph.children(node),
+            CardEdgeType::Blocks => graph.blocks_targets(node),
+            CardEdgeType::RelatesTo => graph.related(node),
         };
         Ok(summaries_for_ids(self.backend.list_all_cards()?, &ids))
     }
@@ -1369,9 +1369,9 @@ impl GraphOperations for KanbanContext {
     fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>> {
         let graph = self.backend.get_graph()?;
         let ids: Vec<Uuid> = match kind {
-            CardEdgeType::ParentOf => graph.cards.parents(node),
-            CardEdgeType::Blocks => graph.cards.blockers(node),
-            CardEdgeType::RelatesTo => graph.cards.related(node),
+            CardEdgeType::ParentOf => graph.parents(node),
+            CardEdgeType::Blocks => graph.blockers(node),
+            CardEdgeType::RelatesTo => graph.related(node),
         };
         Ok(summaries_for_ids(self.backend.list_all_cards()?, &ids))
     }

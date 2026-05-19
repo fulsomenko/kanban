@@ -16,7 +16,6 @@ use super::{
     CommandContext, ImportEntities, SetParentCommand,
 };
 use crate::data_store::DataStore;
-use crate::dependencies::{CardEdgeType, CardGraphExt};
 use crate::{KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -82,7 +81,7 @@ impl DeleteCardEdges {
         let ids = self.ids.clone();
         context.store.modify_graph(Box::new(move |graph| {
             for id in &ids {
-                graph.cards.remove_card_edges(*id);
+                graph.remove_node(*id);
             }
             Ok(())
         }))
@@ -98,29 +97,39 @@ impl DeleteCardEdges {
         let id_set: std::collections::HashSet<_> = self.ids.iter().copied().collect();
         let graph = store.get_graph()?;
         let mut commands: Vec<Command> = Vec::new();
-        for edge in graph.cards.edges() {
-            if !id_set.contains(&edge.source) && !id_set.contains(&edge.target) {
-                continue;
+        let involves = |edge: &kanban_core::Edge<()>| {
+            id_set.contains(&edge.source) || id_set.contains(&edge.target)
+        };
+
+        for edge in graph.parent_child.edges() {
+            if involves(edge) {
+                commands.push(Command::Dependency(super::DependencyCommand::SetParent(
+                    SetParentCommand {
+                        child_id: edge.target,
+                        parent_id: edge.source,
+                    },
+                )));
             }
-            let cmd = match edge.edge_type {
-                CardEdgeType::Blocks => {
-                    super::DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
+        }
+        for edge in graph.blocks.edges() {
+            if involves(edge) {
+                commands.push(Command::Dependency(super::DependencyCommand::AddBlocks(
+                    AddBlocksDependencyCommand {
                         blocker_id: edge.source,
                         blocked_id: edge.target,
-                    })
-                }
-                CardEdgeType::RelatesTo => {
-                    super::DependencyCommand::AddRelatesTo(AddRelatesToDependencyCommand {
+                    },
+                )));
+            }
+        }
+        for edge in graph.relates.edges() {
+            if involves(edge) {
+                commands.push(Command::Dependency(super::DependencyCommand::AddRelatesTo(
+                    AddRelatesToDependencyCommand {
                         card_a_id: edge.source,
                         card_b_id: edge.target,
-                    })
-                }
-                CardEdgeType::ParentOf => super::DependencyCommand::SetParent(SetParentCommand {
-                    child_id: edge.target,
-                    parent_id: edge.source,
-                }),
-            };
-            commands.push(Command::Dependency(cmd));
+                    },
+                )));
+            }
         }
         Ok(commands)
     }
@@ -310,11 +319,11 @@ mod tests {
 
         {
             let mut graph = tc.store.get_graph().unwrap();
-            graph.cards.add_blocks(card_a, card_b).unwrap();
-            graph.cards.add_blocks(card_b, card_c).unwrap();
+            graph.add_blocks(card_a, card_b).unwrap();
+            graph.add_blocks(card_b, card_c).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
-        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 2);
+        assert_eq!(tc.store.get_graph().unwrap().edge_count(), 2);
 
         let context = tc.as_command_context();
         let cmd = DeleteCardEdges {
@@ -324,7 +333,7 @@ mod tests {
 
         let graph = tc.store.get_graph().unwrap();
         assert_eq!(
-            graph.cards.edges().len(),
+            graph.edge_count(),
             0,
             "edges incident to card_a or card_b should be removed"
         );
@@ -337,7 +346,7 @@ mod tests {
         let card_b = Uuid::new_v4();
         {
             let mut graph = tc.store.get_graph().unwrap();
-            graph.cards.add_blocks(card_a, card_b).unwrap();
+            graph.add_blocks(card_a, card_b).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
 
@@ -345,7 +354,7 @@ mod tests {
         let cmd = DeleteCardEdges { ids: vec![] };
         cmd.execute(&context).unwrap();
 
-        assert_eq!(tc.store.get_graph().unwrap().cards.edges().len(), 1);
+        assert_eq!(tc.store.get_graph().unwrap().edge_count(), 1);
     }
 
     #[test]

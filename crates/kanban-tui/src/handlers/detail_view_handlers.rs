@@ -5,7 +5,7 @@ use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use kanban_core::Editable;
-use kanban_domain::{dependencies::CardGraphExt, BoardSettingsDto, CardMetadataDto};
+use kanban_domain::{BoardSettingsDto, CardMetadataDto};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
@@ -1000,7 +1000,7 @@ impl App {
 
                 if let Some(board_id) = board_id {
                     // Get all descendants to exclude (to prevent cycles)
-                    let descendants = self.model.graph().cards.descendants(card_id);
+                    let descendants = self.model.graph().descendants(card_id);
 
                     // Get cards from current board, excluding self and descendants
                     let column_ids: std::collections::HashSet<_> = self
@@ -1025,7 +1025,6 @@ impl App {
                     let current_parents: std::collections::HashSet<_> = self
                         .model
                         .graph()
-                        .cards
                         .parents(card_id)
                         .into_iter()
                         .collect();
@@ -1058,7 +1057,7 @@ impl App {
 
                 if let Some(board_id) = board_id {
                     // Get all ancestors to exclude (to prevent cycles)
-                    let ancestors = self.model.graph().cards.ancestors(card_id);
+                    let ancestors = self.model.graph().ancestors(card_id);
 
                     // Get cards from current board, excluding self and ancestors
                     let column_ids: std::collections::HashSet<_> = self
@@ -1083,7 +1082,6 @@ impl App {
                     let current_children: std::collections::HashSet<_> = self
                         .model
                         .graph()
-                        .cards
                         .children(card_id)
                         .into_iter()
                         .collect();
@@ -1103,7 +1101,7 @@ impl App {
     pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
         if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.model.cards().get(card_idx) {
-                return self.model.graph().cards.parents(card.id);
+                return self.model.graph().parents(card.id);
             }
         }
         Vec::new()
@@ -1112,7 +1110,7 @@ impl App {
     pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
         if let Some(card_idx) = self.selection.active_card_index {
             if let Some(card) = self.model.cards().get(card_idx) {
-                return self.model.graph().cards.children(card.id);
+                return self.model.graph().children(card.id);
             }
         }
         Vec::new()
