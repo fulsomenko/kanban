@@ -1,12 +1,13 @@
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, SprintCommand,
+    BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, DependencyCommand,
+    RemoveParentCommand, SetParentCommand, SprintCommand,
 };
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
-    Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot,
-    Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardGraphExt, CardListFilter, CardStatus,
+    CardSummary, CardUpdate, Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate,
+    GraphOperations, KanbanOperations, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -1314,4 +1315,87 @@ impl KanbanOperations for KanbanContext {
 
         Ok(board)
     }
+}
+
+impl GraphOperations for KanbanContext {
+    fn add_card_edge(
+        &mut self,
+        from: Uuid,
+        to: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<()> {
+        let cmd = match kind {
+            CardEdgeType::ParentOf => Command::Dependency(DependencyCommand::SetParent(
+                SetParentCommand {
+                    child_id: to,
+                    parent_id: from,
+                },
+            )),
+            CardEdgeType::Blocks | CardEdgeType::RelatesTo => {
+                return Err(KanbanError::validation(
+                    "CardEdgeType not yet wired through GraphOperations",
+                ));
+            }
+        };
+        self.execute(vec![cmd])
+    }
+
+    fn remove_card_edge(
+        &mut self,
+        from: Uuid,
+        to: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<()> {
+        let cmd = match kind {
+            CardEdgeType::ParentOf => Command::Dependency(DependencyCommand::RemoveParent(
+                RemoveParentCommand {
+                    child_id: to,
+                    parent_id: from,
+                },
+            )),
+            CardEdgeType::Blocks | CardEdgeType::RelatesTo => {
+                return Err(KanbanError::validation(
+                    "CardEdgeType not yet wired through GraphOperations",
+                ));
+            }
+        };
+        self.execute(vec![cmd])
+    }
+
+    fn list_card_edges_from(
+        &self,
+        node: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<Vec<CardSummary>> {
+        let graph = self.backend.get_graph()?;
+        let ids: Vec<Uuid> = match kind {
+            CardEdgeType::ParentOf => graph.cards.children(node),
+            CardEdgeType::Blocks => graph.cards.blocked_by(node),
+            CardEdgeType::RelatesTo => graph.cards.related(node),
+        };
+        Ok(summaries_for_ids(self.backend.list_all_cards()?, &ids))
+    }
+
+    fn list_card_edges_to(
+        &self,
+        node: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<Vec<CardSummary>> {
+        let graph = self.backend.get_graph()?;
+        let ids: Vec<Uuid> = match kind {
+            CardEdgeType::ParentOf => graph.cards.parents(node),
+            CardEdgeType::Blocks => graph.cards.blockers(node),
+            CardEdgeType::RelatesTo => graph.cards.related(node),
+        };
+        Ok(summaries_for_ids(self.backend.list_all_cards()?, &ids))
+    }
+}
+
+fn summaries_for_ids(cards: Vec<Card>, ids: &[Uuid]) -> Vec<CardSummary> {
+    let set: std::collections::HashSet<Uuid> = ids.iter().copied().collect();
+    cards
+        .into_iter()
+        .filter(|c| set.contains(&c.id))
+        .map(|c| CardSummary::from(&c))
+        .collect()
 }

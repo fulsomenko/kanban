@@ -7,7 +7,7 @@
 //! divergence; the underlying graph behavior (cycle detection, self-reference
 //! rejection) is unit-tested in `kanban_domain::dependencies::card_graph`.
 
-use kanban_domain::{Board, Card, CardEdgeType, Column, GraphOperations, KanbanOperations};
+use kanban_domain::{Board, Card, CardEdgeType, Column, GraphOperations};
 use kanban_persistence_json::JsonFileStore;
 use kanban_service::{
     json_backend::JsonDataStore, sqlite_backend::SqliteBackend, AppConfig, KanbanBackend,
