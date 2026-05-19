@@ -1,6 +1,8 @@
 pub mod context;
+pub mod error;
 pub mod server;
 
+pub use error::{KanbanMcpError, KanbanMcpResult};
 pub use server::McpServer;
 
 use context::McpContext;
@@ -48,10 +50,7 @@ fn resolve_summaries(ctx: &McpContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
 }
 
 fn kanban_err_to_mcp(e: KanbanError) -> McpError {
-    match &e {
-        KanbanError::Domain(_) => McpError::invalid_params(e.to_string(), None),
-        _ => McpError::internal_error(e.to_string(), None),
-    }
+    error::KanbanMcpError::Domain(e).into()
 }
 
 fn core_err_to_mcp(e: kanban_core::CoreError) -> McpError {
