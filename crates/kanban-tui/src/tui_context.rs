@@ -380,22 +380,12 @@ impl KanbanOperations for TuiContext {
 }
 
 impl GraphOperations for TuiContext {
-    fn add_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()> {
+    fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
         let r = self.inner.add_card_edge(from, to, kind);
         self.with_flush(r)
     }
 
-    fn remove_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()> {
+    fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
         let r = self.inner.remove_card_edge(from, to, kind);
         self.with_flush(r)
     }
@@ -408,11 +398,7 @@ impl GraphOperations for TuiContext {
         self.inner.list_card_edges_from(node, kind)
     }
 
-    fn list_card_edges_to(
-        &self,
-        node: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>> {
         self.inner.list_card_edges_to(node, kind)
     }
 }

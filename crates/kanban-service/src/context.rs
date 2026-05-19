@@ -1318,19 +1318,14 @@ impl KanbanOperations for KanbanContext {
 }
 
 impl GraphOperations for KanbanContext {
-    fn add_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()> {
+    fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
         let cmd = match kind {
-            CardEdgeType::ParentOf => Command::Dependency(DependencyCommand::SetParent(
-                SetParentCommand {
+            CardEdgeType::ParentOf => {
+                Command::Dependency(DependencyCommand::SetParent(SetParentCommand {
                     child_id: to,
                     parent_id: from,
-                },
-            )),
+                }))
+            }
             CardEdgeType::Blocks | CardEdgeType::RelatesTo => {
                 return Err(KanbanError::validation(
                     "CardEdgeType not yet wired through GraphOperations",
@@ -1340,19 +1335,14 @@ impl GraphOperations for KanbanContext {
         self.execute(vec![cmd])
     }
 
-    fn remove_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()> {
+    fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
         let cmd = match kind {
-            CardEdgeType::ParentOf => Command::Dependency(DependencyCommand::RemoveParent(
-                RemoveParentCommand {
+            CardEdgeType::ParentOf => {
+                Command::Dependency(DependencyCommand::RemoveParent(RemoveParentCommand {
                     child_id: to,
                     parent_id: from,
-                },
-            )),
+                }))
+            }
             CardEdgeType::Blocks | CardEdgeType::RelatesTo => {
                 return Err(KanbanError::validation(
                     "CardEdgeType not yet wired through GraphOperations",
@@ -1376,11 +1366,7 @@ impl GraphOperations for KanbanContext {
         Ok(summaries_for_ids(self.backend.list_all_cards()?, &ids))
     }
 
-    fn list_card_edges_to(
-        &self,
-        node: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>> {
         let graph = self.backend.get_graph()?;
         let ids: Vec<Uuid> = match kind {
             CardEdgeType::ParentOf => graph.cards.parents(node),

@@ -257,21 +257,11 @@ impl KanbanOperations for CliContext {
 }
 
 impl GraphOperations for CliContext {
-    fn add_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()> {
+    fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
         self.inner.add_card_edge(from, to, kind)
     }
 
-    fn remove_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()> {
+    fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
         self.inner.remove_card_edge(from, to, kind)
     }
 
@@ -283,11 +273,7 @@ impl GraphOperations for CliContext {
         self.inner.list_card_edges_from(node, kind)
     }
 
-    fn list_card_edges_to(
-        &self,
-        node: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>> {
         self.inner.list_card_edges_to(node, kind)
     }
 }

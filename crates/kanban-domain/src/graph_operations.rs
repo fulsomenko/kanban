@@ -38,20 +38,10 @@ pub trait GraphOperations: KanbanOperations {
     /// Semantics (cycle detection, self-reference rejection, idempotency)
     /// are decided by the implementation. The current implementation
     /// rejects cycles for DAG-typed edges and self-references for all.
-    fn add_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()>;
+    fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()>;
 
     /// Remove the directed edge `from -> to` of the given kind, if present.
-    fn remove_card_edge(
-        &mut self,
-        from: Uuid,
-        to: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<()>;
+    fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()>;
 
     /// All direct successors of `node` reachable by a single edge of `kind`.
     fn list_card_edges_from(
@@ -61,11 +51,7 @@ pub trait GraphOperations: KanbanOperations {
     ) -> KanbanResult<Vec<CardSummary>>;
 
     /// All direct predecessors of `node` via a single edge of `kind`.
-    fn list_card_edges_to(
-        &self,
-        node: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<Vec<CardSummary>>;
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>>;
 
     // --- Convenience defaults for the parent/child case. ---
     // These let surface code read naturally. Any future refactor of the
@@ -73,20 +59,12 @@ pub trait GraphOperations: KanbanOperations {
     // keep calling these.
 
     /// Add a parent-of edge: `parent_id -> child_id`.
-    fn set_card_parent(
-        &mut self,
-        child_id: Uuid,
-        parent_id: Uuid,
-    ) -> KanbanResult<()> {
+    fn set_card_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
         self.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
     }
 
     /// Remove the parent-of edge `parent_id -> child_id`.
-    fn remove_card_parent(
-        &mut self,
-        child_id: Uuid,
-        parent_id: Uuid,
-    ) -> KanbanResult<()> {
+    fn remove_card_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
         self.remove_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
     }
 

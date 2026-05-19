@@ -599,10 +599,8 @@ impl App {
                                 } else {
                                     (selected_card_id, current_card_id)
                                 };
-                                let was_selected = self
-                                    .relationship
-                                    .selected
-                                    .contains(&selected_card_id);
+                                let was_selected =
+                                    self.relationship.selected.contains(&selected_card_id);
                                 let result = if was_selected {
                                     self.ctx.remove_card_parent(child_id, parent_id)
                                 } else {

@@ -89,9 +89,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (a, _, _) = seed_three_cards(&ctx.backend());
 
-                let err = ctx
-                    .add_card_edge(a, a, CardEdgeType::ParentOf)
-                    .unwrap_err();
+                let err = ctx.add_card_edge(a, a, CardEdgeType::ParentOf).unwrap_err();
                 assert!(
                     err.is_self_reference(),
                     "expected SelfReference, got {:?}",
@@ -105,9 +103,7 @@ macro_rules! card_graph_tests {
                 let (a, b, _) = seed_three_cards(&ctx.backend());
 
                 ctx.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
-                let err = ctx
-                    .add_card_edge(b, a, CardEdgeType::ParentOf)
-                    .unwrap_err();
+                let err = ctx.add_card_edge(b, a, CardEdgeType::ParentOf).unwrap_err();
                 assert!(
                     err.is_cycle_detected(),
                     "expected CycleDetected, got {:?}",
@@ -143,7 +139,11 @@ macro_rules! card_graph_tests {
                 let err = ctx
                     .remove_card_edge(a, b, CardEdgeType::ParentOf)
                     .unwrap_err();
-                assert!(err.is_edge_not_found(), "expected EdgeNotFound, got {:?}", err);
+                assert!(
+                    err.is_edge_not_found(),
+                    "expected EdgeNotFound, got {:?}",
+                    err
+                );
             }
 
             #[tokio::test(flavor = "multi_thread")]
