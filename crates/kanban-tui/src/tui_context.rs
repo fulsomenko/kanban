@@ -2,8 +2,9 @@ use crate::state::SaveCoordinator;
 use kanban_domain::commands::Command;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardSummary, CardUpdate,
+    Column, ColumnUpdate, CreateCardOptions, GraphOperations, KanbanOperations, Sprint,
+    SprintUpdate,
 };
 use kanban_service::backend::KanbanBackend;
 use kanban_service::KanbanContext;
@@ -375,5 +376,43 @@ impl KanbanOperations for TuiContext {
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
         let r = self.inner.import_board(data);
         self.with_flush(r)
+    }
+}
+
+impl GraphOperations for TuiContext {
+    fn add_card_edge(
+        &mut self,
+        from: Uuid,
+        to: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<()> {
+        let r = self.inner.add_card_edge(from, to, kind);
+        self.with_flush(r)
+    }
+
+    fn remove_card_edge(
+        &mut self,
+        from: Uuid,
+        to: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<()> {
+        let r = self.inner.remove_card_edge(from, to, kind);
+        self.with_flush(r)
+    }
+
+    fn list_card_edges_from(
+        &self,
+        node: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<Vec<CardSummary>> {
+        self.inner.list_card_edges_from(node, kind)
+    }
+
+    fn list_card_edges_to(
+        &self,
+        node: Uuid,
+        kind: CardEdgeType,
+    ) -> KanbanResult<Vec<CardSummary>> {
+        self.inner.list_card_edges_to(node, kind)
     }
 }
