@@ -7,8 +7,8 @@ use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
 use kanban_domain::task_list_view::TaskListView;
 use kanban_domain::{
-    BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
-    KanbanOperations, KanbanResult,
+    BoardUpdate, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
+    KanbanResult,
 };
 use tempfile::TempDir;
 

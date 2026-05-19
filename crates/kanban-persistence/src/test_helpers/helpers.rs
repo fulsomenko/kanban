@@ -3,7 +3,7 @@ use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::card::{Card, CardPriority, CardStatus};
 use kanban_domain::sprint::{Sprint, SprintStatus};
 use kanban_domain::Snapshot;
-use kanban_domain::{ArchivedCard, Board, CardEdgeType, Column, DependencyGraph, SprintLog};
+use kanban_domain::{ArchivedCard, Board, Column, DependencyGraph, SprintLog};
 use uuid::Uuid;
 
 pub fn fully_populated_snapshot() -> Snapshot {
