@@ -498,6 +498,7 @@ Description of changes
 
 ## Areas for Contribution
 
+- **Bug Fixes**: Crashes, regressions, and cross-platform fixes (Windows, macOS, Linux) are especially welcome. Small, targeted fixes are easy to review and ship quickly.
 - **UI Improvements**: Enhance TUI rendering, add color themes
 - **Features**: New metadata fields, filtering, searching
 - **Testing**: Increase test coverage, integration tests
