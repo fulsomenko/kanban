@@ -3306,3 +3306,230 @@ mod init_tests {
             .failure();
     }
 }
+
+mod relation_tests {
+    use super::*;
+
+    fn setup_two_cards(file: &std::path::Path) -> (String, String) {
+        kanban().args([file.to_str().unwrap()]).assert().success();
+
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&board_output)));
+
+        let column_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "column",
+                "create",
+                "--board",
+                &board_id,
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let column_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&column_output)));
+
+        let make_card = |title: &str| -> String {
+            let out = kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board",
+                    &board_id,
+                    "--column",
+                    &column_id,
+                    "--title",
+                    title,
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+            extract_id(&parse_json_output(&String::from_utf8_lossy(&out)))
+        };
+        let parent_id = make_card("Parent");
+        let child_id = make_card("Child");
+        (parent_id, child_id)
+    }
+
+    #[test]
+    fn test_relation_add_creates_edge_visible_via_parents() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                "--parent",
+                &parent_id,
+                "--child",
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "parents", &child_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        let data = json["data"].as_array().unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0]["id"], parent_id);
+    }
+
+    #[test]
+    fn test_relation_add_cycle_returns_error_exit_code() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (a, b) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                "--parent",
+                &a,
+                "--child",
+                &b,
+            ])
+            .assert()
+            .success();
+
+        // Closing the cycle b -> a should fail.
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                "--parent",
+                &b,
+                "--child",
+                &a,
+            ])
+            .assert()
+            .failure();
+    }
+
+    #[test]
+    fn test_relation_remove_removes_edge() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                "--parent",
+                &parent_id,
+                "--child",
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "remove",
+                "--parent",
+                &parent_id,
+                "--child",
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "parents", &child_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_relation_children_returns_summaries() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                "--parent",
+                &parent_id,
+                "--child",
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        let data = json["data"].as_array().unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0]["id"], child_id);
+        assert_eq!(data[0]["title"], "Child");
+    }
+
+    #[test]
+    fn test_relation_add_requires_both_flags() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, _) = setup_two_cards(&file);
+
+        // Missing --child
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                "--parent",
+                &parent_id,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("--child"));
+    }
+}
