@@ -991,6 +991,8 @@ async fn tool_set_card_parent_resolves_identifiers_and_persists() {
 
 #[tokio::test]
 async fn tool_set_card_parent_cycle_returns_mcp_error() {
+    use rmcp::model::ErrorCode;
+
     let (server, _tmp, a, b) = setup_server_with_two_cards().await;
 
     server
@@ -1009,10 +1011,20 @@ async fn tool_set_card_parent_cycle_returns_mcp_error() {
         }))
         .await
         .unwrap_err();
-    let msg = format!("{err:?}");
+
+    // KanbanMcpError maps domain errors (which DependencyError::CycleDetected
+    // is) to INVALID_PARAMS at the boundary. Pin the JSON-RPC code so the
+    // contract is not just stringly typed, and verify the cycle is the
+    // source by inspecting the (typed) message.
+    assert_eq!(
+        err.code,
+        ErrorCode::INVALID_PARAMS,
+        "domain errors must surface as INVALID_PARAMS at the MCP boundary"
+    );
     assert!(
-        msg.to_lowercase().contains("cycle") || msg.to_lowercase().contains("would create"),
-        "expected cycle error, got: {msg}"
+        err.message.contains("cycle"),
+        "message should mention cycle; got: {}",
+        err.message
     );
 }
 
@@ -1054,6 +1066,8 @@ async fn tool_list_card_parents_returns_summaries() {
 
 #[tokio::test]
 async fn tool_remove_card_parent_returns_error_when_edge_missing() {
+    use rmcp::model::ErrorCode;
+
     let (server, _tmp, parent, child) = setup_server_with_two_cards().await;
 
     let err = server
@@ -1063,7 +1077,9 @@ async fn tool_remove_card_parent_returns_error_when_edge_missing() {
         }))
         .await
         .unwrap_err();
-    let msg = format!("{err:?}").to_lowercase();
+
+    assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    let msg = err.message.to_lowercase();
     assert!(
         msg.contains("not found") || msg.contains("missing") || msg.contains("does not exist"),
         "expected edge-not-found message, got: {msg}"
