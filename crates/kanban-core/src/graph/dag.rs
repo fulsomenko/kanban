@@ -102,8 +102,7 @@ impl DagGraph {
     }
 
     fn active_adjacency(&self) -> std::collections::HashMap<Uuid, Vec<Uuid>> {
-        let mut adj: std::collections::HashMap<Uuid, Vec<Uuid>> =
-            std::collections::HashMap::new();
+        let mut adj: std::collections::HashMap<Uuid, Vec<Uuid>> = std::collections::HashMap::new();
         for edge in self.store.active_edges() {
             adj.entry(edge.source).or_default().push(edge.target);
         }

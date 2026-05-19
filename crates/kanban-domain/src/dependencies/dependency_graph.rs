@@ -72,9 +72,7 @@ impl DependencyGraph {
 
     /// Add a `parent -> child` parent-of edge.
     pub fn set_parent(&mut self, child: CardId, parent: CardId) -> KanbanResult<()> {
-        self.parent_child
-            .add_edge(parent, child)
-            .map_err(dep_err)
+        self.parent_child.add_edge(parent, child).map_err(dep_err)
     }
 
     /// Remove the `parent -> child` parent-of edge.
@@ -252,7 +250,10 @@ mod tests {
     fn test_remove_parent_missing_returns_edge_not_found() {
         let (parent, child, _) = ids();
         let mut g = DependencyGraph::new();
-        assert!(g.remove_parent(child, parent).unwrap_err().is_edge_not_found());
+        assert!(g
+            .remove_parent(child, parent)
+            .unwrap_err()
+            .is_edge_not_found());
     }
 
     #[test]

@@ -1022,12 +1022,8 @@ impl App {
                         .collect();
 
                     // Get current parents (for checkbox display)
-                    let current_parents: std::collections::HashSet<_> = self
-                        .model
-                        .graph()
-                        .parents(card_id)
-                        .into_iter()
-                        .collect();
+                    let current_parents: std::collections::HashSet<_> =
+                        self.model.graph().parents(card_id).into_iter().collect();
 
                     // Set up dialog state
                     self.relationship.card_ids = eligible_cards;
@@ -1079,12 +1075,8 @@ impl App {
                         .collect();
 
                     // Get current children (for checkbox display)
-                    let current_children: std::collections::HashSet<_> = self
-                        .model
-                        .graph()
-                        .children(card_id)
-                        .into_iter()
-                        .collect();
+                    let current_children: std::collections::HashSet<_> =
+                        self.model.graph().children(card_id).into_iter().collect();
 
                     // Set up dialog state
                     self.relationship.card_ids = eligible_cards;

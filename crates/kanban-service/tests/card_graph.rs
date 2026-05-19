@@ -235,8 +235,7 @@ macro_rules! card_graph_tests {
 
                 ctx.set_card_parent(child_id, parent_id).unwrap();
 
-                let convenience: Vec<uuid::Uuid> =
-                    ctx.list_card_parents(child_id).unwrap();
+                let convenience: Vec<uuid::Uuid> = ctx.list_card_parents(child_id).unwrap();
                 let primitive: Vec<uuid::Uuid> = ctx
                     .list_card_edges_to(child_id, CardEdgeType::ParentOf)
                     .unwrap();

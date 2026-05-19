@@ -25,19 +25,11 @@ pub trait Graph {
 
     /// Add an edge `from -> to`. Returns [`GraphError::Cycle`] /
     /// [`GraphError::SelfReference`] when the implementation rejects.
-    fn add_edge(
-        &mut self,
-        from: Self::NodeId,
-        to: Self::NodeId,
-    ) -> Result<(), GraphError>;
+    fn add_edge(&mut self, from: Self::NodeId, to: Self::NodeId) -> Result<(), GraphError>;
 
     /// Remove the edge `from -> to`. Returns [`GraphError::EdgeNotFound`]
     /// if no such edge exists.
-    fn remove_edge(
-        &mut self,
-        from: Self::NodeId,
-        to: Self::NodeId,
-    ) -> Result<(), GraphError>;
+    fn remove_edge(&mut self, from: Self::NodeId, to: Self::NodeId) -> Result<(), GraphError>;
 
     /// True iff an edge `from -> to` is present.
     fn contains_edge(&self, from: Self::NodeId, to: Self::NodeId) -> bool;

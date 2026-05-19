@@ -1,7 +1,9 @@
-//! to V6 (split-graph) migration: splits the single `graph.cards` edge list into three
-//! sub-graphs (`parent_child`, `blocks`, `relates`) keyed by edge type.
+//! V6 split-graph migration: splits the single `graph.cards` edge list
+//! into three sub-graphs (`parent_child`, `blocks`, `relates`) keyed by
+//! edge type. Applies to any pre-V6 envelope (V3, V4, V5 all share the
+//! same pre-split graph schema on disk).
 //!
-//! Pre-V4 envelopes carried:
+//! Pre-V6 envelopes carried:
 //!
 //! ```json
 //! "data": {
@@ -11,7 +13,7 @@
 //! }
 //! ```
 //!
-//! V4 envelopes carry:
+//! V6 envelopes carry:
 //!
 //! ```json
 //! "data": {
@@ -32,7 +34,8 @@ use kanban_persistence::{PersistenceError, PersistenceResult};
 use serde_json::{json, Value};
 use std::path::Path;
 
-/// Migrate a V3 JSON file to V4 format in-place (atomic write).
+/// Apply the split-graph migration to a JSON file in-place, atomic write.
+/// Output is V6.
 pub async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
     let content = tokio::fs::read_to_string(path).await?;
     let mut envelope: Value = serde_json::from_str(&content)
@@ -45,7 +48,7 @@ pub async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
     let tmp_path = path.with_extension("tmp");
     tokio::fs::write(&tmp_path, json_str.as_bytes()).await?;
     tokio::fs::rename(&tmp_path, path).await?;
-    tracing::info!("Migrated {} from V3 to V4 format", path.display());
+    tracing::info!("Applied split-graph migration to {} (V6)", path.display());
     Ok(())
 }
 
@@ -157,7 +160,13 @@ mod tests {
             }
         }));
         transform_to_v6_split_graph_value(&mut env).unwrap();
-        assert_eq!(env["data"]["graph"]["blocks"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            env["data"]["graph"]["blocks"]["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -176,7 +185,13 @@ mod tests {
             }
         }));
         transform_to_v6_split_graph_value(&mut env).unwrap();
-        assert_eq!(env["data"]["graph"]["relates"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            env["data"]["graph"]["relates"]["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]

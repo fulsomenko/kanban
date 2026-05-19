@@ -323,10 +323,7 @@ async fn test_inverse_add_blocks_removes_edge() -> KanbanResult<()> {
             blocked_id: b.id,
         },
     ))])?;
-    assert!(
-        ctx.graph()?.has_edge(a.id, b.id),
-        "edge added by forward"
-    );
+    assert!(ctx.graph()?.has_edge(a.id, b.id), "edge added by forward");
 
     assert!(ctx.undo()?);
     assert!(

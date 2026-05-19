@@ -7,14 +7,20 @@ use uuid::Uuid;
 
 fn resolve_summaries(ctx: &CliContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
     ids.into_iter()
-        .filter_map(|id| ctx.get_card(id).ok().flatten().map(|c| CardSummary::from(&c)))
+        .filter_map(|id| {
+            ctx.get_card(id)
+                .ok()
+                .flatten()
+                .map(|c| CardSummary::from(&c))
+        })
         .collect()
 }
 
 fn resolve_card(ctx: &CliContext, raw: &str) -> KanbanCliResult<Uuid> {
-    ctx.resolve_card_id(raw).map_err(|e| KanbanCliError::Resolution {
-        hint: e.to_string(),
-    })
+    ctx.resolve_card_id(raw)
+        .map_err(|e| KanbanCliError::Resolution {
+            hint: e.to_string(),
+        })
 }
 
 pub async fn handle(ctx: &mut CliContext, action: RelationAction) -> anyhow::Result<()> {

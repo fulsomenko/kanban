@@ -45,7 +45,12 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
 
 fn resolve_summaries(ctx: &McpContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
     ids.into_iter()
-        .filter_map(|id| ctx.get_card(id).ok().flatten().map(|c| CardSummary::from(&c)))
+        .filter_map(|id| {
+            ctx.get_card(id)
+                .ok()
+                .flatten()
+                .map(|c| CardSummary::from(&c))
+        })
         .collect()
 }
 

@@ -379,10 +379,7 @@ mod tests {
             graph.add_blocks(card_a, card_b).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
-        assert_eq!(
-            tc.store.get_graph().unwrap().blockers(card_b).len(),
-            1
-        );
+        assert_eq!(tc.store.get_graph().unwrap().blockers(card_b).len(), 1);
 
         let context = tc.as_command_context();
         let cmd = RemoveDependencyCommand {
@@ -445,14 +442,7 @@ mod tests {
             graph.set_parent(child_id, parent_id).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
-        assert_eq!(
-            tc.store
-                .get_graph()
-                .unwrap()
-                .children(parent_id)
-                .len(),
-            1
-        );
+        assert_eq!(tc.store.get_graph().unwrap().children(parent_id).len(), 1);
 
         let context = tc.as_command_context();
         let cmd = RemoveParentCommand {
