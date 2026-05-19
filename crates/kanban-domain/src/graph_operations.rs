@@ -1,18 +1,14 @@
-use crate::{CardEdgeType, CardSummary, KanbanOperations, KanbanResult};
+use crate::{CardEdgeType, KanbanOperations, KanbanResult};
 use uuid::Uuid;
 
 /// Service-layer interface to the card-relation graph.
 ///
-/// Generic over edge kind: the four primitive methods accept any
-/// `CardEdgeType`. Convenience defaults wrap the common parent/child
-/// case so call sites stay readable.
-///
-/// The current implementation behind this trait is the parent-child
-/// tree-style graph backed by `CardDependencyGraph` (see
-/// `crates/kanban-domain/src/dependencies/`). A different graph
-/// implementation can satisfy this trait without changes to CLI, MCP,
-/// or TUI code. The trait is the contract; the implementation is
-/// concrete and replaceable.
+/// The trait returns raw `Vec<Uuid>` rather than resolved
+/// `Vec<CardSummary>`. Surfaces that need display data resolve ids
+/// themselves (e.g. via `KanbanOperations::get_card`). This keeps the
+/// trait focused on graph topology and avoids forcing every consumer
+/// (notably the TUI, which already has cards in memory) to pay for
+/// resolution it doesn't need.
 ///
 /// Decoupled from the 51-method `KanbanOperations` god-trait (see
 /// KAN-483); graph operations cluster as their own concern.
@@ -34,29 +30,18 @@ pub trait GraphOperations: KanbanOperations {
     // --- Primitive methods. Every consumer can call these. ---
 
     /// Add a directed edge `from -> to` of the given kind.
-    ///
-    /// Semantics (cycle detection, self-reference rejection, idempotency)
-    /// are decided by the implementation. The current implementation
-    /// rejects cycles for DAG-typed edges and self-references for all.
     fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()>;
 
     /// Remove the directed edge `from -> to` of the given kind, if present.
     fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()>;
 
     /// All direct successors of `node` reachable by a single edge of `kind`.
-    fn list_card_edges_from(
-        &self,
-        node: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<Vec<CardSummary>>;
+    fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>>;
 
     /// All direct predecessors of `node` via a single edge of `kind`.
-    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>>;
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>>;
 
     // --- Convenience defaults for the parent/child case. ---
-    // These let surface code read naturally. Any future refactor of the
-    // edge model leaves the high-level API intact because consumers can
-    // keep calling these.
 
     /// Add a parent-of edge: `parent_id -> child_id`.
     fn set_card_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
@@ -69,12 +54,12 @@ pub trait GraphOperations: KanbanOperations {
     }
 
     /// Direct parents of `card_id` (incoming parent-of edges).
-    fn list_card_parents(&self, card_id: Uuid) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_parents(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.list_card_edges_to(card_id, CardEdgeType::ParentOf)
     }
 
     /// Direct children of `card_id` (outgoing parent-of edges).
-    fn list_card_children(&self, card_id: Uuid) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_children(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.list_card_edges_from(card_id, CardEdgeType::ParentOf)
     }
 }

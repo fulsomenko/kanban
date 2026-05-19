@@ -6,8 +6,9 @@ pub use server::McpServer;
 use context::McpContext;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
-    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardSummary,
+    CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, GraphOperations, KanbanOperations,
+    SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_service::StoreManager;
@@ -38,6 +39,12 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
     let json = serde_json::to_string_pretty(&value)
         .map_err(|e| McpError::internal_error(format!("Serialization failed: {}", e), None))?;
     Ok(CallToolResult::success(vec![Content::text(json)]))
+}
+
+fn resolve_summaries(ctx: &McpContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
+    ids.into_iter()
+        .filter_map(|id| ctx.get_card(id).ok().flatten().map(|c| CardSummary::from(&c)))
+        .collect()
 }
 
 fn kanban_err_to_mcp(e: KanbanError) -> McpError {
@@ -1190,8 +1197,8 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let parents = locked_read(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
-            use kanban_domain::GraphOperations;
-            ctx.list_card_parents(id).map_err(kanban_err_to_mcp)
+            let ids = ctx.list_card_parents(id).map_err(kanban_err_to_mcp)?;
+            Ok(resolve_summaries(ctx, ids))
         })
         .await?;
         to_call_tool_result(&parents)
@@ -1204,8 +1211,8 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let children = locked_read(&self.ctx, |ctx| {
             let id = ctx.mcp_resolve_card(&req.card)?;
-            use kanban_domain::GraphOperations;
-            ctx.list_card_children(id).map_err(kanban_err_to_mcp)
+            let ids = ctx.list_card_children(id).map_err(kanban_err_to_mcp)?;
+            Ok(resolve_summaries(ctx, ids))
         })
         .await?;
         to_call_tool_result(&children)

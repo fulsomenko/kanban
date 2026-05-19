@@ -1352,36 +1352,21 @@ impl GraphOperations for KanbanContext {
         self.execute(vec![cmd])
     }
 
-    fn list_card_edges_from(
-        &self,
-        node: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
         let graph = self.backend.get_graph()?;
-        let ids: Vec<Uuid> = match kind {
+        Ok(match kind {
             CardEdgeType::ParentOf => graph.children(node),
             CardEdgeType::Blocks => graph.blocks_targets(node),
             CardEdgeType::RelatesTo => graph.related(node),
-        };
-        Ok(summaries_for_ids(self.backend.list_all_cards()?, &ids))
+        })
     }
 
-    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
         let graph = self.backend.get_graph()?;
-        let ids: Vec<Uuid> = match kind {
+        Ok(match kind {
             CardEdgeType::ParentOf => graph.parents(node),
             CardEdgeType::Blocks => graph.blockers(node),
             CardEdgeType::RelatesTo => graph.related(node),
-        };
-        Ok(summaries_for_ids(self.backend.list_all_cards()?, &ids))
+        })
     }
-}
-
-fn summaries_for_ids(cards: Vec<Card>, ids: &[Uuid]) -> Vec<CardSummary> {
-    let set: std::collections::HashSet<Uuid> = ids.iter().copied().collect();
-    cards
-        .into_iter()
-        .filter(|c| set.contains(&c.id))
-        .map(|c| CardSummary::from(&c))
-        .collect()
 }

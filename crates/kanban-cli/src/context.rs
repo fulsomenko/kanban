@@ -265,15 +265,11 @@ impl GraphOperations for CliContext {
         self.inner.remove_card_edge(from, to, kind)
     }
 
-    fn list_card_edges_from(
-        &self,
-        node: Uuid,
-        kind: CardEdgeType,
-    ) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_card_edges_from(node, kind)
     }
 
-    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<CardSummary>> {
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_card_edges_to(node, kind)
     }
 }

@@ -75,13 +75,13 @@ macro_rules! card_graph_tests {
                     .list_card_edges_from(parent_id, CardEdgeType::ParentOf)
                     .unwrap();
                 assert_eq!(children.len(), 1);
-                assert_eq!(children[0].id, child_id);
+                assert_eq!(children[0], child_id);
 
                 let parents = ctx
                     .list_card_edges_to(child_id, CardEdgeType::ParentOf)
                     .unwrap();
                 assert_eq!(parents.len(), 1);
-                assert_eq!(parents[0].id, parent_id);
+                assert_eq!(parents[0], parent_id);
             }
 
             #[tokio::test(flavor = "multi_thread")]
@@ -159,7 +159,7 @@ macro_rules! card_graph_tests {
                 let children = ctx
                     .list_card_edges_from(parent_id, CardEdgeType::ParentOf)
                     .unwrap();
-                let mut ids: Vec<uuid::Uuid> = children.iter().map(|s| s.id).collect();
+                let mut ids: Vec<uuid::Uuid> = children.iter().copied().collect();
                 ids.sort();
                 let mut expected = vec![c1, c2];
                 expected.sort();
@@ -179,7 +179,7 @@ macro_rules! card_graph_tests {
                 let parents = ctx
                     .list_card_edges_to(child_id, CardEdgeType::ParentOf)
                     .unwrap();
-                let mut ids: Vec<uuid::Uuid> = parents.iter().map(|s| s.id).collect();
+                let mut ids: Vec<uuid::Uuid> = parents.iter().copied().collect();
                 ids.sort();
                 let mut expected = vec![p1, p2];
                 expected.sort();
@@ -221,11 +221,11 @@ macro_rules! card_graph_tests {
 
                 let children = ctx.list_card_children(parent_id).unwrap();
                 assert_eq!(children.len(), 1);
-                assert_eq!(children[0].id, child_id);
+                assert_eq!(children[0], child_id);
 
                 let parents = ctx.list_card_parents(child_id).unwrap();
                 assert_eq!(parents.len(), 1);
-                assert_eq!(parents[0].id, parent_id);
+                assert_eq!(parents[0], parent_id);
             }
 
             #[tokio::test(flavor = "multi_thread")]
@@ -235,18 +235,11 @@ macro_rules! card_graph_tests {
 
                 ctx.set_card_parent(child_id, parent_id).unwrap();
 
-                let convenience: Vec<uuid::Uuid> = ctx
-                    .list_card_parents(child_id)
-                    .unwrap()
-                    .into_iter()
-                    .map(|s| s.id)
-                    .collect();
+                let convenience: Vec<uuid::Uuid> =
+                    ctx.list_card_parents(child_id).unwrap();
                 let primitive: Vec<uuid::Uuid> = ctx
                     .list_card_edges_to(child_id, CardEdgeType::ParentOf)
-                    .unwrap()
-                    .into_iter()
-                    .map(|s| s.id)
-                    .collect();
+                    .unwrap();
                 assert_eq!(convenience, primitive);
             }
         }
