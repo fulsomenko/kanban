@@ -40,6 +40,7 @@ pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities};
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
+pub use graph_operations::GraphOperations;
 pub use operations::{CardListFilter, KanbanOperations};
 pub use query::{
     sprint::{
