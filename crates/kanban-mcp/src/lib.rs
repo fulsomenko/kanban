@@ -1157,7 +1157,6 @@ impl KanbanMcpServer {
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| {
             let child_id = ctx.mcp_resolve_card(&req.child)?;
             let parent_id = ctx.mcp_resolve_card(&req.parent)?;
-            use kanban_domain::GraphOperations;
             ctx.set_card_parent(child_id, parent_id)
                 .map_err(kanban_err_to_mcp)?;
             Ok((child_id, parent_id))
@@ -1177,7 +1176,6 @@ impl KanbanMcpServer {
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| {
             let child_id = ctx.mcp_resolve_card(&req.child)?;
             let parent_id = ctx.mcp_resolve_card(&req.parent)?;
-            use kanban_domain::GraphOperations;
             ctx.remove_card_parent(child_id, parent_id)
                 .map_err(kanban_err_to_mcp)?;
             Ok((child_id, parent_id))

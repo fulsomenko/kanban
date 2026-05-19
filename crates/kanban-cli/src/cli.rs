@@ -282,8 +282,10 @@ pub enum RelationAction {
     },
     /// Remove a parent → child edge between two cards
     Remove {
+        /// Parent card UUID or identifier (e.g. KAN-2)
         #[arg(long)]
         parent: String,
+        /// Child card UUID or identifier
         #[arg(long)]
         child: String,
     },
