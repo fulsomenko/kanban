@@ -25,7 +25,7 @@ impl Migrator {
     /// Detect the version of a persisted file
     pub async fn detect_version(path: &Path) -> PersistenceResult<FormatVersion> {
         if !path.exists() {
-            return Ok(FormatVersion::V4); // Default to V4 for new files
+            return Ok(FormatVersion::V6); // Default to V6 for new files
         }
 
         let content = tokio::fs::read_to_string(path).await?;
@@ -52,6 +52,19 @@ impl Migrator {
                 super::v2_to_v3::migrate_v2_to_v3(path).await
             }
             (FormatVersion::V2, FormatVersion::V3) => super::v2_to_v3::migrate_v2_to_v3(path).await,
+            (_, FormatVersion::V6) if from < FormatVersion::V6 => {
+                // Bring the file forward through every legacy step it needs,
+                // then run the split-graph transform that produces V6.
+                if from == FormatVersion::V1 {
+                    Self::migrate_v1_to_v2(path).await?;
+                }
+                if from <= FormatVersion::V2 {
+                    super::v2_to_v3::migrate_v2_to_v3(path).await?;
+                }
+                // V3, V4, and V5 all share the pre-split graph schema; the
+                // split-graph transform is the only step that distinguishes them.
+                super::split_graph::migrate_to_v6_split_graph(path).await
+            }
             _ => Err(PersistenceError::Serialization(format!(
                 "Unsupported migration: {:?} -> {:?}",
                 from, to

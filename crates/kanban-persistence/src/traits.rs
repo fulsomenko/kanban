@@ -135,6 +135,10 @@ pub enum FormatVersion {
     V3,
     V4,
     V5,
+    /// V6 splits the dependency graph from a single edge-type-tagged list
+    /// (`graph.cards.edges`) into three sub-graphs keyed by edge kind
+    /// (`graph.parent_child`, `graph.blocks`, `graph.relates`).
+    V6,
 }
 
 impl FormatVersion {
@@ -145,6 +149,7 @@ impl FormatVersion {
             Self::V3 => 3,
             Self::V4 => 4,
             Self::V5 => 5,
+            Self::V6 => 6,
         }
     }
 
@@ -155,6 +160,7 @@ impl FormatVersion {
             3 => Some(Self::V3),
             4 => Some(Self::V4),
             5 => Some(Self::V5),
+            6 => Some(Self::V6),
             _ => None,
         }
     }

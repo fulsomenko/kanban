@@ -1,6 +1,6 @@
 use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
-use crate::migration::{transform_v2_to_v3_value, Migrator};
+use crate::migration::{transform_to_v6_split_graph_value, transform_v2_to_v3_value, Migrator};
 use kanban_persistence::{
     FormatVersion, PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
     StoreSnapshot,
@@ -85,11 +85,14 @@ impl JsonEnvelope {
 
 // ─── Sync migration helpers ───────────────────────────────────────────────────
 
-fn migrate_to_v3_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
+fn migrate_to_v6_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
     if from == FormatVersion::V1 {
         migrate_v1_to_v2_sync(path)?;
     }
-    migrate_v2_to_v3_sync(path)
+    if from <= FormatVersion::V2 {
+        migrate_v2_to_v3_sync(path)?;
+    }
+    split_graph_sync(path)
 }
 
 fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
@@ -123,6 +126,21 @@ fn migrate_v2_to_v3_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
     std::fs::write(&tmp_path, &json_bytes)?;
     std::fs::rename(&tmp_path, path)?;
     tracing::info!("Migrated {} from V2 to V3 (sync)", path.display());
+    Ok(json_bytes)
+}
+
+fn split_graph_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut envelope: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    transform_to_v6_split_graph_value(&mut envelope)?;
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, &json_bytes)?;
+    std::fs::rename(&tmp_path, path)?;
+    tracing::info!("Applied split-graph migration to {} (sync)", path.display());
     Ok(json_bytes)
 }
 
@@ -165,7 +183,7 @@ impl JsonFileStore {
         let envelope: JsonEnvelope = serde_json::from_slice(bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        if envelope.version < 2 || envelope.version > 5 {
+        if envelope.version < 2 || envelope.version > 6 {
             return Err(PersistenceError::Serialization(format!(
                 "Unsupported format version: {}",
                 envelope.version
@@ -240,7 +258,7 @@ impl PersistenceStore for JsonFileStore {
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let envelope = JsonEnvelope {
-            version: 5,
+            version: 6,
             metadata: snapshot.metadata.clone(),
             data: data_value,
         };
@@ -270,14 +288,14 @@ impl PersistenceStore for JsonFileStore {
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
         let current_version = Migrator::detect_version(&self.path).await?;
 
-        if current_version < FormatVersion::V3 {
+        if current_version < FormatVersion::V6 {
             tracing::info!(
-                "Detected {:?} format at {}. Migrating to V3...",
+                "Detected {:?} format at {}. Migrating to V6...",
                 current_version,
                 self.path.display()
             );
-            Migrator::migrate(current_version, FormatVersion::V3, &self.path).await?;
-            tracing::info!("Migration to V3 completed successfully");
+            Migrator::migrate(current_version, FormatVersion::V6, &self.path).await?;
+            tracing::info!("Migration to V6 completed successfully");
         }
 
         let file_bytes = tokio::fs::read(&self.path).await?;
@@ -329,13 +347,13 @@ impl PersistenceStore for JsonFileStore {
 
         let current_version = Migrator::detect_version_from_value(&value);
 
-        let final_bytes = if current_version < FormatVersion::V3 {
+        let final_bytes = if current_version < FormatVersion::V6 {
             tracing::info!(
-                "Detected {:?} format at {}. Migrating to V3 (sync)...",
+                "Detected {:?} format at {}. Migrating to V6 (sync)...",
                 current_version,
                 self.path.display()
             );
-            migrate_to_v3_sync(current_version, &self.path)?
+            migrate_to_v6_sync(current_version, &self.path)?
         } else {
             file_bytes
         };
@@ -573,24 +591,30 @@ mod tests {
         }
     }
 
-    /// Loading a file that has no legacy fields must not rewrite it. A
-    /// spurious write would change the file's mtime, trip file-watcher
-    /// notifications, and risk altering byte-for-byte content (which some
-    /// users may track in version control).
+    /// Loading a clean V6 file (current format) that has no legacy fields
+    /// must not rewrite it. A spurious write would change the file's
+    /// mtime, trip file-watcher notifications, and risk altering
+    /// byte-for-byte content (which some users may track in version
+    /// control). Pre-V6 files are migrated on load and *are* rewritten,
+    /// which is covered by the migration-specific tests.
     #[tokio::test]
     async fn test_load_is_a_noop_write_when_no_legacy_fields_present() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("clean.json");
 
         let clean = json!({
-            "version": 5,
+            "version": 6,
             "metadata": {
                 "instance_id": "550e8400-e29b-41d4-a716-446655440000",
                 "saved_at": "2024-01-01T00:00:00Z"
             },
             "data": {
                 "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
-                "graph": { "cards": { "edges": [] } }
+                "graph": {
+                    "parent_child": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
             }
         });
         let original_bytes = serde_json::to_vec_pretty(&clean).unwrap();

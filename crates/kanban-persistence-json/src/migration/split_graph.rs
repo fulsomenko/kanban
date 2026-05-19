@@ -1,0 +1,270 @@
+//! to V6 (split-graph) migration: splits the single `graph.cards` edge list into three
+//! sub-graphs (`parent_child`, `blocks`, `relates`) keyed by edge type.
+//!
+//! Pre-V4 envelopes carried:
+//!
+//! ```json
+//! "data": {
+//!   "graph": { "cards": { "edges": [
+//!     { "source": "...", "target": "...", "edge_type": "ParentOf", ... }
+//!   ] } }
+//! }
+//! ```
+//!
+//! V4 envelopes carry:
+//!
+//! ```json
+//! "data": {
+//!   "graph": {
+//!     "parent_child": { "edges": [...] },
+//!     "blocks":       { "edges": [...] },
+//!     "relates":      { "edges": [...] }
+//!   }
+//! }
+//! ```
+//!
+//! Each transferred edge has `edge_type` stripped (the new edge type is
+//! `()` because the sub-graph already encodes the relation kind) and the
+//! remaining fields (`source`, `target`, `direction`, `weight`,
+//! `created_at`, `archived_at`) preserved.
+
+use kanban_persistence::{PersistenceError, PersistenceResult};
+use serde_json::{json, Value};
+use std::path::Path;
+
+/// Migrate a V3 JSON file to V4 format in-place (atomic write).
+pub async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
+    let content = tokio::fs::read_to_string(path).await?;
+    let mut envelope: Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+
+    transform_to_v6_split_graph_value(&mut envelope)?;
+
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let tmp_path = path.with_extension("tmp");
+    tokio::fs::write(&tmp_path, json_str.as_bytes()).await?;
+    tokio::fs::rename(&tmp_path, path).await?;
+    tracing::info!("Migrated {} from V3 to V4 format", path.display());
+    Ok(())
+}
+
+/// Pure synchronous to V6 (split-graph) transformation on an already-parsed envelope.
+pub fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceResult<()> {
+    let data = envelope
+        .get_mut("data")
+        .ok_or_else(|| PersistenceError::Serialization("missing 'data' field".into()))?;
+
+    let mut parent_child_edges: Vec<Value> = Vec::new();
+    let mut blocks_edges: Vec<Value> = Vec::new();
+    let mut relates_edges: Vec<Value> = Vec::new();
+
+    if let Some(graph) = data.get("graph") {
+        if let Some(cards) = graph.get("cards") {
+            if let Some(edges) = cards.get("edges").and_then(|v| v.as_array()) {
+                for edge in edges {
+                    let kind = edge.get("edge_type").and_then(|v| v.as_str()).unwrap_or("");
+                    let mut stripped = edge.clone();
+                    if let Some(obj) = stripped.as_object_mut() {
+                        obj.insert("edge_type".to_string(), Value::Null);
+                    }
+                    match kind {
+                        "ParentOf" => parent_child_edges.push(stripped),
+                        "Blocks" => blocks_edges.push(stripped),
+                        "RelatesTo" => relates_edges.push(stripped),
+                        other => {
+                            tracing::warn!(
+                                "split-graph migration: dropping edge with unknown edge_type '{}'",
+                                other
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    data["graph"] = json!({
+        "parent_child": { "edges": parent_child_edges },
+        "blocks":       { "edges": blocks_edges },
+        "relates":      { "edges": relates_edges },
+    });
+
+    envelope["version"] = Value::Number(6.into());
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    fn make_v3_envelope(graph: Value) -> Value {
+        json!({
+            "version": 3,
+            "metadata": {
+                "instance_id": "00000000-0000-0000-0000-000000000001",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": graph
+            }
+        })
+    }
+
+    #[test]
+    fn test_split_graph_routes_parent_of_edges_to_parent_child() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "edge_type": "ParentOf",
+                    "direction": "Directed",
+                    "weight": null,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": null
+                }]
+            }
+        }));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        assert_eq!(env["version"], 6);
+        let g = &env["data"]["graph"];
+        assert_eq!(g["parent_child"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(g["blocks"]["edges"].as_array().unwrap().len(), 0);
+        assert_eq!(g["relates"]["edges"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_split_graph_routes_blocks_edges_to_blocks() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "edge_type": "Blocks",
+                    "direction": "Directed",
+                    "weight": null,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": null
+                }]
+            }
+        }));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        assert_eq!(env["data"]["graph"]["blocks"]["edges"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_split_graph_routes_relates_edges_to_relates() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "edge_type": "RelatesTo",
+                    "direction": "Bidirectional",
+                    "weight": null,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": null
+                }]
+            }
+        }));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        assert_eq!(env["data"]["graph"]["relates"]["edges"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_split_graph_splits_mixed_edge_list() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [
+                    { "source": "11111111-1111-1111-1111-111111111111", "target": "22222222-2222-2222-2222-222222222222", "edge_type": "ParentOf", "direction": "Directed", "weight": null, "created_at": "2024-01-01T00:00:00Z", "archived_at": null },
+                    { "source": "33333333-3333-3333-3333-333333333333", "target": "44444444-4444-4444-4444-444444444444", "edge_type": "Blocks",   "direction": "Directed", "weight": null, "created_at": "2024-01-01T00:00:00Z", "archived_at": null },
+                    { "source": "55555555-5555-5555-5555-555555555555", "target": "66666666-6666-6666-6666-666666666666", "edge_type": "RelatesTo","direction": "Bidirectional", "weight": null, "created_at": "2024-01-01T00:00:00Z", "archived_at": null }
+                ]
+            }
+        }));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        let g = &env["data"]["graph"];
+        assert_eq!(g["parent_child"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(g["blocks"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(g["relates"]["edges"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_split_graph_strips_edge_type_from_migrated_edges() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "edge_type": "ParentOf",
+                    "direction": "Directed",
+                    "weight": null,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": null
+                }]
+            }
+        }));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        let edge = &env["data"]["graph"]["parent_child"]["edges"][0];
+        assert!(edge["edge_type"].is_null(), "edge_type should be nulled");
+        assert_eq!(edge["source"], "11111111-1111-1111-1111-111111111111");
+        assert_eq!(edge["target"], "22222222-2222-2222-2222-222222222222");
+    }
+
+    #[test]
+    fn test_split_graph_preserves_archived_at_and_weight() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "edge_type": "Blocks",
+                    "direction": "Directed",
+                    "weight": 1.5,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": "2024-02-01T00:00:00Z"
+                }]
+            }
+        }));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        let edge = &env["data"]["graph"]["blocks"]["edges"][0];
+        assert_eq!(edge["weight"], 1.5);
+        assert_eq!(edge["archived_at"], "2024-02-01T00:00:00Z");
+    }
+
+    #[test]
+    fn test_split_graph_empty_graph_produces_three_empty_subgraphs() {
+        let mut env = make_v3_envelope(json!({}));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        let g = &env["data"]["graph"];
+        assert_eq!(g["parent_child"]["edges"].as_array().unwrap().len(), 0);
+        assert_eq!(g["blocks"]["edges"].as_array().unwrap().len(), 0);
+        assert_eq!(g["relates"]["edges"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_migrate_to_v6_split_graph_file_writes_bumped_version() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        let env = make_v3_envelope(json!({
+            "cards": { "edges": [] }
+        }));
+        tokio::fs::write(&path, serde_json::to_string_pretty(&env).unwrap())
+            .await
+            .unwrap();
+
+        migrate_to_v6_split_graph(&path).await.unwrap();
+
+        let migrated: Value =
+            serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
+        assert_eq!(migrated["version"], 6);
+    }
+}
