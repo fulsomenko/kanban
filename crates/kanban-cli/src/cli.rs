@@ -23,6 +23,8 @@ pub enum Commands {
     Column(ColumnCommand),
     /// Card operations
     Card(CardCommand),
+    /// Card-relation operations (parent/child)
+    Relation(RelationCommand),
     /// Sprint operations
     Sprint(SprintCommand),
     /// Export board data
@@ -256,6 +258,44 @@ pub enum CardAction {
         /// Sprint UUID, name, or number (must be on the same board as all selected cards)
         #[arg(long)]
         sprint: String,
+    },
+}
+
+// Relation commands
+
+#[derive(Args)]
+pub struct RelationCommand {
+    #[command(subcommand)]
+    pub action: RelationAction,
+}
+
+#[derive(Subcommand)]
+pub enum RelationAction {
+    /// Add a parent → child edge between two cards
+    Add {
+        /// Parent card UUID or identifier (e.g. KAN-2)
+        #[arg(long)]
+        parent: String,
+        /// Child card UUID or identifier
+        #[arg(long)]
+        child: String,
+    },
+    /// Remove a parent → child edge between two cards
+    Remove {
+        #[arg(long)]
+        parent: String,
+        #[arg(long)]
+        child: String,
+    },
+    /// List direct parents of a card
+    Parents {
+        /// Card UUID or identifier
+        card: String,
+    },
+    /// List direct children of a card
+    Children {
+        /// Card UUID or identifier
+        card: String,
     },
 }
 
