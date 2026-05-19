@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use kanban_core::graph::{Edge, Graph};
+use kanban_core::graph::{Edge, EdgeStore};
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
@@ -191,7 +191,7 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
 }
 
 fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    let mut graph: Graph<CardEdgeType> = Graph::new();
+    let mut graph: EdgeStore<CardEdgeType> = EdgeStore::new();
     for row in rows {
         let source_str: String = row.try_get("source_id").map_err(db_err)?;
         let target_str: String = row.try_get("target_id").map_err(db_err)?;

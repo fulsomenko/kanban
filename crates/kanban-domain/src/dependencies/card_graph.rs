@@ -1,13 +1,13 @@
 use crate::error::DependencyError;
 use crate::KanbanResult;
 use chrono::Utc;
-use kanban_core::{Edge, EdgeDirection, Graph};
+use kanban_core::{Edge, EdgeDirection, EdgeStore};
 
 use super::CardEdgeType;
 use crate::CardId;
 
 /// Type alias for card dependency graph
-pub type CardDependencyGraph = Graph<CardEdgeType>;
+pub type CardDependencyGraph = EdgeStore<CardEdgeType>;
 
 /// Extension trait for card-specific graph operations
 pub trait CardGraphExt {

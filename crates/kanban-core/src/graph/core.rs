@@ -5,22 +5,22 @@ use uuid::Uuid;
 use super::algorithms;
 use super::edge::{Edge, EdgeDirection};
 
-/// Generic graph structure that can hold any edge type E
+/// Generic edge-store container that can hold any edge type E
 ///
 /// Stores edges as an edge list for efficient serialization.
 /// Provides adjacency list views for graph algorithms.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Graph<E> {
+pub struct EdgeStore<E> {
     edges: Vec<Edge<E>>,
 }
 
-impl<E> Default for Graph<E> {
+impl<E> Default for EdgeStore<E> {
     fn default() -> Self {
         Self { edges: Vec::new() }
     }
 }
 
-impl<E> Graph<E> {
+impl<E> EdgeStore<E> {
     /// Create a new empty graph
     pub fn new() -> Self {
         Self { edges: Vec::new() }
@@ -228,13 +228,13 @@ mod tests {
 
     #[test]
     fn test_graph_creation() {
-        let graph: Graph<TestEdgeType> = Graph::new();
+        let graph: EdgeStore<TestEdgeType> = EdgeStore::new();
         assert_eq!(graph.edge_count(), 0);
     }
 
     #[test]
     fn test_add_edge() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
         let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_remove_edge() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
         let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn test_remove_node() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
@@ -294,7 +294,7 @@ mod tests {
 
     #[test]
     fn test_archive_node() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_unarchive_node() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
 
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn test_outgoing_incoming() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn test_neighbors_directed() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_neighbors_bidirectional() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
 
@@ -422,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_would_create_cycle() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn test_adjacency_list() {
-        let mut graph = Graph::new();
+        let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
