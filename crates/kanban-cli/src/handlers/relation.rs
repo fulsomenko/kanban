@@ -3,7 +3,7 @@ use crate::context::CliContext;
 use crate::error::{KanbanCliError, KanbanCliResult};
 use crate::output;
 use kanban_domain::sort::OrderedSorter;
-use kanban_domain::{Card, CardSummary, GraphOperations, KanbanOperations};
+use kanban_domain::{Card, CardSummary, GraphOperations, KanbanError, KanbanOperations};
 use uuid::Uuid;
 
 fn resolve_cards(ctx: &CliContext, ids: Vec<Uuid>) -> Vec<Card> {
@@ -25,6 +25,35 @@ fn resolve_card(ctx: &CliContext, raw: &str) -> KanbanCliResult<Uuid> {
         })
 }
 
+/// Rewrite domain-level mutation errors to include the raw `--parent`
+/// and `--child` strings the user typed. The underlying domain
+/// `DependencyError` is anonymous (just "cycle detected" / etc.); the
+/// CLI handler is the right boundary to attach user-input context so
+/// the error becomes a self-contained breadcrumb.
+fn enrich_add_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError {
+    if e.is_cycle_detected() {
+        KanbanCliError::Domain(KanbanError::validation(format!(
+            "cycle detected: making {parent} a parent of {child} would create a cycle"
+        )))
+    } else if e.is_self_reference() {
+        KanbanCliError::Domain(KanbanError::validation(format!(
+            "self-reference not allowed: {parent} cannot be its own parent"
+        )))
+    } else {
+        e.into()
+    }
+}
+
+fn enrich_remove_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError {
+    if e.is_edge_not_found() {
+        KanbanCliError::Domain(KanbanError::validation(format!(
+            "edge not found: no parent->child edge from {parent} to {child} to remove (use `kanban relation parents {child}` to see existing parents)"
+        )))
+    } else {
+        e.into()
+    }
+}
+
 pub async fn handle(ctx: &mut CliContext, action: RelationAction) -> anyhow::Result<()> {
     let result: KanbanCliResult<serde_json::Value> = run(ctx, action).await;
     match result {
@@ -41,7 +70,8 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
         RelationAction::Add { parent, child } => {
             let parent_uuid = resolve_card(ctx, &parent)?;
             let child_uuid = resolve_card(ctx, &child)?;
-            ctx.set_child(parent_uuid, child_uuid)?;
+            ctx.set_child(parent_uuid, child_uuid)
+                .map_err(|e| enrich_add_error(e, &parent, &child))?;
             ctx.save().await?;
             Ok(serde_json::json!({
                 "parent": parent_uuid.to_string(),
@@ -51,7 +81,8 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
         RelationAction::Remove { parent, child } => {
             let parent_uuid = resolve_card(ctx, &parent)?;
             let child_uuid = resolve_card(ctx, &child)?;
-            ctx.remove_child(parent_uuid, child_uuid)?;
+            ctx.remove_child(parent_uuid, child_uuid)
+                .map_err(|e| enrich_remove_error(e, &parent, &child))?;
             ctx.save().await?;
             Ok(serde_json::json!({
                 "parent": parent_uuid.to_string(),
