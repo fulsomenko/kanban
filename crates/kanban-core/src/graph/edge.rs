@@ -15,13 +15,23 @@ pub enum EdgeDirection {
 ///
 /// Generic over edge type `E` to support different relationship types
 /// (e.g., CardEdgeType::Blocks, CardEdgeType::RelatesTo, etc.)
+///
+/// `edge_type` carries `#[serde(default)]` so an edge whose JSON
+/// representation omits the field (or sets it to `null`) round-trips
+/// through `Deserialize` cleanly. This matters for `E = ()` (the V6
+/// on-disk shape: the type is encoded by the sub-graph the edge lives
+/// in, not carried per-edge), and for forward-compat with older
+/// migration outputs that nulled the field. Imposes `E: Default` on
+/// the derived `Deserialize` impl; both `()` and `CardEdgeType`
+/// satisfy it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge<E> {
     /// Source node identifier
     pub source: Uuid,
     /// Target node identifier
     pub target: Uuid,
-    /// Type of relationship (e.g., Blocks, RelatesTo)
+    /// Type of relationship (e.g., Blocks, RelatesTo).
+    #[serde(default)]
     pub edge_type: E,
     /// Direction of the edge
     pub direction: EdgeDirection,

@@ -9,7 +9,13 @@ use super::edge::{Edge, EdgeDirection};
 ///
 /// Stores edges as an edge list for efficient serialization.
 /// Provides adjacency list views for graph algorithms.
+///
+/// `E: Default` propagates from [`Edge`]'s serde-derived `Deserialize`
+/// (Edge's `edge_type` field is `#[serde(default)]` to round-trip
+/// files that omit or null the field). Both `()` and `CardEdgeType`
+/// satisfy this.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "E: Default + serde::Deserialize<'de>"))]
 pub struct EdgeStore<E> {
     edges: Vec<Edge<E>>,
 }

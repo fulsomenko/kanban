@@ -1,7 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 /// Types of relationships between cards
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Default` is `ParentOf` — the primary user-facing edge kind. This
+/// only matters for serde-deserialisation of edges whose `edge_type`
+/// field is missing from the JSON (Edge<()> on the V6 disk format,
+/// where the type is encoded by the sub-graph the edge lives in
+/// rather than carried per-edge).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CardEdgeType {
     /// This card blocks the target (must complete before target can start)
     /// Enforces DAG - no cycles allowed
@@ -12,6 +18,7 @@ pub enum CardEdgeType {
 
     /// Organizational grouping - parent contains child (source is parent, target is child)
     /// Enforces DAG - no cycles allowed (can't be own ancestor)
+    #[default]
     ParentOf,
     // Future edge types can be added here:
     // Duplicates,
