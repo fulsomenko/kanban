@@ -42,4 +42,20 @@ mod tests {
         };
         assert!(err.to_string().contains("foo"));
     }
+
+    /// CLI error messages must match the existing convention used by
+    /// `card get` / `card delete` / `card archive` / `card update`:
+    /// just `Card 'X' not found`, no `identifier resolution failed:`
+    /// prefix. The Resolution variant's Display renders only the
+    /// hint — the hint already carries the full user-facing message.
+    #[test]
+    fn test_kanban_cli_error_resolution_renders_hint_without_prefix() {
+        let hint = "Card 'KAN-99999' not found";
+        let err = KanbanCliError::Resolution { hint: hint.into() };
+        assert_eq!(
+            err.to_string(),
+            hint,
+            "Resolution Display should be exactly the hint — no prefix"
+        );
+    }
 }
