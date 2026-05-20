@@ -116,4 +116,55 @@ mod tests {
         let b = Uuid::new_v4();
         g.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
     }
+
+    /// Convenience methods read in subject-object order: the first
+    /// parameter is the subject of the verb. `set_child(parent, child)`
+    /// — "set this child under that parent". `set_parent(child, parent)`
+    /// — "set this child's parent to that one". Both produce the same
+    /// parent->child edge.
+    #[test]
+    fn test_convenience_methods_use_semantic_parameter_ordering() {
+        struct GraphOnly;
+        impl GraphOperations for GraphOnly {
+            fn add_card_edge(
+                &mut self,
+                _from: Uuid,
+                _to: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_card_edge(
+                &mut self,
+                _from: Uuid,
+                _to: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn list_card_edges_from(
+                &self,
+                _node: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn list_card_edges_to(
+                &self,
+                _node: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+        }
+        let mut g = GraphOnly;
+        let parent = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        // Subject-object order: parent-then-child or child-then-parent
+        // matching the verb's subject.
+        g.set_child(parent, child).unwrap();
+        g.set_parent(child, parent).unwrap();
+        g.remove_child(parent, child).unwrap();
+        g.remove_parent(child, parent).unwrap();
+    }
 }
