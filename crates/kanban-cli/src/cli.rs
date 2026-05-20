@@ -314,23 +314,21 @@ pub struct RelationCommand {
 
 #[derive(Subcommand)]
 pub enum RelationAction {
-    /// Add a parent → child edge between two cards
+    /// Add parent → child edges between one parent and one or more children
     Add {
         /// Parent card UUID or identifier (e.g. KAN-2)
-        #[arg(long)]
         parent: String,
-        /// Child card UUID or identifier
-        #[arg(long)]
-        child: String,
+        /// One or more child cards (UUID or identifier)
+        #[arg(required = true, num_args = 1..)]
+        children: Vec<String>,
     },
-    /// Remove a parent → child edge between two cards
+    /// Remove parent → child edges between one parent and one or more children
     Remove {
         /// Parent card UUID or identifier (e.g. KAN-2)
-        #[arg(long)]
         parent: String,
-        /// Child card UUID or identifier
-        #[arg(long)]
-        child: String,
+        /// One or more child cards (UUID or identifier)
+        #[arg(required = true, num_args = 1..)]
+        children: Vec<String>,
     },
     /// List direct parents of a card
     Parents {

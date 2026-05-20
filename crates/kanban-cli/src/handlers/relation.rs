@@ -73,26 +73,39 @@ pub async fn handle(ctx: &mut CliContext, action: RelationAction) -> anyhow::Res
 
 async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<serde_json::Value> {
     match action {
-        RelationAction::Add { parent, child } => {
+        RelationAction::Add { parent, children } => {
+            // Per-child loop, non-atomic. On error we stop and report —
+            // the children added before the failure stay added. Echoing
+            // the user's raw identifier in the error means they can see
+            // which entry in their list broke without re-reading their
+            // scrollback.
             let parent_uuid = resolve_card(ctx, &parent)?;
-            let child_uuid = resolve_card(ctx, &child)?;
-            ctx.set_child(parent_uuid, child_uuid)
-                .map_err(|e| enrich_add_error(e, &parent, &child))?;
+            let mut added = Vec::with_capacity(children.len());
+            for child in &children {
+                let child_uuid = resolve_card(ctx, child)?;
+                ctx.set_child(parent_uuid, child_uuid)
+                    .map_err(|e| enrich_add_error(e, &parent, child))?;
+                added.push(child_uuid.to_string());
+            }
             ctx.save().await?;
             Ok(serde_json::json!({
-                "parent": parent_uuid.to_string(),
-                "child":  child_uuid.to_string(),
+                "parent":   parent_uuid.to_string(),
+                "children": added,
             }))
         }
-        RelationAction::Remove { parent, child } => {
+        RelationAction::Remove { parent, children } => {
             let parent_uuid = resolve_card(ctx, &parent)?;
-            let child_uuid = resolve_card(ctx, &child)?;
-            ctx.remove_child(parent_uuid, child_uuid)
-                .map_err(|e| enrich_remove_error(e, &parent, &child))?;
+            let mut removed = Vec::with_capacity(children.len());
+            for child in &children {
+                let child_uuid = resolve_card(ctx, child)?;
+                ctx.remove_child(parent_uuid, child_uuid)
+                    .map_err(|e| enrich_remove_error(e, &parent, child))?;
+                removed.push(child_uuid.to_string());
+            }
             ctx.save().await?;
             Ok(serde_json::json!({
-                "parent": parent_uuid.to_string(),
-                "child":  child_uuid.to_string(),
+                "parent":   parent_uuid.to_string(),
+                "children": removed,
             }))
         }
         RelationAction::Parents { card, sort, order } => {

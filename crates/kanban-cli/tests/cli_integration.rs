@@ -3370,6 +3370,68 @@ mod relation_tests {
         (parent_id, child_id)
     }
 
+    fn setup_three_cards(file: &std::path::Path) -> (String, String, String) {
+        kanban().args([file.to_str().unwrap()]).assert().success();
+
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&board_output)));
+
+        let column_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "column",
+                "create",
+                "--board",
+                &board_id,
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let column_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&column_output)));
+
+        let make_card = |title: &str| -> String {
+            let out = kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board",
+                    &board_id,
+                    "--column",
+                    &column_id,
+                    "--title",
+                    title,
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+            extract_id(&parse_json_output(&String::from_utf8_lossy(&out)))
+        };
+        (
+            make_card("Parent"),
+            make_card("Child1"),
+            make_card("Child2"),
+        )
+    }
+
     #[test]
     fn test_relation_add_creates_edge_visible_via_parents() {
         let dir = tempdir().unwrap();
@@ -3381,9 +3443,7 @@ mod relation_tests {
                 file.to_str().unwrap(),
                 "relation",
                 "add",
-                "--parent",
                 &parent_id,
-                "--child",
                 &child_id,
             ])
             .assert()
@@ -3410,15 +3470,7 @@ mod relation_tests {
         let (a, b) = setup_two_cards(&file);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "relation",
-                "add",
-                "--parent",
-                &a,
-                "--child",
-                &b,
-            ])
+            .args([file.to_str().unwrap(), "relation", "add", &a, &b])
             .assert()
             .success();
 
@@ -3427,15 +3479,7 @@ mod relation_tests {
         // command produced the failure without re-reading their
         // scrollback.
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "relation",
-                "add",
-                "--parent",
-                &b,
-                "--child",
-                &a,
-            ])
+            .args([file.to_str().unwrap(), "relation", "add", &b, &a])
             .assert()
             .failure()
             .stderr(predicate::str::contains(&b))
@@ -3454,15 +3498,7 @@ mod relation_tests {
         let (a, _) = setup_two_cards(&file);
 
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "relation",
-                "add",
-                "--parent",
-                &a,
-                "--child",
-                &a,
-            ])
+            .args([file.to_str().unwrap(), "relation", "add", &a, &a])
             .assert()
             .failure()
             .stderr(predicate::str::contains(&a))
@@ -3478,15 +3514,7 @@ mod relation_tests {
 
         // No edge has been added between a and b.
         kanban()
-            .args([
-                file.to_str().unwrap(),
-                "relation",
-                "remove",
-                "--parent",
-                &a,
-                "--child",
-                &b,
-            ])
+            .args([file.to_str().unwrap(), "relation", "remove", &a, &b])
             .assert()
             .failure()
             .stderr(predicate::str::contains(&a))
@@ -3506,9 +3534,7 @@ mod relation_tests {
                 file.to_str().unwrap(),
                 "relation",
                 "add",
-                "--parent",
                 &parent_id,
-                "--child",
                 &child_id,
             ])
             .assert()
@@ -3519,9 +3545,7 @@ mod relation_tests {
                 file.to_str().unwrap(),
                 "relation",
                 "remove",
-                "--parent",
                 &parent_id,
-                "--child",
                 &child_id,
             ])
             .assert()
@@ -3549,9 +3573,7 @@ mod relation_tests {
                 file.to_str().unwrap(),
                 "relation",
                 "add",
-                "--parent",
                 &parent_id,
-                "--child",
                 &child_id,
             ])
             .assert()
@@ -3572,22 +3594,89 @@ mod relation_tests {
     }
 
     #[test]
-    fn test_relation_add_requires_both_flags() {
+    fn test_relation_add_requires_at_least_one_child() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
         let (parent_id, _) = setup_two_cards(&file);
 
-        // Missing --child
+        // Parent only; no child argument supplied.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &parent_id])
+            .assert()
+            .failure();
+    }
+
+    /// Multi-child support: a single `relation add P C1 C2 C3` invocation
+    /// must create every parent->child edge. Without this the user has
+    /// to script a per-child loop themselves.
+    #[test]
+    fn test_relation_add_with_multiple_children_creates_all_edges() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
         kanban()
             .args([
                 file.to_str().unwrap(),
                 "relation",
                 "add",
-                "--parent",
                 &parent_id,
+                &c1,
+                &c2,
             ])
             .assert()
-            .failure()
-            .stderr(predicate::str::contains("--child"));
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        let data = json["data"].as_array().unwrap();
+        assert_eq!(data.len(), 2, "both children should be attached");
+    }
+
+    /// Multi-child remove mirrors the add path.
+    #[test]
+    fn test_relation_remove_with_multiple_children_clears_all_edges() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &c1,
+                &c2,
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "remove",
+                &parent_id,
+                &c1,
+                &c2,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"].as_array().unwrap().len(), 0);
     }
 }
