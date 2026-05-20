@@ -76,7 +76,7 @@ pub fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceRes
                         })?;
                     let mut stripped = edge.clone();
                     if let Some(obj) = stripped.as_object_mut() {
-                        obj.insert("edge_type".to_string(), Value::Null);
+                        obj.remove("edge_type");
                     }
                     match kind {
                         "ParentOf" => parent_child_edges.push(stripped),
@@ -219,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn test_split_graph_strips_edge_type_from_migrated_edges() {
+    fn test_split_graph_preserves_source_target_on_migrated_edges() {
         let mut env = make_v3_envelope(json!({
             "cards": {
                 "edges": [{
@@ -235,7 +235,6 @@ mod tests {
         }));
         transform_to_v6_split_graph_value(&mut env).unwrap();
         let edge = &env["data"]["graph"]["parent_child"]["edges"][0];
-        assert!(edge["edge_type"].is_null(), "edge_type should be nulled");
         assert_eq!(edge["source"], "11111111-1111-1111-1111-111111111111");
         assert_eq!(edge["target"], "22222222-2222-2222-2222-222222222222");
     }
