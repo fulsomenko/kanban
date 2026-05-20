@@ -1,8 +1,9 @@
 use kanban_core::AppConfig;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardSummary, CardUpdate,
+    Column, ColumnUpdate, CreateCardOptions, GraphOperations, KanbanOperations, Sprint,
+    SprintUpdate,
 };
 use kanban_service::{KanbanContext, StoreManager};
 use uuid::Uuid;
@@ -255,4 +256,20 @@ impl KanbanOperations for CliContext {
     }
 }
 
-kanban_domain::delegate_graph_ops_to_inner!(CliContext);
+impl GraphOperations for CliContext {
+    fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
+        self.inner.add_card_edge(from, to, kind)
+    }
+
+    fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
+        self.inner.remove_card_edge(from, to, kind)
+    }
+
+    fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_card_edges_from(node, kind)
+    }
+
+    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_card_edges_to(node, kind)
+    }
+}

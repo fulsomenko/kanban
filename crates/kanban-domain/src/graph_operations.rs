@@ -78,64 +78,6 @@ pub trait GraphOperations {
     }
 }
 
-/// Delegate `GraphOperations` to an `inner` field on the wrapping type.
-///
-/// Eliminates the byte-identical forwarding impl that wrapper context
-/// types (`CliContext`, `McpContext`) would otherwise hand-write. The
-/// wrapping type must own a field named `inner` whose type already
-/// implements `GraphOperations` (`KanbanContext` in practice).
-///
-/// Wrappers that need to override behaviour on the mutating methods
-/// (e.g. `TuiContext` runs each mutation through a save-coordinator
-/// hook via `with_flush`) write the impl by hand instead of using
-/// this macro — the macro exists precisely to absorb the no-overhead
-/// pass-through case, not to be a one-size-fits-all delegation
-/// primitive.
-///
-/// # Usage
-///
-/// ```ignore
-/// use kanban_domain::delegate_graph_ops_to_inner;
-/// delegate_graph_ops_to_inner!(CliContext);
-/// ```
-#[macro_export]
-macro_rules! delegate_graph_ops_to_inner {
-    ($wrapper:ty) => {
-        impl $crate::GraphOperations for $wrapper {
-            fn add_card_edge(
-                &mut self,
-                from: ::uuid::Uuid,
-                to: ::uuid::Uuid,
-                kind: $crate::CardEdgeType,
-            ) -> $crate::KanbanResult<()> {
-                self.inner.add_card_edge(from, to, kind)
-            }
-            fn remove_card_edge(
-                &mut self,
-                from: ::uuid::Uuid,
-                to: ::uuid::Uuid,
-                kind: $crate::CardEdgeType,
-            ) -> $crate::KanbanResult<()> {
-                self.inner.remove_card_edge(from, to, kind)
-            }
-            fn list_card_edges_from(
-                &self,
-                node: ::uuid::Uuid,
-                kind: $crate::CardEdgeType,
-            ) -> $crate::KanbanResult<Vec<::uuid::Uuid>> {
-                self.inner.list_card_edges_from(node, kind)
-            }
-            fn list_card_edges_to(
-                &self,
-                node: ::uuid::Uuid,
-                kind: $crate::CardEdgeType,
-            ) -> $crate::KanbanResult<Vec<::uuid::Uuid>> {
-                self.inner.list_card_edges_to(node, kind)
-            }
-        }
-    };
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
