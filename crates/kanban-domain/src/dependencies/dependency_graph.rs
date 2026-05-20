@@ -1,4 +1,4 @@
-use kanban_core::{DagGraph, Graph, GraphError, SubGraph, UndirectedGraph};
+use kanban_core::{DagGraph, Directed, Graph, GraphError, SubGraph, Undirected, UndirectedGraph};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

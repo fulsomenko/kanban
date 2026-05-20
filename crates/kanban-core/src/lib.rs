@@ -15,8 +15,8 @@ pub use config::{
 };
 pub use error::{CoreError, CoreResult};
 pub use graph::{
-    DagGraph, Edge, EdgeDirection, EdgeStore, Graph, GraphError, GraphNode, SubGraph,
-    UndirectedGraph,
+    DagGraph, Directed, Edge, EdgeDirection, EdgeStore, Graph, GraphError, GraphNode, SubGraph,
+    Undirected, UndirectedGraph,
 };
 pub use input::InputState;
 pub use logging::{LogEntry, Loggable};

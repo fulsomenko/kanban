@@ -11,12 +11,14 @@ pub trait GraphNode {
     fn node_id(&self) -> Uuid;
 }
 
-/// Common interface for graph data structures.
+/// Minimal contract every graph data structure satisfies.
 ///
-/// Implementors decide what `add_edge` enforces (acyclicity for DAGs,
-/// no constraint beyond self-reference for undirected graphs). For
-/// undirected graphs `outgoing` and `incoming` return the same neighbour
-/// set; for directed graphs they return distinct sets.
+/// Direction-agnostic: only methods that make sense for both directed
+/// and undirected graphs live here. Directional access (`outgoing` /
+/// `incoming`) lives on [`Directed`]; undirected neighbour access lives
+/// on [`Undirected`]. A type that needs both must pick the right
+/// subtype — there is no way to ask an [`Undirected`] graph for
+/// directed semantics and silently get a wrong answer.
 ///
 /// Object-safe with an explicit `NodeId` binding, e.g.
 /// `&dyn Graph<NodeId = Uuid>`.
@@ -33,23 +35,39 @@ pub trait Graph {
 
     /// True iff an edge `from -> to` is present.
     fn contains_edge(&self, from: Self::NodeId, to: Self::NodeId) -> bool;
+}
 
-    /// Direct successors of `node`.
+/// Directed-graph vocabulary: distinct outgoing and incoming neighbour
+/// sets. Implementations preserve edge direction; calling
+/// `outgoing(node)` returns successors, `incoming(node)` returns
+/// predecessors.
+///
+/// Only types that genuinely encode direction implement this. An
+/// [`Undirected`] graph cannot accidentally satisfy this trait by
+/// returning the same set for both methods.
+pub trait Directed: Graph {
     fn outgoing(&self, node: Self::NodeId) -> Vec<Self::NodeId>;
-
-    /// Direct predecessors of `node`. For undirected graphs this returns
-    /// the same set as `outgoing`.
     fn incoming(&self, node: Self::NodeId) -> Vec<Self::NodeId>;
 }
 
-/// Soft-delete and aggregate operations that every node-keyed graph
+/// Undirected-graph vocabulary: a single neighbour set per node.
+/// Calling `neighbors(node)` returns every node connected to `node` by
+/// any edge, ignoring orientation. Implementations that genuinely lack
+/// edge direction expose only this surface — directed callers must
+/// require [`Directed`] explicitly.
+pub trait Undirected: Graph {
+    fn neighbors(&self, node: Self::NodeId) -> Vec<Self::NodeId>;
+}
+
+/// Soft-delete and aggregate operations every node-keyed graph
 /// container in this workspace supports, on top of the basic [`Graph`]
 /// edge surface.
 ///
-/// `SubGraph: Graph<NodeId = Uuid>` so a `&dyn SubGraph` automatically
-/// provides the directed-graph vocabulary too. Both [`super::DagGraph`]
-/// and [`super::UndirectedGraph`] implement this — composite types
-/// (e.g. `kanban_domain::DependencyGraph`) can iterate their sub-graphs
+/// `SubGraph: Graph<NodeId = Uuid>` so a `&dyn SubGraph` lets callers
+/// add/remove edges and inspect existence without committing to either
+/// directed or undirected semantics. Both [`super::DagGraph`] and
+/// [`super::UndirectedGraph`] implement this — composite types (e.g.
+/// `kanban_domain::DependencyGraph`) iterate their sub-graphs
 /// uniformly without per-field hard-coding.
 pub trait SubGraph: Graph<NodeId = Uuid> {
     /// Archive every edge involving `node` (soft delete).
@@ -73,6 +91,16 @@ mod tests {
     #[test]
     fn test_graph_trait_is_object_safe_for_uuid_nodes() {
         fn _accepts_dyn(_: &dyn Graph<NodeId = Uuid>) {}
+    }
+
+    #[test]
+    fn test_directed_trait_is_object_safe() {
+        fn _accepts_dyn(_: &dyn Directed<NodeId = Uuid>) {}
+    }
+
+    #[test]
+    fn test_undirected_trait_is_object_safe() {
+        fn _accepts_dyn(_: &dyn Undirected<NodeId = Uuid>) {}
     }
 
     #[test]

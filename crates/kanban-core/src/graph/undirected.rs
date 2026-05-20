@@ -4,7 +4,7 @@ use uuid::Uuid;
 use super::core::EdgeStore;
 use super::edge::{Edge, EdgeDirection};
 use super::error::GraphError;
-use super::traits::{Graph, SubGraph};
+use super::traits::{Graph, SubGraph, Undirected};
 
 /// Undirected graph keyed by `Uuid` node identifiers.
 ///
@@ -57,19 +57,6 @@ impl UndirectedGraph {
     pub fn insert_raw_edge(&mut self, edge: Edge<()>) {
         self.store.add_edge(edge);
     }
-
-    /// Neighbours of `node` from any active edge (either endpoint).
-    pub fn neighbors(&self, node: Uuid) -> Vec<Uuid> {
-        let mut out = Vec::new();
-        for edge in self.store.active_edges() {
-            if edge.source == node {
-                out.push(edge.target);
-            } else if edge.target == node {
-                out.push(edge.source);
-            }
-        }
-        out
-    }
 }
 
 impl SubGraph for UndirectedGraph {
@@ -119,13 +106,23 @@ impl Graph for UndirectedGraph {
             .iter()
             .any(|e| e.connects(from, to))
     }
+}
 
-    fn outgoing(&self, node: Uuid) -> Vec<Uuid> {
-        self.neighbors(node)
-    }
-
-    fn incoming(&self, node: Uuid) -> Vec<Uuid> {
-        self.neighbors(node)
+impl Undirected for UndirectedGraph {
+    /// Neighbours of `node` from any active edge (either endpoint).
+    /// The `Undirected` trait is the only access path — callers must
+    /// bring it into scope. Choosing this over an inherent method
+    /// makes the trait load-bearing rather than decorative.
+    fn neighbors(&self, node: Uuid) -> Vec<Uuid> {
+        let mut out = Vec::new();
+        for edge in self.store.active_edges() {
+            if edge.source == node {
+                out.push(edge.target);
+            } else if edge.target == node {
+                out.push(edge.source);
+            }
+        }
+        out
     }
 }
 
@@ -148,10 +145,11 @@ mod tests {
         let (a, b, _) = ids();
         let mut g = UndirectedGraph::new();
         g.add_edge(a, b).unwrap();
-        assert_eq!(g.outgoing(a), vec![b]);
-        assert_eq!(g.outgoing(b), vec![a]);
-        assert_eq!(g.incoming(a), vec![b]);
-        assert_eq!(g.incoming(b), vec![a]);
+        // Undirected vocabulary: both endpoints see the other as a
+        // neighbour. There is no outgoing/incoming distinction to ask
+        // for — the type system enforces this.
+        assert_eq!(g.neighbors(a), vec![b]);
+        assert_eq!(g.neighbors(b), vec![a]);
     }
 
     #[test]

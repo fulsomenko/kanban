@@ -5,7 +5,7 @@ use super::algorithms::would_create_cycle;
 use super::core::EdgeStore;
 use super::edge::{Edge, EdgeDirection};
 use super::error::GraphError;
-use super::traits::{Graph, SubGraph};
+use super::traits::{Directed, Graph, SubGraph};
 
 /// Directed acyclic graph keyed by `Uuid` node identifiers.
 ///
@@ -161,7 +161,9 @@ impl Graph for DagGraph {
             .iter()
             .any(|e| e.target == to)
     }
+}
 
+impl Directed for DagGraph {
     fn outgoing(&self, node: Uuid) -> Vec<Uuid> {
         self.store
             .outgoing_active(node)
