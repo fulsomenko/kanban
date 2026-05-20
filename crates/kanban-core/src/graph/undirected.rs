@@ -9,8 +9,10 @@ use super::traits::{Graph, SubGraph, Undirected};
 /// Undirected graph keyed by `Uuid` node identifiers.
 ///
 /// Rejects self-references; cycles are permitted (the directed concept
-/// does not apply). `outgoing` and `incoming` return the same neighbour
-/// set. Wraps an [`EdgeStore`] for archive parity with [`super::DagGraph`].
+/// does not apply). Implements [`Undirected`] exclusively — there is no
+/// `outgoing` / `incoming` distinction to ask for, and the type system
+/// will reject any caller that tries. Wraps an [`EdgeStore`] for archive
+/// parity with [`super::DagGraph`].
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct UndirectedGraph {
     #[serde(flatten)]
