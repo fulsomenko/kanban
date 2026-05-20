@@ -1701,4 +1701,49 @@ mod tests {
         let err = kanban_err_to_mcp(KanbanError::Io(io_err));
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
     }
+
+    // resolve_summaries: graph-vs-store divergence
+
+    /// `resolve_summaries` silently filters ids whose card no longer
+    /// exists in the store. This documents the behaviour: if the
+    /// graph references a dangling id (e.g. a cascade race or a
+    /// hand-edited file), the list_card_* tools return fewer entries
+    /// than the graph reports rather than erroring. The caller may
+    /// see N parents on a child while only M < N appear in the
+    /// rendered summaries.
+    #[tokio::test]
+    async fn resolve_summaries_silently_drops_ids_not_present_in_store() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = StoreManager::new(kanban_service::default_registry());
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx.create_board("Test".into(), Some("TST".into())).unwrap();
+        let column = ctx.create_column(board.id, "TODO".into(), None).unwrap();
+        let card = ctx
+            .create_card(
+                board.id,
+                column.id,
+                "Real".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+
+        let ghost = Uuid::new_v4();
+        let summaries = resolve_summaries(&ctx, vec![card.id, ghost]);
+
+        assert_eq!(
+            summaries.len(),
+            1,
+            "ghost id with no backing card should be silently filtered; got {summaries:?}"
+        );
+        assert_eq!(summaries[0].id, card.id);
+    }
 }
