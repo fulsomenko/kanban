@@ -13,14 +13,22 @@ kanban relation remove --parent KAN-5 --child KAN-7
 
 Under the hood this lands several structural refactors that the new surfaces depend on:
 
-- **Graph primitives in `kanban-core`.** A small, direction-agnostic `Graph` trait (`add_edge`, `remove_edge`, `contains_edge`) is paired with two subtype traits — `Directed` (`outgoing`, `incoming`) and `Undirected` (`neighbors`) — plus a `GraphError` enum (`Cycle`, `SelfReference`, `EdgeNotFound`) and a `SubGraph: Graph<NodeId=Uuid>` trait for the soft-delete cascade surface (`archive_node`, `unarchive_node`, `remove_node`, `edge_count`, `active_edge_count`, `has_edge`). Two concrete implementations: `DagGraph` implements `Directed + SubGraph` (cycle-rejecting), `UndirectedGraph` implements `Undirected + SubGraph` (cycle-permitting). Both wrap an `EdgeStore<()>` (renamed from the previous `Graph<E>` struct) to keep archive semantics. Direction-specific vocabulary lives only on the matching subtype trait — there is no way to ask an `UndirectedGraph` for directed semantics, the type system refuses.
+- **Graph primitives in `kanban-core`.** A small trait taxonomy where each trait has one cohesive purpose:
+  - `Graph` — minimal direction-agnostic edge contract: `add_edge`, `remove_edge`, `contains_edge`.
+  - `Directed: Graph` — directed traversal vocabulary: `outgoing`, `incoming`.
+  - `Undirected: Graph` — undirected traversal vocabulary: `neighbors`.
+  - `Cascadable: Graph<NodeId=Uuid>` — node-level cascade mutations: `archive_node`, `unarchive_node`, `remove_node`.
+  - `EdgeStats: Graph<NodeId=Uuid>` — read-only edge aggregates and existence: `edge_count`, `active_edge_count`, `has_edge`.
+  - `GraphError` enum: `Cycle`, `SelfReference`, `EdgeNotFound`.
+
+  Two concrete implementations: `DagGraph` implements `Directed + Cascadable + EdgeStats` (cycle-rejecting), `UndirectedGraph` implements `Undirected + Cascadable + EdgeStats` (cycle-permitting). Both wrap an `EdgeStore<()>` (renamed from the previous `Graph<E>` struct) to keep archive semantics. Direction-specific vocabulary lives only on the matching subtype trait — there is no way to ask an `UndirectedGraph` for directed semantics, the type system refuses. Cascadable and EdgeStats are deliberately separate: a read-only consumer of edge counts no longer carries mutation authority via its trait choice.
 
 - **Split `DependencyGraph` into three sub-graphs.** Replaces the single edge-type-tagged `CardDependencyGraph` and the `CardGraphExt` god-trait with three structurally honest sub-graphs:
   - `parent_child: DagGraph` (cycle + self-ref rejected)
   - `blocks:       DagGraph` (cycle + self-ref rejected)
   - `relates:      UndirectedGraph` (self-ref rejected, cycles permitted)
 
-  Convenience methods (`set_parent`, `add_blocks`, `add_relates_to`, `parents`, `children`, `blockers`, `related`, `ancestors`, `descendants`, `can_start`, ...) live on `DependencyGraph` and delegate. Cross-cutting cascades (`archive_node`, `unarchive_node`, `remove_node`, `edge_count`, `has_edge`, `try_remove_edge`) iterate over `[&mut dyn SubGraph; 3]` via a private helper rather than hand-listing fields — adding a fourth sub-graph only updates the helper, not seven cascade methods. The old `blocked_by` (which paradoxically returned outgoing edges) is renamed to `blocks_targets` on the public surface.
+  Convenience methods (`set_parent`, `add_blocks`, `add_relates_to`, `parents`, `children`, `blockers`, `related`, `ancestors`, `descendants`, `can_start`, ...) live on `DependencyGraph` and delegate. Cross-cutting cascades split by capability: node-level mutations (`archive_node`, `unarchive_node`, `remove_node`, `try_remove_edge`) iterate over `[&mut dyn Cascadable; 3]`; edge-level aggregates (`edge_count`, `active_edge_count`, `has_edge`) iterate over `[&dyn EdgeStats; 3]`. Both come from private helpers rather than hand-listing fields — adding a fourth component graph only updates the helpers, not every cascade method. The old `blocked_by` (which paradoxically returned outgoing edges) is renamed to `blocks_targets` on the public surface.
 
 - **Persistence routes through `DependencyGraph`.** Two new public methods on `DependencyGraph` — `insert_raw_edge(kind, edge)` and `edges_by_kind() -> impl Iterator<Item = (CardEdgeType, &Edge<()>)>` — give serializers a layer-clean seam. Persistence backends (SQLite read/write, command capture-inverse) no longer reach into `graph.parent_child` / `graph.blocks` / `graph.relates` directly.
 
