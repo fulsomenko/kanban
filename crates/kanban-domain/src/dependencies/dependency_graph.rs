@@ -1,5 +1,5 @@
 use kanban_core::{
-    Cascadable, DagGraph, Directed, Edge, EdgeStats, Graph, GraphError, Undirected, UndirectedGraph,
+    Cascadable, DagGraph, Directed, Edge, EdgeSet, Graph, GraphError, Undirected, UndirectedGraph,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -47,11 +47,11 @@ impl DependencyGraph {
         [&mut self.parent_child, &mut self.blocks, &mut self.relates]
     }
 
-    /// Borrow each component graph as `&dyn EdgeStats` for read-only
-    /// edge-level queries (counts, existence). Symmetric with
+    /// Borrow each component graph as `&dyn EdgeSet` for read-only
+    /// edge-level queries (size, membership). Symmetric with
     /// `cascadable_parts_mut`; lives separately because the read
     /// surface has no business carrying mutation authority.
-    fn edge_stats_parts(&self) -> [&dyn EdgeStats; 3] {
+    fn edge_sets(&self) -> [&dyn EdgeSet; 3] {
         [&self.parent_child, &self.blocks, &self.relates]
     }
 
@@ -78,19 +78,21 @@ impl DependencyGraph {
         }
     }
 
-    // --- Cross-cutting edge aggregates (EdgeStats surface) ---
+    // --- Cross-cutting edge aggregates (EdgeSet surface) ---
 
     /// Total edge count across all three sub-graphs (active + archived).
-    pub fn edge_count(&self) -> usize {
-        self.edge_stats_parts().iter().map(|g| g.edge_count()).sum()
+    pub fn len(&self) -> usize {
+        self.edge_sets().iter().map(|g| g.len()).sum()
+    }
+
+    /// True iff every sub-graph is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Active edge count across all three sub-graphs.
-    pub fn active_edge_count(&self) -> usize {
-        self.edge_stats_parts()
-            .iter()
-            .map(|g| g.active_edge_count())
-            .sum()
+    pub fn active_len(&self) -> usize {
+        self.edge_sets().iter().map(|g| g.active_len()).sum()
     }
 
     // --- Parent / child ---
@@ -181,8 +183,8 @@ impl DependencyGraph {
 
     /// True iff any edge between `a` and `b` exists in any sub-graph
     /// (active or archived). Cross-cutting check across all three.
-    pub fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
-        self.edge_stats_parts().iter().any(|g| g.has_edge(a, b))
+    pub fn contains(&self, a: Uuid, b: Uuid) -> bool {
+        self.edge_sets().iter().any(|g| g.contains(a, b))
     }
 
     /// Tolerant cross-cutting edge removal: removes the `a -> b` edge
@@ -274,7 +276,7 @@ mod tests {
     #[test]
     fn test_dependency_graph_creation() {
         let graph = DependencyGraph::new();
-        assert_eq!(graph.edge_count(), 0);
+        assert_eq!(graph.len(), 0);
     }
 
     #[test]
@@ -282,7 +284,7 @@ mod tests {
         let graph = DependencyGraph::new();
         let json = serde_json::to_string(&graph).unwrap();
         let deserialized: DependencyGraph = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.edge_count(), 0);
+        assert_eq!(deserialized.len(), 0);
     }
 
     // --- Parent/child convenience ---
@@ -444,8 +446,8 @@ mod tests {
         assert!(g.children(a).is_empty());
         assert!(g.blocks_targets(a).is_empty());
         assert!(g.related(a).is_empty());
-        assert_eq!(g.edge_count(), 3);
-        assert_eq!(g.active_edge_count(), 0);
+        assert_eq!(g.len(), 3);
+        assert_eq!(g.active_len(), 0);
     }
 
     #[test]
@@ -456,7 +458,7 @@ mod tests {
         g.add_blocks(a, c).unwrap();
         g.add_relates_to(a, c).unwrap();
         g.remove_node(a);
-        assert_eq!(g.edge_count(), 0);
+        assert_eq!(g.len(), 0);
     }
 
     // --- Cross-cutting tolerant removal ---

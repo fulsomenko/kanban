@@ -62,7 +62,7 @@ pub trait Undirected: Graph {
 /// Node-keyed cascade operations: archive, unarchive, and hard-remove
 /// every edge involving a given node.
 ///
-/// Strictly mutating. Distinct from [`EdgeStats`] (which is read-only)
+/// Strictly mutating. Distinct from [`EdgeSet`] (which is read-only)
 /// because the two surfaces are independent — a caller that just
 /// counts edges doesn't need cascade authority, and a caller doing
 /// soft-deletes doesn't need to ask for counts. Splitting them keeps
@@ -76,19 +76,28 @@ pub trait Cascadable: Graph<NodeId = Uuid> {
     fn remove_node(&mut self, node: Uuid);
 }
 
-/// Edge-level aggregate and existence queries: counts and
-/// presence-checks across both active and archived edges.
+/// Set-like read access over a graph's edges: size, active-only size,
+/// and membership.
 ///
-/// Strictly read-only. Lives separately from [`Cascadable`] so a
-/// generic consumer can require only the surface it actually uses —
-/// no implicit mutation authority leaking into inspection code.
-pub trait EdgeStats: Graph<NodeId = Uuid> {
-    /// Total edges (active + archived).
-    fn edge_count(&self) -> usize;
-    /// Active edges only.
-    fn active_edge_count(&self) -> usize;
-    /// True iff any (active or archived) edge between `a` and `b` exists.
-    fn has_edge(&self, a: Uuid, b: Uuid) -> bool;
+/// Aligns with stdlib `HashSet` / `BTreeSet` vocabulary — `len`,
+/// `contains` — so a reader who has seen those once knows the shape
+/// of this trait immediately. Strictly read-only; lives separately
+/// from [`Cascadable`] so a generic consumer can require only the
+/// surface it actually uses, with no implicit mutation authority
+/// leaking into inspection code.
+pub trait EdgeSet: Graph<NodeId = Uuid> {
+    /// Total edge count (active + archived).
+    fn len(&self) -> usize;
+    /// Active edge count only.
+    fn active_len(&self) -> usize;
+    /// True iff this edge set is empty (no edges at all, archived or
+    /// active).
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    /// True iff any (active or archived) edge between `a` and `b`
+    /// exists in this set.
+    fn contains(&self, a: Uuid, b: Uuid) -> bool;
 }
 
 #[cfg(test)]
@@ -117,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_stats_trait_is_object_safe() {
-        fn _accepts_dyn(_: &dyn EdgeStats) {}
+    fn test_edge_set_trait_is_object_safe() {
+        fn _accepts_dyn(_: &dyn EdgeSet) {}
     }
 }

@@ -375,7 +375,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
     assert_eq!(archived[0].original_column_id, col_todo.id);
 
     let graph = loaded.graph()?;
-    assert_eq!(graph.edge_count(), 3, "expected 3 edges total");
+    assert_eq!(graph.len(), 3, "expected 3 edges total");
     Ok(())
 }
 

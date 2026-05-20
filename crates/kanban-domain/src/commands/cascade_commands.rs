@@ -318,7 +318,7 @@ mod tests {
             graph.add_blocks(card_b, card_c).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
-        assert_eq!(tc.store.get_graph().unwrap().edge_count(), 2);
+        assert_eq!(tc.store.get_graph().unwrap().len(), 2);
 
         let context = tc.as_command_context();
         let cmd = DeleteCardEdges {
@@ -328,7 +328,7 @@ mod tests {
 
         let graph = tc.store.get_graph().unwrap();
         assert_eq!(
-            graph.edge_count(),
+            graph.len(),
             0,
             "edges incident to card_a or card_b should be removed"
         );
@@ -349,7 +349,7 @@ mod tests {
         let cmd = DeleteCardEdges { ids: vec![] };
         cmd.execute(&context).unwrap();
 
-        assert_eq!(tc.store.get_graph().unwrap().edge_count(), 1);
+        assert_eq!(tc.store.get_graph().unwrap().len(), 1);
     }
 
     #[test]

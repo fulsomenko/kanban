@@ -10,5 +10,5 @@ pub use core::EdgeStore;
 pub use dag::DagGraph;
 pub use edge::{Edge, EdgeDirection};
 pub use error::GraphError;
-pub use traits::{Cascadable, Directed, EdgeStats, Graph, GraphNode, Undirected};
+pub use traits::{Cascadable, Directed, EdgeSet, Graph, GraphNode, Undirected};
 pub use undirected::UndirectedGraph;

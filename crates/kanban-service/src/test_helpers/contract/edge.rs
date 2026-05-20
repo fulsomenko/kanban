@@ -272,7 +272,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     ctx.save().await.unwrap();
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
-    assert_eq!(ctx.graph()?.edge_count(), 3);
+    assert_eq!(ctx.graph()?.len(), 3);
     Ok(())
 }
 
@@ -287,6 +287,6 @@ pub async fn test_empty_graph_roundtrip(factory: &BackendFactory) -> KanbanResul
     ctx.save().await.unwrap();
 
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
-    assert_eq!(ctx.graph()?.edge_count(), 0);
+    assert_eq!(ctx.graph()?.len(), 0);
     Ok(())
 }

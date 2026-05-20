@@ -5,7 +5,7 @@ use super::algorithms::would_create_cycle;
 use super::core::EdgeStore;
 use super::edge::{Edge, EdgeDirection};
 use super::error::GraphError;
-use super::traits::{Cascadable, Directed, EdgeStats, Graph};
+use super::traits::{Cascadable, Directed, EdgeSet, Graph};
 
 /// Directed acyclic graph keyed by `Uuid` node identifiers.
 ///
@@ -38,27 +38,12 @@ impl DagGraph {
         self.store.remove_node(node);
     }
 
-    /// Count of edges including archived.
-    pub fn edge_count(&self) -> usize {
-        self.store.edge_count()
-    }
-
-    /// Count of active edges.
-    pub fn active_edge_count(&self) -> usize {
-        self.store.active_edge_count()
-    }
-
     /// Borrow the raw underlying edge list (active + archived).
+    /// Used by persistence layers that need to serialize the storage
+    /// shape directly. For size and membership queries, use the
+    /// [`EdgeSet`] trait surface instead.
     pub fn edges(&self) -> &[Edge<()>] {
         self.store.edges()
-    }
-
-    /// True if a (possibly archived) edge `source -> target` exists.
-    pub fn has_edge(&self, source: Uuid, target: Uuid) -> bool {
-        self.store
-            .edges()
-            .iter()
-            .any(|e| e.connects(source, target))
     }
 
     /// Insert a raw edge without DAG validation. Use only for
@@ -122,15 +107,15 @@ impl Cascadable for DagGraph {
     }
 }
 
-impl EdgeStats for DagGraph {
-    fn edge_count(&self) -> usize {
-        DagGraph::edge_count(self)
+impl EdgeSet for DagGraph {
+    fn len(&self) -> usize {
+        self.store.edge_count()
     }
-    fn active_edge_count(&self) -> usize {
-        DagGraph::active_edge_count(self)
+    fn active_len(&self) -> usize {
+        self.store.active_edge_count()
     }
-    fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
-        DagGraph::has_edge(self, a, b)
+    fn contains(&self, a: Uuid, b: Uuid) -> bool {
+        self.store.edges().iter().any(|e| e.connects(a, b))
     }
 }
 
@@ -195,8 +180,8 @@ mod tests {
     #[test]
     fn test_new_dag_is_empty() {
         let g = DagGraph::new();
-        assert_eq!(g.edge_count(), 0);
-        assert_eq!(g.active_edge_count(), 0);
+        assert_eq!(g.len(), 0);
+        assert_eq!(g.active_len(), 0);
     }
 
     #[test]
@@ -266,8 +251,8 @@ mod tests {
         g.add_edge(a, b).unwrap();
         g.archive_node(b);
         assert!(g.outgoing(a).is_empty());
-        assert_eq!(g.edge_count(), 1);
-        assert_eq!(g.active_edge_count(), 0);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g.active_len(), 0);
     }
 
     #[test]
@@ -287,7 +272,7 @@ mod tests {
         g.add_edge(a, b).unwrap();
         g.add_edge(b, c).unwrap();
         g.remove_node(b);
-        assert_eq!(g.edge_count(), 0);
+        assert_eq!(g.len(), 0);
     }
 
     #[test]

@@ -90,12 +90,12 @@ macro_rules! cascade_tests {
                 let mut graph = backend.get_graph().unwrap();
                 graph.add_blocks(card_a_id, card_b_id).unwrap();
                 backend.set_graph(graph).unwrap();
-                assert_eq!(backend.get_graph().unwrap().edge_count(), 1);
+                assert_eq!(backend.get_graph().unwrap().len(), 1);
 
                 ctx.delete_board(board_id).unwrap();
 
                 assert_eq!(
-                    backend.get_graph().unwrap().edge_count(),
+                    backend.get_graph().unwrap().len(),
                     0,
                     "service delete_board must clean dependency-graph edges for all deleted cards"
                 );

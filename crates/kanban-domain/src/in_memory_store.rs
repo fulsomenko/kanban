@@ -1144,7 +1144,7 @@ mod tests {
 
         let graph = store.get_graph().unwrap();
         assert_eq!(
-            graph.edge_count(),
+            graph.len(),
             1,
             "modify_graph should not apply partial changes on error"
         );

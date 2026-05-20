@@ -4,7 +4,7 @@ use uuid::Uuid;
 use super::core::EdgeStore;
 use super::edge::{Edge, EdgeDirection};
 use super::error::GraphError;
-use super::traits::{Cascadable, EdgeStats, Graph, Undirected};
+use super::traits::{Cascadable, EdgeSet, Graph, Undirected};
 
 /// Undirected graph keyed by `Uuid` node identifiers.
 ///
@@ -36,22 +36,12 @@ impl UndirectedGraph {
         self.store.remove_node(node);
     }
 
-    pub fn edge_count(&self) -> usize {
-        self.store.edge_count()
-    }
-
-    pub fn active_edge_count(&self) -> usize {
-        self.store.active_edge_count()
-    }
-
     /// Borrow the raw underlying edge list (active + archived).
+    /// Used by persistence layers that need to serialize the storage
+    /// shape directly. For size and membership queries, use the
+    /// [`EdgeSet`] trait surface instead.
     pub fn edges(&self) -> &[Edge<()>] {
         self.store.edges()
-    }
-
-    /// True if a (possibly archived) edge between `a` and `b` exists.
-    pub fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
-        self.store.edges().iter().any(|e| e.connects(a, b))
     }
 
     /// Insert a raw edge without validation. Use only for migrations
@@ -73,15 +63,15 @@ impl Cascadable for UndirectedGraph {
     }
 }
 
-impl EdgeStats for UndirectedGraph {
-    fn edge_count(&self) -> usize {
-        UndirectedGraph::edge_count(self)
+impl EdgeSet for UndirectedGraph {
+    fn len(&self) -> usize {
+        self.store.edge_count()
     }
-    fn active_edge_count(&self) -> usize {
-        UndirectedGraph::active_edge_count(self)
+    fn active_len(&self) -> usize {
+        self.store.active_edge_count()
     }
-    fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
-        UndirectedGraph::has_edge(self, a, b)
+    fn contains(&self, a: Uuid, b: Uuid) -> bool {
+        self.store.edges().iter().any(|e| e.connects(a, b))
     }
 }
 
@@ -142,7 +132,7 @@ mod tests {
     #[test]
     fn test_new_undirected_is_empty() {
         let g = UndirectedGraph::new();
-        assert_eq!(g.edge_count(), 0);
+        assert_eq!(g.len(), 0);
     }
 
     #[test]
@@ -214,8 +204,8 @@ mod tests {
         g.add_edge(a, b).unwrap();
         g.archive_node(a);
         assert!(g.neighbors(b).is_empty());
-        assert_eq!(g.edge_count(), 1);
-        assert_eq!(g.active_edge_count(), 0);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g.active_len(), 0);
     }
 
     #[test]
@@ -235,6 +225,6 @@ mod tests {
         g.add_edge(a, b).unwrap();
         g.add_edge(b, c).unwrap();
         g.remove_node(b);
-        assert_eq!(g.edge_count(), 0);
+        assert_eq!(g.len(), 0);
     }
 }
