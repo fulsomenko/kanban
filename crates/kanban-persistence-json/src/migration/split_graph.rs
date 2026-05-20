@@ -265,6 +265,47 @@ mod tests {
         assert_eq!(g["relates"]["edges"].as_array().unwrap().len(), 0);
     }
 
+    #[test]
+    fn test_split_graph_unknown_edge_type_returns_error() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "edge_type": "MysteryKind",
+                    "direction": "Directed",
+                    "weight": null,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": null
+                }]
+            }
+        }));
+        let err = transform_to_v6_split_graph_value(&mut env).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("MysteryKind") && msg.to_lowercase().contains("unknown"),
+            "expected unknown edge_type error mentioning the offending kind, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_split_graph_missing_edge_type_field_returns_error() {
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "direction": "Directed",
+                    "weight": null,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": null
+                }]
+            }
+        }));
+        let err = transform_to_v6_split_graph_value(&mut env).unwrap_err();
+        assert!(format!("{err:?}").to_lowercase().contains("edge_type"));
+    }
+
     #[tokio::test]
     async fn test_migrate_to_v6_split_graph_file_writes_bumped_version() {
         let dir = tempdir().unwrap();
