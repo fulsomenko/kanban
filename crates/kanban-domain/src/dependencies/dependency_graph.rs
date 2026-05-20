@@ -384,6 +384,35 @@ mod tests {
         assert_eq!(g.edge_count(), 0);
     }
 
+    // --- Cross-cutting tolerant removal ---
+
+    #[test]
+    fn test_try_remove_edge_returns_true_when_edge_existed_in_any_subgraph() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.add_blocks(a, b).unwrap();
+        assert!(g.try_remove_edge(a, b), "edge existed in blocks; expected true");
+        assert!(!g.try_remove_edge(a, b), "edge already gone; expected false");
+    }
+
+    #[test]
+    fn test_try_remove_edge_returns_false_when_no_edge_exists() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        assert!(!g.try_remove_edge(a, b), "no edge present in any subgraph");
+    }
+
+    #[test]
+    fn test_try_remove_edge_removes_from_every_subgraph_holding_pair() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_parent(b, a).unwrap();
+        g.add_blocks(a, b).unwrap();
+        assert!(g.try_remove_edge(a, b));
+        assert!(g.children(a).is_empty());
+        assert!(g.blocks_targets(a).is_empty());
+    }
+
     #[test]
     fn test_parent_child_and_blocks_are_independent() {
         let (a, b, c) = ids();
