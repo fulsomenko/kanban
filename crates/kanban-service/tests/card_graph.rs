@@ -241,6 +241,206 @@ macro_rules! card_graph_tests {
                     .unwrap();
                 assert_eq!(convenience, primitive);
             }
+
+            // --- Blocks edge wiring ---
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_blocks_creates_directed_edge() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (blocker, blocked, _) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(blocker, blocked, CardEdgeType::Blocks)
+                    .unwrap();
+
+                let targets = ctx
+                    .list_card_edges_from(blocker, CardEdgeType::Blocks)
+                    .unwrap();
+                assert_eq!(targets, vec![blocked]);
+
+                let blockers = ctx
+                    .list_card_edges_to(blocked, CardEdgeType::Blocks)
+                    .unwrap();
+                assert_eq!(blockers, vec![blocker]);
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_blocks_self_reference_returns_error() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, _, _) = seed_three_cards(&ctx.backend());
+
+                let err = ctx.add_card_edge(a, a, CardEdgeType::Blocks).unwrap_err();
+                assert!(
+                    err.is_self_reference(),
+                    "expected SelfReference, got {:?}",
+                    err
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_blocks_cycle_returns_error() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, c) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
+                ctx.add_card_edge(b, c, CardEdgeType::Blocks).unwrap();
+                let err = ctx.add_card_edge(c, a, CardEdgeType::Blocks).unwrap_err();
+                assert!(
+                    err.is_cycle_detected(),
+                    "expected CycleDetected, got {:?}",
+                    err
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_card_edge_blocks_removes_edge() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
+                ctx.remove_card_edge(a, b, CardEdgeType::Blocks).unwrap();
+
+                assert!(ctx
+                    .list_card_edges_from(a, CardEdgeType::Blocks)
+                    .unwrap()
+                    .is_empty());
+                assert!(ctx
+                    .list_card_edges_to(b, CardEdgeType::Blocks)
+                    .unwrap()
+                    .is_empty());
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_card_edge_blocks_nonexistent_returns_error() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                let err = ctx
+                    .remove_card_edge(a, b, CardEdgeType::Blocks)
+                    .unwrap_err();
+                assert!(
+                    err.is_edge_not_found(),
+                    "expected EdgeNotFound, got {:?}",
+                    err
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_blocks_is_undoable_through_undo_stack() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
+                assert!(ctx.can_undo());
+                ctx.undo().unwrap();
+                assert!(ctx
+                    .list_card_edges_from(a, CardEdgeType::Blocks)
+                    .unwrap()
+                    .is_empty());
+            }
+
+            // --- RelatesTo edge wiring ---
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_relates_to_is_visible_from_both_endpoints() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+
+                // Undirected — both endpoints see the other as a neighbour
+                // via either direction accessor.
+                assert_eq!(
+                    ctx.list_card_edges_from(a, CardEdgeType::RelatesTo)
+                        .unwrap(),
+                    vec![b]
+                );
+                assert_eq!(
+                    ctx.list_card_edges_to(a, CardEdgeType::RelatesTo).unwrap(),
+                    vec![b]
+                );
+                assert_eq!(
+                    ctx.list_card_edges_from(b, CardEdgeType::RelatesTo)
+                        .unwrap(),
+                    vec![a]
+                );
+                assert_eq!(
+                    ctx.list_card_edges_to(b, CardEdgeType::RelatesTo).unwrap(),
+                    vec![a]
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_relates_to_self_reference_returns_error() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, _, _) = seed_three_cards(&ctx.backend());
+
+                let err = ctx
+                    .add_card_edge(a, a, CardEdgeType::RelatesTo)
+                    .unwrap_err();
+                assert!(
+                    err.is_self_reference(),
+                    "expected SelfReference, got {:?}",
+                    err
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_relates_to_permits_cycle() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, c) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+                ctx.add_card_edge(b, c, CardEdgeType::RelatesTo).unwrap();
+                // Cycle permitted on undirected sub-graph.
+                ctx.add_card_edge(c, a, CardEdgeType::RelatesTo).unwrap();
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_card_edge_relates_to_removes_edge() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+                ctx.remove_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+
+                assert!(ctx
+                    .list_card_edges_from(a, CardEdgeType::RelatesTo)
+                    .unwrap()
+                    .is_empty());
+                assert!(ctx
+                    .list_card_edges_from(b, CardEdgeType::RelatesTo)
+                    .unwrap()
+                    .is_empty());
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_card_edge_relates_to_nonexistent_returns_error() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                let err = ctx
+                    .remove_card_edge(a, b, CardEdgeType::RelatesTo)
+                    .unwrap_err();
+                assert!(
+                    err.is_edge_not_found(),
+                    "expected EdgeNotFound, got {:?}",
+                    err
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_relates_to_is_undoable_through_undo_stack() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+                assert!(ctx.can_undo());
+                ctx.undo().unwrap();
+                assert!(ctx
+                    .list_card_edges_from(a, CardEdgeType::RelatesTo)
+                    .unwrap()
+                    .is_empty());
+            }
         }
     };
 }
