@@ -1,9 +1,4 @@
 {
-  "version": 5,
-  "metadata": {
-    "instance_id": "a0c9b6cd-77b5-416a-b19c-e362c91414eb",
-    "saved_at": "2026-05-14T20:09:30.573233690Z"
-  },
   "data": {
     "archived_cards": [
       {
@@ -14048,13 +14043,15 @@
       }
     ],
     "graph": {
-      "cards": {
+      "blocks": {
+        "edges": []
+      },
+      "parent_child": {
         "edges": [
           {
             "archived_at": null,
             "created_at": "2026-04-27T08:34:58.455681782Z",
             "direction": "Directed",
-            "edge_type": "ParentOf",
             "source": "626f228c-2598-4a52-b022-9133e185c43f",
             "target": "c4658b76-e0dd-41a5-86c7-f84334259f6b",
             "weight": null
@@ -14063,7 +14060,6 @@
             "archived_at": null,
             "created_at": "2026-04-27T08:35:22.941374100Z",
             "direction": "Directed",
-            "edge_type": "ParentOf",
             "source": "626f228c-2598-4a52-b022-9133e185c43f",
             "target": "a06f4acc-70d9-49f4-bb1a-fdfd9281f42f",
             "weight": null
@@ -14072,7 +14068,6 @@
             "archived_at": null,
             "created_at": "2026-04-27T08:35:34.554673879Z",
             "direction": "Directed",
-            "edge_type": "ParentOf",
             "source": "626f228c-2598-4a52-b022-9133e185c43f",
             "target": "138be5cc-f008-4f58-bc15-df865947c173",
             "weight": null
@@ -14081,12 +14076,14 @@
             "archived_at": null,
             "created_at": "2026-04-27T08:35:52.967124202Z",
             "direction": "Directed",
-            "edge_type": "ParentOf",
             "source": "626f228c-2598-4a52-b022-9133e185c43f",
             "target": "200e9bcd-9654-49a0-affc-cab1866ab223",
             "weight": null
           }
         ]
+      },
+      "relates": {
+        "edges": []
       }
     },
     "sprints": [
@@ -14234,5 +14231,10 @@
         "updated_at": "2026-05-11T20:17:55.568733091Z"
       }
     ]
-  }
+  },
+  "metadata": {
+    "instance_id": "a0c9b6cd-77b5-416a-b19c-e362c91414eb",
+    "saved_at": "2026-05-14T20:09:30.573233690Z"
+  },
+  "version": 6
 }

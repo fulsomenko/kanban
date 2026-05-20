@@ -630,6 +630,98 @@ mod tests {
         );
     }
 
+    /// Regression test for KAN-504 migration round-trip bug.
+    ///
+    /// The V6 split-graph migration removes the `edge_type` key from each
+    /// migrated edge (it lives implicitly in the sub-graph the edge is
+    /// routed to). The post-migration file must still load through the
+    /// `Edge<()>` deserialiser — otherwise we produce files that can't be
+    /// loaded by the very code that wrote them. Was missed by the unit
+    /// tests on the migration's in-memory output, which never round-
+    /// tripped through `Edge::deserialize`.
+    #[tokio::test]
+    async fn test_v3_file_with_edges_round_trips_through_migration_and_load() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v3_with_edges.json");
+
+        let v3_content = json!({
+            "version": 3,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": {
+                    "cards": {
+                        "edges": [
+                            {
+                                "source": "11111111-1111-1111-1111-111111111111",
+                                "target": "22222222-2222-2222-2222-222222222222",
+                                "edge_type": "ParentOf",
+                                "direction": "Directed",
+                                "weight": null,
+                                "created_at": "2024-01-01T00:00:00Z",
+                                "archived_at": null
+                            },
+                            {
+                                "source": "33333333-3333-3333-3333-333333333333",
+                                "target": "44444444-4444-4444-4444-444444444444",
+                                "edge_type": "Blocks",
+                                "direction": "Directed",
+                                "weight": null,
+                                "created_at": "2024-01-01T00:00:00Z",
+                                "archived_at": null
+                            },
+                            {
+                                "source": "55555555-5555-5555-5555-555555555555",
+                                "target": "66666666-6666-6666-6666-666666666666",
+                                "edge_type": "RelatesTo",
+                                "direction": "Bidirectional",
+                                "weight": null,
+                                "created_at": "2024-01-01T00:00:00Z",
+                                "archived_at": null
+                            }
+                        ]
+                    }
+                }
+            }
+        });
+        tokio::fs::write(&file_path, v3_content.to_string())
+            .await
+            .unwrap();
+
+        // Trigger migration on first load.
+        let store = JsonFileStore::new(&file_path);
+        store
+            .load()
+            .await
+            .expect("first load (migration) must succeed");
+
+        // Re-open and load again — this exercises the
+        // `Edge::deserialize` path on the post-migration file shape.
+        let store2 = JsonFileStore::new(&file_path);
+        let (snapshot, _meta) = store2
+            .load()
+            .await
+            .expect("re-load of migrated file must succeed");
+
+        // Decode the snapshot bytes through the full domain stack —
+        // this is what kanban-service does at startup, and it's where
+        // the bug actually triggers because Edge<()>::deserialize
+        // requires the `edge_type` field by default.
+        use kanban_persistence::snapshot_from_json_bytes;
+        let domain_snapshot = snapshot_from_json_bytes(&snapshot.data)
+            .expect("snapshot must deserialize through the full domain stack after migration");
+        assert_eq!(domain_snapshot.graph.parent_child.edges().len(), 1);
+        assert_eq!(domain_snapshot.graph.blocks.edges().len(), 1);
+        assert_eq!(domain_snapshot.graph.relates.edges().len(), 1);
+    }
+
     #[tokio::test]
     async fn test_v3_file_loads_correctly() {
         let dir = tempdir().unwrap();
