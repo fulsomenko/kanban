@@ -63,4 +63,24 @@ mod tests {
         let mcp: McpError = err.into();
         assert!(format!("{:?}", mcp).contains("bad"));
     }
+
+    /// Pins the absence of double-hint interpolation: the rendered
+    /// `McpError.message` must contain the hint string exactly once.
+    /// A regression where Display already includes the hint AND the
+    /// conversion prepends it again would produce two occurrences and
+    /// fail this assertion.
+    #[test]
+    fn test_into_mcp_error_resolution_renders_hint_exactly_once() {
+        let hint = "no card matches 'foo'";
+        let err = KanbanMcpError::Resolution {
+            hint: hint.to_string(),
+        };
+        let mcp: McpError = err.into();
+        let occurrences = mcp.message.matches(hint).count();
+        assert_eq!(
+            occurrences, 1,
+            "hint should appear exactly once in rendered message; got {occurrences} in {:?}",
+            mcp.message
+        );
+    }
 }
