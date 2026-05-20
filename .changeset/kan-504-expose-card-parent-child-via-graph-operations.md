@@ -5,10 +5,11 @@ bump: minor
 Card parent/child relations are now reachable from the CLI and the MCP server, not only the TUI. A new top-level `kanban relation` subcommand exposes `add`, `remove`, `parents`, and `children`; four matching MCP tools (`tool_set_card_parent`, `tool_remove_card_parent`, `tool_list_card_parents`, `tool_list_card_children`) cover the same surface for LLM clients.
 
 ```
-kanban relation add --parent KAN-5 --child KAN-7   # KAN-7 is now a subtask of KAN-5
-kanban relation children KAN-5                     # list direct children
-kanban relation parents KAN-7                      # list direct parents
-kanban relation remove --parent KAN-5 --child KAN-7
+kanban relation add KAN-5 KAN-7              # KAN-7 is now a subtask of KAN-5
+kanban relation add KAN-5 KAN-7 KAN-8 KAN-9  # attach several children in one call
+kanban relation children KAN-5               # list direct children
+kanban relation parents KAN-7                # list direct parents
+kanban relation remove KAN-5 KAN-7
 ```
 
 Under the hood this lands several structural refactors that the new surfaces depend on:
@@ -28,11 +29,11 @@ Under the hood this lands several structural refactors that the new surfaces dep
   - `blocks:       DagGraph` (cycle + self-ref rejected)
   - `relates:      UndirectedGraph` (self-ref rejected, cycles permitted)
 
-  Convenience methods (`set_parent`, `add_blocks`, `add_relates_to`, `parents`, `children`, `blockers`, `related`, `ancestors`, `descendants`, `can_start`, ...) live on `DependencyGraph` and delegate. Cross-cutting cascades split by capability: node-level mutations (`archive_node`, `unarchive_node`, `remove_node`, `try_remove_edge`) iterate over `[&mut dyn Cascadable; 3]`; edge-level reads (`len`, `active_len`, `contains`) iterate over `[&dyn EdgeSet; 3]`. Both come from private helpers rather than hand-listing fields — adding a fourth component graph only updates the helpers, not every cascade method. The old `blocked_by` (which paradoxically returned outgoing edges) is renamed to `blocks_targets` on the public surface.
+  Convenience methods (`set_parent`, `set_block`, `relate`, `parents`, `children`, `blockers`, `blocked`, `related`, `ancestors`, `descendants`, `can_start`, ...) live on `DependencyGraph` and delegate. Cross-cutting cascades split by capability: node-level mutations (`archive_node`, `unarchive_node`, `remove_node`, `disconnect`) iterate over `[&mut dyn Cascadable; 3]`; edge-level reads (`len`, `active_len`, `contains`) iterate over `[&dyn EdgeSet; 3]`. Both come from private helpers rather than hand-listing fields — adding a fourth component graph only updates the helpers, not every cascade method. The old `blocked_by` (which paradoxically returned outgoing edges) is gone; the public surface is `blocked` (outgoing) / `blockers` (incoming) with names that match what they return.
 
 - **Persistence routes through `DependencyGraph`.** Two new public methods on `DependencyGraph` — `insert_raw_edge(kind, edge)` and `edges_by_kind() -> impl Iterator<Item = (CardEdgeType, &Edge<()>)>` — give serializers a layer-clean seam. Persistence backends (SQLite read/write, command capture-inverse) no longer reach into `graph.parent_child` / `graph.blocks` / `graph.relates` directly.
 
-- **`GraphOperations` returns `Vec<Uuid>`.** The trait surface deals in raw node ids; CLI / MCP / TUI surfaces resolve to display data themselves at their own boundary. Convenience methods are paired with semantic parameter ordering (`set_child(parent, child)` / `set_parent(child, parent)` are aliases, callers pick what reads naturally). The trait has no `KanbanOperations` supertrait — graph topology is a separate concern. CLI and MCP context wrappers delegate via a `delegate_graph_ops_to_inner!` macro; TUI keeps its hand-written impl because its `with_flush` save-coordinator hook is a real override.
+- **`GraphOperations` returns `Vec<Uuid>`.** The trait surface deals in raw node ids; CLI / MCP / TUI surfaces resolve to display data themselves at their own boundary. Convenience methods are paired with semantic parameter ordering (`set_child(parent, child)` / `set_parent(child, parent)` are aliases, callers pick what reads naturally). The trait has no `KanbanOperations` supertrait — graph topology is a separate concern. All three wrapper contexts (`CliContext`, `McpContext`, `TuiContext`) write the impl by hand. Mutating calls go through `KanbanContext::add_card_edge` / `remove_card_edge`, which now reject unknown card ids up front before the command reaches the graph — a stale or fabricated UUID returns `NotFound { entity: "card", id }` instead of silently landing in the graph as a dangling edge.
 
 - **JSON format V6 with split-graph migration.** On-disk dependency graphs change shape from `graph.cards.edges: [{ edge_type, ... }]` to `graph.{ parent_child, blocks, relates }.edges: [{ ... }]`. Existing files at V1..V5 are auto-migrated on load through the appropriate chain of legacy steps and the new split-graph step. Migration aborts loudly on unknown or missing `edge_type` rather than silently dropping data, and removes the `edge_type` field entirely (no `null`-padding) so migrated files match the wire shape of freshly-saved V6 files. New saves write V6 directly.
 
@@ -40,6 +41,6 @@ Under the hood this lands several structural refactors that the new surfaces dep
 
 Cycle detection and self-reference rejection from the underlying graph implementations flow up unchanged to every surface. Cross-board parent/child is permitted, matching the prior TUI behavior.
 
-### Known follow-up
+- **`DependencyCommand` collapsed to typed `AddEdge` / `RemoveEdge`.** Six per-kind structs (`AddBlocks`, `RemoveBlocks`, `AddRelatesTo`, `RemoveRelatesTo`, `SetParent`, `RemoveParent`) collapse into two — one per operation, each carrying `kind: CardEdgeType` so the sub-graph is selected at execute time. Safe to do because neither backend serializes the command log on snapshot today, so there is no on-disk variant name to migrate (the JSON snapshot intentionally drops commands between sessions; SQLite command-log persistence is a separate ticket). Each impl's match collapses from six `(kind, op)` pairs to three kinds.
 
-The `DependencyCommand` enum still carries one struct per `(edge_kind, op)` pair (`AddBlocks`, `RemoveBlocks`, `AddRelatesTo`, `RemoveRelatesTo`, `SetParent`, `RemoveParent`). A consolidating `EdgeMutation { kind, op, source, target }` would absorb ~70% of the boilerplate but is deferred: command values are persisted to the on-disk audit log via `serde`, and replacing variants breaks deserialization of pre-refactor V6 files. Doing this safely needs either a custom `Deserialize` shim that accepts both shapes, or a V7 format bump with a command-log migration step — each is its own ticket.
+- **CLI error variants slimmed.** `KanbanCliError::Message` is gone; its single user (handler-built enrichment of anonymous domain errors) folds into `Resolution { hint }`, which now covers both identifier-resolution failures and handler-enriched messages. The `Resolution` variant's `Display` is hint-verbatim — no `identifier resolution failed:` prefix — matching the established CLI convention used by `card get` / `card delete` / `card archive`.
