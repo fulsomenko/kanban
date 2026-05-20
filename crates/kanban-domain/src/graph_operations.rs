@@ -1,32 +1,29 @@
-use crate::{CardEdgeType, KanbanOperations, KanbanResult};
+use crate::{CardEdgeType, KanbanResult};
 use uuid::Uuid;
 
 /// Service-layer interface to the card-relation graph.
 ///
 /// The trait returns raw `Vec<Uuid>` rather than resolved
 /// `Vec<CardSummary>`. Surfaces that need display data resolve ids
-/// themselves (e.g. via `KanbanOperations::get_card`). This keeps the
-/// trait focused on graph topology and avoids forcing every consumer
-/// (notably the TUI, which already has cards in memory) to pay for
-/// resolution it doesn't need.
+/// themselves at their own boundary. This keeps the contract focused
+/// on graph topology and avoids forcing consumers (notably the TUI,
+/// which already has cards in memory) to pay for resolution.
 ///
-/// Decoupled from the 51-method `KanbanOperations` god-trait (see
-/// KAN-483); graph operations cluster as their own concern.
+/// Stands alone from the 51-method `KanbanOperations` god-trait
+/// (KAN-483) — there is no supertrait bound, because the trait deals
+/// only in node ids. Implementers compose `KanbanOperations` and
+/// `GraphOperations` separately when they need both.
 ///
-/// # Currently exposed via surfaces (CLI / MCP / TUI)
-/// - `CardEdgeType::ParentOf` (parent/child)
-///
-/// # Future edge kinds
-/// `Blocks` and `RelatesTo` are recognized by the underlying
-/// `CardEdgeType` enum but are not yet wired through user surfaces.
-/// Each addition is a separate card that extends the impl on
-/// `KanbanContext` and adds the matching CLI / MCP / TUI surfaces.
+/// All three `CardEdgeType` variants are wired through the trait
+/// today: parent/child (DAG), blocks (DAG), relates-to (undirected).
+/// Cycle detection, self-reference rejection, and edge-not-found
+/// behavior come from the underlying sub-graph implementation.
 ///
 /// # Note
 /// Cross-board parent/child is permitted at the domain layer today and
 /// this trait preserves that behavior. Board-scoping is a separate
 /// decision.
-pub trait GraphOperations: KanbanOperations {
+pub trait GraphOperations {
     // --- Primitive methods. Every consumer can call these. ---
 
     /// Add a directed edge `from -> to` of the given kind.
