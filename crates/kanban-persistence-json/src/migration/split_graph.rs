@@ -66,7 +66,14 @@ pub fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceRes
         if let Some(cards) = graph.get("cards") {
             if let Some(edges) = cards.get("edges").and_then(|v| v.as_array()) {
                 for edge in edges {
-                    let kind = edge.get("edge_type").and_then(|v| v.as_str()).unwrap_or("");
+                    let kind = edge
+                        .get("edge_type")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            PersistenceError::Serialization(format!(
+                            "split-graph migration: missing or non-string edge_type on edge {edge}"
+                        ))
+                        })?;
                     let mut stripped = edge.clone();
                     if let Some(obj) = stripped.as_object_mut() {
                         obj.insert("edge_type".to_string(), Value::Null);
@@ -76,10 +83,9 @@ pub fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceRes
                         "Blocks" => blocks_edges.push(stripped),
                         "RelatesTo" => relates_edges.push(stripped),
                         other => {
-                            tracing::warn!(
-                                "split-graph migration: dropping edge with unknown edge_type '{}'",
-                                other
-                            );
+                            return Err(PersistenceError::Serialization(format!(
+                                "split-graph migration: unknown edge_type '{other}'"
+                            )));
                         }
                     }
                 }
