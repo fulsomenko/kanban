@@ -56,6 +56,96 @@ fn seed_three_cards(backend: &Arc<dyn KanbanBackend>) -> (uuid::Uuid, uuid::Uuid
     (a_id, b_id, c_id)
 }
 
+/// Edge kinds exercised by every kind-agnostic shape test.
+/// Adding a fourth variant here causes every parameterised test to
+/// pick it up automatically — that's the maintenance win this layout
+/// is designed for.
+const ALL_KINDS: [CardEdgeType; 3] = [
+    CardEdgeType::ParentOf,
+    CardEdgeType::Blocks,
+    CardEdgeType::RelatesTo,
+];
+
+// --- Parameterised shape assertions ---
+//
+// Each helper exercises one piece of behaviour every edge kind must
+// support. Tests pass `kind` in via a loop; assertion failures include
+// the kind in the panic message so a single broken variant is easy to
+// pinpoint.
+
+fn assert_add_creates_visible_edge(
+    ctx: &mut KanbanContext,
+    kind: CardEdgeType,
+    a: uuid::Uuid,
+    b: uuid::Uuid,
+) {
+    ctx.add_card_edge(a, b, kind).unwrap();
+    let from_a = ctx.list_card_edges_from(a, kind).unwrap();
+    assert!(
+        from_a.contains(&b),
+        "{kind:?}: list_card_edges_from({a:?}) should contain {b:?}; got {from_a:?}"
+    );
+    let to_b = ctx.list_card_edges_to(b, kind).unwrap();
+    assert!(
+        to_b.contains(&a),
+        "{kind:?}: list_card_edges_to({b:?}) should contain {a:?}; got {to_b:?}"
+    );
+}
+
+fn assert_self_reference_rejected(ctx: &mut KanbanContext, kind: CardEdgeType, a: uuid::Uuid) {
+    let err = ctx.add_card_edge(a, a, kind).unwrap_err();
+    assert!(
+        err.is_self_reference(),
+        "{kind:?}: expected SelfReference, got {err:?}"
+    );
+}
+
+fn assert_remove_clears_edge(
+    ctx: &mut KanbanContext,
+    kind: CardEdgeType,
+    a: uuid::Uuid,
+    b: uuid::Uuid,
+) {
+    ctx.add_card_edge(a, b, kind).unwrap();
+    ctx.remove_card_edge(a, b, kind).unwrap();
+    assert!(
+        ctx.list_card_edges_from(a, kind).unwrap().is_empty(),
+        "{kind:?}: list_from({a:?}) should be empty after remove"
+    );
+    assert!(
+        ctx.list_card_edges_to(b, kind).unwrap().is_empty(),
+        "{kind:?}: list_to({b:?}) should be empty after remove"
+    );
+}
+
+fn assert_remove_nonexistent_errors(
+    ctx: &mut KanbanContext,
+    kind: CardEdgeType,
+    a: uuid::Uuid,
+    b: uuid::Uuid,
+) {
+    let err = ctx.remove_card_edge(a, b, kind).unwrap_err();
+    assert!(
+        err.is_edge_not_found(),
+        "{kind:?}: expected EdgeNotFound, got {err:?}"
+    );
+}
+
+fn assert_add_is_undoable(
+    ctx: &mut KanbanContext,
+    kind: CardEdgeType,
+    a: uuid::Uuid,
+    b: uuid::Uuid,
+) {
+    ctx.add_card_edge(a, b, kind).unwrap();
+    assert!(ctx.can_undo(), "{kind:?}: can_undo() after add");
+    ctx.undo().unwrap();
+    assert!(
+        ctx.list_card_edges_from(a, kind).unwrap().is_empty(),
+        "{kind:?}: undo should remove the edge"
+    );
+}
+
 /// Seed two distinct boards, one card on each. Returns the card ids for
 /// use as cross-board graph nodes. The changeset advertises cross-board
 /// parent/child as permitted; this helper backs the tests that exercise
@@ -86,93 +176,62 @@ macro_rules! card_graph_tests {
         mod $mod_name {
             use super::*;
 
-            // --- Primitive API ---
+            // --- Parameterised shape contract ---
+            //
+            // One test per behaviour, looping every kind. Each iteration
+            // gets a fresh context so state from one kind doesn't leak
+            // into another. Adding a new edge kind to ALL_KINDS picks
+            // up automatically below.
 
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_parentof_creates_directed_edge() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
-                    .unwrap();
-
-                let children = ctx
-                    .list_card_edges_from(parent_id, CardEdgeType::ParentOf)
-                    .unwrap();
-                assert_eq!(children.len(), 1);
-                assert_eq!(children[0], child_id);
-
-                let parents = ctx
-                    .list_card_edges_to(child_id, CardEdgeType::ParentOf)
-                    .unwrap();
-                assert_eq!(parents.len(), 1);
-                assert_eq!(parents[0], parent_id);
+            async fn test_add_creates_visible_edge_for_all_kinds() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (a, b, _) = seed_three_cards(&ctx.backend());
+                    assert_add_creates_visible_edge(&mut ctx, kind, a, b);
+                }
             }
 
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_parentof_self_reference_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, _, _) = seed_three_cards(&ctx.backend());
-
-                let err = ctx.add_card_edge(a, a, CardEdgeType::ParentOf).unwrap_err();
-                assert!(
-                    err.is_self_reference(),
-                    "expected SelfReference, got {:?}",
-                    err
-                );
+            async fn test_self_reference_rejected_for_all_kinds() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (a, _, _) = seed_three_cards(&ctx.backend());
+                    assert_self_reference_rejected(&mut ctx, kind, a);
+                }
             }
 
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_parentof_cycle_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
-                let err = ctx.add_card_edge(b, a, CardEdgeType::ParentOf).unwrap_err();
-                assert!(
-                    err.is_cycle_detected(),
-                    "expected CycleDetected, got {:?}",
-                    err
-                );
+            async fn test_remove_clears_edge_for_all_kinds() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (a, b, _) = seed_three_cards(&ctx.backend());
+                    assert_remove_clears_edge(&mut ctx, kind, a, b);
+                }
             }
 
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_remove_card_edge_parentof_removes_edge() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
-                    .unwrap();
-                ctx.remove_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
-                    .unwrap();
-
-                assert!(ctx
-                    .list_card_edges_from(parent_id, CardEdgeType::ParentOf)
-                    .unwrap()
-                    .is_empty());
-                assert!(ctx
-                    .list_card_edges_to(child_id, CardEdgeType::ParentOf)
-                    .unwrap()
-                    .is_empty());
+            async fn test_remove_nonexistent_errors_for_all_kinds() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (a, b, _) = seed_three_cards(&ctx.backend());
+                    assert_remove_nonexistent_errors(&mut ctx, kind, a, b);
+                }
             }
 
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_remove_card_edge_parentof_nonexistent_edge_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                let err = ctx
-                    .remove_card_edge(a, b, CardEdgeType::ParentOf)
-                    .unwrap_err();
-                assert!(
-                    err.is_edge_not_found(),
-                    "expected EdgeNotFound, got {:?}",
-                    err
-                );
+            async fn test_add_is_undoable_for_all_kinds() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (a, b, _) = seed_three_cards(&ctx.backend());
+                    assert_add_is_undoable(&mut ctx, kind, a, b);
+                }
             }
 
+            // --- Multi-edge fanout (ParentOf-shaped: directional) ---
+
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_list_card_edges_from_parentof_returns_children_summaries() {
+            async fn test_list_card_edges_from_parentof_returns_all_children() {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
@@ -181,10 +240,9 @@ macro_rules! card_graph_tests {
                 ctx.add_card_edge(parent_id, c2, CardEdgeType::ParentOf)
                     .unwrap();
 
-                let children = ctx
+                let mut ids = ctx
                     .list_card_edges_from(parent_id, CardEdgeType::ParentOf)
                     .unwrap();
-                let mut ids: Vec<uuid::Uuid> = children.iter().copied().collect();
                 ids.sort();
                 let mut expected = vec![c1, c2];
                 expected.sort();
@@ -192,7 +250,7 @@ macro_rules! card_graph_tests {
             }
 
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_list_card_edges_to_parentof_returns_parents_summaries() {
+            async fn test_list_card_edges_to_parentof_returns_all_parents() {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (p1, p2, child_id) = seed_three_cards(&ctx.backend());
 
@@ -201,37 +259,82 @@ macro_rules! card_graph_tests {
                 ctx.add_card_edge(p2, child_id, CardEdgeType::ParentOf)
                     .unwrap();
 
-                let parents = ctx
+                let mut ids = ctx
                     .list_card_edges_to(child_id, CardEdgeType::ParentOf)
                     .unwrap();
-                let mut ids: Vec<uuid::Uuid> = parents.iter().copied().collect();
                 ids.sort();
                 let mut expected = vec![p1, p2];
                 expected.sort();
                 assert_eq!(ids, expected);
             }
 
+            // --- Kind-specific: DAG vs undirected semantics ---
+
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_is_undoable_through_undo_stack() {
+            async fn test_parentof_cycle_rejected() {
                 let (mut ctx, _dir) = $open_ctx.await;
-                let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
+                let (a, b, _) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
-                    .unwrap();
-                assert_eq!(
-                    ctx.list_card_edges_from(parent_id, CardEdgeType::ParentOf)
-                        .unwrap()
-                        .len(),
-                    1
-                );
-
-                assert!(ctx.can_undo());
-                ctx.undo().unwrap();
+                ctx.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
+                let err = ctx.add_card_edge(b, a, CardEdgeType::ParentOf).unwrap_err();
                 assert!(
-                    ctx.list_card_edges_from(parent_id, CardEdgeType::ParentOf)
-                        .unwrap()
-                        .is_empty(),
-                    "undo should remove the parent edge"
+                    err.is_cycle_detected(),
+                    "expected CycleDetected, got {err:?}"
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_blocks_cycle_rejected() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, c) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
+                ctx.add_card_edge(b, c, CardEdgeType::Blocks).unwrap();
+                let err = ctx.add_card_edge(c, a, CardEdgeType::Blocks).unwrap_err();
+                assert!(
+                    err.is_cycle_detected(),
+                    "expected CycleDetected, got {err:?}"
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_relates_to_cycle_permitted() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, c) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+                ctx.add_card_edge(b, c, CardEdgeType::RelatesTo).unwrap();
+                // Undirected — closing the triangle is not a cycle violation.
+                ctx.add_card_edge(c, a, CardEdgeType::RelatesTo).unwrap();
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_relates_to_is_bidirectional_from_both_endpoints() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+
+                // Undirected: list_from and list_to both return the neighbour
+                // from either endpoint. This is the defining property that
+                // distinguishes RelatesTo from the two DAG kinds.
+                assert_eq!(
+                    ctx.list_card_edges_from(a, CardEdgeType::RelatesTo)
+                        .unwrap(),
+                    vec![b]
+                );
+                assert_eq!(
+                    ctx.list_card_edges_to(a, CardEdgeType::RelatesTo).unwrap(),
+                    vec![b]
+                );
+                assert_eq!(
+                    ctx.list_card_edges_from(b, CardEdgeType::RelatesTo)
+                        .unwrap(),
+                    vec![a]
+                );
+                assert_eq!(
+                    ctx.list_card_edges_to(b, CardEdgeType::RelatesTo).unwrap(),
+                    vec![a]
                 );
             }
 
@@ -265,206 +368,6 @@ macro_rules! card_graph_tests {
                     .list_card_edges_to(child_id, CardEdgeType::ParentOf)
                     .unwrap();
                 assert_eq!(convenience, primitive);
-            }
-
-            // --- Blocks edge wiring ---
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_blocks_creates_directed_edge() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (blocker, blocked, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(blocker, blocked, CardEdgeType::Blocks)
-                    .unwrap();
-
-                let targets = ctx
-                    .list_card_edges_from(blocker, CardEdgeType::Blocks)
-                    .unwrap();
-                assert_eq!(targets, vec![blocked]);
-
-                let blockers = ctx
-                    .list_card_edges_to(blocked, CardEdgeType::Blocks)
-                    .unwrap();
-                assert_eq!(blockers, vec![blocker]);
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_blocks_self_reference_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, _, _) = seed_three_cards(&ctx.backend());
-
-                let err = ctx.add_card_edge(a, a, CardEdgeType::Blocks).unwrap_err();
-                assert!(
-                    err.is_self_reference(),
-                    "expected SelfReference, got {:?}",
-                    err
-                );
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_blocks_cycle_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, c) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
-                ctx.add_card_edge(b, c, CardEdgeType::Blocks).unwrap();
-                let err = ctx.add_card_edge(c, a, CardEdgeType::Blocks).unwrap_err();
-                assert!(
-                    err.is_cycle_detected(),
-                    "expected CycleDetected, got {:?}",
-                    err
-                );
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_remove_card_edge_blocks_removes_edge() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
-                ctx.remove_card_edge(a, b, CardEdgeType::Blocks).unwrap();
-
-                assert!(ctx
-                    .list_card_edges_from(a, CardEdgeType::Blocks)
-                    .unwrap()
-                    .is_empty());
-                assert!(ctx
-                    .list_card_edges_to(b, CardEdgeType::Blocks)
-                    .unwrap()
-                    .is_empty());
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_remove_card_edge_blocks_nonexistent_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                let err = ctx
-                    .remove_card_edge(a, b, CardEdgeType::Blocks)
-                    .unwrap_err();
-                assert!(
-                    err.is_edge_not_found(),
-                    "expected EdgeNotFound, got {:?}",
-                    err
-                );
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_blocks_is_undoable_through_undo_stack() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
-                assert!(ctx.can_undo());
-                ctx.undo().unwrap();
-                assert!(ctx
-                    .list_card_edges_from(a, CardEdgeType::Blocks)
-                    .unwrap()
-                    .is_empty());
-            }
-
-            // --- RelatesTo edge wiring ---
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_relates_to_is_visible_from_both_endpoints() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
-
-                // Undirected — both endpoints see the other as a neighbour
-                // via either direction accessor.
-                assert_eq!(
-                    ctx.list_card_edges_from(a, CardEdgeType::RelatesTo)
-                        .unwrap(),
-                    vec![b]
-                );
-                assert_eq!(
-                    ctx.list_card_edges_to(a, CardEdgeType::RelatesTo).unwrap(),
-                    vec![b]
-                );
-                assert_eq!(
-                    ctx.list_card_edges_from(b, CardEdgeType::RelatesTo)
-                        .unwrap(),
-                    vec![a]
-                );
-                assert_eq!(
-                    ctx.list_card_edges_to(b, CardEdgeType::RelatesTo).unwrap(),
-                    vec![a]
-                );
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_relates_to_self_reference_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, _, _) = seed_three_cards(&ctx.backend());
-
-                let err = ctx
-                    .add_card_edge(a, a, CardEdgeType::RelatesTo)
-                    .unwrap_err();
-                assert!(
-                    err.is_self_reference(),
-                    "expected SelfReference, got {:?}",
-                    err
-                );
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_relates_to_permits_cycle() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, c) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
-                ctx.add_card_edge(b, c, CardEdgeType::RelatesTo).unwrap();
-                // Cycle permitted on undirected sub-graph.
-                ctx.add_card_edge(c, a, CardEdgeType::RelatesTo).unwrap();
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_remove_card_edge_relates_to_removes_edge() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
-                ctx.remove_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
-
-                assert!(ctx
-                    .list_card_edges_from(a, CardEdgeType::RelatesTo)
-                    .unwrap()
-                    .is_empty());
-                assert!(ctx
-                    .list_card_edges_from(b, CardEdgeType::RelatesTo)
-                    .unwrap()
-                    .is_empty());
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_remove_card_edge_relates_to_nonexistent_returns_error() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                let err = ctx
-                    .remove_card_edge(a, b, CardEdgeType::RelatesTo)
-                    .unwrap_err();
-                assert!(
-                    err.is_edge_not_found(),
-                    "expected EdgeNotFound, got {:?}",
-                    err
-                );
-            }
-
-            #[tokio::test(flavor = "multi_thread")]
-            async fn test_add_card_edge_relates_to_is_undoable_through_undo_stack() {
-                let (mut ctx, _dir) = $open_ctx.await;
-                let (a, b, _) = seed_three_cards(&ctx.backend());
-
-                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
-                assert!(ctx.can_undo());
-                ctx.undo().unwrap();
-                assert!(ctx
-                    .list_card_edges_from(a, CardEdgeType::RelatesTo)
-                    .unwrap()
-                    .is_empty());
             }
 
             // --- Cross-board parent/child ---
