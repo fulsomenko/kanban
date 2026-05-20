@@ -1,9 +1,8 @@
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    AddBlocksDependencyCommand, AddRelatesToDependencyCommand, BoardCommand, CardCommand,
-    ColumnCommand, Command, CommandContext, DependencyCommand, RemoveBlocksDependencyCommand,
-    RemoveParentCommand, RemoveRelatesToDependencyCommand, SetParentCommand, SprintCommand,
+    BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, DependencyCommand,
+    EdgeMutation, EdgeOp, SprintCommand,
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardStatus, CardSummary,
@@ -1320,51 +1319,25 @@ impl KanbanOperations for KanbanContext {
 
 impl GraphOperations for KanbanContext {
     fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
-        let cmd = match kind {
-            CardEdgeType::ParentOf => {
-                Command::Dependency(DependencyCommand::SetParent(SetParentCommand {
-                    child_id: to,
-                    parent_id: from,
-                }))
-            }
-            CardEdgeType::Blocks => {
-                Command::Dependency(DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
-                    blocker_id: from,
-                    blocked_id: to,
-                }))
-            }
-            CardEdgeType::RelatesTo => Command::Dependency(DependencyCommand::AddRelatesTo(
-                AddRelatesToDependencyCommand {
-                    card_a_id: from,
-                    card_b_id: to,
-                },
-            )),
-        };
-        self.execute(vec![cmd])
+        self.execute(vec![Command::Dependency(DependencyCommand::EdgeMutation(
+            EdgeMutation {
+                kind,
+                op: EdgeOp::Add,
+                source: from,
+                target: to,
+            },
+        ))])
     }
 
     fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
-        let cmd = match kind {
-            CardEdgeType::ParentOf => {
-                Command::Dependency(DependencyCommand::RemoveParent(RemoveParentCommand {
-                    child_id: to,
-                    parent_id: from,
-                }))
-            }
-            CardEdgeType::Blocks => Command::Dependency(DependencyCommand::RemoveBlocks(
-                RemoveBlocksDependencyCommand {
-                    blocker_id: from,
-                    blocked_id: to,
-                },
-            )),
-            CardEdgeType::RelatesTo => Command::Dependency(DependencyCommand::RemoveRelatesTo(
-                RemoveRelatesToDependencyCommand {
-                    card_a_id: from,
-                    card_b_id: to,
-                },
-            )),
-        };
-        self.execute(vec![cmd])
+        self.execute(vec![Command::Dependency(DependencyCommand::EdgeMutation(
+            EdgeMutation {
+                kind,
+                op: EdgeOp::Remove,
+                source: from,
+                target: to,
+            },
+        ))])
     }
 
     fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {

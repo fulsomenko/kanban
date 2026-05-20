@@ -12,8 +12,7 @@
 //! board) that make the bypassed validations safe.
 
 use super::{
-    AddBlocksDependencyCommand, AddRelatesToDependencyCommand, BoardCommand, Command,
-    CommandContext, ImportEntities, SetParentCommand,
+    BoardCommand, Command, CommandContext, DependencyCommand, EdgeMutation, EdgeOp, ImportEntities,
 };
 use crate::data_store::DataStore;
 use crate::{KanbanError, KanbanResult};
@@ -94,7 +93,6 @@ impl DeleteCardEdges {
     /// Inverse: capture every active edge involving any id in self.ids and
     /// emit the matching Add* / SetParent command for each.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        use crate::dependencies::CardEdgeType;
         let id_set: std::collections::HashSet<_> = self.ids.iter().copied().collect();
         let graph = store.get_graph()?;
         let involves = |edge: &kanban_core::Edge<()>| {
@@ -104,27 +102,12 @@ impl DeleteCardEdges {
             .edges_by_kind()
             .filter(|(_, edge)| involves(edge))
             .map(|(kind, edge)| {
-                let cmd = match kind {
-                    CardEdgeType::ParentOf => {
-                        super::DependencyCommand::SetParent(SetParentCommand {
-                            child_id: edge.target,
-                            parent_id: edge.source,
-                        })
-                    }
-                    CardEdgeType::Blocks => {
-                        super::DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
-                            blocker_id: edge.source,
-                            blocked_id: edge.target,
-                        })
-                    }
-                    CardEdgeType::RelatesTo => {
-                        super::DependencyCommand::AddRelatesTo(AddRelatesToDependencyCommand {
-                            card_a_id: edge.source,
-                            card_b_id: edge.target,
-                        })
-                    }
-                };
-                Command::Dependency(cmd)
+                Command::Dependency(DependencyCommand::EdgeMutation(EdgeMutation {
+                    kind,
+                    op: EdgeOp::Add,
+                    source: edge.source,
+                    target: edge.target,
+                }))
             })
             .collect())
     }

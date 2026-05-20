@@ -411,29 +411,14 @@ impl DeleteCard {
                 .edges_by_kind()
                 .filter(|(_, edge)| edge.involves(card_id))
                 .map(|(kind, edge)| {
-                    let cmd = match kind {
-                        crate::dependencies::CardEdgeType::ParentOf => {
-                            super::DependencyCommand::SetParent(super::SetParentCommand {
-                                child_id: edge.target,
-                                parent_id: edge.source,
-                            })
-                        }
-                        crate::dependencies::CardEdgeType::Blocks => {
-                            super::DependencyCommand::AddBlocks(super::AddBlocksDependencyCommand {
-                                blocker_id: edge.source,
-                                blocked_id: edge.target,
-                            })
-                        }
-                        crate::dependencies::CardEdgeType::RelatesTo => {
-                            super::DependencyCommand::AddRelatesTo(
-                                super::AddRelatesToDependencyCommand {
-                                    card_a_id: edge.source,
-                                    card_b_id: edge.target,
-                                },
-                            )
-                        }
-                    };
-                    Command::Dependency(cmd)
+                    Command::Dependency(super::DependencyCommand::EdgeMutation(
+                        super::EdgeMutation {
+                            kind,
+                            op: super::EdgeOp::Add,
+                            source: edge.source,
+                            target: edge.target,
+                        },
+                    ))
                 }),
         );
         Ok(commands)
