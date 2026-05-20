@@ -53,7 +53,20 @@ pub async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
 }
 
 /// Pure synchronous to V6 (split-graph) transformation on an already-parsed envelope.
+///
+/// Idempotent: if the envelope is already at version 6, returns `Ok(())`
+/// without touching `data["graph"]`. Without this early-out the transform
+/// would unconditionally overwrite the (split) graph with three empty
+/// sub-graph maps when no legacy `cards.edges` field exists — silent data
+/// loss for any caller that misinvokes it on a V6 file.
 pub fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceResult<()> {
+    // Idempotency guard: a V6 envelope has no legacy `cards.edges` to
+    // split, and overwriting `data["graph"]` would wipe the edges
+    // already in the split sub-graphs.
+    if envelope.get("version").and_then(|v| v.as_u64()) == Some(6) {
+        return Ok(());
+    }
+
     let data = envelope
         .get_mut("data")
         .ok_or_else(|| PersistenceError::Serialization("missing 'data' field".into()))?;
