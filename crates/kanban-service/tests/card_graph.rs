@@ -213,11 +213,11 @@ macro_rules! card_graph_tests {
             // --- Convenience defaults ---
 
             #[tokio::test(flavor = "multi_thread")]
-            async fn test_set_card_parent_creates_edge_visible_via_list_card_children() {
+            async fn test_set_parent_creates_edge_visible_via_list_card_children() {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
 
-                ctx.set_card_parent(child_id, parent_id).unwrap();
+                ctx.set_parent(child_id, parent_id).unwrap();
 
                 let children = ctx.list_card_children(parent_id).unwrap();
                 assert_eq!(children.len(), 1);
@@ -233,7 +233,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
 
-                ctx.set_card_parent(child_id, parent_id).unwrap();
+                ctx.set_parent(child_id, parent_id).unwrap();
 
                 let convenience: Vec<uuid::Uuid> = ctx.list_card_parents(child_id).unwrap();
                 let primitive: Vec<uuid::Uuid> = ctx

@@ -41,7 +41,7 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
         RelationAction::Add { parent, child } => {
             let parent_uuid = resolve_card(ctx, &parent)?;
             let child_uuid = resolve_card(ctx, &child)?;
-            ctx.set_card_parent(child_uuid, parent_uuid)?;
+            ctx.set_child(parent_uuid, child_uuid)?;
             ctx.save().await?;
             Ok(serde_json::json!({
                 "parent": parent_uuid.to_string(),
@@ -51,7 +51,7 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
         RelationAction::Remove { parent, child } => {
             let parent_uuid = resolve_card(ctx, &parent)?;
             let child_uuid = resolve_card(ctx, &child)?;
-            ctx.remove_card_parent(child_uuid, parent_uuid)?;
+            ctx.remove_child(parent_uuid, child_uuid)?;
             ctx.save().await?;
             Ok(serde_json::json!({
                 "parent": parent_uuid.to_string(),

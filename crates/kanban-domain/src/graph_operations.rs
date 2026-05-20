@@ -39,14 +39,31 @@ pub trait GraphOperations {
     fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>>;
 
     // --- Convenience defaults for the parent/child case. ---
+    //
+    // Parameter order follows the verb's subject-object pairing:
+    //   set_child(parent, child)   — set this child under that parent
+    //   set_parent(child, parent)  — set this child's parent to that
+    // Both add the same `parent -> child` edge. The two spellings are
+    // intentional aliases: call sites pick whichever reads naturally
+    // in context.
 
-    /// Add a parent-of edge: `parent_id -> child_id`.
-    fn set_card_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
+    /// Add a `parent -> child` edge by naming the parent first.
+    fn set_child(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
         self.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
     }
 
-    /// Remove the parent-of edge `parent_id -> child_id`.
-    fn remove_card_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
+    /// Add a `parent -> child` edge by naming the child first.
+    fn set_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
+        self.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
+    }
+
+    /// Remove the `parent -> child` edge by naming the parent first.
+    fn remove_child(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
+        self.remove_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
+    }
+
+    /// Remove the `parent -> child` edge by naming the child first.
+    fn remove_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
         self.remove_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
     }
 
