@@ -138,12 +138,13 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
 /// intentional perf tradeoff: typical MCP usage is single-process, and the
 /// reload cost (file read + parse) is significant relative to the read
 /// itself.
-async fn locked_read<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
+async fn locked_read<T, E, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
-    F: FnOnce(&McpContext) -> Result<T, McpError>,
+    F: FnOnce(&McpContext) -> Result<T, E>,
+    E: Into<McpError>,
 {
     let guard = ctx.lock().await;
-    f(&guard)
+    f(&guard).map_err(Into::into)
 }
 
 /// Acquire the context lock, reload from disk, run the closure with mutable
@@ -163,13 +164,14 @@ where
 /// metadata (mtime / instance_id) and skips the full reload when no
 /// external write has occurred would let undo history persist across calls
 /// in the same session. Track as `KanbanBackend::reload_if_changed()`.
-async fn locked_write<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
+async fn locked_write<T, E, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
-    F: FnOnce(&mut McpContext) -> Result<T, McpError>,
+    F: FnOnce(&mut McpContext) -> Result<T, E>,
+    E: Into<McpError>,
 {
     let mut guard = ctx.lock().await;
     guard.reload().await.map_err(kanban_err_to_mcp)?;
-    let result = f(&mut guard)?;
+    let result = f(&mut guard).map_err(Into::into)?;
     guard.save().await.map_err(kanban_err_to_mcp)?;
     Ok(result)
 }
@@ -770,7 +772,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_board(&req.board)?;
             ctx.delete_board(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -850,7 +852,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_column_global(&req.column)?;
             ctx.delete_column(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1030,7 +1032,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.archive_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1064,7 +1066,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.delete_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1159,11 +1161,10 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<SetCardParentRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| {
-            let child_id = ctx.mcp_resolve_card(&req.child)?;
-            let parent_id = ctx.mcp_resolve_card(&req.parent)?;
-            ctx.set_parent(child_id, parent_id)
-                .map_err(kanban_err_to_mcp)?;
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let child_id = ctx.resolve_card_id(&req.child)?;
+            let parent_id = ctx.resolve_card_id(&req.parent)?;
+            ctx.set_parent(child_id, parent_id)?;
             Ok((child_id, parent_id))
         })
         .await?;
@@ -1178,11 +1179,10 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<RemoveCardParentRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| {
-            let child_id = ctx.mcp_resolve_card(&req.child)?;
-            let parent_id = ctx.mcp_resolve_card(&req.parent)?;
-            ctx.remove_parent(child_id, parent_id)
-                .map_err(kanban_err_to_mcp)?;
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let child_id = ctx.resolve_card_id(&req.child)?;
+            let parent_id = ctx.resolve_card_id(&req.parent)?;
+            ctx.remove_parent(child_id, parent_id)?;
             Ok((child_id, parent_id))
         })
         .await?;
@@ -1197,9 +1197,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListCardParentsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let parents = locked_read(&self.ctx, |ctx| {
-            let id = ctx.mcp_resolve_card(&req.card)?;
-            let ids = ctx.list_card_parents(id).map_err(kanban_err_to_mcp)?;
+        let parents = locked_read(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let id = ctx.resolve_card_id(&req.card)?;
+            let ids = ctx.list_card_parents(id)?;
             Ok(resolve_summaries(ctx, ids))
         })
         .await?;
@@ -1211,9 +1211,9 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListCardChildrenRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let children = locked_read(&self.ctx, |ctx| {
-            let id = ctx.mcp_resolve_card(&req.card)?;
-            let ids = ctx.list_card_children(id).map_err(kanban_err_to_mcp)?;
+        let children = locked_read(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let id = ctx.resolve_card_id(&req.card)?;
+            let ids = ctx.list_card_children(id)?;
             Ok(resolve_summaries(ctx, ids))
         })
         .await?;
@@ -1405,7 +1405,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.delete_sprint(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
