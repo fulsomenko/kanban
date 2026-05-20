@@ -272,6 +272,36 @@ mod tests {
     }
 
     #[test]
+    fn test_split_graph_removes_edge_type_key_entirely() {
+        // Migrated edges must be byte-shape compatible with freshly
+        // saved V6 edges. The new on-disk Edge<()> does not write an
+        // `edge_type` field at all; leaving a null behind from the
+        // migration would produce diff noise in version-controlled
+        // kanban files.
+        let mut env = make_v3_envelope(json!({
+            "cards": {
+                "edges": [{
+                    "source": "11111111-1111-1111-1111-111111111111",
+                    "target": "22222222-2222-2222-2222-222222222222",
+                    "edge_type": "ParentOf",
+                    "direction": "Directed",
+                    "weight": null,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "archived_at": null
+                }]
+            }
+        }));
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        let edge = &env["data"]["graph"]["parent_child"]["edges"][0]
+            .as_object()
+            .unwrap();
+        assert!(
+            !edge.contains_key("edge_type"),
+            "edge_type key should be removed entirely, not nulled; got {edge:?}"
+        );
+    }
+
+    #[test]
     fn test_split_graph_unknown_edge_type_returns_error() {
         let mut env = make_v3_envelope(json!({
             "cards": {
