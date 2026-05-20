@@ -12,6 +12,8 @@ pub enum DependencyCommand {
     AddBlocks(AddBlocksDependencyCommand),
     AddRelatesTo(AddRelatesToDependencyCommand),
     Remove(RemoveDependencyCommand),
+    RemoveBlocks(RemoveBlocksDependencyCommand),
+    RemoveRelatesTo(RemoveRelatesToDependencyCommand),
     SetParent(SetParentCommand),
     RemoveParent(RemoveParentCommand),
     CreateSubcard(CreateSubcardCommand),
@@ -23,6 +25,8 @@ impl DependencyCommand {
             DependencyCommand::AddBlocks(c) => c.execute(context),
             DependencyCommand::AddRelatesTo(c) => c.execute(context),
             DependencyCommand::Remove(c) => c.execute(context),
+            DependencyCommand::RemoveBlocks(c) => c.execute(context),
+            DependencyCommand::RemoveRelatesTo(c) => c.execute(context),
             DependencyCommand::SetParent(c) => c.execute(context),
             DependencyCommand::RemoveParent(c) => c.execute(context),
             DependencyCommand::CreateSubcard(c) => c.execute(context),
@@ -34,6 +38,8 @@ impl DependencyCommand {
             DependencyCommand::AddBlocks(c) => c.description(),
             DependencyCommand::AddRelatesTo(c) => c.description(),
             DependencyCommand::Remove(c) => c.description(),
+            DependencyCommand::RemoveBlocks(c) => c.description(),
+            DependencyCommand::RemoveRelatesTo(c) => c.description(),
             DependencyCommand::SetParent(c) => c.description(),
             DependencyCommand::RemoveParent(c) => c.description(),
             DependencyCommand::CreateSubcard(c) => c.description(),
@@ -45,6 +51,8 @@ impl DependencyCommand {
             DependencyCommand::AddBlocks(c) => c.capture_inverse(store),
             DependencyCommand::AddRelatesTo(c) => c.capture_inverse(store),
             DependencyCommand::RemoveParent(c) => c.capture_inverse(store),
+            DependencyCommand::RemoveBlocks(c) => c.capture_inverse(store),
+            DependencyCommand::RemoveRelatesTo(c) => c.capture_inverse(store),
             DependencyCommand::SetParent(c) => c.capture_inverse(store),
             DependencyCommand::CreateSubcard(c) => c.capture_inverse(store),
             DependencyCommand::Remove(c) => c.capture_inverse(store),
@@ -222,6 +230,86 @@ impl SetParentCommand {
             RemoveParentCommand {
                 child_id: self.child_id,
                 parent_id: self.parent_id,
+            },
+        ))])
+    }
+}
+
+/// Remove a blocks dependency between two cards (type-specific).
+///
+/// Symmetric to [`AddBlocksDependencyCommand`]: removes only the
+/// `blocker -> blocked` edge in the `blocks` sub-graph. Returns
+/// [`crate::KanbanError`] with `is_edge_not_found()` if no such edge
+/// exists.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveBlocksDependencyCommand {
+    pub blocker_id: Uuid,
+    pub blocked_id: Uuid,
+}
+
+impl RemoveBlocksDependencyCommand {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let blocker_id = self.blocker_id;
+        let blocked_id = self.blocked_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.remove_blocks(blocker_id, blocked_id)?;
+            Ok(())
+        }))
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Remove blocks dependency: {} no longer blocks {}",
+            self.blocker_id, self.blocked_id
+        )
+    }
+
+    /// Inverse: re-add the blocks edge we just removed.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::AddBlocks(
+            AddBlocksDependencyCommand {
+                blocker_id: self.blocker_id,
+                blocked_id: self.blocked_id,
+            },
+        ))])
+    }
+}
+
+/// Remove a relates-to dependency between two cards (type-specific).
+///
+/// Symmetric to [`AddRelatesToDependencyCommand`]: removes only the
+/// undirected edge between `card_a_id` and `card_b_id` in the
+/// `relates` sub-graph. Returns [`crate::KanbanError`] with
+/// `is_edge_not_found()` if no such edge exists.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveRelatesToDependencyCommand {
+    pub card_a_id: Uuid,
+    pub card_b_id: Uuid,
+}
+
+impl RemoveRelatesToDependencyCommand {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let card_a_id = self.card_a_id;
+        let card_b_id = self.card_b_id;
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.remove_relates_to(card_a_id, card_b_id)?;
+            Ok(())
+        }))
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Remove relates-to dependency: {} <-> {}",
+            self.card_a_id, self.card_b_id
+        )
+    }
+
+    /// Inverse: re-add the relates-to edge we just removed.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::AddRelatesTo(
+            AddRelatesToDependencyCommand {
+                card_a_id: self.card_a_id,
+                card_b_id: self.card_b_id,
             },
         ))])
     }

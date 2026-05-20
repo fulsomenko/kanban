@@ -1,8 +1,9 @@
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, DependencyCommand,
-    RemoveParentCommand, SetParentCommand, SprintCommand,
+    AddBlocksDependencyCommand, AddRelatesToDependencyCommand, BoardCommand, CardCommand,
+    ColumnCommand, Command, CommandContext, DependencyCommand, RemoveBlocksDependencyCommand,
+    RemoveParentCommand, RemoveRelatesToDependencyCommand, SetParentCommand, SprintCommand,
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardStatus, CardSummary,
@@ -1326,11 +1327,18 @@ impl GraphOperations for KanbanContext {
                     parent_id: from,
                 }))
             }
-            CardEdgeType::Blocks | CardEdgeType::RelatesTo => {
-                return Err(KanbanError::validation(
-                    "CardEdgeType not yet wired through GraphOperations",
-                ));
+            CardEdgeType::Blocks => {
+                Command::Dependency(DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
+                    blocker_id: from,
+                    blocked_id: to,
+                }))
             }
+            CardEdgeType::RelatesTo => Command::Dependency(DependencyCommand::AddRelatesTo(
+                AddRelatesToDependencyCommand {
+                    card_a_id: from,
+                    card_b_id: to,
+                },
+            )),
         };
         self.execute(vec![cmd])
     }
@@ -1343,11 +1351,18 @@ impl GraphOperations for KanbanContext {
                     parent_id: from,
                 }))
             }
-            CardEdgeType::Blocks | CardEdgeType::RelatesTo => {
-                return Err(KanbanError::validation(
-                    "CardEdgeType not yet wired through GraphOperations",
-                ));
-            }
+            CardEdgeType::Blocks => Command::Dependency(DependencyCommand::RemoveBlocks(
+                RemoveBlocksDependencyCommand {
+                    blocker_id: from,
+                    blocked_id: to,
+                },
+            )),
+            CardEdgeType::RelatesTo => Command::Dependency(DependencyCommand::RemoveRelatesTo(
+                RemoveRelatesToDependencyCommand {
+                    card_a_id: from,
+                    card_b_id: to,
+                },
+            )),
         };
         self.execute(vec![cmd])
     }
