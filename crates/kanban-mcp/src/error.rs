@@ -30,9 +30,7 @@ impl From<KanbanMcpError> for McpError {
                     McpError::internal_error(d.to_string(), None)
                 }
             }
-            KanbanMcpError::Resolution { ref hint } => {
-                McpError::invalid_params(format!("{}: {}", e, hint), None)
-            }
+            KanbanMcpError::Resolution { .. } => McpError::invalid_params(e.to_string(), None),
             KanbanMcpError::InvalidParam(_) => McpError::invalid_params(e.to_string(), None),
         }
     }
