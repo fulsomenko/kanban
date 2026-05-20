@@ -163,41 +163,34 @@ impl RemoveDependencyCommand {
     /// remember each edge's type. The inverse then emits one Add* or
     /// SetParent command per captured edge.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        use crate::dependencies::CardEdgeType;
         let graph = store.get_graph()?;
-        let mut commands: Vec<Command> = Vec::new();
         let (a, b) = (self.source_id, self.target_id);
-
-        for edge in graph.parent_child.edges() {
-            if edge.connects(a, b) {
-                commands.push(Command::Dependency(DependencyCommand::SetParent(
-                    SetParentCommand {
+        Ok(graph
+            .edges_by_kind()
+            .filter(|(_, edge)| edge.connects(a, b))
+            .map(|(kind, edge)| {
+                let cmd = match kind {
+                    CardEdgeType::ParentOf => DependencyCommand::SetParent(SetParentCommand {
                         child_id: edge.target,
                         parent_id: edge.source,
-                    },
-                )));
-            }
-        }
-        for edge in graph.blocks.edges() {
-            if edge.connects(a, b) {
-                commands.push(Command::Dependency(DependencyCommand::AddBlocks(
-                    AddBlocksDependencyCommand {
-                        blocker_id: edge.source,
-                        blocked_id: edge.target,
-                    },
-                )));
-            }
-        }
-        for edge in graph.relates.edges() {
-            if edge.connects(a, b) {
-                commands.push(Command::Dependency(DependencyCommand::AddRelatesTo(
-                    AddRelatesToDependencyCommand {
-                        card_a_id: edge.source,
-                        card_b_id: edge.target,
-                    },
-                )));
-            }
-        }
-        Ok(commands)
+                    }),
+                    CardEdgeType::Blocks => {
+                        DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
+                            blocker_id: edge.source,
+                            blocked_id: edge.target,
+                        })
+                    }
+                    CardEdgeType::RelatesTo => {
+                        DependencyCommand::AddRelatesTo(AddRelatesToDependencyCommand {
+                            card_a_id: edge.source,
+                            card_b_id: edge.target,
+                        })
+                    }
+                };
+                Command::Dependency(cmd)
+            })
+            .collect())
     }
 }
 

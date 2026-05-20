@@ -3,7 +3,7 @@ use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::card::{Card, CardPriority, CardStatus};
 use kanban_domain::sprint::{Sprint, SprintStatus};
 use kanban_domain::Snapshot;
-use kanban_domain::{ArchivedCard, Board, Column, DependencyGraph, SprintLog};
+use kanban_domain::{ArchivedCard, Board, CardEdgeType, Column, DependencyGraph, SprintLog};
 use uuid::Uuid;
 
 pub fn fully_populated_snapshot() -> Snapshot {
@@ -113,24 +113,30 @@ pub fn fully_populated_snapshot() -> Snapshot {
     };
 
     let mut graph = DependencyGraph::new();
-    graph.blocks.insert_raw_edge(Edge {
-        source: card_id,
-        target: archived_card_inner_id,
-        edge_type: (),
-        direction: EdgeDirection::Directed,
-        weight: Some(1.5),
-        created_at: now,
-        archived_at: None,
-    });
-    graph.relates.insert_raw_edge(Edge {
-        source: card_id,
-        target: archived_card_inner_id,
-        edge_type: (),
-        direction: EdgeDirection::Bidirectional,
-        weight: None,
-        created_at: now,
-        archived_at: Some(now),
-    });
+    graph.insert_raw_edge(
+        CardEdgeType::Blocks,
+        Edge {
+            source: card_id,
+            target: archived_card_inner_id,
+            edge_type: (),
+            direction: EdgeDirection::Directed,
+            weight: Some(1.5),
+            created_at: now,
+            archived_at: None,
+        },
+    );
+    graph.insert_raw_edge(
+        CardEdgeType::RelatesTo,
+        Edge {
+            source: card_id,
+            target: archived_card_inner_id,
+            edge_type: (),
+            direction: EdgeDirection::Bidirectional,
+            weight: None,
+            created_at: now,
+            archived_at: Some(now),
+        },
+    );
 
     Snapshot {
         boards: vec![board],

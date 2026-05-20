@@ -6,6 +6,7 @@ use tempfile::TempDir;
 
 fn add_edge(ctx: &KanbanContext, edge: Edge<CardEdgeType>) {
     let mut graph = ctx.data_store().get_graph().unwrap();
+    let kind = edge.edge_type;
     let untyped: Edge<()> = Edge {
         source: edge.source,
         target: edge.target,
@@ -15,11 +16,7 @@ fn add_edge(ctx: &KanbanContext, edge: Edge<CardEdgeType>) {
         created_at: edge.created_at,
         archived_at: edge.archived_at,
     };
-    match edge.edge_type {
-        CardEdgeType::ParentOf => graph.parent_child.insert_raw_edge(untyped),
-        CardEdgeType::Blocks => graph.blocks.insert_raw_edge(untyped),
-        CardEdgeType::RelatesTo => graph.relates.insert_raw_edge(untyped),
-    }
+    graph.insert_raw_edge(kind, untyped);
     ctx.data_store().set_graph(graph).unwrap();
 }
 

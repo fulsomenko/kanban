@@ -212,11 +212,9 @@ fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
             archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
         };
 
-        match edge_type {
-            CardEdgeType::ParentOf => graph.parent_child.insert_raw_edge(untyped),
-            CardEdgeType::Blocks => graph.blocks.insert_raw_edge(untyped),
-            CardEdgeType::RelatesTo => graph.relates.insert_raw_edge(untyped),
-        }
+        // Route through the public DependencyGraph surface; persistence
+        // never touches sub-graph internals.
+        graph.insert_raw_edge(edge_type, untyped);
     }
     Ok(graph)
 }
@@ -767,28 +765,9 @@ impl SqliteStore {
             .await
             .map_err(db_err)?;
 
-        let to_write: Vec<(&kanban_core::Edge<()>, CardEdgeType)> = graph
-            .parent_child
-            .edges()
-            .iter()
-            .map(|e| (e, CardEdgeType::ParentOf))
-            .chain(
-                graph
-                    .blocks
-                    .edges()
-                    .iter()
-                    .map(|e| (e, CardEdgeType::Blocks)),
-            )
-            .chain(
-                graph
-                    .relates
-                    .edges()
-                    .iter()
-                    .map(|e| (e, CardEdgeType::RelatesTo)),
-            )
-            .collect();
-
-        for (edge, kind) in to_write {
+        // Iterate via the DependencyGraph's public seam — persistence
+        // does not reach into sub-graph internals.
+        for (kind, edge) in graph.edges_by_kind() {
             sqlx::query(
                 "INSERT INTO card_edges
                     (source_id, target_id, edge_type, direction, weight, created_at, archived_at)

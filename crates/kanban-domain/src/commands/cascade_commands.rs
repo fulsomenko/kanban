@@ -94,44 +94,39 @@ impl DeleteCardEdges {
     /// Inverse: capture every active edge involving any id in self.ids and
     /// emit the matching Add* / SetParent command for each.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        use crate::dependencies::CardEdgeType;
         let id_set: std::collections::HashSet<_> = self.ids.iter().copied().collect();
         let graph = store.get_graph()?;
-        let mut commands: Vec<Command> = Vec::new();
         let involves = |edge: &kanban_core::Edge<()>| {
             id_set.contains(&edge.source) || id_set.contains(&edge.target)
         };
-
-        for edge in graph.parent_child.edges() {
-            if involves(edge) {
-                commands.push(Command::Dependency(super::DependencyCommand::SetParent(
-                    SetParentCommand {
-                        child_id: edge.target,
-                        parent_id: edge.source,
-                    },
-                )));
-            }
-        }
-        for edge in graph.blocks.edges() {
-            if involves(edge) {
-                commands.push(Command::Dependency(super::DependencyCommand::AddBlocks(
-                    AddBlocksDependencyCommand {
-                        blocker_id: edge.source,
-                        blocked_id: edge.target,
-                    },
-                )));
-            }
-        }
-        for edge in graph.relates.edges() {
-            if involves(edge) {
-                commands.push(Command::Dependency(super::DependencyCommand::AddRelatesTo(
-                    AddRelatesToDependencyCommand {
-                        card_a_id: edge.source,
-                        card_b_id: edge.target,
-                    },
-                )));
-            }
-        }
-        Ok(commands)
+        Ok(graph
+            .edges_by_kind()
+            .filter(|(_, edge)| involves(edge))
+            .map(|(kind, edge)| {
+                let cmd = match kind {
+                    CardEdgeType::ParentOf => {
+                        super::DependencyCommand::SetParent(SetParentCommand {
+                            child_id: edge.target,
+                            parent_id: edge.source,
+                        })
+                    }
+                    CardEdgeType::Blocks => {
+                        super::DependencyCommand::AddBlocks(AddBlocksDependencyCommand {
+                            blocker_id: edge.source,
+                            blocked_id: edge.target,
+                        })
+                    }
+                    CardEdgeType::RelatesTo => {
+                        super::DependencyCommand::AddRelatesTo(AddRelatesToDependencyCommand {
+                            card_a_id: edge.source,
+                            card_b_id: edge.target,
+                        })
+                    }
+                };
+                Command::Dependency(cmd)
+            })
+            .collect())
     }
 }
 

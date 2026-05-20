@@ -405,38 +405,37 @@ impl DeleteCard {
             },
         ))];
         let graph = store.get_graph()?;
-        let touches = |edge: &kanban_core::Edge<()>| edge.involves(self.card_id);
-
-        for edge in graph.parent_child.edges() {
-            if touches(edge) {
-                commands.push(Command::Dependency(super::DependencyCommand::SetParent(
-                    super::SetParentCommand {
-                        child_id: edge.target,
-                        parent_id: edge.source,
-                    },
-                )));
-            }
-        }
-        for edge in graph.blocks.edges() {
-            if touches(edge) {
-                commands.push(Command::Dependency(super::DependencyCommand::AddBlocks(
-                    super::AddBlocksDependencyCommand {
-                        blocker_id: edge.source,
-                        blocked_id: edge.target,
-                    },
-                )));
-            }
-        }
-        for edge in graph.relates.edges() {
-            if touches(edge) {
-                commands.push(Command::Dependency(super::DependencyCommand::AddRelatesTo(
-                    super::AddRelatesToDependencyCommand {
-                        card_a_id: edge.source,
-                        card_b_id: edge.target,
-                    },
-                )));
-            }
-        }
+        let card_id = self.card_id;
+        commands.extend(
+            graph
+                .edges_by_kind()
+                .filter(|(_, edge)| edge.involves(card_id))
+                .map(|(kind, edge)| {
+                    let cmd = match kind {
+                        crate::dependencies::CardEdgeType::ParentOf => {
+                            super::DependencyCommand::SetParent(super::SetParentCommand {
+                                child_id: edge.target,
+                                parent_id: edge.source,
+                            })
+                        }
+                        crate::dependencies::CardEdgeType::Blocks => {
+                            super::DependencyCommand::AddBlocks(super::AddBlocksDependencyCommand {
+                                blocker_id: edge.source,
+                                blocked_id: edge.target,
+                            })
+                        }
+                        crate::dependencies::CardEdgeType::RelatesTo => {
+                            super::DependencyCommand::AddRelatesTo(
+                                super::AddRelatesToDependencyCommand {
+                                    card_a_id: edge.source,
+                                    card_b_id: edge.target,
+                                },
+                            )
+                        }
+                    };
+                    Command::Dependency(cmd)
+                }),
+        );
         Ok(commands)
     }
 }

@@ -7,8 +7,8 @@ use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
 use kanban_domain::task_list_view::TaskListView;
 use kanban_domain::{
-    BoardUpdate, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations,
-    KanbanResult,
+    BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
+    KanbanOperations, KanbanResult,
 };
 use tempfile::TempDir;
 
@@ -281,33 +281,42 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
     let now = chrono::Utc::now();
     {
         let mut graph = ctx.data_store().get_graph().unwrap();
-        graph.blocks.insert_raw_edge(Edge {
-            source: card1.id,
-            target: card2.id,
-            edge_type: (),
-            direction: EdgeDirection::Directed,
-            weight: Some(1.0_f32),
-            created_at: now,
-            archived_at: None,
-        });
-        graph.relates.insert_raw_edge(Edge {
-            source: card1.id,
-            target: card3.id,
-            edge_type: (),
-            direction: EdgeDirection::Bidirectional,
-            weight: None,
-            created_at: now,
-            archived_at: Some(now),
-        });
-        graph.parent_child.insert_raw_edge(Edge {
-            source: card2.id,
-            target: card3.id,
-            edge_type: (),
-            direction: EdgeDirection::Directed,
-            weight: Some(0.5_f32),
-            created_at: now,
-            archived_at: None,
-        });
+        graph.insert_raw_edge(
+            CardEdgeType::Blocks,
+            Edge {
+                source: card1.id,
+                target: card2.id,
+                edge_type: (),
+                direction: EdgeDirection::Directed,
+                weight: Some(1.0_f32),
+                created_at: now,
+                archived_at: None,
+            },
+        );
+        graph.insert_raw_edge(
+            CardEdgeType::RelatesTo,
+            Edge {
+                source: card1.id,
+                target: card3.id,
+                edge_type: (),
+                direction: EdgeDirection::Bidirectional,
+                weight: None,
+                created_at: now,
+                archived_at: Some(now),
+            },
+        );
+        graph.insert_raw_edge(
+            CardEdgeType::ParentOf,
+            Edge {
+                source: card2.id,
+                target: card3.id,
+                edge_type: (),
+                direction: EdgeDirection::Directed,
+                weight: Some(0.5_f32),
+                created_at: now,
+                archived_at: None,
+            },
+        );
         ctx.data_store().set_graph(graph).unwrap();
     }
 

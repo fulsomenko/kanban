@@ -1,7 +1,10 @@
-use kanban_core::{DagGraph, Directed, Graph, GraphError, SubGraph, Undirected, UndirectedGraph};
+use kanban_core::{
+    DagGraph, Directed, Edge, Graph, GraphError, SubGraph, Undirected, UndirectedGraph,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::CardEdgeType;
 use crate::error::DependencyError;
 use crate::{CardId, KanbanResult};
 
@@ -187,6 +190,51 @@ impl DependencyGraph {
             }
         }
         any_removed
+    }
+
+    // --- Persistence helpers ---
+    //
+    // The two methods below are the public seam persistence backends
+    // use to round-trip edges without reaching into sub-graph internals.
+    // Callers stay layer-clean: they see `DependencyGraph` plus
+    // `CardEdgeType` and never touch `self.parent_child` / `self.blocks`
+    // / `self.relates` directly.
+
+    /// Insert a raw edge into the sub-graph indicated by `kind` without
+    /// structural validation. Intended for persistence-layer loaders
+    /// reading edges from a backing store — the data has already passed
+    /// validation when it was written, so re-running the cycle check on
+    /// re-load would double-pay for no benefit.
+    pub fn insert_raw_edge(&mut self, kind: CardEdgeType, edge: Edge<()>) {
+        match kind {
+            CardEdgeType::ParentOf => self.parent_child.insert_raw_edge(edge),
+            CardEdgeType::Blocks => self.blocks.insert_raw_edge(edge),
+            CardEdgeType::RelatesTo => self.relates.insert_raw_edge(edge),
+        }
+    }
+
+    /// Iterate every edge in the graph paired with its
+    /// [`CardEdgeType`]. Order is `parent_child` → `blocks` → `relates`,
+    /// matching the field declaration order; within each sub-graph the
+    /// order is insertion. Lets persistence backends serialize the
+    /// graph without reaching past this type's surface.
+    pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &Edge<()>)> + '_ {
+        self.parent_child
+            .edges()
+            .iter()
+            .map(|e| (CardEdgeType::ParentOf, e))
+            .chain(
+                self.blocks
+                    .edges()
+                    .iter()
+                    .map(|e| (CardEdgeType::Blocks, e)),
+            )
+            .chain(
+                self.relates
+                    .edges()
+                    .iter()
+                    .map(|e| (CardEdgeType::RelatesTo, e)),
+            )
     }
 }
 
