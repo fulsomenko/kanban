@@ -406,6 +406,79 @@ macro_rules! card_graph_tests {
                 assert_eq!(graph.children(parent_on_a), vec![child_on_b]);
             }
 
+            // --- Card-existence validation ---
+            //
+            // The service layer rejects edge mutations against unknown
+            // card ids before mutating the graph. Without this guard
+            // a stale or fabricated UUID would silently add a dangling
+            // edge whose endpoints reference no live card — a data
+            // integrity hole the CLI's identifier-resolution layer
+            // doesn't close (raw UUIDs are parsed but not looked up).
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_with_unknown_source_returns_card_not_found() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (b, _, _) = seed_three_cards(&ctx.backend());
+                    let phantom = uuid::Uuid::new_v4();
+                    let err = ctx.add_card_edge(phantom, b, kind).unwrap_err();
+                    assert!(
+                        err.is_not_found(),
+                        "{kind:?}: expected NotFound for phantom source; got {err:?}"
+                    );
+                    assert!(
+                        err.to_string().contains(&phantom.to_string()),
+                        "{kind:?}: error must name the missing id; got {err:?}"
+                    );
+                }
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_card_edge_with_unknown_target_returns_card_not_found() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (a, _, _) = seed_three_cards(&ctx.backend());
+                    let phantom = uuid::Uuid::new_v4();
+                    let err = ctx.add_card_edge(a, phantom, kind).unwrap_err();
+                    assert!(
+                        err.is_not_found(),
+                        "{kind:?}: expected NotFound for phantom target; got {err:?}"
+                    );
+                    assert!(
+                        err.to_string().contains(&phantom.to_string()),
+                        "{kind:?}: error must name the missing id; got {err:?}"
+                    );
+                }
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_card_edge_with_unknown_source_returns_card_not_found() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (b, _, _) = seed_three_cards(&ctx.backend());
+                    let phantom = uuid::Uuid::new_v4();
+                    let err = ctx.remove_card_edge(phantom, b, kind).unwrap_err();
+                    assert!(
+                        err.is_not_found(),
+                        "{kind:?}: expected NotFound for phantom source; got {err:?}"
+                    );
+                }
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_card_edge_with_unknown_target_returns_card_not_found() {
+                for kind in ALL_KINDS {
+                    let (mut ctx, _dir) = $open_ctx.await;
+                    let (a, _, _) = seed_three_cards(&ctx.backend());
+                    let phantom = uuid::Uuid::new_v4();
+                    let err = ctx.remove_card_edge(a, phantom, kind).unwrap_err();
+                    assert!(
+                        err.is_not_found(),
+                        "{kind:?}: expected NotFound for phantom target; got {err:?}"
+                    );
+                }
+            }
+
             #[tokio::test(flavor = "multi_thread")]
             async fn test_remove_parent_across_boards_clears_edge() {
                 let (mut ctx, _dir) = $open_ctx.await;

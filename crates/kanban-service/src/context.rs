@@ -1317,8 +1317,25 @@ impl KanbanOperations for KanbanContext {
     }
 }
 
+impl KanbanContext {
+    /// Reject edge mutations against unknown card ids before the
+    /// command reaches the graph. Without this guard a stale or
+    /// fabricated UUID would silently land in the graph as a dangling
+    /// edge — the CLI's identifier-resolution layer parses raw UUIDs
+    /// without looking them up, so service-level enforcement is the
+    /// right boundary.
+    fn require_card_exists(&self, id: Uuid) -> KanbanResult<()> {
+        match self.backend.get_card(id)? {
+            Some(_) => Ok(()),
+            None => Err(KanbanError::not_found("card", id)),
+        }
+    }
+}
+
 impl GraphOperations for KanbanContext {
     fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
+        self.require_card_exists(from)?;
+        self.require_card_exists(to)?;
         self.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
             AddEdge {
                 kind,
@@ -1329,6 +1346,8 @@ impl GraphOperations for KanbanContext {
     }
 
     fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
+        self.require_card_exists(from)?;
+        self.require_card_exists(to)?;
         self.execute(vec![Command::Dependency(DependencyCommand::RemoveEdge(
             RemoveEdge {
                 kind,
