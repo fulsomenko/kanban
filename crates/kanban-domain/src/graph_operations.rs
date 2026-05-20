@@ -72,4 +72,51 @@ mod tests {
     fn trait_is_object_safe() {
         fn _accepts_dyn(_: &dyn GraphOperations) {}
     }
+
+    /// `GraphOperations` deals only in node ids (`Vec<Uuid>`); it does
+    /// not need card resolution and therefore must not require the
+    /// 51-method `KanbanOperations` god-trait as a supertrait. This
+    /// test pins the decoupling at compile time by impl'ing
+    /// `GraphOperations` on a minimal struct that does not impl
+    /// `KanbanOperations`.
+    #[test]
+    fn trait_does_not_require_kanban_operations_supertrait() {
+        struct GraphOnly;
+        impl GraphOperations for GraphOnly {
+            fn add_card_edge(
+                &mut self,
+                _from: Uuid,
+                _to: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_card_edge(
+                &mut self,
+                _from: Uuid,
+                _to: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn list_card_edges_from(
+                &self,
+                _node: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn list_card_edges_to(
+                &self,
+                _node: Uuid,
+                _kind: CardEdgeType,
+            ) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+        }
+        let mut g = GraphOnly;
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        g.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
+    }
 }
