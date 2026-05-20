@@ -81,4 +81,23 @@ mod tests {
             mcp.message
         );
     }
+
+    /// MCP `Resolution` must render the bare hint — no
+    /// `identifier resolution failed:` prefix. The CLI side strips
+    /// the same prefix; this pins the symmetry. INVALID_PARAMS
+    /// already encodes the category in the error code; the
+    /// human-readable message stays consistent across surfaces.
+    #[test]
+    fn test_into_mcp_error_resolution_renders_no_prefix() {
+        let hint = "Card 'KAN-99999' not found";
+        let err = KanbanMcpError::Resolution {
+            hint: hint.to_string(),
+        };
+        let mcp: McpError = err.into();
+        assert_eq!(
+            mcp.message, hint,
+            "Resolution rendered with prefix: {:?}",
+            mcp.message
+        );
+    }
 }
