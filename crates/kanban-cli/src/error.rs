@@ -20,6 +20,15 @@ pub enum KanbanCliError {
     /// rendered message stays consistent across the surface.
     #[error("{hint}")]
     Resolution { hint: String },
+    /// Handler-built user-facing message.
+    ///
+    /// Used when a domain-level error is anonymous (e.g. "cycle
+    /// detected" with no card identifiers) and the CLI handler has
+    /// enough input context to construct a more legible message that
+    /// echoes the user's flags. Display renders the message verbatim —
+    /// no wrapper prefix — matching the established CLI convention.
+    #[error("{0}")]
+    Message(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
