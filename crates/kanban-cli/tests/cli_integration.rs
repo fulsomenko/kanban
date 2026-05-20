@@ -3422,7 +3422,10 @@ mod relation_tests {
             .assert()
             .success();
 
-        // Closing the cycle b -> a should fail.
+        // Closing the cycle b -> a should fail. The error must name
+        // both card identifiers so the user can identify which
+        // command produced the failure without re-reading their
+        // scrollback.
         kanban()
             .args([
                 file.to_str().unwrap(),
@@ -3434,7 +3437,56 @@ mod relation_tests {
                 &a,
             ])
             .assert()
-            .failure();
+            .failure()
+            .stderr(predicate::str::contains(&b))
+            .stderr(predicate::str::contains(&a))
+            .stderr(predicate::str::contains("cycle"));
+    }
+
+    #[test]
+    fn test_relation_add_self_reference_error_includes_card_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (a, _) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                "--parent",
+                &a,
+                "--child",
+                &a,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&a))
+            .stderr(predicate::str::contains("self-reference"));
+    }
+
+    #[test]
+    fn test_relation_remove_nonexistent_error_includes_both_card_identifiers() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (a, b) = setup_two_cards(&file);
+
+        // No edge has been added between a and b.
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "remove",
+                "--parent",
+                &a,
+                "--child",
+                &b,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&a))
+            .stderr(predicate::str::contains(&b))
+            .stderr(predicate::str::contains("not found"));
     }
 
     #[test]
