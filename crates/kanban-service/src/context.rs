@@ -1,8 +1,8 @@
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, DependencyCommand,
-    EdgeMutation, EdgeOp, SprintCommand,
+    AddEdge, BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, DependencyCommand,
+    RemoveEdge, SprintCommand,
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardStatus, CardSummary,
@@ -1319,10 +1319,9 @@ impl KanbanOperations for KanbanContext {
 
 impl GraphOperations for KanbanContext {
     fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
-        self.execute(vec![Command::Dependency(DependencyCommand::EdgeMutation(
-            EdgeMutation {
+        self.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
+            AddEdge {
                 kind,
-                op: EdgeOp::Add,
                 source: from,
                 target: to,
             },
@@ -1330,10 +1329,9 @@ impl GraphOperations for KanbanContext {
     }
 
     fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
-        self.execute(vec![Command::Dependency(DependencyCommand::EdgeMutation(
-            EdgeMutation {
+        self.execute(vec![Command::Dependency(DependencyCommand::RemoveEdge(
+            RemoveEdge {
                 kind,
-                op: EdgeOp::Remove,
                 source: from,
                 target: to,
             },
