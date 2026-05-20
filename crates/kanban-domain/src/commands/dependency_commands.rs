@@ -145,7 +145,7 @@ impl RemoveDependencyCommand {
             // No-op-on-miss is intentional here: undo replay against a
             // graph where the edge is already gone must still succeed.
             // The bool return is informational for direct callers.
-            let _removed = graph.try_remove_edge(source_id, target_id);
+            let _removed = graph.disconnect(source_id, target_id);
             Ok(())
         }))
     }

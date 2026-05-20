@@ -187,13 +187,17 @@ impl DependencyGraph {
         self.edge_sets().iter().any(|g| g.contains(a, b))
     }
 
-    /// Tolerant cross-cutting edge removal: removes the `a -> b` edge
-    /// from every sub-graph it appears in. Returns `true` iff at least
-    /// one sub-graph held the edge — lets callers distinguish "the
-    /// pair was disconnected" from "no edge was there to remove"
-    /// without needing per-type knowledge. Uses the `Graph::remove_edge`
-    /// inherited via `Cascadable`'s supertrait bound.
-    pub fn try_remove_edge(&mut self, a: Uuid, b: Uuid) -> bool {
+    /// Sever every directed or undirected edge between `a` and `b`
+    /// across all three sub-graphs. Returns `true` iff at least one
+    /// edge was removed — lets callers distinguish "the pair was
+    /// disconnected" from "no edge was there to remove" without
+    /// needing per-type knowledge.
+    ///
+    /// Tolerant by design: missing edges are silently ignored. Use
+    /// the typed `remove_parent` / `remove_blocks` / `remove_relates_to`
+    /// methods when you want strict edge-not-found errors. Uses the
+    /// `Graph::remove_edge` inherited via `Cascadable`'s supertrait.
+    pub fn disconnect(&mut self, a: Uuid, b: Uuid) -> bool {
         let mut any_removed = false;
         for sg in self.cascadable_parts_mut() {
             if sg.remove_edge(a, b).is_ok() {
@@ -464,34 +468,28 @@ mod tests {
     // --- Cross-cutting tolerant removal ---
 
     #[test]
-    fn test_try_remove_edge_returns_true_when_edge_existed_in_any_subgraph() {
+    fn test_disconnect_returns_true_when_edge_existed_in_any_subgraph() {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
         g.add_blocks(a, b).unwrap();
-        assert!(
-            g.try_remove_edge(a, b),
-            "edge existed in blocks; expected true"
-        );
-        assert!(
-            !g.try_remove_edge(a, b),
-            "edge already gone; expected false"
-        );
+        assert!(g.disconnect(a, b), "edge existed in blocks; expected true");
+        assert!(!g.disconnect(a, b), "edge already gone; expected false");
     }
 
     #[test]
-    fn test_try_remove_edge_returns_false_when_no_edge_exists() {
+    fn test_disconnect_returns_false_when_no_edge_exists() {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
-        assert!(!g.try_remove_edge(a, b), "no edge present in any subgraph");
+        assert!(!g.disconnect(a, b), "no edge present in any subgraph");
     }
 
     #[test]
-    fn test_try_remove_edge_removes_from_every_subgraph_holding_pair() {
+    fn test_disconnect_removes_from_every_subgraph_holding_pair() {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
         g.set_parent(b, a).unwrap();
         g.add_blocks(a, b).unwrap();
-        assert!(g.try_remove_edge(a, b));
+        assert!(g.disconnect(a, b));
         assert!(g.children(a).is_empty());
         assert!(g.blocks_targets(a).is_empty());
     }
