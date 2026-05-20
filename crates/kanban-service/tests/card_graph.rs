@@ -56,6 +56,31 @@ fn seed_three_cards(backend: &Arc<dyn KanbanBackend>) -> (uuid::Uuid, uuid::Uuid
     (a_id, b_id, c_id)
 }
 
+/// Seed two distinct boards, one card on each. Returns the card ids for
+/// use as cross-board graph nodes. The changeset advertises cross-board
+/// parent/child as permitted; this helper backs the tests that exercise
+/// it.
+fn seed_two_boards_one_card_each(backend: &Arc<dyn KanbanBackend>) -> (uuid::Uuid, uuid::Uuid) {
+    let mut board_a = Board::new("Board A".to_string(), Some("AAA".to_string()));
+    let col_a = Column::new(board_a.id, "TODO".to_string(), 0);
+    let card_a = Card::new(&mut board_a, col_a.id, "Card A".to_string(), 0);
+    let card_a_id = card_a.id;
+
+    let mut board_b = Board::new("Board B".to_string(), Some("BBB".to_string()));
+    let col_b = Column::new(board_b.id, "TODO".to_string(), 0);
+    let card_b = Card::new(&mut board_b, col_b.id, "Card B".to_string(), 0);
+    let card_b_id = card_b.id;
+
+    backend.upsert_board(board_a).unwrap();
+    backend.upsert_column(col_a).unwrap();
+    backend.upsert_card(card_a).unwrap();
+    backend.upsert_board(board_b).unwrap();
+    backend.upsert_column(col_b).unwrap();
+    backend.upsert_card(card_b).unwrap();
+
+    (card_a_id, card_b_id)
+}
+
 macro_rules! card_graph_tests {
     ($mod_name:ident, $open_ctx:expr) => {
         mod $mod_name {
@@ -440,6 +465,54 @@ macro_rules! card_graph_tests {
                     .list_card_edges_from(a, CardEdgeType::RelatesTo)
                     .unwrap()
                     .is_empty());
+            }
+
+            // --- Cross-board parent/child ---
+            //
+            // Pins the changeset claim that cross-board parent/child is
+            // permitted. The graph is keyed by card UUIDs only — board
+            // identity is not consulted, and the edge persists in both
+            // sub-graphs equally.
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_set_parent_across_boards_is_permitted_and_visible_from_both_sides() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
+
+                ctx.set_parent(child_on_b, parent_on_a).unwrap();
+
+                let children = ctx.list_card_children(parent_on_a).unwrap();
+                assert_eq!(children, vec![child_on_b], "child visible from parent side");
+
+                let parents = ctx.list_card_parents(child_on_b).unwrap();
+                assert_eq!(parents, vec![parent_on_a], "parent visible from child side");
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_set_parent_across_boards_persists_to_backend_round_trip() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
+
+                ctx.set_parent(child_on_b, parent_on_a).unwrap();
+                ctx.save().await.unwrap();
+
+                // Re-read graph from the backend rather than the in-memory
+                // KanbanContext to confirm the edge survives serialization.
+                let graph = ctx.backend().get_graph().unwrap();
+                assert_eq!(graph.parents(child_on_b), vec![parent_on_a]);
+                assert_eq!(graph.children(parent_on_a), vec![child_on_b]);
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_parent_across_boards_clears_edge() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
+
+                ctx.set_parent(child_on_b, parent_on_a).unwrap();
+                ctx.remove_parent(child_on_b, parent_on_a).unwrap();
+
+                assert!(ctx.list_card_children(parent_on_a).unwrap().is_empty());
+                assert!(ctx.list_card_parents(child_on_b).unwrap().is_empty());
             }
         }
     };
