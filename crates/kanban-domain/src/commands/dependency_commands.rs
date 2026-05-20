@@ -88,8 +88,8 @@ impl AddEdge {
         context.store.modify_graph(Box::new(move |graph| {
             match kind {
                 CardEdgeType::ParentOf => graph.set_parent(target, source)?,
-                CardEdgeType::Blocks => graph.add_blocks(source, target)?,
-                CardEdgeType::RelatesTo => graph.add_relates_to(source, target)?,
+                CardEdgeType::Blocks => graph.set_block(source, target)?,
+                CardEdgeType::RelatesTo => graph.relate(source, target)?,
             }
             Ok(())
         }))
@@ -142,8 +142,8 @@ impl RemoveEdge {
         context.store.modify_graph(Box::new(move |graph| {
             match kind {
                 CardEdgeType::ParentOf => graph.remove_parent(target, source)?,
-                CardEdgeType::Blocks => graph.remove_blocks(source, target)?,
-                CardEdgeType::RelatesTo => graph.remove_relates_to(source, target)?,
+                CardEdgeType::Blocks => graph.unblock(source, target)?,
+                CardEdgeType::RelatesTo => graph.unrelate(source, target)?,
             }
             Ok(())
         }))

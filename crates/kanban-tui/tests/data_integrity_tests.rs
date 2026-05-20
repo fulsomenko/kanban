@@ -41,7 +41,7 @@ fn test_delete_card_cleans_dependencies() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.add_blocks(card_a, card_b).unwrap();
+        graph.set_block(card_a, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
     assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
@@ -232,7 +232,7 @@ fn test_archive_card_preserves_edges() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.add_blocks(card_a, card_b).unwrap();
+        graph.set_block(card_a, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
     assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
@@ -389,14 +389,14 @@ fn test_cycle_detection_blocks() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.add_blocks(card_a, card_b).unwrap();
-        graph.add_blocks(card_b, card_c).unwrap();
+        graph.set_block(card_a, card_b).unwrap();
+        graph.set_block(card_b, card_c).unwrap();
         store.set_graph(graph).unwrap();
     }
 
     {
         let mut graph = store.get_graph().unwrap();
-        let result = graph.add_blocks(card_c, card_a);
+        let result = graph.set_block(card_c, card_a);
         assert!(result.unwrap_err().is_cycle_detected());
     }
 }

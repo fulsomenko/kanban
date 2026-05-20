@@ -1342,7 +1342,7 @@ impl GraphOperations for KanbanContext {
         let graph = self.backend.get_graph()?;
         Ok(match kind {
             CardEdgeType::ParentOf => graph.children(node),
-            CardEdgeType::Blocks => graph.blocks_targets(node),
+            CardEdgeType::Blocks => graph.blocked(node),
             CardEdgeType::RelatesTo => graph.related(node),
         })
     }

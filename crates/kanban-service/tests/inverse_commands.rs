@@ -1331,7 +1331,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
 
     // Add a graph edge so the cascade has something to clean up.
     let mut graph = ctx.graph()?;
-    graph.add_blocks(c1.id, c3.id).unwrap();
+    graph.set_block(c1.id, c3.id).unwrap();
     ctx.backend().set_graph(graph)?;
     ctx.clear_history()?;
 

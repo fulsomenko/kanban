@@ -88,7 +88,7 @@ macro_rules! cascade_tests {
                 backend.upsert_card(card_b).unwrap();
 
                 let mut graph = backend.get_graph().unwrap();
-                graph.add_blocks(card_a_id, card_b_id).unwrap();
+                graph.set_block(card_a_id, card_b_id).unwrap();
                 backend.set_graph(graph).unwrap();
                 assert_eq!(backend.get_graph().unwrap().len(), 1);
 

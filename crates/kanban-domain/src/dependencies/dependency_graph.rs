@@ -18,7 +18,7 @@ use crate::{CardId, KanbanResult};
 ///
 /// Cross-cutting operations (`archive_node`, `unarchive_node`,
 /// `remove_node`) cascade across all three. Per-edge-type convenience
-/// methods (`set_parent`, `add_blocks`, `add_relates`, etc.) delegate
+/// methods (`set_parent`, `set_block`, `relate`, etc.) delegate
 /// to the matching sub-graph and convert [`GraphError`] into the
 /// domain-level [`DependencyError`] / [`crate::KanbanError`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -137,17 +137,17 @@ impl DependencyGraph {
     // --- Blocks ---
 
     /// Add a `blocker -> blocked` blocks edge.
-    pub fn add_blocks(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
+    pub fn set_block(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
         self.blocks.add_edge(blocker, blocked).map_err(dep_err)
     }
 
     /// Remove the `blocker -> blocked` blocks edge.
-    pub fn remove_blocks(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
+    pub fn unblock(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
         self.blocks.remove_edge(blocker, blocked).map_err(dep_err)
     }
 
     /// Cards `card` blocks (outgoing blocks edges).
-    pub fn blocks_targets(&self, card: CardId) -> Vec<CardId> {
+    pub fn blocked(&self, card: CardId) -> Vec<CardId> {
         self.blocks.outgoing(card)
     }
 
@@ -167,12 +167,12 @@ impl DependencyGraph {
     // --- Relates ---
 
     /// Add an undirected `a <-> b` relates edge.
-    pub fn add_relates_to(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
+    pub fn relate(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
         self.relates.add_edge(a, b).map_err(dep_err)
     }
 
     /// Remove the undirected `a <-> b` relates edge.
-    pub fn remove_relates_to(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
+    pub fn unrelate(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
         self.relates.remove_edge(a, b).map_err(dep_err)
     }
 
@@ -194,7 +194,7 @@ impl DependencyGraph {
     /// needing per-type knowledge.
     ///
     /// Tolerant by design: missing edges are silently ignored. Use
-    /// the typed `remove_parent` / `remove_blocks` / `remove_relates_to`
+    /// the typed `remove_parent` / `unblock` / `unrelate`
     /// methods when you want strict edge-not-found errors. Uses the
     /// `Graph::remove_edge` inherited via `Cascadable`'s supertrait.
     pub fn disconnect(&mut self, a: Uuid, b: Uuid) -> bool {
@@ -379,8 +379,8 @@ mod tests {
     fn test_add_blocks_creates_directed_edge() {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
-        g.add_blocks(a, b).unwrap();
-        assert_eq!(g.blocks_targets(a), vec![b]);
+        g.set_block(a, b).unwrap();
+        assert_eq!(g.blocked(a), vec![b]);
         assert_eq!(g.blockers(b), vec![a]);
     }
 
@@ -388,24 +388,24 @@ mod tests {
     fn test_add_blocks_cycle_returns_error() {
         let (a, b, c) = ids();
         let mut g = DependencyGraph::new();
-        g.add_blocks(a, b).unwrap();
-        g.add_blocks(b, c).unwrap();
-        assert!(g.add_blocks(c, a).unwrap_err().is_cycle_detected());
+        g.set_block(a, b).unwrap();
+        g.set_block(b, c).unwrap();
+        assert!(g.set_block(c, a).unwrap_err().is_cycle_detected());
     }
 
     #[test]
     fn test_add_blocks_self_reference_returns_error() {
         let (a, _, _) = ids();
         let mut g = DependencyGraph::new();
-        assert!(g.add_blocks(a, a).unwrap_err().is_self_reference());
+        assert!(g.set_block(a, a).unwrap_err().is_self_reference());
     }
 
     #[test]
     fn test_can_start_returns_true_when_all_blockers_complete() {
         let (a, b, c) = ids();
         let mut g = DependencyGraph::new();
-        g.add_blocks(a, c).unwrap();
-        g.add_blocks(b, c).unwrap();
+        g.set_block(a, c).unwrap();
+        g.set_block(b, c).unwrap();
         assert!(!g.can_start(c, |id| id == a));
         assert!(g.can_start(c, |_| true));
     }
@@ -416,7 +416,7 @@ mod tests {
     fn test_add_relates_to_creates_bidirectional_edge() {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
-        g.add_relates_to(a, b).unwrap();
+        g.relate(a, b).unwrap();
         assert_eq!(g.related(a), vec![b]);
         assert_eq!(g.related(b), vec![a]);
     }
@@ -425,16 +425,16 @@ mod tests {
     fn test_add_relates_to_self_reference_returns_error() {
         let (a, _, _) = ids();
         let mut g = DependencyGraph::new();
-        assert!(g.add_relates_to(a, a).unwrap_err().is_self_reference());
+        assert!(g.relate(a, a).unwrap_err().is_self_reference());
     }
 
     #[test]
     fn test_add_relates_permits_cycle() {
         let (a, b, c) = ids();
         let mut g = DependencyGraph::new();
-        g.add_relates_to(a, b).unwrap();
-        g.add_relates_to(b, c).unwrap();
-        assert!(g.add_relates_to(c, a).is_ok());
+        g.relate(a, b).unwrap();
+        g.relate(b, c).unwrap();
+        assert!(g.relate(c, a).is_ok());
     }
 
     // --- Cross-cutting cascades ---
@@ -444,11 +444,11 @@ mod tests {
         let (a, b, c) = ids();
         let mut g = DependencyGraph::new();
         g.set_parent(b, a).unwrap();
-        g.add_blocks(a, c).unwrap();
-        g.add_relates_to(a, c).unwrap();
+        g.set_block(a, c).unwrap();
+        g.relate(a, c).unwrap();
         g.archive_node(a);
         assert!(g.children(a).is_empty());
-        assert!(g.blocks_targets(a).is_empty());
+        assert!(g.blocked(a).is_empty());
         assert!(g.related(a).is_empty());
         assert_eq!(g.len(), 3);
         assert_eq!(g.active_len(), 0);
@@ -459,8 +459,8 @@ mod tests {
         let (a, b, c) = ids();
         let mut g = DependencyGraph::new();
         g.set_parent(b, a).unwrap();
-        g.add_blocks(a, c).unwrap();
-        g.add_relates_to(a, c).unwrap();
+        g.set_block(a, c).unwrap();
+        g.relate(a, c).unwrap();
         g.remove_node(a);
         assert_eq!(g.len(), 0);
     }
@@ -471,7 +471,7 @@ mod tests {
     fn test_disconnect_returns_true_when_edge_existed_in_any_subgraph() {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
-        g.add_blocks(a, b).unwrap();
+        g.set_block(a, b).unwrap();
         assert!(g.disconnect(a, b), "edge existed in blocks; expected true");
         assert!(!g.disconnect(a, b), "edge already gone; expected false");
     }
@@ -488,10 +488,10 @@ mod tests {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
         g.set_parent(b, a).unwrap();
-        g.add_blocks(a, b).unwrap();
+        g.set_block(a, b).unwrap();
         assert!(g.disconnect(a, b));
         assert!(g.children(a).is_empty());
-        assert!(g.blocks_targets(a).is_empty());
+        assert!(g.blocked(a).is_empty());
     }
 
     #[test]
@@ -499,8 +499,8 @@ mod tests {
         let (a, b, c) = ids();
         let mut g = DependencyGraph::new();
         g.set_parent(b, a).unwrap();
-        g.add_blocks(b, c).unwrap();
+        g.set_block(b, c).unwrap();
         assert_eq!(g.children(a), vec![b]);
-        assert_eq!(g.blocks_targets(b), vec![c]);
+        assert_eq!(g.blocked(b), vec![c]);
     }
 }

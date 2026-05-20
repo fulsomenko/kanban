@@ -284,8 +284,8 @@ mod tests {
 
         {
             let mut graph = tc.store.get_graph().unwrap();
-            graph.add_blocks(card_a, card_b).unwrap();
-            graph.add_blocks(card_b, card_c).unwrap();
+            graph.set_block(card_a, card_b).unwrap();
+            graph.set_block(card_b, card_c).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
         assert_eq!(tc.store.get_graph().unwrap().len(), 2);
@@ -311,7 +311,7 @@ mod tests {
         let card_b = Uuid::new_v4();
         {
             let mut graph = tc.store.get_graph().unwrap();
-            graph.add_blocks(card_a, card_b).unwrap();
+            graph.set_block(card_a, card_b).unwrap();
             tc.store.set_graph(graph).unwrap();
         }
 

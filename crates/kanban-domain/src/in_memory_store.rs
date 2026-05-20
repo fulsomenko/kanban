@@ -1133,7 +1133,7 @@ mod tests {
         let b = Uuid::new_v4();
 
         let mut graph = store.get_graph().unwrap();
-        graph.add_blocks(a, b).unwrap();
+        graph.set_block(a, b).unwrap();
         store.set_graph(graph).unwrap();
 
         let result = store.modify_graph(Box::new(move |graph| {
