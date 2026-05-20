@@ -77,7 +77,7 @@ pub enum EdgeOp {
 /// - `ParentOf`:   source = parent, target = child   (edge parent -> child)
 /// - `Blocks`:     source = blocker, target = blocked (edge blocker -> blocked)
 /// - `RelatesTo`:  undirected; the pair is symmetric but source/target
-///                 are stored in the order the caller provided them.
+///   are stored in the order the caller provided them.
 ///
 /// Strict by design: `Add` rejects cycles / self-references, `Remove`
 /// errors on edge-not-found. For tolerant kind-agnostic removal (e.g.
