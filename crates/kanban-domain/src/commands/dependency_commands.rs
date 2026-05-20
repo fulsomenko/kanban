@@ -142,7 +142,10 @@ impl RemoveDependencyCommand {
         let source_id = self.source_id;
         let target_id = self.target_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.try_remove_edge(source_id, target_id);
+            // No-op-on-miss is intentional here: undo replay against a
+            // graph where the edge is already gone must still succeed.
+            // The bool return is informational for direct callers.
+            let _removed = graph.try_remove_edge(source_id, target_id);
             Ok(())
         }))
     }

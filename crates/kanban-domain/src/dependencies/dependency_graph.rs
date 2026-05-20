@@ -163,12 +163,15 @@ impl DependencyGraph {
     }
 
     /// Tolerant cross-cutting edge removal: removes the `a -> b` edge
-    /// from every sub-graph it appears in. Returns Ok if nothing was
-    /// found (no per-type knowledge required at the call site).
-    pub fn try_remove_edge(&mut self, a: Uuid, b: Uuid) {
-        let _ = self.parent_child.remove_edge(a, b);
-        let _ = self.blocks.remove_edge(a, b);
-        let _ = self.relates.remove_edge(a, b);
+    /// from every sub-graph it appears in. Returns `true` iff at least
+    /// one sub-graph held the edge — lets callers distinguish "the
+    /// pair was disconnected" from "no edge was there to remove"
+    /// without needing per-type knowledge.
+    pub fn try_remove_edge(&mut self, a: Uuid, b: Uuid) -> bool {
+        let removed_parent = self.parent_child.remove_edge(a, b).is_ok();
+        let removed_blocks = self.blocks.remove_edge(a, b).is_ok();
+        let removed_relates = self.relates.remove_edge(a, b).is_ok();
+        removed_parent || removed_blocks || removed_relates
     }
 }
 
@@ -391,8 +394,14 @@ mod tests {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
         g.add_blocks(a, b).unwrap();
-        assert!(g.try_remove_edge(a, b), "edge existed in blocks; expected true");
-        assert!(!g.try_remove_edge(a, b), "edge already gone; expected false");
+        assert!(
+            g.try_remove_edge(a, b),
+            "edge existed in blocks; expected true"
+        );
+        assert!(
+            !g.try_remove_edge(a, b),
+            "edge already gone; expected false"
+        );
     }
 
     #[test]
