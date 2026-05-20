@@ -12,23 +12,16 @@ use thiserror::Error;
 pub enum KanbanCliError {
     #[error(transparent)]
     Domain(#[from] KanbanError),
-    /// Identifier resolution failed at the CLI boundary.
+    /// Handler-built user-facing message at the CLI boundary.
     ///
-    /// Display renders the hint verbatim so the user sees the same
-    /// `Card 'X' not found` shape every other card-targeted CLI command
-    /// produces. The variant name is the semantic category — the
-    /// rendered message stays consistent across the surface.
+    /// Covers both the original use case — identifier resolution
+    /// failed (`Card 'KAN-99' not found`) — and the broader case where
+    /// a handler has enough input context to enrich an otherwise
+    /// anonymous domain error (`cycle detected: making A a parent of B
+    /// would create a cycle`). Display renders the hint verbatim, no
+    /// wrapper prefix, matching the established CLI convention.
     #[error("{hint}")]
     Resolution { hint: String },
-    /// Handler-built user-facing message.
-    ///
-    /// Used when a domain-level error is anonymous (e.g. "cycle
-    /// detected" with no card identifiers) and the CLI handler has
-    /// enough input context to construct a more legible message that
-    /// echoes the user's flags. Display renders the message verbatim —
-    /// no wrapper prefix — matching the established CLI convention.
-    #[error("{0}")]
-    Message(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

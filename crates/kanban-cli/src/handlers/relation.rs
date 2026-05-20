@@ -29,18 +29,20 @@ fn resolve_card(ctx: &CliContext, raw: &str) -> KanbanCliResult<Uuid> {
 /// and `--child` strings the user typed. The underlying domain
 /// `DependencyError` is anonymous (just "cycle detected" / etc.); the
 /// CLI handler is the right boundary to attach user-input context so
-/// the error becomes a self-contained breadcrumb. Renders via the
-/// `Message` variant so the bare message reaches the user without
+/// the error becomes a self-contained breadcrumb. Renders via
+/// `Resolution { hint }` so the bare message reaches the user without
 /// the domain layer's "validation error:" wrapper.
 fn enrich_add_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError {
     if e.is_cycle_detected() {
-        KanbanCliError::Message(format!(
-            "cycle detected: making {parent} a parent of {child} would create a cycle"
-        ))
+        KanbanCliError::Resolution {
+            hint: format!(
+                "cycle detected: making {parent} a parent of {child} would create a cycle"
+            ),
+        }
     } else if e.is_self_reference() {
-        KanbanCliError::Message(format!(
-            "self-reference not allowed: {parent} cannot be its own parent"
-        ))
+        KanbanCliError::Resolution {
+            hint: format!("self-reference not allowed: {parent} cannot be its own parent"),
+        }
     } else {
         e.into()
     }
@@ -48,9 +50,11 @@ fn enrich_add_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError
 
 fn enrich_remove_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError {
     if e.is_edge_not_found() {
-        KanbanCliError::Message(format!(
-            "edge not found: no parent->child edge from {parent} to {child} to remove (use `kanban relation parents {child}` to see existing parents)"
-        ))
+        KanbanCliError::Resolution {
+            hint: format!(
+                "edge not found: no parent->child edge from {parent} to {child} to remove (use `kanban relation parents {child}` to see existing parents)"
+            ),
+        }
     } else {
         e.into()
     }
