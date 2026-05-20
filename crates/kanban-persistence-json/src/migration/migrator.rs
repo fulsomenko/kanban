@@ -242,6 +242,117 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_migrate_v6_to_v6_is_a_noop_byte_for_byte() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v6.json");
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        let original = serde_json::to_string_pretty(&v6).unwrap();
+        tokio::fs::write(&path, &original).await.unwrap();
+
+        Migrator::migrate(FormatVersion::V6, FormatVersion::V6, &path)
+            .await
+            .unwrap();
+
+        let after = tokio::fs::read_to_string(&path).await.unwrap();
+        assert_eq!(
+            after, original,
+            "V6 -> V6 migration must be a byte-for-byte noop"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_migrate_v4_to_v6_skips_legacy_steps() {
+        // A V4 file goes straight through split_graph: no v1→v2
+        // (no .v1.backup file should appear) and no v2→v3 (the
+        // pre-V3 'prefix_counters' shaping doesn't apply because
+        // V4 already shipped past that point).
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v4.json");
+        let v4 = json!({
+            "version": 4,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        tokio::fs::write(&path, serde_json::to_string_pretty(&v4).unwrap())
+            .await
+            .unwrap();
+
+        Migrator::migrate(FormatVersion::V4, FormatVersion::V6, &path)
+            .await
+            .unwrap();
+
+        let after: Value =
+            serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
+        assert_eq!(after["version"], 6);
+        assert!(after["data"]["graph"]["parent_child"].is_object());
+        assert!(
+            !path.with_extension("v1.backup").exists(),
+            "V4 -> V6 must not trigger the v1→v2 step that creates .v1.backup"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_migrate_v5_to_v6_skips_legacy_steps() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v5.json");
+        let v5 = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        tokio::fs::write(&path, serde_json::to_string_pretty(&v5).unwrap())
+            .await
+            .unwrap();
+
+        Migrator::migrate(FormatVersion::V5, FormatVersion::V6, &path)
+            .await
+            .unwrap();
+
+        let after: Value =
+            serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
+        assert_eq!(after["version"], 6);
+        assert!(after["data"]["graph"]["relates"].is_object());
+        assert!(
+            !path.with_extension("v1.backup").exists(),
+            "V5 -> V6 must not trigger the v1→v2 step that creates .v1.backup"
+        );
+    }
+
+    #[tokio::test]
     async fn test_migrate_v1_to_v3_via_chain() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("board.json");
