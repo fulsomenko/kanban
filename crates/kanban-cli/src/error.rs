@@ -12,7 +12,13 @@ use thiserror::Error;
 pub enum KanbanCliError {
     #[error(transparent)]
     Domain(#[from] KanbanError),
-    #[error("identifier resolution failed: {hint}")]
+    /// Identifier resolution failed at the CLI boundary.
+    ///
+    /// Display renders the hint verbatim so the user sees the same
+    /// `Card 'X' not found` shape every other card-targeted CLI command
+    /// produces. The variant name is the semantic category — the
+    /// rendered message stays consistent across the surface.
+    #[error("{hint}")]
     Resolution { hint: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
