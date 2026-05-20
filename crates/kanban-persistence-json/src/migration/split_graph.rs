@@ -341,6 +341,52 @@ mod tests {
         assert!(format!("{err:?}").to_lowercase().contains("edge_type"));
     }
 
+    /// `transform_to_v6_split_graph_value` is `pub`. If a caller
+    /// accidentally invokes it on an already-V6 envelope (with edges in
+    /// the three split sub-graphs and no legacy `cards` field), the
+    /// function must NOT wipe the edges. Without an early-out, lines
+    /// 96-100 unconditionally overwrite `data["graph"]` with three
+    /// empty maps — silent data loss. This test pins idempotency.
+    #[test]
+    fn test_transform_is_idempotent_on_v6_envelope_with_edges() {
+        let mut env = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "00000000-0000-0000-0000-000000000001",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": "11111111-1111-1111-1111-111111111111",
+                        "target": "22222222-2222-2222-2222-222222222222",
+                        "direction": "Directed",
+                        "weight": null,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }] },
+                    "blocks":  { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        let before = env.clone();
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        assert_eq!(
+            env, before,
+            "V6 envelope must be unchanged by the split-graph transform"
+        );
+        assert_eq!(
+            env["data"]["graph"]["parent_child"]["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1,
+            "the V6 parent_child edge survived"
+        );
+    }
+
     #[tokio::test]
     async fn test_migrate_to_v6_split_graph_file_writes_bumped_version() {
         let dir = tempdir().unwrap();
