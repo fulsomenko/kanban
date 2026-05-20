@@ -4,7 +4,7 @@ use uuid::Uuid;
 use super::core::EdgeStore;
 use super::edge::{Edge, EdgeDirection};
 use super::error::GraphError;
-use super::traits::{Graph, SubGraph, Undirected};
+use super::traits::{Cascadable, EdgeStats, Graph, Undirected};
 
 /// Undirected graph keyed by `Uuid` node identifiers.
 ///
@@ -61,7 +61,7 @@ impl UndirectedGraph {
     }
 }
 
-impl SubGraph for UndirectedGraph {
+impl Cascadable for UndirectedGraph {
     fn archive_node(&mut self, node: Uuid) {
         UndirectedGraph::archive_node(self, node);
     }
@@ -71,6 +71,9 @@ impl SubGraph for UndirectedGraph {
     fn remove_node(&mut self, node: Uuid) {
         UndirectedGraph::remove_node(self, node);
     }
+}
+
+impl EdgeStats for UndirectedGraph {
     fn edge_count(&self) -> usize {
         UndirectedGraph::edge_count(self)
     }

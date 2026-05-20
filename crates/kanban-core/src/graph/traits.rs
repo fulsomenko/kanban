@@ -59,23 +59,30 @@ pub trait Undirected: Graph {
     fn neighbors(&self, node: Self::NodeId) -> Vec<Self::NodeId>;
 }
 
-/// Soft-delete and aggregate operations every node-keyed graph
-/// container in this workspace supports, on top of the basic [`Graph`]
-/// edge surface.
+/// Node-keyed cascade operations: archive, unarchive, and hard-remove
+/// every edge involving a given node.
 ///
-/// `SubGraph: Graph<NodeId = Uuid>` so a `&dyn SubGraph` lets callers
-/// add/remove edges and inspect existence without committing to either
-/// directed or undirected semantics. Both [`super::DagGraph`] and
-/// [`super::UndirectedGraph`] implement this — composite types (e.g.
-/// `kanban_domain::DependencyGraph`) iterate their sub-graphs
-/// uniformly without per-field hard-coding.
-pub trait SubGraph: Graph<NodeId = Uuid> {
+/// Strictly mutating. Distinct from [`EdgeStats`] (which is read-only)
+/// because the two surfaces are independent — a caller that just
+/// counts edges doesn't need cascade authority, and a caller doing
+/// soft-deletes doesn't need to ask for counts. Splitting them keeps
+/// each trait's name accurate to its single purpose.
+pub trait Cascadable: Graph<NodeId = Uuid> {
     /// Archive every edge involving `node` (soft delete).
     fn archive_node(&mut self, node: Uuid);
     /// Unarchive every edge involving `node`.
     fn unarchive_node(&mut self, node: Uuid);
     /// Remove every edge involving `node` (hard delete).
     fn remove_node(&mut self, node: Uuid);
+}
+
+/// Edge-level aggregate and existence queries: counts and
+/// presence-checks across both active and archived edges.
+///
+/// Strictly read-only. Lives separately from [`Cascadable`] so a
+/// generic consumer can require only the surface it actually uses —
+/// no implicit mutation authority leaking into inspection code.
+pub trait EdgeStats: Graph<NodeId = Uuid> {
     /// Total edges (active + archived).
     fn edge_count(&self) -> usize;
     /// Active edges only.
@@ -104,8 +111,13 @@ mod tests {
     }
 
     #[test]
-    fn test_subgraph_trait_is_object_safe() {
-        fn _accepts_dyn(_: &dyn SubGraph) {}
-        fn _accepts_dyn_mut(_: &mut dyn SubGraph) {}
+    fn test_cascadable_trait_is_object_safe() {
+        fn _accepts_dyn(_: &dyn Cascadable) {}
+        fn _accepts_dyn_mut(_: &mut dyn Cascadable) {}
+    }
+
+    #[test]
+    fn test_edge_stats_trait_is_object_safe() {
+        fn _accepts_dyn(_: &dyn EdgeStats) {}
     }
 }

@@ -1,5 +1,5 @@
 use kanban_core::{
-    DagGraph, Directed, Edge, Graph, GraphError, SubGraph, Undirected, UndirectedGraph,
+    Cascadable, DagGraph, Directed, Edge, EdgeStats, Graph, GraphError, Undirected, UndirectedGraph,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -36,50 +36,58 @@ impl DependencyGraph {
         Self::default()
     }
 
-    /// Borrow each sub-graph as a `&dyn SubGraph` for cross-cutting
-    /// operations that don't care which structural rules apply. Order
-    /// is `parent_child`, `blocks`, `relates` — stable across callers.
-    /// A new sub-graph field need only be added to these two helpers,
-    /// not to every cascade method below.
-    fn sub_graphs(&self) -> [&dyn SubGraph; 3] {
-        [&self.parent_child, &self.blocks, &self.relates]
-    }
-
-    fn sub_graphs_mut(&mut self) -> [&mut dyn SubGraph; 3] {
+    /// Borrow each component graph as `&mut dyn Cascadable` for
+    /// node-level cascade operations (archive / unarchive / hard
+    /// remove + tolerant cross-cutting edge removal via the inherited
+    /// `Graph::remove_edge`). Order is `parent_child`, `blocks`,
+    /// `relates` — stable across callers. A new component graph only
+    /// needs to be added to this helper, not to every cascade method
+    /// below.
+    fn cascadable_parts_mut(&mut self) -> [&mut dyn Cascadable; 3] {
         [&mut self.parent_child, &mut self.blocks, &mut self.relates]
     }
 
-    // --- Cross-cutting node cascades ---
+    /// Borrow each component graph as `&dyn EdgeStats` for read-only
+    /// edge-level queries (counts, existence). Symmetric with
+    /// `cascadable_parts_mut`; lives separately because the read
+    /// surface has no business carrying mutation authority.
+    fn edge_stats_parts(&self) -> [&dyn EdgeStats; 3] {
+        [&self.parent_child, &self.blocks, &self.relates]
+    }
+
+    // --- Cross-cutting node cascades (Cascadable surface) ---
 
     /// Archive every edge involving `card` across all three sub-graphs.
     pub fn archive_node(&mut self, card: CardId) {
-        for sg in self.sub_graphs_mut() {
+        for sg in self.cascadable_parts_mut() {
             sg.archive_node(card);
         }
     }
 
     /// Unarchive every edge involving `card` across all three sub-graphs.
     pub fn unarchive_node(&mut self, card: CardId) {
-        for sg in self.sub_graphs_mut() {
+        for sg in self.cascadable_parts_mut() {
             sg.unarchive_node(card);
         }
     }
 
     /// Hard-remove every edge involving `card` across all three sub-graphs.
     pub fn remove_node(&mut self, card: CardId) {
-        for sg in self.sub_graphs_mut() {
+        for sg in self.cascadable_parts_mut() {
             sg.remove_node(card);
         }
     }
 
+    // --- Cross-cutting edge aggregates (EdgeStats surface) ---
+
     /// Total edge count across all three sub-graphs (active + archived).
     pub fn edge_count(&self) -> usize {
-        self.sub_graphs().iter().map(|g| g.edge_count()).sum()
+        self.edge_stats_parts().iter().map(|g| g.edge_count()).sum()
     }
 
     /// Active edge count across all three sub-graphs.
     pub fn active_edge_count(&self) -> usize {
-        self.sub_graphs()
+        self.edge_stats_parts()
             .iter()
             .map(|g| g.active_edge_count())
             .sum()
@@ -174,17 +182,18 @@ impl DependencyGraph {
     /// True iff any edge between `a` and `b` exists in any sub-graph
     /// (active or archived). Cross-cutting check across all three.
     pub fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
-        self.sub_graphs().iter().any(|g| g.has_edge(a, b))
+        self.edge_stats_parts().iter().any(|g| g.has_edge(a, b))
     }
 
     /// Tolerant cross-cutting edge removal: removes the `a -> b` edge
     /// from every sub-graph it appears in. Returns `true` iff at least
     /// one sub-graph held the edge — lets callers distinguish "the
     /// pair was disconnected" from "no edge was there to remove"
-    /// without needing per-type knowledge.
+    /// without needing per-type knowledge. Uses the `Graph::remove_edge`
+    /// inherited via `Cascadable`'s supertrait bound.
     pub fn try_remove_edge(&mut self, a: Uuid, b: Uuid) -> bool {
         let mut any_removed = false;
-        for sg in self.sub_graphs_mut() {
+        for sg in self.cascadable_parts_mut() {
             if sg.remove_edge(a, b).is_ok() {
                 any_removed = true;
             }

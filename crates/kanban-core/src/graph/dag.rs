@@ -5,7 +5,7 @@ use super::algorithms::would_create_cycle;
 use super::core::EdgeStore;
 use super::edge::{Edge, EdgeDirection};
 use super::error::GraphError;
-use super::traits::{Directed, Graph, SubGraph};
+use super::traits::{Cascadable, Directed, EdgeStats, Graph};
 
 /// Directed acyclic graph keyed by `Uuid` node identifiers.
 ///
@@ -110,7 +110,7 @@ impl DagGraph {
     }
 }
 
-impl SubGraph for DagGraph {
+impl Cascadable for DagGraph {
     fn archive_node(&mut self, node: Uuid) {
         DagGraph::archive_node(self, node);
     }
@@ -120,6 +120,9 @@ impl SubGraph for DagGraph {
     fn remove_node(&mut self, node: Uuid) {
         DagGraph::remove_node(self, node);
     }
+}
+
+impl EdgeStats for DagGraph {
     fn edge_count(&self) -> usize {
         DagGraph::edge_count(self)
     }
