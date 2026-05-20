@@ -11,9 +11,8 @@
 //! ordering invariants (graph edges → cards → archived → columns → sprints →
 //! board) that make the bypassed validations safe.
 
-use super::{
-    BoardCommand, Command, CommandContext, DependencyCommand, EdgeMutation, EdgeOp, ImportEntities,
-};
+use super::dependency_commands::edges_to_undo_commands;
+use super::{BoardCommand, Command, CommandContext, ImportEntities};
 use crate::data_store::DataStore;
 use crate::{KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
@@ -95,21 +94,9 @@ impl DeleteCardEdges {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let id_set: std::collections::HashSet<_> = self.ids.iter().copied().collect();
         let graph = store.get_graph()?;
-        let involves = |edge: &kanban_core::Edge<()>| {
+        Ok(edges_to_undo_commands(&graph, |edge| {
             id_set.contains(&edge.source) || id_set.contains(&edge.target)
-        };
-        Ok(graph
-            .edges_by_kind()
-            .filter(|(_, edge)| involves(edge))
-            .map(|(kind, edge)| {
-                Command::Dependency(DependencyCommand::EdgeMutation(EdgeMutation {
-                    kind,
-                    op: EdgeOp::Add,
-                    source: edge.source,
-                    target: edge.target,
-                }))
-            })
-            .collect())
+        }))
     }
 }
 

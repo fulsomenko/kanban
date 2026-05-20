@@ -406,21 +406,10 @@ impl DeleteCard {
         ))];
         let graph = store.get_graph()?;
         let card_id = self.card_id;
-        commands.extend(
-            graph
-                .edges_by_kind()
-                .filter(|(_, edge)| edge.involves(card_id))
-                .map(|(kind, edge)| {
-                    Command::Dependency(super::DependencyCommand::EdgeMutation(
-                        super::EdgeMutation {
-                            kind,
-                            op: super::EdgeOp::Add,
-                            source: edge.source,
-                            target: edge.target,
-                        },
-                    ))
-                }),
-        );
+        commands.extend(super::dependency_commands::edges_to_undo_commands(
+            &graph,
+            |edge| edge.involves(card_id),
+        ));
         Ok(commands)
     }
 }

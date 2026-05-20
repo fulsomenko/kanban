@@ -170,6 +170,42 @@ impl EdgeMutation {
     }
 }
 
+/// Build the inverse-replay sequence of `EdgeMutation::Add` commands
+/// for every edge in `graph` that matches `predicate`.
+///
+/// Centralises the kind→command mapping used by three capture-inverse
+/// sites:
+/// - [`RemoveDependencyCommand::capture_inverse`] (filter: edge connects `(a, b)`)
+/// - [`super::cascade_commands::DeleteCardEdges::capture_inverse`]
+///   (filter: edge involves any id in a batch)
+/// - [`super::card_commands::DeleteCard::capture_inverse`]
+///   (filter: edge involves a single card id)
+///
+/// Each previously duplicated the same `edges_by_kind().filter().map()`
+/// block. After P1.4's `EdgeMutation` consolidation the inner map
+/// collapses to a single uniform construction; this helper removes
+/// the remaining duplication.
+pub(super) fn edges_to_undo_commands<P>(
+    graph: &crate::DependencyGraph,
+    predicate: P,
+) -> Vec<Command>
+where
+    P: Fn(&kanban_core::Edge<()>) -> bool,
+{
+    graph
+        .edges_by_kind()
+        .filter(|(_, edge)| predicate(edge))
+        .map(|(kind, edge)| {
+            Command::Dependency(DependencyCommand::EdgeMutation(EdgeMutation {
+                kind,
+                op: EdgeOp::Add,
+                source: edge.source,
+                target: edge.target,
+            }))
+        })
+        .collect()
+}
+
 /// Remove a dependency between two cards (kind-agnostic, tolerant).
 ///
 /// Severs every directed or undirected edge between `source_id` and
@@ -210,18 +246,7 @@ impl RemoveDependencyCommand {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let graph = store.get_graph()?;
         let (a, b) = (self.source_id, self.target_id);
-        Ok(graph
-            .edges_by_kind()
-            .filter(|(_, edge)| edge.connects(a, b))
-            .map(|(kind, edge)| {
-                Command::Dependency(DependencyCommand::EdgeMutation(EdgeMutation {
-                    kind,
-                    op: EdgeOp::Add,
-                    source: edge.source,
-                    target: edge.target,
-                }))
-            })
-            .collect())
+        Ok(edges_to_undo_commands(&graph, |edge| edge.connects(a, b)))
     }
 }
 
