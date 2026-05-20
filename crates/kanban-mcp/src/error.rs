@@ -12,7 +12,14 @@ use thiserror::Error;
 pub enum KanbanMcpError {
     #[error(transparent)]
     Domain(#[from] KanbanError),
-    #[error("identifier resolution failed: {hint}")]
+    /// Identifier resolution failed at the MCP boundary.
+    ///
+    /// Display renders the hint verbatim — symmetric with
+    /// `KanbanCliError::Resolution`. The `INVALID_PARAMS` error code
+    /// (assigned at conversion to `McpError`) encodes the semantic
+    /// category; the message stays human-readable without a wrapper
+    /// prefix.
+    #[error("{hint}")]
     Resolution { hint: String },
     #[error("invalid parameter: {0}")]
     InvalidParam(String),
