@@ -42,6 +42,30 @@ pub trait Graph {
     fn incoming(&self, node: Self::NodeId) -> Vec<Self::NodeId>;
 }
 
+/// Soft-delete and aggregate operations that every node-keyed graph
+/// container in this workspace supports, on top of the basic [`Graph`]
+/// edge surface.
+///
+/// `SubGraph: Graph<NodeId = Uuid>` so a `&dyn SubGraph` automatically
+/// provides the directed-graph vocabulary too. Both [`super::DagGraph`]
+/// and [`super::UndirectedGraph`] implement this — composite types
+/// (e.g. `kanban_domain::DependencyGraph`) can iterate their sub-graphs
+/// uniformly without per-field hard-coding.
+pub trait SubGraph: Graph<NodeId = Uuid> {
+    /// Archive every edge involving `node` (soft delete).
+    fn archive_node(&mut self, node: Uuid);
+    /// Unarchive every edge involving `node`.
+    fn unarchive_node(&mut self, node: Uuid);
+    /// Remove every edge involving `node` (hard delete).
+    fn remove_node(&mut self, node: Uuid);
+    /// Total edges (active + archived).
+    fn edge_count(&self) -> usize;
+    /// Active edges only.
+    fn active_edge_count(&self) -> usize;
+    /// True iff any (active or archived) edge between `a` and `b` exists.
+    fn has_edge(&self, a: Uuid, b: Uuid) -> bool;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,5 +73,11 @@ mod tests {
     #[test]
     fn test_graph_trait_is_object_safe_for_uuid_nodes() {
         fn _accepts_dyn(_: &dyn Graph<NodeId = Uuid>) {}
+    }
+
+    #[test]
+    fn test_subgraph_trait_is_object_safe() {
+        fn _accepts_dyn(_: &dyn SubGraph) {}
+        fn _accepts_dyn_mut(_: &mut dyn SubGraph) {}
     }
 }

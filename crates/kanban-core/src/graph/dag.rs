@@ -5,7 +5,7 @@ use super::algorithms::would_create_cycle;
 use super::core::EdgeStore;
 use super::edge::{Edge, EdgeDirection};
 use super::error::GraphError;
-use super::traits::Graph;
+use super::traits::{Graph, SubGraph};
 
 /// Directed acyclic graph keyed by `Uuid` node identifiers.
 ///
@@ -107,6 +107,27 @@ impl DagGraph {
             adj.entry(edge.source).or_default().push(edge.target);
         }
         adj
+    }
+}
+
+impl SubGraph for DagGraph {
+    fn archive_node(&mut self, node: Uuid) {
+        DagGraph::archive_node(self, node);
+    }
+    fn unarchive_node(&mut self, node: Uuid) {
+        DagGraph::unarchive_node(self, node);
+    }
+    fn remove_node(&mut self, node: Uuid) {
+        DagGraph::remove_node(self, node);
+    }
+    fn edge_count(&self) -> usize {
+        DagGraph::edge_count(self)
+    }
+    fn active_edge_count(&self) -> usize {
+        DagGraph::active_edge_count(self)
+    }
+    fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
+        DagGraph::has_edge(self, a, b)
     }
 }
 

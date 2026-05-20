@@ -1,4 +1,4 @@
-use kanban_core::{DagGraph, Graph, GraphError, UndirectedGraph};
+use kanban_core::{DagGraph, Graph, GraphError, SubGraph, UndirectedGraph};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -33,39 +33,53 @@ impl DependencyGraph {
         Self::default()
     }
 
+    /// Borrow each sub-graph as a `&dyn SubGraph` for cross-cutting
+    /// operations that don't care which structural rules apply. Order
+    /// is `parent_child`, `blocks`, `relates` — stable across callers.
+    /// A new sub-graph field need only be added to these two helpers,
+    /// not to every cascade method below.
+    fn sub_graphs(&self) -> [&dyn SubGraph; 3] {
+        [&self.parent_child, &self.blocks, &self.relates]
+    }
+
+    fn sub_graphs_mut(&mut self) -> [&mut dyn SubGraph; 3] {
+        [&mut self.parent_child, &mut self.blocks, &mut self.relates]
+    }
+
     // --- Cross-cutting node cascades ---
 
     /// Archive every edge involving `card` across all three sub-graphs.
     pub fn archive_node(&mut self, card: CardId) {
-        self.parent_child.archive_node(card);
-        self.blocks.archive_node(card);
-        self.relates.archive_node(card);
+        for sg in self.sub_graphs_mut() {
+            sg.archive_node(card);
+        }
     }
 
     /// Unarchive every edge involving `card` across all three sub-graphs.
     pub fn unarchive_node(&mut self, card: CardId) {
-        self.parent_child.unarchive_node(card);
-        self.blocks.unarchive_node(card);
-        self.relates.unarchive_node(card);
+        for sg in self.sub_graphs_mut() {
+            sg.unarchive_node(card);
+        }
     }
 
     /// Hard-remove every edge involving `card` across all three sub-graphs.
     pub fn remove_node(&mut self, card: CardId) {
-        self.parent_child.remove_node(card);
-        self.blocks.remove_node(card);
-        self.relates.remove_node(card);
+        for sg in self.sub_graphs_mut() {
+            sg.remove_node(card);
+        }
     }
 
     /// Total edge count across all three sub-graphs (active + archived).
     pub fn edge_count(&self) -> usize {
-        self.parent_child.edge_count() + self.blocks.edge_count() + self.relates.edge_count()
+        self.sub_graphs().iter().map(|g| g.edge_count()).sum()
     }
 
     /// Active edge count across all three sub-graphs.
     pub fn active_edge_count(&self) -> usize {
-        self.parent_child.active_edge_count()
-            + self.blocks.active_edge_count()
-            + self.relates.active_edge_count()
+        self.sub_graphs()
+            .iter()
+            .map(|g| g.active_edge_count())
+            .sum()
     }
 
     // --- Parent / child ---
@@ -157,9 +171,7 @@ impl DependencyGraph {
     /// True iff any edge between `a` and `b` exists in any sub-graph
     /// (active or archived). Cross-cutting check across all three.
     pub fn has_edge(&self, a: Uuid, b: Uuid) -> bool {
-        self.parent_child.has_edge(a, b)
-            || self.blocks.has_edge(a, b)
-            || self.relates.has_edge(a, b)
+        self.sub_graphs().iter().any(|g| g.has_edge(a, b))
     }
 
     /// Tolerant cross-cutting edge removal: removes the `a -> b` edge
@@ -168,10 +180,13 @@ impl DependencyGraph {
     /// pair was disconnected" from "no edge was there to remove"
     /// without needing per-type knowledge.
     pub fn try_remove_edge(&mut self, a: Uuid, b: Uuid) -> bool {
-        let removed_parent = self.parent_child.remove_edge(a, b).is_ok();
-        let removed_blocks = self.blocks.remove_edge(a, b).is_ok();
-        let removed_relates = self.relates.remove_edge(a, b).is_ok();
-        removed_parent || removed_blocks || removed_relates
+        let mut any_removed = false;
+        for sg in self.sub_graphs_mut() {
+            if sg.remove_edge(a, b).is_ok() {
+                any_removed = true;
+            }
+        }
+        any_removed
     }
 }
 
