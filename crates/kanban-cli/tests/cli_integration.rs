@@ -3440,7 +3440,11 @@ mod relation_tests {
             .failure()
             .stderr(predicate::str::contains(&b))
             .stderr(predicate::str::contains(&a))
-            .stderr(predicate::str::contains("cycle"));
+            .stderr(predicate::str::contains("cycle"))
+            // Must not leak the underlying domain wrapper's prefix —
+            // other CLI commands report errors without 'validation
+            // error:' on the front.
+            .stderr(predicate::str::contains("validation error").not());
     }
 
     #[test]
@@ -3462,7 +3466,8 @@ mod relation_tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(&a))
-            .stderr(predicate::str::contains("self-reference"));
+            .stderr(predicate::str::contains("self-reference"))
+            .stderr(predicate::str::contains("validation error").not());
     }
 
     #[test]
@@ -3486,7 +3491,8 @@ mod relation_tests {
             .failure()
             .stderr(predicate::str::contains(&a))
             .stderr(predicate::str::contains(&b))
-            .stderr(predicate::str::contains("not found"));
+            .stderr(predicate::str::contains("not found"))
+            .stderr(predicate::str::contains("validation error").not());
     }
 
     #[test]
