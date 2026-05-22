@@ -59,12 +59,26 @@ impl<E: Edge> UndirectedGraph<E> {
     }
 
     /// Push an edge while preserving caller-supplied metadata.
+    ///
     /// Rejects self-references regardless of active/archived status.
+    /// Rejects active duplicates: an active edge whose endpoints
+    /// match `{a, b}` in either ordering is treated as the same
+    /// edge. Archived edges don't count against the duplicate check,
+    /// so re-adding after archive succeeds.
+    ///
     /// Load paths use this to rehydrate stored edges and surface
     /// corrupt self-loops as a hard load failure.
     pub fn add_edge_with_metadata(&mut self, edge: E) -> Result<(), GraphError> {
         if edge.source() == edge.target() {
             return Err(GraphError::SelfReference);
+        }
+        if edge.is_active() {
+            let (a, b) = (edge.source(), edge.target());
+            if self.store.active_edges().any(|e| {
+                (e.source() == a && e.target() == b) || (e.source() == b && e.target() == a)
+            }) {
+                return Err(GraphError::Duplicate);
+            }
         }
         self.store.add_edge(edge);
         Ok(())
@@ -247,6 +261,35 @@ mod tests {
         g.add_edge(b, c).unwrap();
         g.remove_node(b);
         assert_eq!(g.len(), 0);
+    }
+
+    #[test]
+    fn test_add_active_duplicate_in_either_orientation_returns_duplicate_error() {
+        let (a, b, _) = ids();
+        let mut g: UndirectedGraph<EdgeBase> = UndirectedGraph::new();
+        g.add_edge(a, b).unwrap();
+        assert_eq!(
+            g.add_edge(a, b),
+            Err(GraphError::Duplicate),
+            "same orientation rejected"
+        );
+        assert_eq!(
+            g.add_edge(b, a),
+            Err(GraphError::Duplicate),
+            "reverse orientation is the same undirected edge"
+        );
+        assert_eq!(g.len(), 1, "rejected duplicates must not be stored");
+    }
+
+    #[test]
+    fn test_re_add_after_archive_succeeds() {
+        let (a, b, _) = ids();
+        let mut g: UndirectedGraph<EdgeBase> = UndirectedGraph::new();
+        g.add_edge(a, b).unwrap();
+        g.archive_node(a);
+        g.add_edge(a, b).unwrap();
+        assert_eq!(g.active_len(), 1);
+        assert_eq!(g.len(), 2);
     }
 
     #[test]

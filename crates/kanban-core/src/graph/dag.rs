@@ -67,18 +67,26 @@ impl<E: Edge> DagGraph<E> {
 
     /// Push an edge while preserving caller-supplied metadata.
     ///
-    /// Runs the same self-reference and cycle invariants as the
-    /// trait's [`Graph::add_edge`]: self-references are rejected
-    /// always; cycles are rejected when the edge is active, ignored
-    /// when it is archived (archived edges are not part of the
-    /// active DAG and don't constrain new mutations). Load paths
-    /// use this to rehydrate stored edges and surface corrupt-DAG
-    /// state as a hard load failure.
+    /// Runs the same self-reference, duplicate, and cycle invariants
+    /// as the trait's [`Graph::add_edge`]:
+    /// - self-references are rejected always;
+    /// - active duplicates (an existing active `source -> target`)
+    ///   are rejected always; the duplicate check ignores archived
+    ///   edges so re-adding after archive succeeds;
+    /// - cycles are rejected when the edge is active, ignored
+    ///   when it is archived (archived edges are not part of the
+    ///   active DAG and don't constrain new mutations).
+    ///
+    /// Load paths use this to rehydrate stored edges and surface
+    /// corrupt-DAG state as a hard load failure.
     pub fn add_edge_with_metadata(&mut self, edge: E) -> Result<(), GraphError> {
         if edge.source() == edge.target() {
             return Err(GraphError::SelfReference);
         }
         if edge.is_active() {
+            if self.store.outgoing_active(edge.source()).any(|e| e.target() == edge.target()) {
+                return Err(GraphError::Duplicate);
+            }
             let adj = self.store.adjacency_list();
             if super::algorithms::would_create_cycle(&adj, edge.source(), edge.target()) {
                 return Err(GraphError::Cycle);
@@ -321,6 +329,51 @@ mod tests {
         let mut expected = vec![a, b];
         expected.sort();
         assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn test_add_active_duplicate_returns_duplicate_error() {
+        let (a, b, _) = ids();
+        let mut g: DagGraph<EdgeBase> = DagGraph::new();
+        add(&mut g, a, b).unwrap();
+        assert_eq!(
+            add(&mut g, a, b),
+            Err(GraphError::Duplicate),
+            "second active a->b must be rejected as duplicate"
+        );
+        assert_eq!(
+            g.outgoing(a),
+            vec![b],
+            "rejected duplicate must not appear in adjacency"
+        );
+    }
+
+    #[test]
+    fn test_add_reverse_orientation_is_not_a_duplicate() {
+        let (a, b, _) = ids();
+        let mut g: DagGraph<EdgeBase> = DagGraph::new();
+        add(&mut g, a, b).unwrap();
+        // a->b exists; b->a is a different directed edge — but the DAG
+        // also rejects it as a cycle (a->b->a). Pinning the precedence:
+        // cycle wins over duplicate because cycle covers the structural
+        // invariant.
+        assert_eq!(
+            add(&mut g, b, a),
+            Err(GraphError::Cycle),
+            "reverse orientation is a cycle in a DAG, not a duplicate"
+        );
+    }
+
+    #[test]
+    fn test_re_add_after_archive_succeeds_and_keeps_both_records() {
+        let (a, b, _) = ids();
+        let mut g: DagGraph<EdgeBase> = DagGraph::new();
+        add(&mut g, a, b).unwrap();
+        g.archive_node(a);
+        // Archived edge no longer counts toward the duplicate check.
+        add(&mut g, a, b).unwrap();
+        assert_eq!(g.active_len(), 1, "one fresh active edge");
+        assert_eq!(g.len(), 2, "archive record is preserved alongside");
     }
 
     #[test]

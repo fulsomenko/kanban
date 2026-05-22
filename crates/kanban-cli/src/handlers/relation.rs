@@ -73,6 +73,17 @@ fn enrich_add_error_for_batch(
                 hint: messages::parent_self_reference(parent),
             }
         }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => {
+            let hint = if let [only] = children_raw {
+                messages::parent_duplicate(parent, only)
+            } else {
+                format!(
+                    "edge already exists: one of [{}] is already a child of {parent}",
+                    children_raw.join(", ")
+                )
+            };
+            KanbanCliError::Resolution { hint }
+        }
         KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => e.into(),
         other => other.into(),
     }
@@ -101,6 +112,7 @@ fn enrich_remove_error_for_batch(
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => e.into(),
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => e.into(),
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => e.into(),
         other => other.into(),
     }
 }

@@ -29,6 +29,14 @@ pub fn parent_edge_not_found(parent: &str, child: &str) -> String {
     )
 }
 
+/// Message body for a duplicate-parent-add. Surfaces both sides so the
+/// user can see which entry in a multi-child invocation collided.
+pub fn parent_duplicate(parent: &str, child: &str) -> String {
+    format!(
+        "edge already exists: {child} is already a child of {parent}; remove the existing edge first if you want to re-add it"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,5 +62,13 @@ mod tests {
         assert!(msg.contains("KAN-5"));
         assert!(msg.contains("KAN-7"));
         assert!(msg.contains("parents"));
+    }
+
+    #[test]
+    fn test_parent_duplicate_names_both_sides() {
+        let msg = parent_duplicate("KAN-5", "KAN-7");
+        assert!(msg.contains("KAN-5"));
+        assert!(msg.contains("KAN-7"));
+        assert!(msg.to_lowercase().contains("already"));
     }
 }

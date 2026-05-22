@@ -89,6 +89,9 @@ fn mcp_enrich_add_error(
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => {
             error::KanbanMcpError::InvalidParam(messages::parent_self_reference(parent_raw))
         }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => {
+            error::KanbanMcpError::InvalidParam(messages::parent_duplicate(parent_raw, child_raw))
+        }
         KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => e.into(),
         other => other.into(),
     }
@@ -109,6 +112,7 @@ fn mcp_enrich_remove_error(
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => e.into(),
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => e.into(),
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => e.into(),
         other => other.into(),
     }
 }

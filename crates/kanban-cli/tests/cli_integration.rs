@@ -3709,6 +3709,53 @@ mod relation_tests {
         );
     }
 
+    /// Duplicate-child rejection: an existing parent->child edge
+    /// cannot be re-added. The error message must name both sides
+    /// so the user can see which entry collided.
+    #[test]
+    fn test_relation_add_duplicate_child_returns_error_naming_both_sides() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&parent_id))
+            .stderr(predicate::str::contains(&child_id))
+            .stderr(predicate::str::contains("already"));
+
+        // Atomicity: still exactly one edge on disk after the
+        // rejected duplicate.
+        let out = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&out));
+        assert_eq!(json["data"].as_array().unwrap().len(), 1);
+    }
+
     /// Atomicity check for `relation remove`: a partial-remove must
     /// roll back, leaving the originally-attached children attached.
     #[test]

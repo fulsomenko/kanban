@@ -77,6 +77,8 @@ pub enum DependencyError {
     SelfReference,
     #[error("edge not found")]
     EdgeNotFound,
+    #[error("edge already exists between the two cards")]
+    DuplicateEdge,
 }
 
 #[derive(Error, Debug)]
@@ -326,6 +328,13 @@ impl KanbanError {
         matches!(
             self,
             KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound))
+        )
+    }
+
+    pub fn is_duplicate_edge(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge))
         )
     }
 

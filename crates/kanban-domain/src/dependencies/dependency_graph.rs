@@ -292,6 +292,7 @@ impl From<GraphError> for DependencyError {
             GraphError::Cycle => DependencyError::CycleDetected,
             GraphError::SelfReference => DependencyError::SelfReference,
             GraphError::EdgeNotFound => DependencyError::EdgeNotFound,
+            GraphError::Duplicate => DependencyError::DuplicateEdge,
         }
     }
 }
@@ -353,6 +354,15 @@ mod tests {
         g.set_parent(child, parent).unwrap();
         g.remove_parent(child, parent).unwrap();
         assert!(g.children(parent).is_empty());
+    }
+
+    #[test]
+    fn test_set_parent_duplicate_returns_duplicate_edge_error() {
+        let (parent, child, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_parent(child, parent).unwrap();
+        assert!(g.set_parent(child, parent).unwrap_err().is_duplicate_edge());
+        assert_eq!(g.children(parent), vec![child], "no duplicate stored");
     }
 
     #[test]
@@ -439,6 +449,23 @@ mod tests {
         g.set_block(a, b).unwrap();
         g.set_block(b, c).unwrap();
         assert!(g.set_block(c, a).unwrap_err().is_cycle_detected());
+    }
+
+    #[test]
+    fn test_set_block_duplicate_returns_duplicate_edge_error() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_block(a, b).unwrap();
+        assert!(g.set_block(a, b).unwrap_err().is_duplicate_edge());
+    }
+
+    #[test]
+    fn test_relate_duplicate_in_either_orientation_returns_duplicate_edge_error() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.relate(a, b).unwrap();
+        assert!(g.relate(a, b).unwrap_err().is_duplicate_edge());
+        assert!(g.relate(b, a).unwrap_err().is_duplicate_edge());
     }
 
     #[test]
