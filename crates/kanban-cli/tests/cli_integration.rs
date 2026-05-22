@@ -3639,13 +3639,14 @@ mod relation_tests {
         assert_eq!(data.len(), 2, "both children should be attached");
     }
 
-    /// Mid-list failure in a multi-child add must stop at the first
-    /// error and identify which entry broke. Children that succeeded
-    /// before the failure remain visible in memory; the save outside
-    /// the loop is short-circuited by `?` so the process exits without
-    /// persisting partial state.
+    /// Mid-list failure in a multi-child add is atomic: the entire
+    /// batch is rolled back, and an inspection of the persisted graph
+    /// shows none of the would-be children attached. This pins the
+    /// service-level transactional contract at the CLI boundary so a
+    /// future change that breaks atomicity (e.g. reverts to a loop of
+    /// singles) is caught here.
     #[test]
-    fn test_relation_add_with_cycle_mid_list_aborts_and_names_offending_child() {
+    fn test_relation_add_with_cycle_mid_list_aborts_atomically_and_names_offending_child() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
         let (parent_id, c1, c2) = setup_three_cards(&file);
@@ -3671,8 +3672,8 @@ mod relation_tests {
                 "relation",
                 "add",
                 &c2,
-                &c1, // would create c2 -> c1 cycle (already c1 -> c2)
-                &parent_id,
+                &c1,        // would succeed in isolation (c1 already child of c2 after add)
+                &parent_id, // would close the cycle parent -> c1 -> c2 -> parent
             ])
             .assert()
             .failure()
@@ -3685,9 +3686,75 @@ mod relation_tests {
             "expected cycle error, got: {stderr}"
         );
         assert!(
-            stderr.contains(&c1) || stderr.contains(&c2),
-            "expected the offending child or its parent to appear in the message; got: {stderr}"
+            stderr.contains(&c1) || stderr.contains(&c2) || stderr.contains(&parent_id),
+            "expected one of the listed children or their parent to appear in the message; got: {stderr}"
         );
+
+        // Atomicity check: c2 must have ZERO children on disk after
+        // the failed batch. If atomicity is ever broken, c1 would be
+        // visible here.
+        let children_output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &c2])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let children_json = parse_json_output(&String::from_utf8_lossy(&children_output));
+        assert_eq!(
+            children_json["data"].as_array().unwrap().len(),
+            0,
+            "batch must have rolled back; c2 should have no children, got: {}",
+            children_json["data"]
+        );
+    }
+
+    /// Atomicity check for `relation remove`: a partial-remove must
+    /// roll back, leaving the originally-attached children attached.
+    #[test]
+    fn test_relation_remove_mid_list_failure_rolls_back_atomically() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
+        // Attach only c1; c2 is never made a child of parent.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &parent_id, &c1])
+            .assert()
+            .success();
+
+        // Attempting to remove both c1 and c2 must fail (c2 was never
+        // attached) and must NOT detach c1.
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "remove",
+                &parent_id,
+                &c1,
+                &c2,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("not found"));
+
+        // c1 must still be a child of parent on disk.
+        let children_output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let children_json = parse_json_output(&String::from_utf8_lossy(&children_output));
+        let data = children_json["data"].as_array().unwrap();
+        assert_eq!(
+            data.len(),
+            1,
+            "rollback must keep c1 attached; got: {}",
+            children_json["data"]
+        );
+        assert_eq!(data[0]["id"], c1);
     }
 
     /// Multi-child remove mirrors the add path.

@@ -14,10 +14,12 @@ pub enum KanbanCliError {
     Domain(#[from] KanbanError),
     /// Handler-built user-facing message at the CLI boundary.
     ///
-    /// Used when a handler has enough input context to enrich an
-    /// otherwise anonymous domain error (`cycle detected: making A a
-    /// parent of B would create a cycle`). Identifier-resolution
-    /// failures flow through `Domain` directly so the structured
+    /// Named to match the MCP-side `KanbanMcpError::Resolution` so
+    /// the two surfaces stay symmetric. Used when a handler has
+    /// enough input context to enrich an otherwise anonymous domain
+    /// error (`cycle detected: making A a parent of B would create a
+    /// cycle`). Identifier-resolution failures flow through `Domain`
+    /// directly so the structured
     /// [`kanban_domain::DomainError::NotFoundByName`] / `Ambiguous`
     /// variants stay introspectable.
     ///
@@ -25,13 +27,11 @@ pub enum KanbanCliError {
     /// matching the established CLI convention used by `card get` /
     /// `card delete` / `card archive`.
     #[error("{hint}")]
-    Message { hint: String },
+    Resolution { hint: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Serialization(#[from] serde_json::Error),
-    #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
 }
 
 pub type KanbanCliResult<T> = Result<T, KanbanCliError>;
@@ -48,8 +48,8 @@ mod tests {
     }
 
     #[test]
-    fn test_message_variant_displays_hint_verbatim() {
-        let err = KanbanCliError::Message {
+    fn test_resolution_variant_displays_hint_verbatim() {
+        let err = KanbanCliError::Resolution {
             hint: "no card matches 'foo'".into(),
         };
         assert!(err.to_string().contains("foo"));
@@ -57,12 +57,12 @@ mod tests {
 
     /// CLI error messages must match the existing convention used by
     /// `card get` / `card delete` / `card archive` / `card update`:
-    /// just the hint string with no wrapper prefix. The Message
+    /// just the hint string with no wrapper prefix. The Resolution
     /// variant's Display renders only the hint.
     #[test]
-    fn test_message_variant_display_has_no_prefix() {
+    fn test_resolution_variant_display_has_no_prefix() {
         let hint = "cycle detected: making KAN-5 a parent of KAN-7 would create a cycle";
-        let err = KanbanCliError::Message { hint: hint.into() };
+        let err = KanbanCliError::Resolution { hint: hint.into() };
         assert_eq!(err.to_string(), hint);
     }
 }

@@ -32,42 +32,73 @@ fn sort_and_summarize(mut cards: Vec<Card>, sort: SortKey, order: SortDir) -> Ve
     cards.iter().map(CardSummary::from).collect()
 }
 
-/// Rewrite an anonymous domain `DependencyError` from a parent-edge
-/// mutation into a CLI-shaped message that names both sides of the
-/// edge. The underlying domain error doesn't know the user's raw
-/// identifier strings; the handler does, and attaches them here.
-///
-/// Non-dependency `KanbanError` variants pass through to `Domain`
-/// unchanged so their structured form stays introspectable.
-fn enrich_add_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError {
+/// Resolve every raw child identifier into a UUID, short-circuiting on
+/// the first resolution failure. The atomic batch then sees a list of
+/// already-validated UUIDs — failures here use the raw identifier the
+/// user supplied so the error breadcrumb stays meaningful.
+fn resolve_children(ctx: &CliContext, raw: &[String]) -> KanbanCliResult<Vec<Uuid>> {
+    raw.iter()
+        .map(|r| ctx.resolve_card_id(r).map_err(Into::into))
+        .collect()
+}
+
+/// Batch-mode enrichment for `set_parents`. The atomic batch returns a
+/// single error rather than the per-child error the loop-of-singles
+/// produced, so the hint identifies the parent and the offending child
+/// where the variant lets us narrow it down:
+/// - `SelfReference`: the offending child is exactly the one whose
+///   resolved UUID matches the parent — we name that raw identifier.
+/// - `CycleDetected`: any child in the list could be the culprit; we
+///   list them all so the user can see the entries involved without
+///   needing to bisect.
+fn enrich_add_error_for_batch(
+    e: KanbanError,
+    parent: &str,
+    children_raw: &[String],
+) -> KanbanCliError {
     match e {
         KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => {
-            KanbanCliError::Message {
-                hint: messages::parent_cycle(parent, child),
-            }
+            let hint = if let [only] = children_raw {
+                messages::parent_cycle(parent, only)
+            } else {
+                format!(
+                    "cycle detected: making {parent} a parent of one of [{}] would create a cycle",
+                    children_raw.join(", ")
+                )
+            };
+            KanbanCliError::Resolution { hint }
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => {
-            KanbanCliError::Message {
+            KanbanCliError::Resolution {
                 hint: messages::parent_self_reference(parent),
             }
         }
-        // EdgeNotFound is not reachable from an add path, but cover it
-        // exhaustively so a future DependencyError variant can't
-        // silently slip through the else branch.
         KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => e.into(),
         other => other.into(),
     }
 }
 
-fn enrich_remove_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError {
+/// Batch-mode enrichment for `remove_parents`. `EdgeNotFound` is the
+/// only reachable dependency-variant failure on a remove: the hint
+/// names the parent and the children list so the user can see which
+/// invocation failed without re-reading scrollback.
+fn enrich_remove_error_for_batch(
+    e: KanbanError,
+    parent: &str,
+    children_raw: &[String],
+) -> KanbanCliError {
     match e {
         KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => {
-            KanbanCliError::Message {
-                hint: messages::parent_edge_not_found(parent, child),
-            }
+            let hint = if let [only] = children_raw {
+                messages::parent_edge_not_found(parent, only)
+            } else {
+                format!(
+                    "edge not found: no parent->child edge from {parent} to any of [{}] to remove",
+                    children_raw.join(", ")
+                )
+            };
+            KanbanCliError::Resolution { hint }
         }
-        // Cycle/self-ref are not reachable on a remove; preserve the
-        // exhaustive shape so future variants do not slip through.
         KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => e.into(),
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => e.into(),
         other => other.into(),
@@ -88,39 +119,30 @@ pub async fn handle(ctx: &mut CliContext, action: RelationAction) -> anyhow::Res
 async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<serde_json::Value> {
     match action {
         RelationAction::Add { parent, children } => {
-            // Per-child loop, non-atomic. On error we stop and report;
-            // the children added before the failure stay in-memory and
-            // are persisted by ctx.save() outside the loop only if no
-            // child errors. Echoing the user's raw identifier in the
-            // error means they can see which entry in their list broke
-            // without re-reading their scrollback.
+            // Resolve raw identifiers up front, then commit all
+            // edges in a single atomic batch via `add_children`. The
+            // service rolls the entire batch back on any failure
+            // (cycle / self-ref / unknown card), so a mid-list error
+            // never leaves a partial state in memory or on disk.
             let parent_uuid = ctx.resolve_card_id(&parent)?;
-            let mut added = Vec::with_capacity(children.len());
-            for child in &children {
-                let child_uuid = ctx.resolve_card_id(child)?;
-                ctx.set_parent(child_uuid, parent_uuid)
-                    .map_err(|e| enrich_add_error(e, &parent, child))?;
-                added.push(child_uuid.to_string());
-            }
+            let child_uuids = resolve_children(ctx, &children)?;
+            ctx.add_children(parent_uuid, child_uuids.clone())
+                .map_err(|e| enrich_add_error_for_batch(e, &parent, &children))?;
             ctx.save().await?;
             Ok(serde_json::json!({
                 "parent":   parent_uuid.to_string(),
-                "children": added,
+                "children": child_uuids.iter().map(|u| u.to_string()).collect::<Vec<_>>(),
             }))
         }
         RelationAction::Remove { parent, children } => {
             let parent_uuid = ctx.resolve_card_id(&parent)?;
-            let mut removed = Vec::with_capacity(children.len());
-            for child in &children {
-                let child_uuid = ctx.resolve_card_id(child)?;
-                ctx.remove_parent(child_uuid, parent_uuid)
-                    .map_err(|e| enrich_remove_error(e, &parent, child))?;
-                removed.push(child_uuid.to_string());
-            }
+            let child_uuids = resolve_children(ctx, &children)?;
+            ctx.remove_children(parent_uuid, child_uuids.clone())
+                .map_err(|e| enrich_remove_error_for_batch(e, &parent, &children))?;
             ctx.save().await?;
             Ok(serde_json::json!({
                 "parent":   parent_uuid.to_string(),
-                "children": removed,
+                "children": child_uuids.iter().map(|u| u.to_string()).collect::<Vec<_>>(),
             }))
         }
         RelationAction::Parents { card, sort, order } => {
