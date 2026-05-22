@@ -43,10 +43,7 @@ impl<E> EdgeStore<E> {
     /// Remove an edge between two nodes
     ///
     /// Returns true if an edge was removed, false if no matching edge found
-    pub fn remove_edge(&mut self, source: Uuid, target: Uuid) -> bool
-    where
-        E: Clone,
-    {
+    pub fn remove_edge(&mut self, source: Uuid, target: Uuid) -> bool {
         let initial_len = self.edges.len();
         self.edges.retain(|e| !e.connects(source, target));
         self.edges.len() < initial_len
@@ -102,10 +99,7 @@ impl<E> EdgeStore<E> {
     }
 
     /// Get all neighbor node IDs (connected nodes, handling bidirectional edges)
-    pub fn neighbors(&self, node_id: Uuid) -> Vec<Uuid>
-    where
-        E: Clone,
-    {
+    pub fn neighbors(&self, node_id: Uuid) -> Vec<Uuid> {
         let mut neighbors = Vec::new();
 
         for edge in &self.edges {
@@ -123,10 +117,7 @@ impl<E> EdgeStore<E> {
     }
 
     /// Get all active neighbor node IDs
-    pub fn neighbors_active(&self, node_id: Uuid) -> Vec<Uuid>
-    where
-        E: Clone,
-    {
+    pub fn neighbors_active(&self, node_id: Uuid) -> Vec<Uuid> {
         let mut neighbors = Vec::new();
 
         for edge in self.edges.iter().filter(|e| e.is_active()) {
@@ -145,10 +136,7 @@ impl<E> EdgeStore<E> {
 
     /// Build an adjacency list view of the graph (for algorithms)
     /// Only includes active edges
-    pub fn adjacency_list(&self) -> HashMap<Uuid, Vec<Uuid>>
-    where
-        E: Clone,
-    {
+    pub fn adjacency_list(&self) -> HashMap<Uuid, Vec<Uuid>> {
         let mut adj_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
 
         for edge in self.edges.iter().filter(|e| e.is_active()) {
@@ -173,39 +161,27 @@ impl<E> EdgeStore<E> {
     }
 
     /// Check if an edge exists between two nodes
-    pub fn has_edge(&self, source: Uuid, target: Uuid) -> bool
-    where
-        E: Clone,
-    {
+    pub fn has_edge(&self, source: Uuid, target: Uuid) -> bool {
         self.edges.iter().any(|e| e.connects(source, target))
     }
 
     /// Check if adding an edge would create a cycle
     /// Only checks active edges
-    pub fn would_create_cycle(&self, source: Uuid, target: Uuid) -> bool
-    where
-        E: Clone,
-    {
+    pub fn would_create_cycle(&self, source: Uuid, target: Uuid) -> bool {
         let adj_list = self.adjacency_list();
         algorithms::would_create_cycle(&adj_list, source, target)
     }
 
     /// Check if the graph contains any cycles
     /// Only checks active edges
-    pub fn has_cycle(&self) -> bool
-    where
-        E: Clone,
-    {
+    pub fn has_cycle(&self) -> bool {
         let adj_list = self.adjacency_list();
         algorithms::has_cycle(&adj_list)
     }
 
     /// Get all nodes reachable from a given node
     /// Only considers active edges
-    pub fn reachable_from(&self, start: Uuid) -> std::collections::HashSet<Uuid>
-    where
-        E: Clone,
-    {
+    pub fn reachable_from(&self, start: Uuid) -> std::collections::HashSet<Uuid> {
         let adj_list = self.adjacency_list();
         algorithms::reachable_from(&adj_list, start)
     }

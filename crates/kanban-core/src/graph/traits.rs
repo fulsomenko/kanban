@@ -67,6 +67,11 @@ pub trait Undirected: Graph {
 /// counts edges doesn't need cascade authority, and a caller doing
 /// soft-deletes doesn't need to ask for counts. Splitting them keeps
 /// each trait's name accurate to its single purpose.
+///
+/// TODO: the `Graph<NodeId = Uuid>` bound locks this trait to the
+/// kanban-domain node identity. If a future graph keys on something
+/// else, relax this to `Cascadable<NodeId>: Graph<NodeId = NodeId>`
+/// and update the three methods to take `Self::NodeId`.
 pub trait Cascadable: Graph<NodeId = Uuid> {
     /// Archive every edge involving `node` (soft delete).
     fn archive_node(&mut self, node: Uuid);
@@ -90,10 +95,12 @@ pub trait EdgeSet: Graph<NodeId = Uuid> {
     fn len(&self) -> usize;
     /// Active edge count only.
     fn active_len(&self) -> usize;
-    /// True iff this edge set is empty (no edges at all, archived or
-    /// active).
+    /// True iff this set has no active edges. Archived edges, if any,
+    /// are not counted: a graph whose entire active set has been
+    /// archived reports `is_empty() == true`, matching what callers
+    /// asking "anything here right now?" expect.
     fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.active_len() == 0
     }
     /// True iff any (active or archived) edge between `a` and `b`
     /// exists in this set.
