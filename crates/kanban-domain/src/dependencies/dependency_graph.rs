@@ -197,10 +197,19 @@ impl DependencyGraph {
         self.relates.neighbors(card)
     }
 
-    /// True iff any edge between `a` and `b` exists in any sub-graph
-    /// (active or archived).
+    /// True iff an **active** edge between `a` and `b` exists in any
+    /// sub-graph. Use this to ask "is there a current dependency
+    /// here?". Archived edges are not counted; use
+    /// `contains_archived` to consult both.
     pub fn contains(&self, a: Uuid, b: Uuid) -> bool {
         self.edge_sets().iter().any(|g| g.contains(a, b))
+    }
+
+    /// True iff any edge between `a` and `b` exists in any sub-graph,
+    /// including archived edges. Use when reasoning about edge
+    /// history.
+    pub fn contains_archived(&self, a: Uuid, b: Uuid) -> bool {
+        self.edge_sets().iter().any(|g| g.contains_archived(a, b))
     }
 
     /// Cross-cutting, kind-agnostic sever: remove the `a -> b` edge
@@ -611,6 +620,30 @@ mod tests {
         g.relate(a, b).unwrap();
         assert!(g.disconnect(b, a), "undirected edges are symmetric");
         assert!(g.related(a).is_empty());
+    }
+
+    // --- Active-only contains vs contains_archived ---
+
+    #[test]
+    fn test_contains_returns_false_for_archived_only_edge() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_block(a, b).unwrap();
+        g.archive_node(a);
+        assert!(!g.contains(a, b), "active contains() must skip archived");
+        assert!(
+            g.contains_archived(a, b),
+            "contains_archived() picks up the archived edge"
+        );
+    }
+
+    #[test]
+    fn test_contains_returns_true_for_active_edge() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_block(a, b).unwrap();
+        assert!(g.contains(a, b));
+        assert!(g.contains_archived(a, b));
     }
 
     #[test]

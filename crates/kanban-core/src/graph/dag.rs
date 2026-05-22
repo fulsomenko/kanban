@@ -150,9 +150,13 @@ impl<E: Edge> EdgeSet for DagGraph<E> {
     fn active_len(&self) -> usize {
         self.store.active_edge_count()
     }
-    /// Directed membership: source-to-target ordering matters.
-    /// Considers both active and archived edges.
+    /// Directed active-only membership: source-to-target ordering
+    /// matters. Aligned with `Graph::contains_edge`.
     fn contains(&self, a: E::NodeId, b: E::NodeId) -> bool {
+        self.store.outgoing_active(a).any(|e| e.target() == b)
+    }
+    /// Directed any-state membership including archived edges.
+    fn contains_archived(&self, a: E::NodeId, b: E::NodeId) -> bool {
         self.store
             .edges()
             .iter()

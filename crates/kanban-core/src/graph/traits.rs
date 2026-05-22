@@ -97,6 +97,15 @@ pub trait Cascadable: Graph {
 /// leaking into inspection code.
 ///
 /// Generic over `Graph::NodeId`, same reasoning as `Cascadable`.
+///
+/// # Active vs archived
+///
+/// `is_empty` and `contains` both consult the **active** subset only,
+/// matching `Graph::contains_edge` and the principle of least
+/// surprise: a caller asking "is this here right now?" wants the
+/// current view, not the archive log. `contains_archived` is the
+/// explicit escape hatch for callers that need to consult both. The
+/// (active + archived) total is still available via `len`.
 pub trait EdgeSet: Graph {
     /// Total edge count (active + archived).
     fn len(&self) -> usize;
@@ -109,9 +118,13 @@ pub trait EdgeSet: Graph {
     fn is_empty(&self) -> bool {
         self.active_len() == 0
     }
-    /// True iff any (active or archived) edge between `a` and `b`
-    /// exists in this set.
+    /// True iff an **active** edge between `a` and `b` exists in this
+    /// set. Aligned with `Graph::contains_edge` semantics.
     fn contains(&self, a: Self::NodeId, b: Self::NodeId) -> bool;
+    /// True iff any edge between `a` and `b` exists in this set,
+    /// **including archived ones**. Use when reasoning about edge
+    /// history; prefer `contains` for the current view.
+    fn contains_archived(&self, a: Self::NodeId, b: Self::NodeId) -> bool;
 }
 
 #[cfg(test)]
