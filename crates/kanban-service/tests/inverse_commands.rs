@@ -12,7 +12,7 @@ use kanban_domain::commands::{
     UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
-    BoardUpdate, CardEdgeType, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
+    BoardUpdate, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
     KanbanOperations, KanbanResult, SortField, SortOrder, SprintStatus, SprintUpdate, TaskListView,
 };
 use kanban_service::KanbanContext;

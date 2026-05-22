@@ -61,7 +61,7 @@ fn test_render_manage_parents_popup_search_active_shows_query() {
 #[test]
 fn test_manage_parents_popup_enter_creates_parent_edge() {
     use crossterm::event::KeyCode;
-    use kanban_domain::{CardEdgeType, CreateCardOptions, KanbanOperations, Snapshot};
+    use kanban_domain::{CreateCardOptions, KanbanOperations, Snapshot};
     use kanban_tui::app::mode::{AppMode, DialogMode};
 
     let mut app = App::test_default();

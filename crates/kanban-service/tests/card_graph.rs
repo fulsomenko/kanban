@@ -134,12 +134,12 @@ fn assert_add_creates_visible_edge(
     b: uuid::Uuid,
 ) {
     add_by_kind(ctx, a, b, kind).unwrap();
-    let from_a = list_from_by_kind(&ctx, a, kind).unwrap();
+    let from_a = list_from_by_kind(ctx, a, kind).unwrap();
     assert!(
         from_a.contains(&b),
         "{kind:?}: list_card_edges_from({a:?}) should contain {b:?}; got {from_a:?}"
     );
-    let to_b = list_to_by_kind(&ctx, b, kind).unwrap();
+    let to_b = list_to_by_kind(ctx, b, kind).unwrap();
     assert!(
         to_b.contains(&a),
         "{kind:?}: list_card_edges_to({b:?}) should contain {a:?}; got {to_b:?}"
@@ -163,11 +163,11 @@ fn assert_remove_clears_edge(
     add_by_kind(ctx, a, b, kind).unwrap();
     remove_by_kind(ctx, a, b, kind).unwrap();
     assert!(
-        list_from_by_kind(&ctx, a, kind).unwrap().is_empty(),
+        list_from_by_kind(ctx, a, kind).unwrap().is_empty(),
         "{kind:?}: list_from({a:?}) should be empty after remove"
     );
     assert!(
-        list_to_by_kind(&ctx, b, kind).unwrap().is_empty(),
+        list_to_by_kind(ctx, b, kind).unwrap().is_empty(),
         "{kind:?}: list_to({b:?}) should be empty after remove"
     );
 }
@@ -195,7 +195,7 @@ fn assert_add_is_undoable(
     assert!(ctx.can_undo(), "{kind:?}: can_undo() after add");
     ctx.undo().unwrap();
     assert!(
-        list_from_by_kind(&ctx, a, kind).unwrap().is_empty(),
+        list_from_by_kind(ctx, a, kind).unwrap().is_empty(),
         "{kind:?}: undo should remove the edge"
     );
 }
