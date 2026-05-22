@@ -212,10 +212,11 @@ impl DependencyGraph {
         self.edge_sets().iter().any(|g| g.contains_archived(a, b))
     }
 
-    /// Cross-cutting, kind-agnostic sever: remove the `a -> b` edge
-    /// from every sub-graph that holds it. For the two directed
-    /// sub-graphs only the exact `a -> b` orientation is removed; for
-    /// the undirected sub-graph either ordering removes the edge.
+    /// Cross-cutting, kind-agnostic sever: remove the **active**
+    /// `a -> b` edge from every sub-graph that holds it. For the two
+    /// directed sub-graphs only the exact `a -> b` orientation is
+    /// removed; for the undirected sub-graph either ordering removes
+    /// the edge. Archived edges are preserved across all sub-graphs.
     ///
     /// # CAUTION — picks every kind, not the one you might mean
     ///
@@ -232,7 +233,7 @@ impl DependencyGraph {
     /// - `unblock(blocker, blocked)`    — blocks only
     /// - `unrelate(a, b)`               — relates only
     ///
-    /// Returns true if any sub-graph held the edge.
+    /// Returns true if any sub-graph held an active edge.
     pub fn disconnect(&mut self, a: Uuid, b: Uuid) -> bool {
         let mut any_removed = false;
         for sg in self.cascadable_parts_mut() {
@@ -611,6 +612,21 @@ mod tests {
             "no a->b edge exists; nothing should be removed"
         );
         assert_eq!(g.parents(a), vec![b]);
+    }
+
+    #[test]
+    fn test_disconnect_preserves_archived_edges() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_block(a, b).unwrap();
+        g.archive_node(a);
+        // Disconnect now finds no ACTIVE a->b edge and returns false;
+        // the archived record stays intact.
+        assert!(!g.disconnect(a, b));
+        assert!(
+            g.contains_archived(a, b),
+            "archived record must survive disconnect"
+        );
     }
 
     #[test]

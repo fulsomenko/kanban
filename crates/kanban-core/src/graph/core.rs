@@ -84,23 +84,30 @@ impl<E: Edge> EdgeStore<E> {
         }
     }
 
-    /// Remove the single edge whose `source == source` and
-    /// `target == target` exactly (directed-graph semantics).
-    /// Returns `true` iff an edge was removed.
+    /// Remove the single **active** edge whose `source == source` and
+    /// `target == target` exactly (directed-graph semantics). Archived
+    /// edges with the same endpoints are preserved — they're history,
+    /// not part of the current view, and a remove of the current edge
+    /// must not silently destroy the history record. Returns `true`
+    /// iff an active edge was removed.
     pub fn remove_directed_edge(&mut self, source: E::NodeId, target: E::NodeId) -> bool {
         let before = self.edges.len();
-        self.edges
-            .retain(|e| !(e.source() == source && e.target() == target));
+        self.edges.retain(|e| {
+            !(e.is_active() && e.source() == source && e.target() == target)
+        });
         self.edges.len() < before
     }
 
-    /// Remove any edge whose endpoints are `{a, b}` regardless of
-    /// ordering (undirected-graph semantics). Returns `true` iff at
-    /// least one edge was removed.
+    /// Remove any **active** edge whose endpoints are `{a, b}`
+    /// regardless of ordering (undirected-graph semantics). Archived
+    /// edges are preserved. Returns `true` iff at least one active
+    /// edge was removed.
     pub fn remove_undirected_edge(&mut self, a: E::NodeId, b: E::NodeId) -> bool {
         let before = self.edges.len();
         self.edges.retain(|e| {
-            !((e.source() == a && e.target() == b) || (e.source() == b && e.target() == a))
+            !(e.is_active()
+                && ((e.source() == a && e.target() == b)
+                    || (e.source() == b && e.target() == a)))
         });
         self.edges.len() < before
     }
@@ -225,6 +232,58 @@ mod tests {
             "symmetric on either ordering"
         );
         assert_eq!(graph.edge_count(), 0);
+    }
+
+    #[test]
+    fn test_remove_directed_edge_preserves_archived_record() {
+        let mut graph: EdgeStore<EdgeBase> = EdgeStore::new();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+
+        let mut archived = base(a, b);
+        archived.archive();
+        graph.add_edge(archived);
+        graph.add_edge(base(a, b)); // active
+
+        assert!(graph.remove_directed_edge(a, b));
+        assert_eq!(
+            graph.edge_count(),
+            1,
+            "archived record must survive the active remove"
+        );
+        assert_eq!(graph.active_edge_count(), 0);
+    }
+
+    #[test]
+    fn test_remove_directed_edge_returns_false_when_only_archived_exists() {
+        let mut graph: EdgeStore<EdgeBase> = EdgeStore::new();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let mut archived = base(a, b);
+        archived.archive();
+        graph.add_edge(archived);
+
+        assert!(
+            !graph.remove_directed_edge(a, b),
+            "no active edge means remove is a no-op"
+        );
+        assert_eq!(graph.edge_count(), 1, "archived record untouched");
+    }
+
+    #[test]
+    fn test_remove_undirected_edge_preserves_archived_record() {
+        let mut graph: EdgeStore<EdgeBase> = EdgeStore::new();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+
+        let mut archived = base(a, b);
+        archived.archive();
+        graph.add_edge(archived);
+        graph.add_edge(base(b, a)); // active in opposite ordering
+
+        assert!(graph.remove_undirected_edge(a, b));
+        assert_eq!(graph.edge_count(), 1);
+        assert_eq!(graph.active_edge_count(), 0);
     }
 
     #[test]
