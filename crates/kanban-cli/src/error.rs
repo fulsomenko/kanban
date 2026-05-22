@@ -4,9 +4,9 @@ use thiserror::Error;
 /// CLI-boundary error type.
 ///
 /// Wraps [`KanbanError`] for the domain layer, plus CLI-specific
-/// concerns (identifier resolution, IO, serialization). Handlers that
-/// return `Result<T, KanbanCliError>` propagate all failure modes
-/// uniformly with `?`, and the dispatcher converts to the JSON
+/// concerns (handler-built messages, IO, serialization). Handlers
+/// that return `Result<T, KanbanCliError>` propagate all failure
+/// modes uniformly with `?`, and the dispatcher converts to the JSON
 /// `CliResponse` envelope at the boundary.
 #[derive(Error, Debug)]
 pub enum KanbanCliError {
@@ -14,14 +14,18 @@ pub enum KanbanCliError {
     Domain(#[from] KanbanError),
     /// Handler-built user-facing message at the CLI boundary.
     ///
-    /// Covers both the original use case — identifier resolution
-    /// failed (`Card 'KAN-99' not found`) — and the broader case where
-    /// a handler has enough input context to enrich an otherwise
-    /// anonymous domain error (`cycle detected: making A a parent of B
-    /// would create a cycle`). Display renders the hint verbatim, no
-    /// wrapper prefix, matching the established CLI convention.
+    /// Used when a handler has enough input context to enrich an
+    /// otherwise anonymous domain error (`cycle detected: making A a
+    /// parent of B would create a cycle`). Identifier-resolution
+    /// failures flow through `Domain` directly so the structured
+    /// [`kanban_domain::DomainError::NotFoundByName`] / `Ambiguous`
+    /// variants stay introspectable.
+    ///
+    /// `Display` renders the hint verbatim, no wrapper prefix,
+    /// matching the established CLI convention used by `card get` /
+    /// `card delete` / `card archive`.
     #[error("{hint}")]
-    Resolution { hint: String },
+    Message { hint: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -37,15 +41,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_kanban_cli_error_wraps_kanban_error() {
+    fn test_from_kanban_error_lands_in_domain_variant() {
         let domain = KanbanError::validation("bad input");
         let cli: KanbanCliError = domain.into();
         assert!(matches!(cli, KanbanCliError::Domain(_)));
     }
 
     #[test]
-    fn test_kanban_cli_error_resolution_displays_hint() {
-        let err = KanbanCliError::Resolution {
+    fn test_message_variant_displays_hint_verbatim() {
+        let err = KanbanCliError::Message {
             hint: "no card matches 'foo'".into(),
         };
         assert!(err.to_string().contains("foo"));
@@ -53,17 +57,12 @@ mod tests {
 
     /// CLI error messages must match the existing convention used by
     /// `card get` / `card delete` / `card archive` / `card update`:
-    /// just `Card 'X' not found`, no `identifier resolution failed:`
-    /// prefix. The Resolution variant's Display renders only the
-    /// hint — the hint already carries the full user-facing message.
+    /// just the hint string with no wrapper prefix. The Message
+    /// variant's Display renders only the hint.
     #[test]
-    fn test_kanban_cli_error_resolution_renders_hint_without_prefix() {
-        let hint = "Card 'KAN-99999' not found";
-        let err = KanbanCliError::Resolution { hint: hint.into() };
-        assert_eq!(
-            err.to_string(),
-            hint,
-            "Resolution Display should be exactly the hint — no prefix"
-        );
+    fn test_message_variant_display_has_no_prefix() {
+        let hint = "cycle detected: making KAN-5 a parent of KAN-7 would create a cycle";
+        let err = KanbanCliError::Message { hint: hint.into() };
+        assert_eq!(err.to_string(), hint);
     }
 }

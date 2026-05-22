@@ -183,10 +183,6 @@ impl DependencyGraph {
 
     /// True iff any edge between `a` and `b` exists in any sub-graph
     /// (active or archived). Cross-cutting check across all three.
-    ///
-    /// Linear in total edge count: each sub-graph scans its own edge
-    /// list. For per-kind membership use the sub-graph's own
-    /// [`EdgeSet::contains`][kanban_core::EdgeSet::contains].
     pub fn contains(&self, a: Uuid, b: Uuid) -> bool {
         self.edge_sets().iter().any(|g| g.contains(a, b))
     }
@@ -267,11 +263,6 @@ impl DependencyGraph {
     /// matching the field declaration order; within each sub-graph the
     /// order is insertion. Lets persistence backends serialize the
     /// graph without reaching past this type's surface.
-    ///
-    /// Walks every sub-graph end to end — linear in total edge count.
-    /// Intended for whole-graph serialisation and inverse-replay
-    /// helpers; for "does the graph have any edge involving X?" queries
-    /// use the per-kind sub-graph accessors instead.
     pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &Edge)> + '_ {
         self.parent_child
             .edges()
