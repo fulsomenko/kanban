@@ -2,11 +2,14 @@ use serde::{Deserialize, Serialize};
 
 /// Types of relationships between cards
 ///
-/// `Default` is `ParentOf` — the primary user-facing edge kind. This
-/// only matters for serde-deserialisation of edges whose `edge_type`
-/// field is missing from the JSON (Edge<()> on the V6 disk format,
-/// where the type is encoded by the sub-graph the edge lives in
-/// rather than carried per-edge).
+/// `Default` is `ParentOf`, the primary user-facing edge kind. The
+/// `#[default]` attribute is required because [`Edge<E>`]'s derived
+/// `Deserialize` carries an `E: Default` bound (its `edge_type` field
+/// is `#[serde(default)]`). On the V6 disk format edges are
+/// `Edge<()>` and the kind comes from the sub-graph they live in, so
+/// the variant choice here never affects production deserialisation.
+/// It only fires for test helpers that construct `Edge<CardEdgeType>`
+/// directly and round-trip it through serde.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CardEdgeType {
     /// This card blocks the target (must complete before target can start)
