@@ -263,32 +263,59 @@ impl DependencyGraph {
 
     /// Construct a graph from per-kind edge vectors with structural
     /// validation. Each sub-graph independently checks its
-    /// self-reference / cycle invariants on the way in; a corrupted
-    /// load fails up front instead of silently rehydrating an
-    /// invariant-violating graph.
+    /// self-reference / cycle / duplicate invariants on the way in; a
+    /// corrupted load fails up front instead of silently rehydrating
+    /// an invariant-violating graph.
+    ///
+    /// On failure the returned error names the offending edge kind
+    /// and endpoints so a user inspecting a load failure has enough
+    /// information to find the bad row in the source file (the
+    /// anonymous `DependencyError` variant alone would only say
+    /// "cycle detected" with no clue which kind or which edge).
     pub fn from_validated_per_kind_edges(
         spawns: Vec<SpawnsEdge>,
         blocks: Vec<BlocksEdge>,
         relates: Vec<RelatesEdge>,
     ) -> KanbanResult<Self> {
+        use kanban_core::Edge as _;
         let mut graph = Self::new();
         for edge in spawns {
+            let (s, t) = (edge.source(), edge.target());
             graph
                 .parent_child
                 .add_edge_with_metadata(edge)
-                .map_err(dep_err)?;
+                .map_err(|e| load_err_with_context(e, "spawns", s, t))?;
         }
         for edge in blocks {
-            graph.blocks.add_edge_with_metadata(edge).map_err(dep_err)?;
+            let (s, t) = (edge.source(), edge.target());
+            graph
+                .blocks
+                .add_edge_with_metadata(edge)
+                .map_err(|e| load_err_with_context(e, "blocks", s, t))?;
         }
         for edge in relates {
+            let (s, t) = (edge.source(), edge.target());
             graph
                 .relates
                 .add_edge_with_metadata(edge)
-                .map_err(dep_err)?;
+                .map_err(|e| load_err_with_context(e, "relates", s, t))?;
         }
         Ok(graph)
     }
+}
+
+/// Wrap a structural `GraphError` from a load path with the kind tag
+/// and offending endpoints, so a corrupt-file diagnostic identifies
+/// the bad row instead of just naming the invariant.
+fn load_err_with_context(
+    e: GraphError,
+    kind: &'static str,
+    source: Uuid,
+    target: Uuid,
+) -> crate::KanbanError {
+    crate::KanbanError::validation(format!(
+        "load failed on {kind} edge {source} -> {target}: {e}"
+    ))
 }
 
 fn dep_err(e: GraphError) -> crate::KanbanError {
@@ -331,6 +358,61 @@ mod tests {
     }
 
     // --- Parent/child (Spawns) ---
+
+    // --- from_validated_per_kind_edges context ---
+    //
+    // A corrupt load (cycle, self-ref, duplicate) must surface enough
+    // information for a user to find the bad row in the source file.
+    // The bare DependencyError variants don't carry context; the load
+    // path wraps them with the kind tag and the offending endpoints.
+
+    #[test]
+    fn test_load_with_blocks_cycle_names_kind_and_endpoints() {
+        let (a, b, c) = ids();
+        // Construct a cycle by going through the validated path with
+        // a chain a->b, b->c, c->a in the blocks vector.
+        let err = DependencyGraph::from_validated_per_kind_edges(
+            Vec::new(),
+            vec![
+                super::super::BlocksEdge::new(a, b, super::super::Severity::Medium),
+                super::super::BlocksEdge::new(b, c, super::super::Severity::Medium),
+                super::super::BlocksEdge::new(c, a, super::super::Severity::Medium),
+            ],
+            Vec::new(),
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("blocks"),
+            "load error must name the kind; got: {msg}"
+        );
+        assert!(
+            msg.contains(&c.to_string()) && msg.contains(&a.to_string()),
+            "load error must name the offending endpoints; got: {msg}"
+        );
+        assert!(
+            msg.to_lowercase().contains("cycle"),
+            "load error must name the invariant; got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_load_with_relates_self_reference_names_kind_and_endpoint() {
+        let a = Uuid::new_v4();
+        let err = DependencyGraph::from_validated_per_kind_edges(
+            Vec::new(),
+            Vec::new(),
+            vec![super::super::RelatesEdge::new(
+                a,
+                a,
+                super::super::RelatesKind::General,
+            )],
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("relates"), "kind name in message: {msg}");
+        assert!(msg.contains(&a.to_string()), "endpoint in message: {msg}");
+    }
 
     #[test]
     fn test_set_parent_creates_parent_child_edge() {
