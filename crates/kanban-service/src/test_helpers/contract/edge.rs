@@ -65,7 +65,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResul
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.blocks.edges();
+    let edges = graph.edges_of(CardEdgeType::Blocks);
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
     assert_eq!(e.source, card_a.id);
@@ -111,7 +111,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanR
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.relates.edges();
+    let edges = graph.edges_of(CardEdgeType::RelatesTo);
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
     assert_eq!(e.direction, EdgeDirection::Bidirectional);
@@ -164,7 +164,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.parent_child.edges();
+    let edges = graph.edges_of(CardEdgeType::ParentOf);
     assert_eq!(edges.len(), 1);
     Ok(())
 }
@@ -204,7 +204,7 @@ pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanRes
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.blocks.edges();
+    let edges = graph.edges_of(CardEdgeType::Blocks);
     assert_eq!(edges.len(), 1);
     assert!(edges[0].archived_at.is_some());
     assert!((edges[0].weight.unwrap() - 2.5).abs() < f32::EPSILON);

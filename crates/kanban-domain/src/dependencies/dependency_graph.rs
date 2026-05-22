@@ -24,11 +24,11 @@ use crate::{CardId, KanbanResult};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DependencyGraph {
     #[serde(default)]
-    pub parent_child: DagGraph,
+    pub(crate) parent_child: DagGraph,
     #[serde(default)]
-    pub blocks: DagGraph,
+    pub(crate) blocks: DagGraph,
     #[serde(default)]
-    pub relates: UndirectedGraph,
+    pub(crate) relates: UndirectedGraph,
 }
 
 impl DependencyGraph {
@@ -256,6 +256,18 @@ impl DependencyGraph {
             }
         }
         Ok(graph)
+    }
+
+    /// Borrow the raw edge list for a given sub-graph (active +
+    /// archived). Persistence-shape access for callers that need to
+    /// walk one kind's edges without iterating the full graph; test
+    /// helpers also use this to assert specific kinds round-trip.
+    pub fn edges_of(&self, kind: CardEdgeType) -> &[Edge] {
+        match kind {
+            CardEdgeType::ParentOf => self.parent_child.edges(),
+            CardEdgeType::Blocks => self.blocks.edges(),
+            CardEdgeType::RelatesTo => self.relates.edges(),
+        }
     }
 
     /// Iterate every edge in the graph paired with its
