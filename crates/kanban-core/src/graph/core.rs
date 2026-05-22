@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::algorithms;
-use super::edge::{Edge, EdgeDirection};
+use super::edge::{EdgeDirection, LegacyEdge};
 
-/// Edge-list container shared by every concrete graph kind.
+/// LegacyEdge-list container shared by every concrete graph kind.
 ///
 /// Stores edges as a flat list for efficient serialization and
 /// provides adjacency-list views for graph algorithms. The relation
@@ -13,7 +13,7 @@ use super::edge::{Edge, EdgeDirection};
 /// sub-graph per kind), so this type carries no per-edge kind tag.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct EdgeStore {
-    edges: Vec<Edge>,
+    edges: Vec<LegacyEdge>,
 }
 
 impl EdgeStore {
@@ -26,7 +26,7 @@ impl EdgeStore {
     ///
     /// Note: Cycle checking must be done by caller if needed
     /// (see `would_create_cycle` method)
-    pub fn add_edge(&mut self, edge: Edge) {
+    pub fn add_edge(&mut self, edge: LegacyEdge) {
         self.edges.push(edge);
     }
 
@@ -63,24 +63,24 @@ impl EdgeStore {
     }
 
     /// Get all outgoing edges from a node (where node is source)
-    pub fn outgoing(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
+    pub fn outgoing(&self, node_id: Uuid) -> impl Iterator<Item = &LegacyEdge> {
         self.edges.iter().filter(move |e| e.source == node_id)
     }
 
     /// Get all incoming edges to a node (where node is target)
-    pub fn incoming(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
+    pub fn incoming(&self, node_id: Uuid) -> impl Iterator<Item = &LegacyEdge> {
         self.edges.iter().filter(move |e| e.target == node_id)
     }
 
     /// Get all active outgoing edges from a node
-    pub fn outgoing_active(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
+    pub fn outgoing_active(&self, node_id: Uuid) -> impl Iterator<Item = &LegacyEdge> {
         self.edges
             .iter()
             .filter(move |e| e.source == node_id && e.is_active())
     }
 
     /// Get all active incoming edges to a node
-    pub fn incoming_active(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
+    pub fn incoming_active(&self, node_id: Uuid) -> impl Iterator<Item = &LegacyEdge> {
         self.edges
             .iter()
             .filter(move |e| e.target == node_id && e.is_active())
@@ -139,12 +139,12 @@ impl EdgeStore {
     }
 
     /// Get all edges (for serialization/inspection)
-    pub fn edges(&self) -> &[Edge] {
+    pub fn edges(&self) -> &[LegacyEdge] {
         &self.edges
     }
 
     /// Get all active edges
-    pub fn active_edges(&self) -> impl Iterator<Item = &Edge> {
+    pub fn active_edges(&self) -> impl Iterator<Item = &LegacyEdge> {
         self.edges.iter().filter(|e| e.is_active())
     }
 
@@ -190,12 +190,12 @@ mod tests {
     use super::*;
     use crate::graph::edge::EdgeDirection;
 
-    fn directed_edge(source: Uuid, target: Uuid) -> Edge {
-        Edge::new(source, target, EdgeDirection::Directed)
+    fn directed_edge(source: Uuid, target: Uuid) -> LegacyEdge {
+        LegacyEdge::new(source, target, EdgeDirection::Directed)
     }
 
-    fn bidi_edge(a: Uuid, b: Uuid) -> Edge {
-        Edge::new(a, b, EdgeDirection::Bidirectional)
+    fn bidi_edge(a: Uuid, b: Uuid) -> LegacyEdge {
+        LegacyEdge::new(a, b, EdgeDirection::Bidirectional)
     }
 
     #[test]

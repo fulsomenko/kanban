@@ -123,7 +123,7 @@ macro_rules! context_contract_tests {
             $crate::test_helpers::contract::archive::test_restore_archived_card_roundtrip(&$factory_fn()).await;
         }
 
-        // Edge tests
+        // LegacyEdge tests
         #[tokio::test(flavor = "multi_thread")]
         async fn test_blocks_edge_roundtrip() {
             $crate::test_helpers::contract::edge::test_blocks_edge_roundtrip(&$factory_fn()).await.unwrap();

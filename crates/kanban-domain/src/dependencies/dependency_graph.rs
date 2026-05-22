@@ -1,5 +1,6 @@
 use kanban_core::{
-    Cascadable, DagGraph, Directed, Edge, EdgeSet, Graph, GraphError, Undirected, UndirectedGraph,
+    Cascadable, DagGraph, Directed, EdgeSet, Graph, GraphError, LegacyEdge, Undirected,
+    UndirectedGraph,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -237,7 +238,7 @@ impl DependencyGraph {
     /// `created_at` / `weight` / `archived_at` metadata preserved.
     pub fn from_validated_edges<I>(edges: I) -> KanbanResult<Self>
     where
-        I: IntoIterator<Item = (CardEdgeType, Edge)>,
+        I: IntoIterator<Item = (CardEdgeType, LegacyEdge)>,
     {
         let mut graph = Self::new();
         for (kind, edge) in edges {
@@ -262,7 +263,7 @@ impl DependencyGraph {
     /// archived). Persistence-shape access for callers that need to
     /// walk one kind's edges without iterating the full graph; test
     /// helpers also use this to assert specific kinds round-trip.
-    pub fn edges_of(&self, kind: CardEdgeType) -> &[Edge] {
+    pub fn edges_of(&self, kind: CardEdgeType) -> &[LegacyEdge] {
         match kind {
             CardEdgeType::Spawns => self.parent_child.edges(),
             CardEdgeType::Blocks => self.blocks.edges(),
@@ -275,7 +276,7 @@ impl DependencyGraph {
     /// matching the field declaration order; within each sub-graph the
     /// order is insertion. Lets persistence backends serialize the
     /// graph without reaching past this type's surface.
-    pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &Edge)> + '_ {
+    pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &LegacyEdge)> + '_ {
         self.parent_child
             .edges()
             .iter()

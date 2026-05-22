@@ -1,7 +1,7 @@
 use super::super::helpers::fully_populated_snapshot;
 use super::super::BackendFactory;
 use crate::KanbanContext;
-use kanban_core::{AppConfig, Edge, EdgeDirection};
+use kanban_core::{AppConfig, EdgeDirection, LegacyEdge};
 use kanban_domain::board::{SortField, SortOrder};
 use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
@@ -283,7 +283,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
         let graph = DependencyGraph::from_validated_edges([
             (
                 CardEdgeType::Blocks,
-                Edge {
+                LegacyEdge {
                     source: card1.id,
                     target: card2.id,
                     direction: EdgeDirection::Directed,
@@ -294,7 +294,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
             ),
             (
                 CardEdgeType::RelatesTo,
-                Edge {
+                LegacyEdge {
                     source: card1.id,
                     target: card3.id,
                     direction: EdgeDirection::Bidirectional,
@@ -305,7 +305,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
             ),
             (
                 CardEdgeType::Spawns,
-                Edge {
+                LegacyEdge {
                     source: card2.id,
                     target: card3.id,
                     direction: EdgeDirection::Directed,

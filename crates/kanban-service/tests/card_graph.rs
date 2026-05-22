@@ -56,7 +56,7 @@ fn seed_three_cards(backend: &Arc<dyn KanbanBackend>) -> (uuid::Uuid, uuid::Uuid
     (a_id, b_id, c_id)
 }
 
-/// Edge kinds exercised by every kind-agnostic shape test.
+/// LegacyEdge kinds exercised by every kind-agnostic shape test.
 /// Adding a fourth variant here causes every parameterised test to
 /// pick it up automatically — that's the maintenance win this layout
 /// is designed for.

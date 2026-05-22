@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use kanban_core::graph::Edge;
+use kanban_core::graph::LegacyEdge;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
@@ -204,7 +204,7 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
 }
 
 fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    let mut buf: Vec<(CardEdgeType, Edge)> = Vec::with_capacity(rows.len());
+    let mut buf: Vec<(CardEdgeType, LegacyEdge)> = Vec::with_capacity(rows.len());
     for row in rows {
         let source_str: String = row.try_get("source_id").map_err(db_err)?;
         let target_str: String = row.try_get("target_id").map_err(db_err)?;
@@ -215,7 +215,7 @@ fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
         let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
 
         let edge_type: CardEdgeType = p_enum(&edge_type_str, "edge_type")?;
-        let edge: Edge = Edge {
+        let edge: LegacyEdge = LegacyEdge {
             source: p_uuid(&source_str)?,
             target: p_uuid(&target_str)?,
             direction: p_enum(&direction_str, "edge direction")?,

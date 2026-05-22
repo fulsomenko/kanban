@@ -627,10 +627,10 @@ mod tests {
     /// The V6 split-graph migration removes the `edge_type` key from each
     /// migrated edge (it lives implicitly in the sub-graph the edge is
     /// routed to). The post-migration file must still load through the
-    /// `Edge<()>` deserialiser — otherwise we produce files that can't be
+    /// `LegacyEdge<()>` deserialiser — otherwise we produce files that can't be
     /// loaded by the very code that wrote them. Was missed by the unit
     /// tests on the migration's in-memory output, which never round-
-    /// tripped through `Edge::deserialize`.
+    /// tripped through `LegacyEdge::deserialize`.
     #[tokio::test]
     async fn test_v3_file_with_edges_round_trips_through_migration_and_load() {
         let dir = tempdir().unwrap();
@@ -695,7 +695,7 @@ mod tests {
             .expect("first load (migration) must succeed");
 
         // Re-open and load again — this exercises the
-        // `Edge::deserialize` path on the post-migration file shape.
+        // `LegacyEdge::deserialize` path on the post-migration file shape.
         let store2 = JsonFileStore::new(&file_path);
         let (snapshot, _meta) = store2
             .load()
@@ -704,7 +704,7 @@ mod tests {
 
         // Decode the snapshot bytes through the full domain stack —
         // this is what kanban-service does at startup, and it's where
-        // the bug actually triggers because Edge<()>::deserialize
+        // the bug actually triggers because LegacyEdge<()>::deserialize
         // requires the `edge_type` field by default.
         use kanban_persistence::snapshot_from_json_bytes;
         let domain_snapshot = snapshot_from_json_bytes(&snapshot.data)

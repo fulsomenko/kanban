@@ -1,6 +1,6 @@
 use super::super::BackendFactory;
 use crate::KanbanContext;
-use kanban_core::{AppConfig, Edge, EdgeDirection};
+use kanban_core::{AppConfig, EdgeDirection, LegacyEdge};
 use kanban_domain::{
     CardEdgeType, CreateCardOptions, DependencyGraph, KanbanOperations, KanbanResult,
 };
@@ -8,9 +8,9 @@ use tempfile::TempDir;
 
 /// Round-trip test helper: install a single edge into the graph
 /// through the validating constructor and persist.
-fn add_edge(ctx: &KanbanContext, kind: CardEdgeType, edge: Edge) {
+fn add_edge(ctx: &KanbanContext, kind: CardEdgeType, edge: LegacyEdge) {
     let existing = ctx.data_store().get_graph().unwrap();
-    let mut pairs: Vec<(CardEdgeType, Edge)> = existing
+    let mut pairs: Vec<(CardEdgeType, LegacyEdge)> = existing
         .edges_by_kind()
         .map(|(k, e)| (k, e.clone()))
         .collect();
@@ -51,7 +51,7 @@ pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResul
     add_edge(
         &ctx,
         CardEdgeType::Blocks,
-        Edge {
+        LegacyEdge {
             source: card_a.id,
             target: card_b.id,
             direction: EdgeDirection::Directed,
@@ -97,7 +97,7 @@ pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanR
     add_edge(
         &ctx,
         CardEdgeType::RelatesTo,
-        Edge {
+        LegacyEdge {
             source: card_a.id,
             target: card_b.id,
             direction: EdgeDirection::Bidirectional,
@@ -150,7 +150,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     add_edge(
         &ctx,
         CardEdgeType::Spawns,
-        Edge {
+        LegacyEdge {
             source: parent.id,
             target: child.id,
             direction: EdgeDirection::Directed,
@@ -190,7 +190,7 @@ pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanRes
     add_edge(
         &ctx,
         CardEdgeType::Blocks,
-        Edge {
+        LegacyEdge {
             source: card_a.id,
             target: card_b.id,
             direction: EdgeDirection::Directed,
@@ -235,7 +235,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     add_edge(
         &ctx,
         CardEdgeType::Blocks,
-        Edge {
+        LegacyEdge {
             source: card_a.id,
             target: card_b.id,
             direction: EdgeDirection::Directed,
@@ -247,7 +247,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     add_edge(
         &ctx,
         CardEdgeType::Spawns,
-        Edge {
+        LegacyEdge {
             source: card_b.id,
             target: card_c.id,
             direction: EdgeDirection::Directed,
@@ -259,7 +259,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     add_edge(
         &ctx,
         CardEdgeType::RelatesTo,
-        Edge {
+        LegacyEdge {
             source: card_a.id,
             target: card_c.id,
             direction: EdgeDirection::Bidirectional,

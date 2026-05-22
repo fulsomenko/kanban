@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use super::algorithms::would_create_cycle;
 use super::core::EdgeStore;
-use super::edge::{Edge, EdgeDirection};
+use super::edge::{EdgeDirection, LegacyEdge};
 use super::error::GraphError;
 use super::traits::{Cascadable, Directed, EdgeSet, Graph};
 
@@ -45,7 +45,7 @@ impl DagGraph {
     /// Used by persistence layers that need to serialize the storage
     /// shape directly. For size and membership queries, use the
     /// [`EdgeSet`] trait surface instead.
-    pub fn edges(&self) -> &[Edge] {
+    pub fn edges(&self) -> &[LegacyEdge] {
         self.store.edges()
     }
 
@@ -59,7 +59,7 @@ impl DagGraph {
     /// DAG and don't constrain new mutations). Load paths use this to
     /// rehydrate stored edges and surface corrupt-DAG state as a
     /// hard load failure.
-    pub fn add_edge_with_metadata(&mut self, edge: Edge) -> Result<(), GraphError> {
+    pub fn add_edge_with_metadata(&mut self, edge: LegacyEdge) -> Result<(), GraphError> {
         if edge.source == edge.target {
             return Err(GraphError::SelfReference);
         }
@@ -151,7 +151,7 @@ impl Graph for DagGraph {
             return Err(GraphError::Cycle);
         }
         self.store
-            .add_edge(Edge::new(from, to, EdgeDirection::Directed));
+            .add_edge(LegacyEdge::new(from, to, EdgeDirection::Directed));
         Ok(())
     }
 

@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn test_split_graph_removes_edge_type_key_entirely() {
         // Migrated edges must be byte-shape compatible with freshly
-        // saved V6 edges. After KAN-504 review the `Edge` type lost its
+        // saved V6 edges. After KAN-504 review the `LegacyEdge` type lost its
         // generic `E` parameter — production edges no longer carry a
         // per-edge type field at all, so the on-disk shape has no
         // `edge_type` key. Leaving a null behind from the migration

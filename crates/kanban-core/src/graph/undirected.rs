@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
 use super::core::EdgeStore;
-use super::edge::{Edge, EdgeDirection};
+use super::edge::{EdgeDirection, LegacyEdge};
 use super::error::GraphError;
 use super::traits::{Cascadable, EdgeSet, Graph, Undirected};
 
@@ -45,7 +45,7 @@ impl UndirectedGraph {
     /// Used by persistence layers that need to serialize the storage
     /// shape directly. For size and membership queries, use the
     /// [`EdgeSet`] trait surface instead.
-    pub fn edges(&self) -> &[Edge] {
+    pub fn edges(&self) -> &[LegacyEdge] {
         self.store.edges()
     }
 
@@ -54,7 +54,7 @@ impl UndirectedGraph {
     /// regardless of active/archived status. Load paths use this to
     /// rehydrate stored edges and surface corrupt self-loops as a
     /// hard load failure.
-    pub fn add_edge_with_metadata(&mut self, edge: Edge) -> Result<(), GraphError> {
+    pub fn add_edge_with_metadata(&mut self, edge: LegacyEdge) -> Result<(), GraphError> {
         if edge.source == edge.target {
             return Err(GraphError::SelfReference);
         }
@@ -95,7 +95,7 @@ impl Graph for UndirectedGraph {
             return Err(GraphError::SelfReference);
         }
         self.store
-            .add_edge(Edge::new(from, to, EdgeDirection::Bidirectional));
+            .add_edge(LegacyEdge::new(from, to, EdgeDirection::Bidirectional));
         Ok(())
     }
 

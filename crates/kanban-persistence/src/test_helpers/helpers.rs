@@ -1,5 +1,5 @@
 use chrono::Utc;
-use kanban_core::{Edge, EdgeDirection};
+use kanban_core::{EdgeDirection, LegacyEdge};
 use kanban_domain::card::{Card, CardPriority, CardStatus};
 use kanban_domain::sprint::{Sprint, SprintStatus};
 use kanban_domain::Snapshot;
@@ -115,7 +115,7 @@ pub fn fully_populated_snapshot() -> Snapshot {
     let graph = DependencyGraph::from_validated_edges([
         (
             CardEdgeType::Blocks,
-            Edge {
+            LegacyEdge {
                 source: card_id,
                 target: archived_card_inner_id,
                 direction: EdgeDirection::Directed,
@@ -126,7 +126,7 @@ pub fn fully_populated_snapshot() -> Snapshot {
         ),
         (
             CardEdgeType::RelatesTo,
-            Edge {
+            LegacyEdge {
                 source: card_id,
                 target: archived_card_inner_id,
                 direction: EdgeDirection::Bidirectional,
