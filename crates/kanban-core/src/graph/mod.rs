@@ -8,7 +8,7 @@ pub mod undirected;
 
 pub use core::EdgeStore;
 pub use dag::DagGraph;
-pub use edge::{Edge, EdgeBase, EdgeDirection, LegacyEdge};
+pub use edge::{Edge, EdgeBase};
 pub use error::GraphError;
 pub use traits::{Cascadable, Directed, EdgeSet, Graph, GraphNode, Undirected};
 pub use undirected::UndirectedGraph;

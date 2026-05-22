@@ -859,11 +859,11 @@ impl SqliteStore {
             .map_err(db_err)?;
 
         // Walk each typed sub-graph and write rows tagged with the
-        // matching kind. Per-kind tables (step 11) replace this
-        // uniform-table write path with one INSERT per sub-graph.
+        // matching kind. The temporary `direction` / `weight` columns
+        // on the legacy single-table schema get hardcoded fillers —
+        // step 11 splits this into per-kind tables that drop those
+        // columns entirely.
         use kanban_core::Edge as _;
-        let directed_legacy = ser_enum(&kanban_core::EdgeDirection::Directed, "edge direction")?;
-        let bidi_legacy = ser_enum(&kanban_core::EdgeDirection::Bidirectional, "edge direction")?;
         for e in graph.spawns_edges() {
             sqlx::query(
                 "INSERT INTO card_edges
@@ -873,7 +873,7 @@ impl SqliteStore {
             .bind(e.source().to_string())
             .bind(e.target().to_string())
             .bind(ser_enum(&CardEdgeType::Spawns, "edge_type")?)
-            .bind(&directed_legacy)
+            .bind("Directed")
             .bind::<Option<f64>>(None)
             .bind(fmt_dt(&e.created_at()))
             .bind(opt_dt(&e.archived_at()))
@@ -890,7 +890,7 @@ impl SqliteStore {
             .bind(e.source().to_string())
             .bind(e.target().to_string())
             .bind(ser_enum(&CardEdgeType::Blocks, "edge_type")?)
-            .bind(&directed_legacy)
+            .bind("Directed")
             .bind::<Option<f64>>(None)
             .bind(fmt_dt(&e.created_at()))
             .bind(opt_dt(&e.archived_at()))
@@ -907,7 +907,7 @@ impl SqliteStore {
             .bind(e.source().to_string())
             .bind(e.target().to_string())
             .bind(ser_enum(&CardEdgeType::RelatesTo, "edge_type")?)
-            .bind(&bidi_legacy)
+            .bind("Bidirectional")
             .bind::<Option<f64>>(None)
             .bind(fmt_dt(&e.created_at()))
             .bind(opt_dt(&e.archived_at()))
