@@ -87,12 +87,34 @@ pub(crate) fn transform_to_v6_split_graph_value(envelope: &mut Value) -> Persist
                         })?;
                     let mut stripped = edge.clone();
                     if let Some(obj) = stripped.as_object_mut() {
+                        // Drop legacy fields that the new per-kind
+                        // edge structs no longer carry.
                         obj.remove("edge_type");
+                        obj.remove("direction");
+                        obj.remove("weight");
                     }
                     match kind {
                         "ParentOf" => parent_child_edges.push(stripped),
-                        "Blocks" => blocks_edges.push(stripped),
-                        "RelatesTo" => relates_edges.push(stripped),
+                        "Blocks" => {
+                            // Per-kind metadata: severity defaults to
+                            // Medium for migrated rows.
+                            if let Some(obj) = stripped.as_object_mut() {
+                                obj.insert(
+                                    "severity".to_string(),
+                                    Value::String("Medium".to_string()),
+                                );
+                            }
+                            blocks_edges.push(stripped);
+                        }
+                        "RelatesTo" => {
+                            if let Some(obj) = stripped.as_object_mut() {
+                                obj.insert(
+                                    "kind".to_string(),
+                                    Value::String("General".to_string()),
+                                );
+                            }
+                            relates_edges.push(stripped);
+                        }
                         other => {
                             return Err(PersistenceError::Serialization(format!(
                                 "split-graph migration: unknown edge_type '{other}'"
@@ -250,8 +272,12 @@ mod tests {
         assert_eq!(edge["target"], "22222222-2222-2222-2222-222222222222");
     }
 
+    /// Migration preserves the load-bearing fields (archived_at)
+    /// and drops the legacy ones (weight, direction, edge_type) so
+    /// the post-migration shape matches the per-kind on-disk shape
+    /// that the new Edge structs serialise to.
     #[test]
-    fn test_split_graph_preserves_archived_at_and_weight() {
+    fn test_split_graph_preserves_archived_at_and_drops_legacy_fields() {
         let mut env = make_v3_envelope(json!({
             "cards": {
                 "edges": [{
@@ -266,9 +292,20 @@ mod tests {
             }
         }));
         transform_to_v6_split_graph_value(&mut env).unwrap();
-        let edge = &env["data"]["graph"]["blocks"]["edges"][0];
-        assert_eq!(edge["weight"], 1.5);
+        let edge = &env["data"]["graph"]["blocks"]["edges"][0]
+            .as_object()
+            .unwrap();
         assert_eq!(edge["archived_at"], "2024-02-01T00:00:00Z");
+        assert_eq!(edge["created_at"], "2024-01-01T00:00:00Z");
+        // Legacy fields dropped; per-kind metadata populated with
+        // defaults.
+        for legacy in ["weight", "direction", "edge_type"] {
+            assert!(
+                !edge.contains_key(legacy),
+                "migrated edge must not carry legacy '{legacy}' field; got {edge:?}"
+            );
+        }
+        assert_eq!(edge["severity"], "Medium");
     }
 
     #[test]

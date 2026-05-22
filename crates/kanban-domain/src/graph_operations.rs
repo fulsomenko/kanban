@@ -4,12 +4,10 @@ use uuid::Uuid;
 
 /// Service-layer interface to the card-relation graph.
 ///
-/// Per-kind methods carry per-kind metadata (severity for blocks,
-/// kind for relates). The previous unified `add_card_edge(from, to,
-/// kind: CardEdgeType)` couldn't accept kind-specific metadata, so
-/// every blocks edge was Medium-severity and every relates edge was
-/// General-kind. Splitting per kind moves the metadata onto the
-/// signature where it belongs.
+/// Per-kind methods carry per-kind metadata directly in their
+/// signatures: severity for blocks, kind for relates, nothing extra
+/// for spawns. No runtime kind discriminator — the type system
+/// expresses what kind is being mutated.
 ///
 /// The trait returns raw `Vec<Uuid>` for list queries rather than
 /// resolved `Vec<CardSummary>`. Surfaces that need display data

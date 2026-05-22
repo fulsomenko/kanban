@@ -10,12 +10,10 @@ use crate::Card;
 
 /// Per-kind dependency commands.
 ///
-/// Each variant has a single relation kind baked into its type. The
-/// previous unified `AddEdge { kind: CardEdgeType }` couldn't carry
-/// kind-specific metadata (severity on Blocks, kind on Relates), so
-/// undo replay lost that data. Splitting per kind keeps the metadata
-/// on the right command and removes the need for a runtime kind
-/// discriminator.
+/// Each variant has a single relation kind baked into its type and
+/// carries the kind-specific metadata (severity on Blocks, kind on
+/// Relates) directly. No runtime kind discriminator: replay sees
+/// the same metadata the forward saw.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum DependencyCommand {

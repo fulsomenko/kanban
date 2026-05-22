@@ -1,11 +1,10 @@
 use kanban_core::{
-    Cascadable, DagGraph, Directed, EdgeBase, EdgeSet, GraphError, Undirected, UndirectedGraph,
+    Cascadable, DagGraph, Directed, EdgeSet, GraphError, Undirected, UndirectedGraph,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::edges::{BlocksEdge, RelatesEdge, SpawnsEdge};
-use super::CardEdgeType;
 use crate::error::DependencyError;
 use crate::{CardId, KanbanResult};
 
@@ -215,30 +214,11 @@ impl DependencyGraph {
 
     // --- Persistence helpers ---
 
-    /// Borrow the raw [`EdgeBase`] list for a given sub-graph as a
-    /// uniform read view. Callers needing per-kind metadata (severity,
-    /// kind) access the typed sub-graph directly via
-    /// `parent_child_edges` / `blocks_edges` / `relates_edges`.
-    pub fn edge_bases_of(&self, kind: CardEdgeType) -> Vec<EdgeBase> {
-        match kind {
-            CardEdgeType::Spawns => self
-                .parent_child
-                .edges()
-                .iter()
-                .map(|e| e.base.clone())
-                .collect(),
-            CardEdgeType::Blocks => self.blocks.edges().iter().map(|e| e.base.clone()).collect(),
-            CardEdgeType::RelatesTo => self
-                .relates
-                .edges()
-                .iter()
-                .map(|e| e.base.clone())
-                .collect(),
-        }
-    }
-
     /// Per-kind raw edge accessors. Persistence backends and test
-    /// fixtures use these to round-trip metadata-bearing edges.
+    /// fixtures use these to round-trip metadata-bearing edges. The
+    /// previous kind-discriminated `edge_bases_of(kind)` was dropped:
+    /// callers either know which kind they want (per-kind accessor)
+    /// or want them all (iterate all three).
     pub fn spawns_edges(&self) -> &[SpawnsEdge] {
         self.parent_child.edges()
     }

@@ -1,17 +1,20 @@
 use serde::{Deserialize, Serialize};
 
-/// Types of relationships between cards.
+/// Kind tag for cross-kind utilities and parameterised tests.
+///
+/// Production code paths are per-kind: each relation has its own
+/// concrete edge struct ([`super::SpawnsEdge`] / [`super::BlocksEdge`]
+/// / [`super::RelatesEdge`]), per-kind sub-graphs
+/// (`DagGraph<SpawnsEdge>` etc.), per-kind GraphOperations methods
+/// (`add_spawns_edge` / `add_blocks_edge(severity)` /
+/// `add_relates_edge(kind)`), and per-kind DependencyCommand variants.
+/// This enum exists only where a uniform discriminator is genuinely
+/// useful: cross-kind test parameterisation, cross-kind cross-kind
+/// debugging tools, and the `requires_dag` / `allows_cycles` checks
+/// below.
 ///
 /// Grammar is "source [variant] target": A `Blocks` B, A `RelatesTo`
-/// B, A `Spawns` B. Verb-form throughout; the previous `ParentOf`
-/// (noun-of-noun) was inconsistent with the other variants.
-///
-/// `Default` is `Spawns`, the primary user-facing hierarchy edge.
-/// The kind lives at the sub-graph layer on disk (parent_child /
-/// blocks / relates), not on the edge itself, so this default is
-/// informational only — it never fires during production
-/// deserialisation. Kept so `CardEdgeType::default()` resolves to a
-/// sensible value if any caller (today: test helpers) needs one.
+/// B, A `Spawns` B.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CardEdgeType {
     /// This card blocks the target (must complete before target can start)

@@ -2,9 +2,8 @@ use crate::state::SaveCoordinator;
 use kanban_domain::commands::Command;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardSummary, CardUpdate,
-    Column, ColumnUpdate, CreateCardOptions, GraphOperations, KanbanOperations, Sprint,
-    SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
+    ColumnUpdate, CreateCardOptions, GraphOperations, KanbanOperations, Sprint, SprintUpdate,
 };
 use kanban_service::backend::KanbanBackend;
 use kanban_service::KanbanContext;

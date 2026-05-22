@@ -1,9 +1,8 @@
 use kanban_core::{AppConfig, PaginatedList};
 use kanban_domain::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardSummary, CardUpdate,
-    Column, ColumnUpdate, CreateCardOptions, GraphOperations, KanbanOperations, Sprint,
-    SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
+    ColumnUpdate, CreateCardOptions, GraphOperations, KanbanOperations, Sprint, SprintUpdate,
 };
 use kanban_service::{KanbanContext, StoreManager};
 use uuid::Uuid;
