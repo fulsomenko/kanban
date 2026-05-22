@@ -1361,7 +1361,7 @@ impl GraphOperations for KanbanContext {
         self.require_card_exists(node)?;
         let graph = self.backend.get_graph()?;
         Ok(match kind {
-            CardEdgeType::ParentOf => graph.children(node),
+            CardEdgeType::Spawns => graph.children(node),
             CardEdgeType::Blocks => graph.blocked(node),
             CardEdgeType::RelatesTo => graph.related(node),
         })
@@ -1371,7 +1371,7 @@ impl GraphOperations for KanbanContext {
         self.require_card_exists(node)?;
         let graph = self.backend.get_graph()?;
         Ok(match kind {
-            CardEdgeType::ParentOf => graph.parents(node),
+            CardEdgeType::Spawns => graph.parents(node),
             CardEdgeType::Blocks => graph.blockers(node),
             CardEdgeType::RelatesTo => graph.related(node),
         })

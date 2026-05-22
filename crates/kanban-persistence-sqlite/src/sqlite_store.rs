@@ -59,7 +59,7 @@ fn p_enum<T: serde::de::DeserializeOwned>(s: &str, label: &str) -> KanbanResult<
 }
 
 /// Render a unit-variant enum to its serde wire name (e.g.
-/// `CardEdgeType::ParentOf -> "ParentOf"`). Symmetric with [`p_enum`].
+/// `CardEdgeType::Spawns -> "ParentOf"`). Symmetric with [`p_enum`].
 /// Avoids coupling the on-disk format to `#[derive(Debug)]`, which is
 /// easy to customize and would break the read/write round-trip silently.
 fn ser_enum<T: serde::Serialize + std::fmt::Debug>(v: &T, label: &str) -> KanbanResult<String> {
@@ -408,11 +408,22 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Rebuild `card_edges` with a `CHECK (edge_type IN (...))` if the
-    /// existing table lacks it. Existing databases were created before
-    /// the constraint was added to `schema.sql`; new ones pick it up
-    /// from `CREATE TABLE IF NOT EXISTS`. The rebuild is a copy-rename
-    /// dance because SQLite can't `ALTER TABLE ... ADD CHECK`.
+    /// Rebuild `card_edges` so the table carries the current CHECK
+    /// constraint (Spawns, Blocks, RelatesTo) and any legacy
+    /// `'ParentOf'` rows are renamed to `'Spawns'` during the copy.
+    ///
+    /// Existing databases fall into three states:
+    /// - No CHECK at all (pre-CHECK schema): rows are `'ParentOf'`.
+    /// - CHECK with `'ParentOf'` (intermediate schema): rows are
+    ///   `'ParentOf'`.
+    /// - CHECK with `'Spawns'` (current schema): rows are `'Spawns'`.
+    ///
+    /// Detection: if the table's stored SQL already mentions
+    /// `'Spawns'`, we're done. Otherwise the rebuild handles both
+    /// pre-CHECK and intermediate states uniformly. The copy maps
+    /// `'ParentOf' → 'Spawns'` via a CASE so existing rows survive
+    /// the rename. SQLite can't `ALTER TABLE ... ADD CHECK`, so we
+    /// copy-rename.
     async fn ensure_card_edges_check_constraint(pool: &Pool<Sqlite>) -> KanbanResult<()> {
         let sql: Option<String> = sqlx::query_scalar(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_edges'",
@@ -421,32 +432,47 @@ impl SqliteStore {
         .await
         .map_err(db_err)?;
         let Some(sql) = sql else { return Ok(()) };
-        if sql.contains("CHECK") && sql.contains("ParentOf") {
+        if sql.contains("CHECK") && sql.contains("Spawns") {
             return Ok(());
         }
         tracing::info!(
-            "rebuilding card_edges to add edge_type CHECK constraint (one-time per database)"
+            "rebuilding card_edges to add edge_type CHECK constraint and rename ParentOf to Spawns (one-time per database)"
         );
-        for stmt in [
-            "CREATE TABLE card_edges_new (
+        // Run the rebuild as a single multi-statement script. Splitting
+        // across multiple `.execute(pool)` calls let intermediate schema
+        // state become visible on different pool connections at
+        // different times, which surfaced as "table or index already
+        // exists" during the rename. The schema-initial CREATE
+        // statements (schema.sql) use exactly this single-script
+        // pattern.
+        sqlx::raw_sql(
+            "DROP INDEX IF EXISTS idx_card_edges_source;
+             DROP INDEX IF EXISTS idx_card_edges_target;
+             CREATE TABLE card_edges_new (
                 source_id TEXT NOT NULL,
                 target_id TEXT NOT NULL,
-                edge_type TEXT NOT NULL CHECK (edge_type IN ('ParentOf', 'Blocks', 'RelatesTo')),
+                edge_type TEXT NOT NULL CHECK (edge_type IN ('Spawns', 'Blocks', 'RelatesTo')),
                 direction TEXT NOT NULL,
                 weight REAL,
                 created_at TEXT NOT NULL,
                 archived_at TEXT,
                 PRIMARY KEY (source_id, target_id, edge_type)
-            )",
-            "INSERT INTO card_edges_new SELECT * FROM card_edges
-                WHERE edge_type IN ('ParentOf', 'Blocks', 'RelatesTo')",
-            "DROP TABLE card_edges",
-            "ALTER TABLE card_edges_new RENAME TO card_edges",
-            "CREATE INDEX IF NOT EXISTS idx_card_edges_source ON card_edges(source_id)",
-            "CREATE INDEX IF NOT EXISTS idx_card_edges_target ON card_edges(target_id)",
-        ] {
-            sqlx::raw_sql(stmt).execute(pool).await.map_err(db_err)?;
-        }
+             );
+             INSERT INTO card_edges_new
+                (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
+             SELECT source_id, target_id,
+                    CASE WHEN edge_type = 'ParentOf' THEN 'Spawns' ELSE edge_type END,
+                    direction, weight, created_at, archived_at
+             FROM card_edges
+             WHERE edge_type IN ('ParentOf', 'Spawns', 'Blocks', 'RelatesTo');
+             DROP TABLE card_edges;
+             ALTER TABLE card_edges_new RENAME TO card_edges;
+             CREATE INDEX idx_card_edges_source ON card_edges(source_id);
+             CREATE INDEX idx_card_edges_target ON card_edges(target_id);",
+        )
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
         Ok(())
     }
 
@@ -1792,6 +1818,96 @@ mod tests {
                     "WAL file should be minimal after save+checkpoint"
                 );
             }
+        });
+    }
+
+    /// Existing databases that pre-date the Spawns rename have rows
+    /// with edge_type='ParentOf'. The migration step that rebuilds
+    /// card_edges to add the new CHECK constraint must also rename
+    /// those rows to 'Spawns', otherwise the next save (which uses
+    /// ser_enum to write 'Spawns') would coexist with stale 'ParentOf'
+    /// rows that then violate the new CHECK on any further mutation.
+    ///
+    /// Drives the test through the public open path twice: first to
+    /// create a clean database, then we hand-rewrite the card_edges
+    /// table to the legacy shape (drop CHECK, swap rows back to
+    /// 'ParentOf'), then re-open to verify the migration upgrades it.
+    /// Reusing SqliteStore::open for the setup avoids the schema-mismatch
+    /// pitfalls of a from-scratch CREATE TABLE in the test.
+    #[test]
+    fn test_open_migrates_legacy_parent_of_rows_to_spawns() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy.sqlite3");
+        let rt = make_rt();
+
+        rt.block_on(async {
+            // First open creates the database via schema.sql with the
+            // new CHECK constraint and the Spawns variant.
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            // Downgrade card_edges to the pre-Spawns shape: a table
+            // without CHECK, containing a single 'ParentOf' row. This
+            // simulates a database created before the rename landed.
+            sqlx::raw_sql(
+                "DROP INDEX IF EXISTS idx_card_edges_source;
+                 DROP INDEX IF EXISTS idx_card_edges_target;
+                 DROP TABLE card_edges;
+                 CREATE TABLE card_edges (
+                    source_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    edge_type TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    weight REAL,
+                    created_at TEXT NOT NULL,
+                    archived_at TEXT,
+                    PRIMARY KEY (source_id, target_id, edge_type)
+                 );",
+            )
+            .execute(store.pool())
+            .await
+            .unwrap();
+            sqlx::query(
+                "INSERT INTO card_edges
+                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
+                 VALUES (?, ?, 'ParentOf', 'Directed', NULL, ?, NULL)",
+            )
+            .bind(uuid::Uuid::nil().to_string())
+            .bind(uuid::Uuid::from_u128(0x42).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await
+            .unwrap();
+            drop(store);
+
+            // Re-opening must rebuild the table and rename the row.
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            let kind: String = sqlx::query_scalar("SELECT edge_type FROM card_edges LIMIT 1")
+                .fetch_one(store.pool())
+                .await
+                .unwrap();
+            assert_eq!(
+                kind, "Spawns",
+                "legacy 'ParentOf' row must rename to 'Spawns'"
+            );
+
+            // The new CHECK constraint must now reject any attempt to
+            // write a legacy 'ParentOf' value.
+            let insert_legacy = sqlx::query(
+                "INSERT INTO card_edges
+                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
+                 VALUES (?, ?, 'ParentOf', 'Directed', NULL, ?, NULL)",
+            )
+            .bind(uuid::Uuid::from_u128(0x100).to_string())
+            .bind(uuid::Uuid::from_u128(0x200).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await;
+            assert!(
+                insert_legacy.is_err(),
+                "post-migration CHECK should reject 'ParentOf'; got {:?}",
+                insert_legacy
+            );
         });
     }
 

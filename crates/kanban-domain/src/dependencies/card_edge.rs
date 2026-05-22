@@ -2,12 +2,16 @@ use serde::{Deserialize, Serialize};
 
 /// Types of relationships between cards.
 ///
-/// `Default` is `ParentOf`, the primary user-facing edge kind. The
-/// kind lives at the sub-graph layer on disk (parent_child / blocks /
-/// relates), not on the edge itself, so this default is informational
-/// only — it never fires during production deserialisation. Kept so
-/// `CardEdgeType::default()` resolves to a sensible value if any
-/// caller (today: test helpers) needs one.
+/// Grammar is "source [variant] target": A `Blocks` B, A `RelatesTo`
+/// B, A `Spawns` B. Verb-form throughout; the previous `ParentOf`
+/// (noun-of-noun) was inconsistent with the other variants.
+///
+/// `Default` is `Spawns`, the primary user-facing hierarchy edge.
+/// The kind lives at the sub-graph layer on disk (parent_child /
+/// blocks / relates), not on the edge itself, so this default is
+/// informational only — it never fires during production
+/// deserialisation. Kept so `CardEdgeType::default()` resolves to a
+/// sensible value if any caller (today: test helpers) needs one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CardEdgeType {
     /// This card blocks the target (must complete before target can start)
@@ -17,10 +21,15 @@ pub enum CardEdgeType {
     /// General relationship (informational, allows cycles)
     RelatesTo,
 
-    /// Organizational grouping - parent contains child (source is parent, target is child)
-    /// Enforces DAG - no cycles allowed (can't be own ancestor)
+    /// Hierarchy edge: source spawns target as a sub-item.
+    /// Transitive: if A spawns B and B spawns C, then A is an
+    /// ancestor of C. Enforces DAG: no cycles allowed (a card can't
+    /// be its own ancestor). The user-facing API still uses
+    /// parent/child language (`set_parent`, `parents`, `children`) —
+    /// that's how the relationship reads from either side; this
+    /// variant names the directed edge itself.
     #[default]
-    ParentOf,
+    Spawns,
     // Future edge types can be added here:
     // Duplicates,
 }
@@ -28,7 +37,7 @@ pub enum CardEdgeType {
 impl CardEdgeType {
     /// Whether this edge type enforces DAG (no cycles)
     pub fn requires_dag(&self) -> bool {
-        matches!(self, CardEdgeType::Blocks | CardEdgeType::ParentOf)
+        matches!(self, CardEdgeType::Blocks | CardEdgeType::Spawns)
     }
 
     /// Whether this edge type allows cycles
@@ -54,8 +63,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parent_of_requires_dag() {
-        assert!(CardEdgeType::ParentOf.requires_dag());
-        assert!(!CardEdgeType::ParentOf.allows_cycles());
+    fn test_spawns_requires_dag() {
+        assert!(CardEdgeType::Spawns.requires_dag());
+        assert!(!CardEdgeType::Spawns.allows_cycles());
     }
 }

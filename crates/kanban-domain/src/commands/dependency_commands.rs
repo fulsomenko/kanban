@@ -67,7 +67,7 @@ impl DependencyCommand {
 ///
 /// `kind` selects which sub-graph receives the edge. `source` and
 /// `target` use the following convention per kind:
-/// - `ParentOf`:  source = parent,  target = child   (edge parent -> child)
+/// - `Spawns`:    source = parent,  target = child   (edge parent -> child)
 /// - `Blocks`:    source = blocker, target = blocked (edge blocker -> blocked)
 /// - `RelatesTo`: undirected; the pair is symmetric but source/target
 ///   are stored in the order the caller provided them.
@@ -87,7 +87,7 @@ impl AddEdge {
         let (kind, source, target) = (self.kind, self.source, self.target);
         context.store.modify_graph(Box::new(move |graph| {
             match kind {
-                CardEdgeType::ParentOf => graph.set_parent(target, source)?,
+                CardEdgeType::Spawns => graph.set_parent(target, source)?,
                 CardEdgeType::Blocks => graph.set_block(source, target)?,
                 CardEdgeType::RelatesTo => graph.relate(source, target)?,
             }
@@ -97,7 +97,7 @@ impl AddEdge {
 
     pub fn description(&self) -> String {
         match self.kind {
-            CardEdgeType::ParentOf => {
+            CardEdgeType::Spawns => {
                 format!("Set parent: {} is parent of {}", self.source, self.target)
             }
             CardEdgeType::Blocks => format!(
@@ -141,7 +141,7 @@ impl RemoveEdge {
         let (kind, source, target) = (self.kind, self.source, self.target);
         context.store.modify_graph(Box::new(move |graph| {
             match kind {
-                CardEdgeType::ParentOf => graph.remove_parent(target, source)?,
+                CardEdgeType::Spawns => graph.remove_parent(target, source)?,
                 CardEdgeType::Blocks => graph.unblock(source, target)?,
                 CardEdgeType::RelatesTo => graph.unrelate(source, target)?,
             }
@@ -151,7 +151,7 @@ impl RemoveEdge {
 
     pub fn description(&self) -> String {
         match self.kind {
-            CardEdgeType::ParentOf => format!(
+            CardEdgeType::Spawns => format!(
                 "Remove parent: {} is no longer parent of {}",
                 self.source, self.target
             ),
@@ -375,7 +375,7 @@ mod tests {
         let context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
-        assert!(add(CardEdgeType::ParentOf, parent_id, child_id)
+        assert!(add(CardEdgeType::Spawns, parent_id, child_id)
             .execute(&context)
             .is_ok());
         let graph = tc.store.get_graph().unwrap();
@@ -389,9 +389,9 @@ mod tests {
         let context = tc.as_command_context();
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
-        assert!(add(CardEdgeType::ParentOf, a, b).execute(&context).is_ok());
+        assert!(add(CardEdgeType::Spawns, a, b).execute(&context).is_ok());
         // b is now child of a; making a a child of b would form a cycle.
-        assert!(add(CardEdgeType::ParentOf, b, a).execute(&context).is_err());
+        assert!(add(CardEdgeType::Spawns, b, a).execute(&context).is_err());
     }
 
     #[test]
@@ -405,7 +405,7 @@ mod tests {
             tc.store.set_graph(graph).unwrap();
         }
         let context = tc.as_command_context();
-        assert!(remove(CardEdgeType::ParentOf, parent_id, child_id)
+        assert!(remove(CardEdgeType::Spawns, parent_id, child_id)
             .execute(&context)
             .is_ok());
         let graph = tc.store.get_graph().unwrap();
@@ -416,11 +416,9 @@ mod tests {
     fn test_remove_edge_parent_nonexistent_errors() {
         let tc = TestContext::new();
         let context = tc.as_command_context();
-        assert!(
-            remove(CardEdgeType::ParentOf, Uuid::new_v4(), Uuid::new_v4())
-                .execute(&context)
-                .is_err()
-        );
+        assert!(remove(CardEdgeType::Spawns, Uuid::new_v4(), Uuid::new_v4())
+            .execute(&context)
+            .is_err());
     }
 
     #[test]
@@ -473,13 +471,13 @@ mod tests {
         let target = Uuid::from_u128(0x42);
 
         let add = DependencyCommand::AddEdge(AddEdge {
-            kind: CardEdgeType::ParentOf,
+            kind: CardEdgeType::Spawns,
             source,
             target,
         });
         let add_json = serde_json::to_value(&add).unwrap();
         assert_eq!(add_json["action"], "add_edge");
-        assert_eq!(add_json["kind"], "ParentOf");
+        assert_eq!(add_json["kind"], "Spawns");
         assert_eq!(add_json["source"], source.to_string());
         assert_eq!(add_json["target"], target.to_string());
 
@@ -510,7 +508,7 @@ mod tests {
         assert!(matches!(
             round_add,
             DependencyCommand::AddEdge(AddEdge {
-                kind: CardEdgeType::ParentOf,
+                kind: CardEdgeType::Spawns,
                 ..
             })
         ));

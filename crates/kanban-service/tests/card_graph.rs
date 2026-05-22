@@ -1,7 +1,7 @@
 //! Integration tests for `KanbanContext`'s `GraphOperations` impl (KAN-504).
 //!
 //! Exercises the four primitive methods (`add_card_edge`, `remove_card_edge`,
-//! `list_card_edges_from`, `list_card_edges_to`) keyed by `CardEdgeType::ParentOf`,
+//! `list_card_edges_from`, `list_card_edges_to`) keyed by `CardEdgeType::Spawns`,
 //! plus the convenience defaults inherited from the trait. Run against both
 //! `JsonDataStore` and `SqliteBackend` via a macro to catch backend-specific
 //! divergence; the underlying graph behavior (cycle detection, self-reference
@@ -61,7 +61,7 @@ fn seed_three_cards(backend: &Arc<dyn KanbanBackend>) -> (uuid::Uuid, uuid::Uuid
 /// pick it up automatically — that's the maintenance win this layout
 /// is designed for.
 const ALL_KINDS: [CardEdgeType; 3] = [
-    CardEdgeType::ParentOf,
+    CardEdgeType::Spawns,
     CardEdgeType::Blocks,
     CardEdgeType::RelatesTo,
 ];
@@ -235,13 +235,13 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(parent_id, c1, CardEdgeType::ParentOf)
+                ctx.add_card_edge(parent_id, c1, CardEdgeType::Spawns)
                     .unwrap();
-                ctx.add_card_edge(parent_id, c2, CardEdgeType::ParentOf)
+                ctx.add_card_edge(parent_id, c2, CardEdgeType::Spawns)
                     .unwrap();
 
                 let mut ids = ctx
-                    .list_card_edges_from(parent_id, CardEdgeType::ParentOf)
+                    .list_card_edges_from(parent_id, CardEdgeType::Spawns)
                     .unwrap();
                 ids.sort();
                 let mut expected = vec![c1, c2];
@@ -254,13 +254,13 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (p1, p2, child_id) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(p1, child_id, CardEdgeType::ParentOf)
+                ctx.add_card_edge(p1, child_id, CardEdgeType::Spawns)
                     .unwrap();
-                ctx.add_card_edge(p2, child_id, CardEdgeType::ParentOf)
+                ctx.add_card_edge(p2, child_id, CardEdgeType::Spawns)
                     .unwrap();
 
                 let mut ids = ctx
-                    .list_card_edges_to(child_id, CardEdgeType::ParentOf)
+                    .list_card_edges_to(child_id, CardEdgeType::Spawns)
                     .unwrap();
                 ids.sort();
                 let mut expected = vec![p1, p2];
@@ -275,8 +275,8 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (a, b, _) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
-                let err = ctx.add_card_edge(b, a, CardEdgeType::ParentOf).unwrap_err();
+                ctx.add_card_edge(a, b, CardEdgeType::Spawns).unwrap();
+                let err = ctx.add_card_edge(b, a, CardEdgeType::Spawns).unwrap_err();
                 assert!(
                     err.is_cycle_detected(),
                     "expected CycleDetected, got {err:?}"
@@ -365,7 +365,7 @@ macro_rules! card_graph_tests {
 
                 let convenience: Vec<uuid::Uuid> = ctx.list_card_parents(child_id).unwrap();
                 let primitive: Vec<uuid::Uuid> = ctx
-                    .list_card_edges_to(child_id, CardEdgeType::ParentOf)
+                    .list_card_edges_to(child_id, CardEdgeType::Spawns)
                     .unwrap();
                 assert_eq!(convenience, primitive);
             }

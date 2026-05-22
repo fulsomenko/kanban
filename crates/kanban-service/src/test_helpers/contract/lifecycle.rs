@@ -304,7 +304,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
                 },
             ),
             (
-                CardEdgeType::ParentOf,
+                CardEdgeType::Spawns,
                 Edge {
                     source: card2.id,
                     target: card3.id,

@@ -49,22 +49,22 @@ pub trait GraphOperations {
 
     /// Add the `parent -> child` edge for `child_id`.
     fn set_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
-        self.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
+        self.add_card_edge(parent_id, child_id, CardEdgeType::Spawns)
     }
 
     /// Remove the `parent -> child` edge for `child_id`.
     fn remove_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
-        self.remove_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
+        self.remove_card_edge(parent_id, child_id, CardEdgeType::Spawns)
     }
 
     /// Direct parents of `card_id` (incoming parent-of edges).
     fn list_card_parents(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.list_card_edges_to(card_id, CardEdgeType::ParentOf)
+        self.list_card_edges_to(card_id, CardEdgeType::Spawns)
     }
 
     /// Direct children of `card_id` (outgoing parent-of edges).
     fn list_card_children(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.list_card_edges_from(card_id, CardEdgeType::ParentOf)
+        self.list_card_edges_from(card_id, CardEdgeType::Spawns)
     }
 }
 
@@ -121,7 +121,7 @@ mod tests {
         let mut g = GraphOnly;
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
-        g.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
+        g.add_card_edge(a, b, CardEdgeType::Spawns).unwrap();
     }
 
     /// Canonical parent/child spelling: child-first. `set_parent` and

@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS archived_cards (
 CREATE TABLE IF NOT EXISTS card_edges (
     source_id TEXT NOT NULL,
     target_id TEXT NOT NULL,
-    edge_type TEXT NOT NULL CHECK (edge_type IN ('ParentOf', 'Blocks', 'RelatesTo')),
+    edge_type TEXT NOT NULL CHECK (edge_type IN ('Spawns', 'Blocks', 'RelatesTo')),
     direction TEXT NOT NULL,
     weight REAL,
     created_at TEXT NOT NULL,

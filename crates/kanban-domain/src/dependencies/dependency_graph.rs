@@ -242,7 +242,7 @@ impl DependencyGraph {
         let mut graph = Self::new();
         for (kind, edge) in edges {
             match kind {
-                CardEdgeType::ParentOf => graph
+                CardEdgeType::Spawns => graph
                     .parent_child
                     .add_edge_with_metadata(edge)
                     .map_err(dep_err)?,
@@ -264,7 +264,7 @@ impl DependencyGraph {
     /// helpers also use this to assert specific kinds round-trip.
     pub fn edges_of(&self, kind: CardEdgeType) -> &[Edge] {
         match kind {
-            CardEdgeType::ParentOf => self.parent_child.edges(),
+            CardEdgeType::Spawns => self.parent_child.edges(),
             CardEdgeType::Blocks => self.blocks.edges(),
             CardEdgeType::RelatesTo => self.relates.edges(),
         }
@@ -279,7 +279,7 @@ impl DependencyGraph {
         self.parent_child
             .edges()
             .iter()
-            .map(|e| (CardEdgeType::ParentOf, e))
+            .map(|e| (CardEdgeType::Spawns, e))
             .chain(
                 self.blocks
                     .edges()

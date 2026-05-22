@@ -372,7 +372,7 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
     let child = ctx.create_card(board.id, col.id, "Child".into(), Default::default())?;
     ctx.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
         AddEdge {
-            kind: CardEdgeType::ParentOf,
+            kind: CardEdgeType::Spawns,
             source: parent.id,
             target: child.id,
         },
@@ -381,7 +381,7 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
 
     ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveEdge(
         RemoveEdge {
-            kind: CardEdgeType::ParentOf,
+            kind: CardEdgeType::Spawns,
             source: parent.id,
             target: child.id,
         },
@@ -587,7 +587,7 @@ async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
 
     ctx.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
         AddEdge {
-            kind: CardEdgeType::ParentOf,
+            kind: CardEdgeType::Spawns,
             source: parent.id,
             target: child.id,
         },

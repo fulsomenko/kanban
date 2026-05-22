@@ -711,7 +711,7 @@ mod tests {
             .expect("snapshot must deserialize through the full domain stack after migration");
         use kanban_domain::CardEdgeType;
         assert_eq!(
-            domain_snapshot.graph.edges_of(CardEdgeType::ParentOf).len(),
+            domain_snapshot.graph.edges_of(CardEdgeType::Spawns).len(),
             1
         );
         assert_eq!(

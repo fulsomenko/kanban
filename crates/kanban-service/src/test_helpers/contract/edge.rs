@@ -149,7 +149,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
-        CardEdgeType::ParentOf,
+        CardEdgeType::Spawns,
         Edge {
             source: parent.id,
             target: child.id,
@@ -164,7 +164,7 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.edges_of(CardEdgeType::ParentOf);
+    let edges = graph.edges_of(CardEdgeType::Spawns);
     assert_eq!(edges.len(), 1);
     Ok(())
 }
@@ -246,7 +246,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     );
     add_edge(
         &ctx,
-        CardEdgeType::ParentOf,
+        CardEdgeType::Spawns,
         Edge {
             source: card_b.id,
             target: card_c.id,
