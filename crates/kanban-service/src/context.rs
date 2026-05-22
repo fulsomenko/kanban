@@ -1358,6 +1358,7 @@ impl GraphOperations for KanbanContext {
     }
 
     fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(node)?;
         let graph = self.backend.get_graph()?;
         Ok(match kind {
             CardEdgeType::ParentOf => graph.children(node),
@@ -1367,6 +1368,7 @@ impl GraphOperations for KanbanContext {
     }
 
     fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(node)?;
         let graph = self.backend.get_graph()?;
         Ok(match kind {
             CardEdgeType::ParentOf => graph.parents(node),

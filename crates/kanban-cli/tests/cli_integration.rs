@@ -3639,6 +3639,57 @@ mod relation_tests {
         assert_eq!(data.len(), 2, "both children should be attached");
     }
 
+    /// Mid-list failure in a multi-child add must stop at the first
+    /// error and identify which entry broke. Children that succeeded
+    /// before the failure remain visible in memory; the save outside
+    /// the loop is short-circuited by `?` so the process exits without
+    /// persisting partial state.
+    #[test]
+    fn test_relation_add_with_cycle_mid_list_aborts_and_names_offending_child() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
+        // Set up a chain so closing it causes a cycle:
+        //   parent -> c1 -> c2
+        // Then attempt `relation add c2 c1 parent`. The first child
+        // (c1) becomes a child of c2 cleanly. The second child
+        // (parent) would close the cycle parent -> c1 -> c2 -> parent
+        // and must fail with the parent identifier in the message.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &parent_id, &c1])
+            .assert()
+            .success();
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &c1, &c2])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &c2,
+                &c1, // would create c2 -> c1 cycle (already c1 -> c2)
+                &parent_id,
+            ])
+            .assert()
+            .failure()
+            .get_output()
+            .stderr
+            .clone();
+        let stderr = String::from_utf8_lossy(&output);
+        assert!(
+            stderr.to_lowercase().contains("cycle"),
+            "expected cycle error, got: {stderr}"
+        );
+        assert!(
+            stderr.contains(&c1) || stderr.contains(&c2),
+            "expected the offending child or its parent to appear in the message; got: {stderr}"
+        );
+    }
+
     /// Multi-child remove mirrors the add path.
     #[test]
     fn test_relation_remove_with_multiple_children_clears_all_edges() {

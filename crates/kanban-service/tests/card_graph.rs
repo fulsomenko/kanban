@@ -480,6 +480,40 @@ macro_rules! card_graph_tests {
             }
 
             #[tokio::test(flavor = "multi_thread")]
+            async fn test_list_card_edges_from_with_unknown_node_returns_card_not_found() {
+                // Listing edges of a phantom UUID must surface NotFound,
+                // symmetric with add/remove. Previously the list paths
+                // silently returned an empty Vec, which hides graph
+                // corruption from any caller that resolved a stale UUID.
+                for kind in ALL_KINDS {
+                    let (ctx, _dir) = $open_ctx.await;
+                    let phantom = uuid::Uuid::new_v4();
+                    let err = ctx.list_card_edges_from(phantom, kind).unwrap_err();
+                    assert!(
+                        err.is_not_found(),
+                        "{kind:?}: expected NotFound; got {err:?}"
+                    );
+                    assert!(
+                        err.to_string().contains(&phantom.to_string()),
+                        "{kind:?}: error must name the missing id; got {err:?}"
+                    );
+                }
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_list_card_edges_to_with_unknown_node_returns_card_not_found() {
+                for kind in ALL_KINDS {
+                    let (ctx, _dir) = $open_ctx.await;
+                    let phantom = uuid::Uuid::new_v4();
+                    let err = ctx.list_card_edges_to(phantom, kind).unwrap_err();
+                    assert!(
+                        err.is_not_found(),
+                        "{kind:?}: expected NotFound; got {err:?}"
+                    );
+                }
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
             async fn test_remove_parent_across_boards_clears_edge() {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
