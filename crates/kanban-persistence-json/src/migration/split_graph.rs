@@ -284,10 +284,13 @@ mod tests {
     #[test]
     fn test_split_graph_removes_edge_type_key_entirely() {
         // Migrated edges must be byte-shape compatible with freshly
-        // saved V6 edges. The new on-disk Edge<()> does not write an
-        // `edge_type` field at all; leaving a null behind from the
-        // migration would produce diff noise in version-controlled
-        // kanban files.
+        // saved V6 edges. After KAN-504 review the `Edge` type lost its
+        // generic `E` parameter — production edges no longer carry a
+        // per-edge type field at all, so the on-disk shape has no
+        // `edge_type` key. Leaving a null behind from the migration
+        // would produce diff noise in version-controlled kanban files
+        // and re-introduce a field the rest of the code path never
+        // emits.
         let mut env = make_v3_envelope(json!({
             "cards": {
                 "edges": [{

@@ -286,7 +286,6 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
             Edge {
                 source: card1.id,
                 target: card2.id,
-                edge_type: (),
                 direction: EdgeDirection::Directed,
                 weight: Some(1.0_f32),
                 created_at: now,
@@ -298,7 +297,6 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
             Edge {
                 source: card1.id,
                 target: card3.id,
-                edge_type: (),
                 direction: EdgeDirection::Bidirectional,
                 weight: None,
                 created_at: now,
@@ -310,7 +308,6 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
             Edge {
                 source: card2.id,
                 target: card3.id,
-                edge_type: (),
                 direction: EdgeDirection::Directed,
                 weight: Some(0.5_f32),
                 created_at: now,

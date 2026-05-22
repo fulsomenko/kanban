@@ -4,19 +4,12 @@ use kanban_core::{AppConfig, Edge, EdgeDirection};
 use kanban_domain::{CardEdgeType, CreateCardOptions, KanbanOperations, KanbanResult};
 use tempfile::TempDir;
 
-fn add_edge(ctx: &KanbanContext, edge: Edge<CardEdgeType>) {
+/// Round-trip test helper: insert one edge of the given kind into the
+/// graph and persist. Edge type lives at the sub-graph layer so the
+/// kind is a separate parameter.
+fn add_edge(ctx: &KanbanContext, kind: CardEdgeType, edge: Edge) {
     let mut graph = ctx.data_store().get_graph().unwrap();
-    let kind = edge.edge_type;
-    let untyped: Edge<()> = Edge {
-        source: edge.source,
-        target: edge.target,
-        edge_type: (),
-        direction: edge.direction,
-        weight: edge.weight,
-        created_at: edge.created_at,
-        archived_at: edge.archived_at,
-    };
-    graph.insert_raw_edge(kind, untyped);
+    graph.insert_raw_edge(kind, edge);
     ctx.data_store().set_graph(graph).unwrap();
 }
 
@@ -50,10 +43,10 @@ pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResul
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
+        CardEdgeType::Blocks,
         Edge {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::Blocks,
             direction: EdgeDirection::Directed,
             weight: Some(1.0_f32),
             created_at: now,
@@ -96,10 +89,10 @@ pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanR
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
+        CardEdgeType::RelatesTo,
         Edge {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::RelatesTo,
             direction: EdgeDirection::Bidirectional,
             weight: None,
             created_at: now,
@@ -149,10 +142,10 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
+        CardEdgeType::ParentOf,
         Edge {
             source: parent.id,
             target: child.id,
-            edge_type: CardEdgeType::ParentOf,
             direction: EdgeDirection::Directed,
             weight: None,
             created_at: now,
@@ -189,10 +182,10 @@ pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanRes
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
+        CardEdgeType::Blocks,
         Edge {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::Blocks,
             direction: EdgeDirection::Directed,
             weight: Some(2.5_f32),
             created_at: now,
@@ -234,10 +227,10 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
+        CardEdgeType::Blocks,
         Edge {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::Blocks,
             direction: EdgeDirection::Directed,
             weight: None,
             created_at: now,
@@ -246,10 +239,10 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     );
     add_edge(
         &ctx,
+        CardEdgeType::ParentOf,
         Edge {
             source: card_b.id,
             target: card_c.id,
-            edge_type: CardEdgeType::ParentOf,
             direction: EdgeDirection::Directed,
             weight: Some(3.0_f32),
             created_at: now,
@@ -258,10 +251,10 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     );
     add_edge(
         &ctx,
+        CardEdgeType::RelatesTo,
         Edge {
             source: card_a.id,
             target: card_c.id,
-            edge_type: CardEdgeType::RelatesTo,
             direction: EdgeDirection::Bidirectional,
             weight: None,
             created_at: now,

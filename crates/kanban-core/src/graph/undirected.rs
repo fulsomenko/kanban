@@ -16,7 +16,7 @@ use super::traits::{Cascadable, EdgeSet, Graph, Undirected};
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct UndirectedGraph {
     #[serde(flatten)]
-    store: EdgeStore<()>,
+    store: EdgeStore,
 }
 
 impl UndirectedGraph {
@@ -40,13 +40,13 @@ impl UndirectedGraph {
     /// Used by persistence layers that need to serialize the storage
     /// shape directly. For size and membership queries, use the
     /// [`EdgeSet`] trait surface instead.
-    pub fn edges(&self) -> &[Edge<()>] {
+    pub fn edges(&self) -> &[Edge] {
         self.store.edges()
     }
 
     /// Insert a raw edge without validation. Use only for migrations
     /// and test fixtures.
-    pub fn insert_raw_edge(&mut self, edge: Edge<()>) {
+    pub fn insert_raw_edge(&mut self, edge: Edge) {
         self.store.add_edge(edge);
     }
 }
@@ -83,7 +83,7 @@ impl Graph for UndirectedGraph {
             return Err(GraphError::SelfReference);
         }
         self.store
-            .add_edge(Edge::new(from, to, (), EdgeDirection::Bidirectional));
+            .add_edge(Edge::new(from, to, EdgeDirection::Bidirectional));
         Ok(())
     }
 

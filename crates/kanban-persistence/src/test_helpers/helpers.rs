@@ -118,7 +118,6 @@ pub fn fully_populated_snapshot() -> Snapshot {
         Edge {
             source: card_id,
             target: archived_card_inner_id,
-            edge_type: (),
             direction: EdgeDirection::Directed,
             weight: Some(1.5),
             created_at: now,
@@ -130,7 +129,6 @@ pub fn fully_populated_snapshot() -> Snapshot {
         Edge {
             source: card_id,
             target: archived_card_inner_id,
-            edge_type: (),
             direction: EdgeDirection::Bidirectional,
             weight: None,
             created_at: now,

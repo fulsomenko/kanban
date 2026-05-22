@@ -215,10 +215,9 @@ fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
         let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
 
         let edge_type: CardEdgeType = p_enum(&edge_type_str, "edge_type")?;
-        let untyped: Edge<()> = Edge {
+        let untyped: Edge = Edge {
             source: p_uuid(&source_str)?,
             target: p_uuid(&target_str)?,
-            edge_type: (),
             direction: p_enum(&direction_str, "edge direction")?,
             weight: weight.map(|w| w as f32),
             created_at: p_dt(&created_at_str)?,

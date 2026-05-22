@@ -11,28 +11,20 @@ pub enum EdgeDirection {
     Bidirectional,
 }
 
-/// A weighted, typed edge between two nodes
+/// A weighted edge between two nodes.
 ///
-/// Generic over edge type `E` to support different relationship types
-/// (e.g., CardEdgeType::Blocks, CardEdgeType::RelatesTo, etc.)
-///
-/// `edge_type` carries `#[serde(default)]` so an edge whose JSON
-/// representation omits the field (or sets it to `null`) round-trips
-/// through `Deserialize` cleanly. This matters for `E = ()` (the V6
-/// on-disk shape: the type is encoded by the sub-graph the edge lives
-/// in, not carried per-edge), and for forward-compat with older
-/// migration outputs that nulled the field. Imposes `E: Default` on
-/// the derived `Deserialize` impl; both `()` and `CardEdgeType`
-/// satisfy it.
+/// The relationship kind (parent-of, blocks, relates-to, ...) is
+/// encoded by which sub-graph the edge lives in — see
+/// [`crate::graph::DagGraph`] and [`crate::graph::UndirectedGraph`] —
+/// not by a per-edge field. Dropping the previous `E` type parameter
+/// also drops the serde-required `E: Default` constraint and the
+/// `edge_type: null` placeholder that used to ride along on disk.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Edge<E> {
+pub struct Edge {
     /// Source node identifier
     pub source: Uuid,
     /// Target node identifier
     pub target: Uuid,
-    /// Type of relationship (e.g., Blocks, RelatesTo).
-    #[serde(default)]
-    pub edge_type: E,
     /// Direction of the edge
     pub direction: EdgeDirection,
     /// Optional weight for weighted graph algorithms
@@ -43,13 +35,12 @@ pub struct Edge<E> {
     pub archived_at: Option<DateTime<Utc>>,
 }
 
-impl<E> Edge<E> {
+impl Edge {
     /// Create a new edge
-    pub fn new(source: Uuid, target: Uuid, edge_type: E, direction: EdgeDirection) -> Self {
+    pub fn new(source: Uuid, target: Uuid, direction: EdgeDirection) -> Self {
         Self {
             source,
             target,
-            edge_type,
             direction,
             weight: None,
             created_at: Utc::now(),
@@ -100,17 +91,11 @@ impl<E> Edge<E> {
 mod tests {
     use super::*;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-    enum TestEdgeType {
-        TypeA,
-        TypeB,
-    }
-
     #[test]
-    fn test_edge_creation() {
+    fn test_new_returns_active_edge_with_endpoints_set() {
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
-        let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
+        let edge = Edge::new(source, target, EdgeDirection::Directed);
 
         assert_eq!(edge.source, source);
         assert_eq!(edge.target, target);
@@ -119,10 +104,10 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_archive() {
+    fn test_archive_then_unarchive_round_trips_active_state() {
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
-        let mut edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
+        let mut edge = Edge::new(source, target, EdgeDirection::Directed);
 
         edge.archive();
         assert!(edge.is_archived());
@@ -134,11 +119,11 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_involves() {
+    fn test_involves_returns_true_for_both_endpoints_only() {
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
         let other = Uuid::new_v4();
-        let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
+        let edge = Edge::new(source, target, EdgeDirection::Directed);
 
         assert!(edge.involves(source));
         assert!(edge.involves(target));
@@ -146,25 +131,20 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_connects_directed() {
+    fn test_connects_directed_only_matches_source_to_target_order() {
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
-        let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
+        let edge = Edge::new(source, target, EdgeDirection::Directed);
 
         assert!(edge.connects(source, target));
         assert!(!edge.connects(target, source));
     }
 
     #[test]
-    fn test_edge_connects_bidirectional() {
+    fn test_connects_bidirectional_matches_either_endpoint_order() {
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
-        let edge = Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Bidirectional,
-        );
+        let edge = Edge::new(node_a, node_b, EdgeDirection::Bidirectional);
 
         assert!(edge.connects(node_a, node_b));
         assert!(edge.connects(node_b, node_a));

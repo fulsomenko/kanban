@@ -195,7 +195,7 @@ pub(super) fn edges_to_undo_commands<P>(
     predicate: P,
 ) -> Vec<Command>
 where
-    P: Fn(&kanban_core::Edge<()>) -> bool,
+    P: Fn(&kanban_core::Edge) -> bool,
 {
     graph
         .edges_by_kind()

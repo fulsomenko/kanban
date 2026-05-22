@@ -235,7 +235,7 @@ impl DependencyGraph {
     /// reading edges from a backing store — the data has already passed
     /// validation when it was written, so re-running the cycle check on
     /// re-load would double-pay for no benefit.
-    pub fn insert_raw_edge(&mut self, kind: CardEdgeType, edge: Edge<()>) {
+    pub fn insert_raw_edge(&mut self, kind: CardEdgeType, edge: Edge) {
         match kind {
             CardEdgeType::ParentOf => self.parent_child.insert_raw_edge(edge),
             CardEdgeType::Blocks => self.blocks.insert_raw_edge(edge),
@@ -253,7 +253,7 @@ impl DependencyGraph {
     /// Intended for whole-graph serialisation and inverse-replay
     /// helpers; for "does the graph have any edge involving X?" queries
     /// use the per-kind sub-graph accessors instead.
-    pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &Edge<()>)> + '_ {
+    pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &Edge)> + '_ {
         self.parent_child
             .edges()
             .iter()

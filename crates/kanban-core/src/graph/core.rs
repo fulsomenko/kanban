@@ -5,28 +5,18 @@ use uuid::Uuid;
 use super::algorithms;
 use super::edge::{Edge, EdgeDirection};
 
-/// Generic edge-store container that can hold any edge type E
+/// Edge-list container shared by every concrete graph kind.
 ///
-/// Stores edges as an edge list for efficient serialization.
-/// Provides adjacency list views for graph algorithms.
-///
-/// `E: Default` propagates from [`Edge`]'s serde-derived `Deserialize`
-/// (Edge's `edge_type` field is `#[serde(default)]` to round-trip
-/// files that omit or null the field). Both `()` and `CardEdgeType`
-/// satisfy this.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(bound(deserialize = "E: Default + serde::Deserialize<'de>"))]
-pub struct EdgeStore<E> {
-    edges: Vec<Edge<E>>,
+/// Stores edges as a flat list for efficient serialization and
+/// provides adjacency-list views for graph algorithms. The relation
+/// kind lives at the outer [`super::DependencyGraph`] layer (one
+/// sub-graph per kind), so this type carries no per-edge kind tag.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct EdgeStore {
+    edges: Vec<Edge>,
 }
 
-impl<E> Default for EdgeStore<E> {
-    fn default() -> Self {
-        Self { edges: Vec::new() }
-    }
-}
-
-impl<E> EdgeStore<E> {
+impl EdgeStore {
     /// Create a new empty graph
     pub fn new() -> Self {
         Self { edges: Vec::new() }
@@ -36,7 +26,7 @@ impl<E> EdgeStore<E> {
     ///
     /// Note: Cycle checking must be done by caller if needed
     /// (see `would_create_cycle` method)
-    pub fn add_edge(&mut self, edge: Edge<E>) {
+    pub fn add_edge(&mut self, edge: Edge) {
         self.edges.push(edge);
     }
 
@@ -73,17 +63,17 @@ impl<E> EdgeStore<E> {
     }
 
     /// Get all outgoing edges from a node (where node is source)
-    pub fn outgoing(&self, node_id: Uuid) -> Vec<&Edge<E>> {
+    pub fn outgoing(&self, node_id: Uuid) -> Vec<&Edge> {
         self.edges.iter().filter(|e| e.source == node_id).collect()
     }
 
     /// Get all incoming edges to a node (where node is target)
-    pub fn incoming(&self, node_id: Uuid) -> Vec<&Edge<E>> {
+    pub fn incoming(&self, node_id: Uuid) -> Vec<&Edge> {
         self.edges.iter().filter(|e| e.target == node_id).collect()
     }
 
     /// Get all active outgoing edges from a node
-    pub fn outgoing_active(&self, node_id: Uuid) -> Vec<&Edge<E>> {
+    pub fn outgoing_active(&self, node_id: Uuid) -> Vec<&Edge> {
         self.edges
             .iter()
             .filter(|e| e.source == node_id && e.is_active())
@@ -91,7 +81,7 @@ impl<E> EdgeStore<E> {
     }
 
     /// Get all active incoming edges to a node
-    pub fn incoming_active(&self, node_id: Uuid) -> Vec<&Edge<E>> {
+    pub fn incoming_active(&self, node_id: Uuid) -> Vec<&Edge> {
         self.edges
             .iter()
             .filter(|e| e.target == node_id && e.is_active())
@@ -151,12 +141,12 @@ impl<E> EdgeStore<E> {
     }
 
     /// Get all edges (for serialization/inspection)
-    pub fn edges(&self) -> &[Edge<E>] {
+    pub fn edges(&self) -> &[Edge] {
         &self.edges
     }
 
     /// Get all active edges
-    pub fn active_edges(&self) -> Vec<&Edge<E>> {
+    pub fn active_edges(&self) -> Vec<&Edge> {
         self.edges.iter().filter(|e| e.is_active()).collect()
     }
 
@@ -202,68 +192,53 @@ mod tests {
     use super::*;
     use crate::graph::edge::EdgeDirection;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-    enum TestEdgeType {
-        TypeA,
-        TypeB,
+    fn directed_edge(source: Uuid, target: Uuid) -> Edge {
+        Edge::new(source, target, EdgeDirection::Directed)
+    }
+
+    fn bidi_edge(a: Uuid, b: Uuid) -> Edge {
+        Edge::new(a, b, EdgeDirection::Bidirectional)
     }
 
     #[test]
-    fn test_graph_creation() {
-        let graph: EdgeStore<TestEdgeType> = EdgeStore::new();
+    fn test_new_returns_empty_edge_store() {
+        let graph = EdgeStore::new();
         assert_eq!(graph.edge_count(), 0);
     }
 
     #[test]
-    fn test_add_edge() {
+    fn test_add_edge_increments_count_and_marks_present() {
         let mut graph = EdgeStore::new();
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
-        let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
 
-        graph.add_edge(edge);
+        graph.add_edge(directed_edge(source, target));
         assert_eq!(graph.edge_count(), 1);
         assert!(graph.has_edge(source, target));
     }
 
     #[test]
-    fn test_remove_edge() {
+    fn test_remove_edge_drops_matching_entry() {
         let mut graph = EdgeStore::new();
         let source = Uuid::new_v4();
         let target = Uuid::new_v4();
-        let edge = Edge::new(source, target, TestEdgeType::TypeA, EdgeDirection::Directed);
 
-        graph.add_edge(edge);
+        graph.add_edge(directed_edge(source, target));
         assert!(graph.remove_edge(source, target));
         assert_eq!(graph.edge_count(), 0);
         assert!(!graph.has_edge(source, target));
     }
 
     #[test]
-    fn test_remove_node() {
+    fn test_remove_node_drops_every_incident_edge() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_b,
-            node_c,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_c,
-            node_a,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
+        graph.add_edge(directed_edge(node_a, node_b));
+        graph.add_edge(directed_edge(node_b, node_c));
+        graph.add_edge(directed_edge(node_c, node_a));
 
         assert_eq!(graph.edge_count(), 3);
 
@@ -275,24 +250,14 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_node() {
+    fn test_archive_node_hides_incident_edges_from_active_count() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_b,
-            node_c,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
+        graph.add_edge(directed_edge(node_a, node_b));
+        graph.add_edge(directed_edge(node_b, node_c));
 
         assert_eq!(graph.active_edge_count(), 2);
 
@@ -302,17 +267,12 @@ mod tests {
     }
 
     #[test]
-    fn test_unarchive_node() {
+    fn test_unarchive_node_restores_active_count() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
+        graph.add_edge(directed_edge(node_a, node_b));
         graph.archive_node(node_a);
         assert_eq!(graph.active_edge_count(), 0);
 
@@ -321,30 +281,15 @@ mod tests {
     }
 
     #[test]
-    fn test_outgoing_incoming() {
+    fn test_outgoing_and_incoming_split_by_direction() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_a,
-            node_c,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_c,
-            node_a,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
+        graph.add_edge(directed_edge(node_a, node_b));
+        graph.add_edge(directed_edge(node_a, node_c));
+        graph.add_edge(directed_edge(node_c, node_a));
 
         assert_eq!(graph.outgoing(node_a).len(), 2);
         assert_eq!(graph.incoming(node_a).len(), 1);
@@ -353,24 +298,14 @@ mod tests {
     }
 
     #[test]
-    fn test_neighbors_directed() {
+    fn test_neighbors_directed_only_includes_outgoing_targets() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_a,
-            node_c,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
+        graph.add_edge(directed_edge(node_a, node_b));
+        graph.add_edge(directed_edge(node_a, node_c));
 
         let neighbors = graph.neighbors(node_a);
         assert_eq!(neighbors.len(), 2);
@@ -381,17 +316,12 @@ mod tests {
     }
 
     #[test]
-    fn test_neighbors_bidirectional() {
+    fn test_neighbors_bidirectional_includes_both_endpoints() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Bidirectional,
-        ));
+        graph.add_edge(bidi_edge(node_a, node_b));
 
         let neighbors_a = graph.neighbors(node_a);
         let neighbors_b = graph.neighbors(node_b);
@@ -403,24 +333,14 @@ mod tests {
     }
 
     #[test]
-    fn test_would_create_cycle() {
+    fn test_would_create_cycle_detects_directed_path_closing() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_b,
-            node_c,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
+        graph.add_edge(directed_edge(node_a, node_b));
+        graph.add_edge(directed_edge(node_b, node_c));
 
         // c -> a would create cycle: a -> b -> c -> a
         assert!(graph.would_create_cycle(node_c, node_a));
@@ -430,24 +350,14 @@ mod tests {
     }
 
     #[test]
-    fn test_adjacency_list() {
+    fn test_adjacency_list_counts_active_outgoing_per_node() {
         let mut graph = EdgeStore::new();
         let node_a = Uuid::new_v4();
         let node_b = Uuid::new_v4();
         let node_c = Uuid::new_v4();
 
-        graph.add_edge(Edge::new(
-            node_a,
-            node_b,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
-        graph.add_edge(Edge::new(
-            node_b,
-            node_c,
-            TestEdgeType::TypeA,
-            EdgeDirection::Directed,
-        ));
+        graph.add_edge(directed_edge(node_a, node_b));
+        graph.add_edge(directed_edge(node_b, node_c));
 
         let adj_list = graph.adjacency_list();
         assert_eq!(adj_list.len(), 2);

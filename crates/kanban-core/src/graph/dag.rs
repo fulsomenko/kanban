@@ -15,7 +15,7 @@ use super::traits::{Cascadable, Directed, EdgeSet, Graph};
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DagGraph {
     #[serde(flatten)]
-    store: EdgeStore<()>,
+    store: EdgeStore,
 }
 
 impl DagGraph {
@@ -42,13 +42,13 @@ impl DagGraph {
     /// Used by persistence layers that need to serialize the storage
     /// shape directly. For size and membership queries, use the
     /// [`EdgeSet`] trait surface instead.
-    pub fn edges(&self) -> &[Edge<()>] {
+    pub fn edges(&self) -> &[Edge] {
         self.store.edges()
     }
 
     /// Insert a raw edge without DAG validation. Use only for
     /// migrations and test fixtures.
-    pub fn insert_raw_edge(&mut self, edge: Edge<()>) {
+    pub fn insert_raw_edge(&mut self, edge: Edge) {
         self.store.add_edge(edge);
     }
 
@@ -131,7 +131,7 @@ impl Graph for DagGraph {
             return Err(GraphError::Cycle);
         }
         self.store
-            .add_edge(Edge::new(from, to, (), EdgeDirection::Directed));
+            .add_edge(Edge::new(from, to, EdgeDirection::Directed));
         Ok(())
     }
 
