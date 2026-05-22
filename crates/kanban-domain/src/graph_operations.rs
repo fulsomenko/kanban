@@ -40,29 +40,19 @@ pub trait GraphOperations {
 
     // --- Convenience defaults for the parent/child case. ---
     //
-    // Parameter order follows the verb's subject-object pairing:
-    //   set_child(parent, child)   — set this child under that parent
-    //   set_parent(child, parent)  — set this child's parent to that
-    // Both add the same `parent -> child` edge. The two spellings are
-    // intentional aliases: call sites pick whichever reads naturally
-    // in context.
+    // Single canonical spelling: child-first, mirroring "set this
+    // child's parent to that one". The earlier `set_child` /
+    // `remove_child` aliases were dropped after the review flagged
+    // call sites diverging across surfaces — having two ways to
+    // express one edge is a footgun that scales linearly with caller
+    // count.
 
-    /// Add a `parent -> child` edge by naming the parent first.
-    fn set_child(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
-        self.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
-    }
-
-    /// Add a `parent -> child` edge by naming the child first.
+    /// Add the `parent -> child` edge for `child_id`.
     fn set_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
         self.add_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
     }
 
-    /// Remove the `parent -> child` edge by naming the parent first.
-    fn remove_child(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
-        self.remove_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
-    }
-
-    /// Remove the `parent -> child` edge by naming the child first.
+    /// Remove the `parent -> child` edge for `child_id`.
     fn remove_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
         self.remove_card_edge(parent_id, child_id, CardEdgeType::ParentOf)
     }
@@ -134,13 +124,12 @@ mod tests {
         g.add_card_edge(a, b, CardEdgeType::ParentOf).unwrap();
     }
 
-    /// Convenience methods read in subject-object order: the first
-    /// parameter is the subject of the verb. `set_child(parent, child)`
-    /// — "set this child under that parent". `set_parent(child, parent)`
-    /// — "set this child's parent to that one". Both produce the same
-    /// parent->child edge.
+    /// Canonical parent/child spelling: child-first. `set_parent` and
+    /// `remove_parent` read as "set/remove this child's parent." The
+    /// alias spellings (set_child / remove_child, parent-first) were
+    /// dropped to keep the API one-way at every call site.
     #[test]
-    fn test_convenience_methods_use_semantic_parameter_ordering() {
+    fn test_canonical_parent_methods_compile_through_trait() {
         struct GraphOnly;
         impl GraphOperations for GraphOnly {
             fn add_card_edge(
@@ -177,11 +166,7 @@ mod tests {
         let mut g = GraphOnly;
         let parent = Uuid::new_v4();
         let child = Uuid::new_v4();
-        // Subject-object order: parent-then-child or child-then-parent
-        // matching the verb's subject.
-        g.set_child(parent, child).unwrap();
         g.set_parent(child, parent).unwrap();
-        g.remove_child(parent, child).unwrap();
         g.remove_parent(child, parent).unwrap();
     }
 }

@@ -41,18 +41,6 @@ impl UndirectedGraph {
         Self::default()
     }
 
-    pub fn archive_node(&mut self, node: Uuid) {
-        self.store.archive_node(node);
-    }
-
-    pub fn unarchive_node(&mut self, node: Uuid) {
-        self.store.unarchive_node(node);
-    }
-
-    pub fn remove_node(&mut self, node: Uuid) {
-        self.store.remove_node(node);
-    }
-
     /// Borrow the raw underlying edge list (active + archived).
     /// Used by persistence layers that need to serialize the storage
     /// shape directly. For size and membership queries, use the
@@ -77,13 +65,13 @@ impl UndirectedGraph {
 
 impl Cascadable for UndirectedGraph {
     fn archive_node(&mut self, node: Uuid) {
-        UndirectedGraph::archive_node(self, node);
+        self.store.archive_node(node);
     }
     fn unarchive_node(&mut self, node: Uuid) {
-        UndirectedGraph::unarchive_node(self, node);
+        self.store.unarchive_node(node);
     }
     fn remove_node(&mut self, node: Uuid) {
-        UndirectedGraph::remove_node(self, node);
+        self.store.remove_node(node);
     }
 }
 
@@ -132,16 +120,13 @@ impl Undirected for UndirectedGraph {
     /// The `Undirected` trait is the only access path — callers must
     /// bring it into scope. Choosing this over an inherent method
     /// makes the trait load-bearing rather than decorative.
+    ///
+    /// Delegates to [`EdgeStore::neighbors_active`], which checks
+    /// `EdgeDirection::Bidirectional` per edge. `UndirectedGraph` only
+    /// inserts bidirectional edges (see [`Graph::add_edge`]) so the
+    /// delegation observes identical semantics to a hand-rolled scan.
     fn neighbors(&self, node: Uuid) -> Vec<Uuid> {
-        let mut out = Vec::new();
-        for edge in self.store.active_edges() {
-            if edge.source == node {
-                out.push(edge.target);
-            } else if edge.target == node {
-                out.push(edge.source);
-            }
-        }
-        out
+        self.store.neighbors_active(node)
     }
 }
 

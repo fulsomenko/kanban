@@ -41,21 +41,6 @@ impl DagGraph {
         Self::default()
     }
 
-    /// Archive all edges involving `node` (soft-delete cascade).
-    pub fn archive_node(&mut self, node: Uuid) {
-        self.store.archive_node(node);
-    }
-
-    /// Unarchive all edges involving `node`.
-    pub fn unarchive_node(&mut self, node: Uuid) {
-        self.store.unarchive_node(node);
-    }
-
-    /// Remove all edges involving `node` (hard-delete cascade).
-    pub fn remove_node(&mut self, node: Uuid) {
-        self.store.remove_node(node);
-    }
-
     /// Borrow the raw underlying edge list (active + archived).
     /// Used by persistence layers that need to serialize the storage
     /// shape directly. For size and membership queries, use the
@@ -123,23 +108,22 @@ impl DagGraph {
     }
 
     fn active_adjacency(&self) -> std::collections::HashMap<Uuid, Vec<Uuid>> {
-        let mut adj: std::collections::HashMap<Uuid, Vec<Uuid>> = std::collections::HashMap::new();
-        for edge in self.store.active_edges() {
-            adj.entry(edge.source).or_default().push(edge.target);
-        }
-        adj
+        // EdgeStore handles Directed (source→target) and Bidirectional
+        // (both directions) edges; `DagGraph` only inserts Directed,
+        // so the two paths observe identical adjacency.
+        self.store.adjacency_list()
     }
 }
 
 impl Cascadable for DagGraph {
     fn archive_node(&mut self, node: Uuid) {
-        DagGraph::archive_node(self, node);
+        self.store.archive_node(node);
     }
     fn unarchive_node(&mut self, node: Uuid) {
-        DagGraph::unarchive_node(self, node);
+        self.store.unarchive_node(node);
     }
     fn remove_node(&mut self, node: Uuid) {
-        DagGraph::remove_node(self, node);
+        self.store.remove_node(node);
     }
 }
 
