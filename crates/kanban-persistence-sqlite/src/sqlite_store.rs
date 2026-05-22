@@ -58,6 +58,19 @@ fn p_enum<T: serde::de::DeserializeOwned>(s: &str, label: &str) -> KanbanResult<
         .map_err(|_| ser_err(format!("unknown {label} variant: {s}")))
 }
 
+/// Render a unit-variant enum to its serde wire name (e.g.
+/// `CardEdgeType::ParentOf -> "ParentOf"`). Symmetric with [`p_enum`].
+/// Avoids coupling the on-disk format to `#[derive(Debug)]`, which is
+/// easy to customize and would break the read/write round-trip silently.
+fn ser_enum<T: serde::Serialize + std::fmt::Debug>(v: &T, label: &str) -> KanbanResult<String> {
+    match serde_json::to_value(v).map_err(ser_err)? {
+        serde_json::Value::String(s) => Ok(s),
+        other => Err(ser_err(format!(
+            "{label} did not serialise to a JSON string: {other}"
+        ))),
+    }
+}
+
 fn fmt_dt(dt: &DateTime<Utc>) -> String {
     dt.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
 }
@@ -391,6 +404,53 @@ impl SqliteStore {
                 .map_err(db_err)?;
         }
 
+        Self::ensure_card_edges_check_constraint(pool).await?;
+
+        Ok(())
+    }
+
+    /// Rebuild `card_edges` with a `CHECK (edge_type IN (...))` if the
+    /// existing table lacks it. Existing databases were created before
+    /// the constraint was added to `schema.sql`; new ones pick it up
+    /// from `CREATE TABLE IF NOT EXISTS`. The rebuild is a copy-rename
+    /// dance because SQLite can't `ALTER TABLE ... ADD CHECK`.
+    async fn ensure_card_edges_check_constraint(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        let sql: Option<String> = sqlx::query_scalar(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_edges'",
+        )
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+        let Some(sql) = sql else { return Ok(()) };
+        if sql.contains("CHECK") && sql.contains("ParentOf") {
+            return Ok(());
+        }
+        tracing::info!(
+            "rebuilding card_edges to add edge_type CHECK constraint (one-time per database)"
+        );
+        for stmt in [
+            "CREATE TABLE card_edges_new (
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                edge_type TEXT NOT NULL CHECK (edge_type IN ('ParentOf', 'Blocks', 'RelatesTo')),
+                direction TEXT NOT NULL,
+                weight REAL,
+                created_at TEXT NOT NULL,
+                archived_at TEXT,
+                PRIMARY KEY (source_id, target_id, edge_type)
+            )",
+            "INSERT INTO card_edges_new SELECT * FROM card_edges
+                WHERE edge_type IN ('ParentOf', 'Blocks', 'RelatesTo')",
+            "DROP TABLE card_edges",
+            "ALTER TABLE card_edges_new RENAME TO card_edges",
+            "CREATE INDEX IF NOT EXISTS idx_card_edges_source ON card_edges(source_id)",
+            "CREATE INDEX IF NOT EXISTS idx_card_edges_target ON card_edges(target_id)",
+        ] {
+            sqlx::raw_sql(stmt)
+                .execute(pool)
+                .await
+                .map_err(db_err)?;
+        }
         Ok(())
     }
 
@@ -775,8 +835,8 @@ impl SqliteStore {
             )
             .bind(edge.source.to_string())
             .bind(edge.target.to_string())
-            .bind(format!("{:?}", kind))
-            .bind(format!("{:?}", edge.direction))
+            .bind(ser_enum(&kind, "edge_type")?)
+            .bind(ser_enum(&edge.direction, "edge direction")?)
             .bind(edge.weight.map(|w| w as f64))
             .bind(fmt_dt(&edge.created_at))
             .bind(opt_dt(&edge.archived_at))

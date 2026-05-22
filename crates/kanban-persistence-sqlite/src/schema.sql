@@ -129,10 +129,13 @@ CREATE TABLE IF NOT EXISTS archived_cards (
 -- (DELETE-all + re-INSERT). Both active and archived cards live in the
 -- cards table, so a FK would be structurally valid but provides minimal
 -- value given the bulk-replace strategy.
+-- The CHECK constraint catches corrupt edge_type values at write time
+-- rather than letting an unknown kind round-trip and bomb on the next
+-- load via p_enum's deserialisation.
 CREATE TABLE IF NOT EXISTS card_edges (
     source_id TEXT NOT NULL,
     target_id TEXT NOT NULL,
-    edge_type TEXT NOT NULL,
+    edge_type TEXT NOT NULL CHECK (edge_type IN ('ParentOf', 'Blocks', 'RelatesTo')),
     direction TEXT NOT NULL,
     weight REAL,
     created_at TEXT NOT NULL,
