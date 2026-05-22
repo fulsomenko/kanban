@@ -58,6 +58,48 @@ fn kanban_err_to_mcp(e: KanbanError) -> McpError {
     error::KanbanMcpError::Domain(e).into()
 }
 
+/// Symmetric with the CLI handler's `enrich_add_error`: rewrite an
+/// anonymous DependencyError from a parent-edge add into a message
+/// that names both sides of the edge, using the user's raw
+/// identifiers. Non-dependency errors pass through to Domain.
+fn mcp_enrich_add_error(
+    e: KanbanError,
+    parent_raw: &str,
+    child_raw: &str,
+) -> error::KanbanMcpError {
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    match e {
+        KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => {
+            error::KanbanMcpError::InvalidParam(messages::parent_cycle(parent_raw, child_raw))
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => {
+            error::KanbanMcpError::InvalidParam(messages::parent_self_reference(parent_raw))
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => e.into(),
+        other => other.into(),
+    }
+}
+
+fn mcp_enrich_remove_error(
+    e: KanbanError,
+    parent_raw: &str,
+    child_raw: &str,
+) -> error::KanbanMcpError {
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    match e {
+        KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => {
+            error::KanbanMcpError::InvalidParam(messages::parent_edge_not_found(
+                parent_raw, child_raw,
+            ))
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => e.into(),
+        KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => e.into(),
+        other => other.into(),
+    }
+}
+
 fn core_err_to_mcp(e: kanban_core::CoreError) -> McpError {
     kanban_err_to_mcp(KanbanError::from(e))
 }
@@ -1161,10 +1203,13 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<SetCardParentRequest>,
     ) -> Result<CallToolResult, McpError> {
+        let parent_raw = req.parent.clone();
+        let child_raw = req.child.clone();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
             let child_id = ctx.resolve_card_id(&req.child)?;
             let parent_id = ctx.resolve_card_id(&req.parent)?;
-            ctx.set_parent(child_id, parent_id)?;
+            ctx.set_parent(child_id, parent_id)
+                .map_err(|e| mcp_enrich_add_error(e, &parent_raw, &child_raw))?;
             Ok((child_id, parent_id))
         })
         .await?;
@@ -1179,10 +1224,13 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<RemoveCardParentRequest>,
     ) -> Result<CallToolResult, McpError> {
+        let parent_raw = req.parent.clone();
+        let child_raw = req.child.clone();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
             let child_id = ctx.resolve_card_id(&req.child)?;
             let parent_id = ctx.resolve_card_id(&req.parent)?;
-            ctx.remove_parent(child_id, parent_id)?;
+            ctx.remove_parent(child_id, parent_id)
+                .map_err(|e| mcp_enrich_remove_error(e, &parent_raw, &child_raw))?;
             Ok((child_id, parent_id))
         })
         .await?;

@@ -1026,6 +1026,46 @@ async fn tool_set_card_parent_cycle_returns_mcp_error() {
         "message should mention cycle; got: {}",
         err.message
     );
+    // The MCP boundary enriches cycle errors with the raw user
+    // identifiers, same as CLI. Pin both sides of the edge so the
+    // shared message formatter stays load-bearing across surfaces.
+    assert!(
+        err.message.contains(&a) && err.message.contains(&b),
+        "cycle message should name both cards; got: {}",
+        err.message
+    );
+}
+
+/// Self-reference at the MCP boundary surfaces as INVALID_PARAMS and
+/// names the offending card, matching the CLI UX. Pins the shared
+/// enrichment path on the self-ref branch (the cycle test pins the
+/// cycle branch).
+#[tokio::test]
+async fn tool_set_card_parent_self_reference_returns_invalid_params_with_card_identifier() {
+    use rmcp::model::ErrorCode;
+
+    let (server, _tmp, a, _b) = setup_server_with_two_cards().await;
+
+    let err = server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: a.clone(),
+            parent: a.clone(),
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    let msg = err.message.to_lowercase();
+    assert!(
+        msg.contains("self"),
+        "self-reference message must name the invariant; got: {}",
+        err.message
+    );
+    assert!(
+        err.message.contains(&a),
+        "self-reference message must name the offending card; got: {}",
+        err.message
+    );
 }
 
 #[tokio::test]

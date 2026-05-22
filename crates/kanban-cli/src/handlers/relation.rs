@@ -2,6 +2,7 @@ use crate::cli::{RelationAction, SortDir, SortKey};
 use crate::context::CliContext;
 use crate::error::{KanbanCliError, KanbanCliResult};
 use crate::output;
+use kanban_domain::dependencies::messages;
 use kanban_domain::error::{DependencyError, DomainError};
 use kanban_domain::sort::OrderedSorter;
 use kanban_domain::{Card, CardSummary, GraphOperations, KanbanError, KanbanOperations};
@@ -30,14 +31,12 @@ fn enrich_add_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliError
     match e {
         KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => {
             KanbanCliError::Message {
-                hint: format!(
-                    "cycle detected: making {parent} a parent of {child} would create a cycle"
-                ),
+                hint: messages::parent_cycle(parent, child),
             }
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => {
             KanbanCliError::Message {
-                hint: format!("self-reference not allowed: {parent} cannot be its own parent"),
+                hint: messages::parent_self_reference(parent),
             }
         }
         // EdgeNotFound is not reachable from an add path, but cover it
@@ -52,9 +51,7 @@ fn enrich_remove_error(e: KanbanError, parent: &str, child: &str) -> KanbanCliEr
     match e {
         KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => {
             KanbanCliError::Message {
-                hint: format!(
-                    "edge not found: no parent->child edge from {parent} to {child} to remove (use `kanban relation parents {child}` to see existing parents)"
-                ),
+                hint: messages::parent_edge_not_found(parent, child),
             }
         }
         // Cycle/self-ref are not reachable on a remove; preserve the
