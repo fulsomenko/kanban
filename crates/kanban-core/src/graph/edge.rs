@@ -2,28 +2,28 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Common edge data: endpoints plus creation / archival timestamps.
+/// Common edge data: endpoints plus creation / archival timestamps,
+/// generic over the node identity type `N`.
 ///
 /// Per-kind edge structs embed this and add their own kind-specific
 /// fields. Concrete kinds live in domain crates (kanban-domain holds
-/// `SpawnsEdge` / `BlocksEdge` / `RelatesEdge`); external crates can
-/// define their own structs the same way. The graph machinery is
-/// generic over [`Edge`], so any struct that implements the trait
-/// works in [`crate::graph::DagGraph`] / [`crate::graph::UndirectedGraph`].
+/// `SpawnsEdge` / `BlocksEdge` / `RelatesEdge`, all keyed on `Uuid`);
+/// external crates can define their own structs the same way and
+/// pick any node identity that satisfies the `Edge::NodeId` bounds.
 ///
 /// Directionality is *not* on `EdgeBase`: it's encoded by the
 /// sub-graph type the edge lives in. `DagGraph` carries directed
 /// edges, `UndirectedGraph` carries undirected edges.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EdgeBase {
-    pub source: Uuid,
-    pub target: Uuid,
+pub struct EdgeBase<N = Uuid> {
+    pub source: N,
+    pub target: N,
     pub created_at: DateTime<Utc>,
     pub archived_at: Option<DateTime<Utc>>,
 }
 
-impl EdgeBase {
-    pub fn new(source: Uuid, target: Uuid) -> Self {
+impl<N> EdgeBase<N> {
+    pub fn new(source: N, target: N) -> Self {
         Self {
             source,
             target,
@@ -39,14 +39,25 @@ impl EdgeBase {
 /// `DagGraph<E: Edge>` and `UndirectedGraph<E: Edge>` can operate on
 /// them uniformly without knowing kind-specific metadata.
 ///
+/// The associated `NodeId` lets each edge kind pick its own node
+/// identity type. The kanban domain uses `Uuid` for every edge today;
+/// a future heterogeneous-entity graph could pick a discriminated
+/// `(EntityKind, Uuid)` newtype without touching this trait or the
+/// algorithms that consume it.
+///
 /// Direction is encoded by the sub-graph type, so `connects` is not
 /// on this trait: `DagGraph` checks strict `source == a && target ==
 /// b`, while `UndirectedGraph` checks either ordering. Cross-kind
 /// algorithms that don't need direction semantics use `source()` /
 /// `target()` directly.
 pub trait Edge {
-    fn source(&self) -> Uuid;
-    fn target(&self) -> Uuid;
+    /// Node identity type for both endpoints. `Copy + Eq + Hash` is
+    /// what the algorithms need (cycle / reachability work over
+    /// `HashMap<NodeId, Vec<NodeId>>`).
+    type NodeId: Copy + Eq + std::hash::Hash;
+
+    fn source(&self) -> Self::NodeId;
+    fn target(&self) -> Self::NodeId;
     fn created_at(&self) -> DateTime<Utc>;
     fn archived_at(&self) -> Option<DateTime<Utc>>;
 
@@ -56,7 +67,7 @@ pub trait Edge {
     fn is_archived(&self) -> bool {
         self.archived_at().is_some()
     }
-    fn involves(&self, node: Uuid) -> bool {
+    fn involves(&self, node: Self::NodeId) -> bool {
         self.source() == node || self.target() == node
     }
 
@@ -76,16 +87,21 @@ pub trait Edge {
     /// taking ownership / returning `Self` aren't callable on
     /// `&dyn Edge` anyway, but the trait itself stays usable as a
     /// trait object for cross-kind read code).
-    fn from_endpoints(source: Uuid, target: Uuid) -> Self
+    fn from_endpoints(source: Self::NodeId, target: Self::NodeId) -> Self
     where
         Self: Sized;
 }
 
-impl Edge for EdgeBase {
-    fn source(&self) -> Uuid {
+impl<N> Edge for EdgeBase<N>
+where
+    N: Copy + Eq + std::hash::Hash,
+{
+    type NodeId = N;
+
+    fn source(&self) -> N {
         self.source
     }
-    fn target(&self) -> Uuid {
+    fn target(&self) -> N {
         self.target
     }
     fn created_at(&self) -> DateTime<Utc> {
@@ -102,7 +118,7 @@ impl Edge for EdgeBase {
     fn unarchive(&mut self) {
         self.archived_at = None;
     }
-    fn from_endpoints(source: Uuid, target: Uuid) -> Self {
+    fn from_endpoints(source: N, target: N) -> Self {
         EdgeBase::new(source, target)
     }
 }
@@ -147,9 +163,13 @@ mod tests {
     /// concrete edge type. Object-safety is the load-bearing
     /// property here; if a trait method ever takes `Self` without a
     /// `where Self: Sized` bound, this test fails to compile.
+    ///
+    /// The associated `NodeId` requires an explicit binding on the
+    /// `dyn` view (`&dyn Edge<NodeId = Uuid>`), the same shape that
+    /// `&dyn Graph<NodeId = Uuid>` already uses elsewhere.
     #[test]
     fn test_edge_trait_is_object_safe() {
-        fn _accepts_dyn(_e: &dyn Edge) {}
-        fn _accepts_dyn_mut(_e: &mut dyn Edge) {}
+        fn _accepts_dyn(_e: &dyn Edge<NodeId = Uuid>) {}
+        fn _accepts_dyn_mut(_e: &mut dyn Edge<NodeId = Uuid>) {}
     }
 }

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use uuid::Uuid;
 
 use super::core::EdgeStore;
 use super::edge::Edge;
@@ -73,13 +72,13 @@ impl<E: Edge> UndirectedGraph<E> {
 }
 
 impl<E: Edge> Cascadable for UndirectedGraph<E> {
-    fn archive_node(&mut self, node: Uuid) {
+    fn archive_node(&mut self, node: E::NodeId) {
         self.store.archive_node(node);
     }
-    fn unarchive_node(&mut self, node: Uuid) {
+    fn unarchive_node(&mut self, node: E::NodeId) {
         self.store.unarchive_node(node);
     }
-    fn remove_node(&mut self, node: Uuid) {
+    fn remove_node(&mut self, node: E::NodeId) {
         self.store.remove_node(node);
     }
 }
@@ -94,7 +93,7 @@ impl<E: Edge> EdgeSet for UndirectedGraph<E> {
     /// Symmetric membership: any edge whose endpoints are `{a, b}`
     /// regardless of ordering. Considers both active and archived
     /// edges.
-    fn contains(&self, a: Uuid, b: Uuid) -> bool {
+    fn contains(&self, a: E::NodeId, b: E::NodeId) -> bool {
         self.store
             .edges()
             .iter()
@@ -103,13 +102,13 @@ impl<E: Edge> EdgeSet for UndirectedGraph<E> {
 }
 
 impl<E: Edge> Graph for UndirectedGraph<E> {
-    type NodeId = Uuid;
+    type NodeId = E::NodeId;
 
-    fn add_edge(&mut self, from: Uuid, to: Uuid) -> Result<(), GraphError> {
+    fn add_edge(&mut self, from: E::NodeId, to: E::NodeId) -> Result<(), GraphError> {
         self.add_edge_with_metadata(E::from_endpoints(from, to))
     }
 
-    fn remove_edge(&mut self, from: Uuid, to: Uuid) -> Result<(), GraphError> {
+    fn remove_edge(&mut self, from: E::NodeId, to: E::NodeId) -> Result<(), GraphError> {
         if self.store.remove_undirected_edge(from, to) {
             Ok(())
         } else {
@@ -119,7 +118,7 @@ impl<E: Edge> Graph for UndirectedGraph<E> {
 
     /// Symmetric: an edge between `{from, to}` in either ordering.
     /// Considers active edges only.
-    fn contains_edge(&self, from: Uuid, to: Uuid) -> bool {
+    fn contains_edge(&self, from: E::NodeId, to: E::NodeId) -> bool {
         self.store.active_edges().any(|e| {
             (e.source() == from && e.target() == to) || (e.source() == to && e.target() == from)
         })
@@ -131,7 +130,7 @@ impl<E: Edge> Undirected for UndirectedGraph<E> {
     /// The `Undirected` trait is the only access path — callers must
     /// bring it into scope. Choosing this over an inherent method
     /// makes the trait load-bearing rather than decorative.
-    fn neighbors(&self, node: Uuid) -> Vec<Uuid> {
+    fn neighbors(&self, node: E::NodeId) -> Vec<E::NodeId> {
         let mut out = Vec::new();
         for edge in self.store.active_edges() {
             if edge.source() == node {
@@ -148,6 +147,7 @@ impl<E: Edge> Undirected for UndirectedGraph<E> {
 mod tests {
     use super::*;
     use crate::graph::edge::EdgeBase;
+    use uuid::Uuid;
 
     fn ids() -> (Uuid, Uuid, Uuid) {
         (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())

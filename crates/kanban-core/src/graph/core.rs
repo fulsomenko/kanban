@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 use super::algorithms;
 use super::edge::Edge;
@@ -63,12 +62,12 @@ impl<E> EdgeStore<E> {
 
 impl<E: Edge> EdgeStore<E> {
     /// Remove every edge involving `node` (hard-delete cascade).
-    pub fn remove_node(&mut self, node_id: Uuid) {
+    pub fn remove_node(&mut self, node_id: E::NodeId) {
         self.edges.retain(|e| !e.involves(node_id));
     }
 
     /// Archive every edge involving `node` (soft-delete cascade).
-    pub fn archive_node(&mut self, node_id: Uuid) {
+    pub fn archive_node(&mut self, node_id: E::NodeId) {
         for edge in &mut self.edges {
             if edge.involves(node_id) {
                 edge.archive();
@@ -77,7 +76,7 @@ impl<E: Edge> EdgeStore<E> {
     }
 
     /// Unarchive every edge involving `node`.
-    pub fn unarchive_node(&mut self, node_id: Uuid) {
+    pub fn unarchive_node(&mut self, node_id: E::NodeId) {
         for edge in &mut self.edges {
             if edge.involves(node_id) {
                 edge.unarchive();
@@ -88,7 +87,7 @@ impl<E: Edge> EdgeStore<E> {
     /// Remove the single edge whose `source == source` and
     /// `target == target` exactly (directed-graph semantics).
     /// Returns `true` iff an edge was removed.
-    pub fn remove_directed_edge(&mut self, source: Uuid, target: Uuid) -> bool {
+    pub fn remove_directed_edge(&mut self, source: E::NodeId, target: E::NodeId) -> bool {
         let before = self.edges.len();
         self.edges
             .retain(|e| !(e.source() == source && e.target() == target));
@@ -98,7 +97,7 @@ impl<E: Edge> EdgeStore<E> {
     /// Remove any edge whose endpoints are `{a, b}` regardless of
     /// ordering (undirected-graph semantics). Returns `true` iff at
     /// least one edge was removed.
-    pub fn remove_undirected_edge(&mut self, a: Uuid, b: Uuid) -> bool {
+    pub fn remove_undirected_edge(&mut self, a: E::NodeId, b: E::NodeId) -> bool {
         let before = self.edges.len();
         self.edges.retain(|e| {
             !((e.source() == a && e.target() == b) || (e.source() == b && e.target() == a))
@@ -107,24 +106,24 @@ impl<E: Edge> EdgeStore<E> {
     }
 
     /// Iterate every outgoing edge from `node` (source == node).
-    pub fn outgoing(&self, node_id: Uuid) -> impl Iterator<Item = &E> {
+    pub fn outgoing(&self, node_id: E::NodeId) -> impl Iterator<Item = &E> {
         self.edges.iter().filter(move |e| e.source() == node_id)
     }
 
     /// Iterate every incoming edge to `node` (target == node).
-    pub fn incoming(&self, node_id: Uuid) -> impl Iterator<Item = &E> {
+    pub fn incoming(&self, node_id: E::NodeId) -> impl Iterator<Item = &E> {
         self.edges.iter().filter(move |e| e.target() == node_id)
     }
 
     /// Iterate active outgoing edges from `node`.
-    pub fn outgoing_active(&self, node_id: Uuid) -> impl Iterator<Item = &E> {
+    pub fn outgoing_active(&self, node_id: E::NodeId) -> impl Iterator<Item = &E> {
         self.edges
             .iter()
             .filter(move |e| e.source() == node_id && e.is_active())
     }
 
     /// Iterate active incoming edges to `node`.
-    pub fn incoming_active(&self, node_id: Uuid) -> impl Iterator<Item = &E> {
+    pub fn incoming_active(&self, node_id: E::NodeId) -> impl Iterator<Item = &E> {
         self.edges
             .iter()
             .filter(move |e| e.target() == node_id && e.is_active())
@@ -138,8 +137,8 @@ impl<E: Edge> EdgeStore<E> {
     /// Active-edge directed adjacency list: `source -> [target]`.
     /// Sub-graphs that need a different view (e.g. undirected
     /// neighbours) build their own from `active_edges`.
-    pub fn adjacency_list(&self) -> HashMap<Uuid, Vec<Uuid>> {
-        let mut adj_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    pub fn adjacency_list(&self) -> HashMap<E::NodeId, Vec<E::NodeId>> {
+        let mut adj_list: HashMap<E::NodeId, Vec<E::NodeId>> = HashMap::new();
         for edge in self.active_edges() {
             adj_list
                 .entry(edge.source())
@@ -156,7 +155,7 @@ impl<E: Edge> EdgeStore<E> {
 
     /// Would adding `source -> target` create a cycle in the active
     /// directed adjacency?
-    pub fn would_create_cycle(&self, source: Uuid, target: Uuid) -> bool {
+    pub fn would_create_cycle(&self, source: E::NodeId, target: E::NodeId) -> bool {
         let adj_list = self.adjacency_list();
         algorithms::would_create_cycle(&adj_list, source, target)
     }
@@ -169,7 +168,7 @@ impl<E: Edge> EdgeStore<E> {
 
     /// Set of nodes reachable from `start` via the active directed
     /// adjacency.
-    pub fn reachable_from(&self, start: Uuid) -> std::collections::HashSet<Uuid> {
+    pub fn reachable_from(&self, start: E::NodeId) -> std::collections::HashSet<E::NodeId> {
         let adj_list = self.adjacency_list();
         algorithms::reachable_from(&adj_list, start)
     }
@@ -179,6 +178,7 @@ impl<E: Edge> EdgeStore<E> {
 mod tests {
     use super::*;
     use crate::graph::edge::EdgeBase;
+    use uuid::Uuid;
 
     fn base(source: Uuid, target: Uuid) -> EdgeBase {
         EdgeBase::new(source, target)

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use uuid::Uuid;
 
 use super::core::EdgeStore;
 use super::edge::Edge;
@@ -90,7 +89,7 @@ impl<E: Edge> DagGraph<E> {
     }
 
     /// Transitive successors of `node` (descendants).
-    pub fn descendants(&self, node: Uuid) -> Vec<Uuid> {
+    pub fn descendants(&self, node: E::NodeId) -> Vec<E::NodeId> {
         let mut out = Vec::new();
         let mut stack = vec![node];
         let mut seen = std::collections::HashSet::new();
@@ -107,7 +106,7 @@ impl<E: Edge> DagGraph<E> {
     }
 
     /// Transitive predecessors of `node` (ancestors).
-    pub fn ancestors(&self, node: Uuid) -> Vec<Uuid> {
+    pub fn ancestors(&self, node: E::NodeId) -> Vec<E::NodeId> {
         let mut out = Vec::new();
         let mut stack = vec![node];
         let mut seen = std::collections::HashSet::new();
@@ -125,13 +124,13 @@ impl<E: Edge> DagGraph<E> {
 }
 
 impl<E: Edge> Cascadable for DagGraph<E> {
-    fn archive_node(&mut self, node: Uuid) {
+    fn archive_node(&mut self, node: E::NodeId) {
         self.store.archive_node(node);
     }
-    fn unarchive_node(&mut self, node: Uuid) {
+    fn unarchive_node(&mut self, node: E::NodeId) {
         self.store.unarchive_node(node);
     }
-    fn remove_node(&mut self, node: Uuid) {
+    fn remove_node(&mut self, node: E::NodeId) {
         self.store.remove_node(node);
     }
 }
@@ -145,7 +144,7 @@ impl<E: Edge> EdgeSet for DagGraph<E> {
     }
     /// Directed membership: source-to-target ordering matters.
     /// Considers both active and archived edges.
-    fn contains(&self, a: Uuid, b: Uuid) -> bool {
+    fn contains(&self, a: E::NodeId, b: E::NodeId) -> bool {
         self.store
             .edges()
             .iter()
@@ -154,9 +153,9 @@ impl<E: Edge> EdgeSet for DagGraph<E> {
 }
 
 impl<E: Edge> Graph for DagGraph<E> {
-    type NodeId = Uuid;
+    type NodeId = E::NodeId;
 
-    fn add_edge(&mut self, from: Uuid, to: Uuid) -> Result<(), GraphError> {
+    fn add_edge(&mut self, from: E::NodeId, to: E::NodeId) -> Result<(), GraphError> {
         // Synthesise an E with per-kind default metadata via the
         // trait constructor. Callers that need to set non-default
         // metadata construct the concrete struct (e.g.
@@ -165,7 +164,7 @@ impl<E: Edge> Graph for DagGraph<E> {
         self.add_edge_with_metadata(E::from_endpoints(from, to))
     }
 
-    fn remove_edge(&mut self, from: Uuid, to: Uuid) -> Result<(), GraphError> {
+    fn remove_edge(&mut self, from: E::NodeId, to: E::NodeId) -> Result<(), GraphError> {
         if self.store.remove_directed_edge(from, to) {
             Ok(())
         } else {
@@ -173,20 +172,20 @@ impl<E: Edge> Graph for DagGraph<E> {
         }
     }
 
-    fn contains_edge(&self, from: Uuid, to: Uuid) -> bool {
+    fn contains_edge(&self, from: E::NodeId, to: E::NodeId) -> bool {
         self.store.outgoing_active(from).any(|e| e.target() == to)
     }
 }
 
 impl<E: Edge> Directed for DagGraph<E> {
-    fn outgoing(&self, node: Uuid) -> Vec<Uuid> {
+    fn outgoing(&self, node: E::NodeId) -> Vec<E::NodeId> {
         self.store
             .outgoing_active(node)
             .map(|e| e.target())
             .collect()
     }
 
-    fn incoming(&self, node: Uuid) -> Vec<Uuid> {
+    fn incoming(&self, node: E::NodeId) -> Vec<E::NodeId> {
         self.store
             .incoming_active(node)
             .map(|e| e.source())
@@ -198,6 +197,7 @@ impl<E: Edge> Directed for DagGraph<E> {
 mod tests {
     use super::*;
     use crate::graph::edge::EdgeBase;
+    use uuid::Uuid;
 
     fn ids() -> (Uuid, Uuid, Uuid) {
         (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())

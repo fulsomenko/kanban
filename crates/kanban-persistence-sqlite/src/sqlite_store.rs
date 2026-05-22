@@ -812,7 +812,7 @@ impl SqliteStore {
             });
         }
 
-        let _ = EdgeBase::new; // keep import in scope for symmetry; suppress unused
+        let _ = EdgeBase::<uuid::Uuid>::new; // keep import in scope for symmetry; suppress unused
         DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
     }
 

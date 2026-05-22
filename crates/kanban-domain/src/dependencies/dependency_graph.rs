@@ -36,17 +36,22 @@ impl DependencyGraph {
         Self::default()
     }
 
-    /// Borrow each component graph as `&mut dyn Cascadable` for
-    /// node-level cascade operations. Order is `parent_child`,
+    /// Borrow each component graph as `&mut dyn Cascadable<NodeId = Uuid>`
+    /// for node-level cascade operations. Order is `parent_child`,
     /// `blocks`, `relates`. A new component sub-graph only needs to
     /// be added to this helper, not to every cascade method.
-    fn cascadable_parts_mut(&mut self) -> [&mut dyn Cascadable; 3] {
+    ///
+    /// The explicit `NodeId = Uuid` binding picks the kanban-domain
+    /// identity; the underlying `Cascadable` trait is generic over
+    /// `NodeId` so a heterogeneous-entity graph can pick its own
+    /// without touching this method.
+    fn cascadable_parts_mut(&mut self) -> [&mut dyn Cascadable<NodeId = Uuid>; 3] {
         [&mut self.parent_child, &mut self.blocks, &mut self.relates]
     }
 
-    /// Borrow each component graph as `&dyn EdgeSet` for read-only
-    /// edge-level queries.
-    fn edge_sets(&self) -> [&dyn EdgeSet; 3] {
+    /// Borrow each component graph as `&dyn EdgeSet<NodeId = Uuid>`
+    /// for read-only edge-level queries.
+    fn edge_sets(&self) -> [&dyn EdgeSet<NodeId = Uuid>; 3] {
         [&self.parent_child, &self.blocks, &self.relates]
     }
 

@@ -90,6 +90,8 @@ impl RelatesEdge {
 // --- Edge trait impls ---
 
 impl Edge for SpawnsEdge {
+    type NodeId = Uuid;
+
     fn source(&self) -> Uuid {
         self.base.source
     }
@@ -114,6 +116,8 @@ impl Edge for SpawnsEdge {
 }
 
 impl Edge for BlocksEdge {
+    type NodeId = Uuid;
+
     fn source(&self) -> Uuid {
         self.base.source
     }
@@ -138,6 +142,8 @@ impl Edge for BlocksEdge {
 }
 
 impl Edge for RelatesEdge {
+    type NodeId = Uuid;
+
     fn source(&self) -> Uuid {
         self.base.source
     }
@@ -208,7 +214,12 @@ mod tests {
         // without knowing concrete metadata. If a future trait method
         // takes `Self`, object safety breaks and this test fails to
         // compile.
-        fn _accepts(_e: &dyn Edge) {}
+        //
+        // The `Edge` trait now carries an associated `NodeId`, so the
+        // `dyn` view binds it explicitly. For the kanban domain that
+        // binding is always `Uuid`; a future heterogeneous edge would
+        // bind a different node-id type without changing this trait.
+        fn _accepts(_e: &dyn Edge<NodeId = Uuid>) {}
         let s = SpawnsEdge::new(Uuid::new_v4(), Uuid::new_v4());
         let b = BlocksEdge::new(Uuid::new_v4(), Uuid::new_v4(), Severity::Critical);
         let r = RelatesEdge::new(Uuid::new_v4(), Uuid::new_v4(), RelatesKind::General);

@@ -2,6 +2,10 @@ use uuid::Uuid;
 
 use super::error::GraphError;
 
+// Note on the `Uuid` import: only the object-safety smoke tests use
+// it as a concrete binding for the `NodeId` associated type. The
+// traits themselves are now fully generic over `NodeId`.
+
 /// Trait for entities that can participate in a graph
 ///
 /// Implemented by domain entities like Card, Sprint, Board, etc.
@@ -68,17 +72,18 @@ pub trait Undirected: Graph {
 /// soft-deletes doesn't need to ask for counts. Splitting them keeps
 /// each trait's name accurate to its single purpose.
 ///
-/// TODO: the `Graph<NodeId = Uuid>` bound locks this trait to the
-/// kanban-domain node identity. If a future graph keys on something
-/// else, relax this to `Cascadable<NodeId>: Graph<NodeId = NodeId>`
-/// and update the three methods to take `Self::NodeId`.
-pub trait Cascadable: Graph<NodeId = Uuid> {
+/// Generic over `Graph::NodeId` — no longer pinned to `Uuid`. The
+/// kanban domain still uses `Uuid` for every edge today; a future
+/// heterogeneous-entity graph can pick another identity (e.g. a
+/// discriminated `(EntityKind, Uuid)` newtype) without touching this
+/// trait or its callers.
+pub trait Cascadable: Graph {
     /// Archive every edge involving `node` (soft delete).
-    fn archive_node(&mut self, node: Uuid);
+    fn archive_node(&mut self, node: Self::NodeId);
     /// Unarchive every edge involving `node`.
-    fn unarchive_node(&mut self, node: Uuid);
+    fn unarchive_node(&mut self, node: Self::NodeId);
     /// Remove every edge involving `node` (hard delete).
-    fn remove_node(&mut self, node: Uuid);
+    fn remove_node(&mut self, node: Self::NodeId);
 }
 
 /// Set-like read access over a graph's edges: size, active-only size,
@@ -90,7 +95,9 @@ pub trait Cascadable: Graph<NodeId = Uuid> {
 /// from [`Cascadable`] so a generic consumer can require only the
 /// surface it actually uses, with no implicit mutation authority
 /// leaking into inspection code.
-pub trait EdgeSet: Graph<NodeId = Uuid> {
+///
+/// Generic over `Graph::NodeId`, same reasoning as `Cascadable`.
+pub trait EdgeSet: Graph {
     /// Total edge count (active + archived).
     fn len(&self) -> usize;
     /// Active edge count only.
@@ -104,7 +111,7 @@ pub trait EdgeSet: Graph<NodeId = Uuid> {
     }
     /// True iff any (active or archived) edge between `a` and `b`
     /// exists in this set.
-    fn contains(&self, a: Uuid, b: Uuid) -> bool;
+    fn contains(&self, a: Self::NodeId, b: Self::NodeId) -> bool;
 }
 
 #[cfg(test)]
@@ -128,12 +135,12 @@ mod tests {
 
     #[test]
     fn test_cascadable_trait_is_object_safe() {
-        fn _accepts_dyn(_: &dyn Cascadable) {}
-        fn _accepts_dyn_mut(_: &mut dyn Cascadable) {}
+        fn _accepts_dyn(_: &dyn Cascadable<NodeId = Uuid>) {}
+        fn _accepts_dyn_mut(_: &mut dyn Cascadable<NodeId = Uuid>) {}
     }
 
     #[test]
     fn test_edge_set_trait_is_object_safe() {
-        fn _accepts_dyn(_: &dyn EdgeSet) {}
+        fn _accepts_dyn(_: &dyn EdgeSet<NodeId = Uuid>) {}
     }
 }
