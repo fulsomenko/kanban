@@ -445,10 +445,7 @@ impl SqliteStore {
             "CREATE INDEX IF NOT EXISTS idx_card_edges_source ON card_edges(source_id)",
             "CREATE INDEX IF NOT EXISTS idx_card_edges_target ON card_edges(target_id)",
         ] {
-            sqlx::raw_sql(stmt)
-                .execute(pool)
-                .await
-                .map_err(db_err)?;
+            sqlx::raw_sql(stmt).execute(pool).await.map_err(db_err)?;
         }
         Ok(())
     }

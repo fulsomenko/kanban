@@ -719,7 +719,10 @@ mod tests {
             1
         );
         assert_eq!(
-            domain_snapshot.graph.edges_of(CardEdgeType::RelatesTo).len(),
+            domain_snapshot
+                .graph
+                .edges_of(CardEdgeType::RelatesTo)
+                .len(),
             1
         );
     }

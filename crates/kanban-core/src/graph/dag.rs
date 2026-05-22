@@ -372,8 +372,8 @@ mod tests {
                 {"source": c, "target": a, "direction": "Directed", "weight": null, "created_at": now, "archived_at": now},
             ]
         });
-        let graph: DagGraph = serde_json::from_value(json)
-            .expect("cycle through archived edge must be loadable");
+        let graph: DagGraph =
+            serde_json::from_value(json).expect("cycle through archived edge must be loadable");
         assert_eq!(graph.len(), 3);
         assert_eq!(graph.active_len(), 2);
     }
