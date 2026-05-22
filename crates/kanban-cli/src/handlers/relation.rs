@@ -10,7 +10,19 @@ use uuid::Uuid;
 
 fn resolve_cards(ctx: &CliContext, ids: Vec<Uuid>) -> Vec<Card> {
     ids.into_iter()
-        .filter_map(|id| ctx.get_card(id).ok().flatten())
+        .filter_map(|id| match ctx.get_card(id) {
+            Ok(Some(card)) => Some(card),
+            Ok(None) => {
+                tracing::warn!(
+                    "graph references unknown card id {id}; dropping from list (possible corruption)"
+                );
+                None
+            }
+            Err(e) => {
+                tracing::warn!("failed to resolve card id {id}: {e}; dropping from list");
+                None
+            }
+        })
         .collect()
 }
 

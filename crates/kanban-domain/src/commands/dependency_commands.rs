@@ -461,6 +461,69 @@ mod tests {
         }
     }
 
+    /// Pin the on-disk JSON shape of `DependencyCommand` variants so a
+    /// future SQLite command-log wiring (the schema exists today but
+    /// the writer is dormant) treats the collapsed `AddEdge` /
+    /// `RemoveEdge` / `Remove` / `CreateSubcard` variant names as a
+    /// backwards-compatibility contract. Any rename or reshape will
+    /// fail this test loudly rather than silently breaking replay.
+    #[test]
+    fn test_dependency_command_serialization_shape_is_stable() {
+        let source = Uuid::nil();
+        let target = Uuid::from_u128(0x42);
+
+        let add = DependencyCommand::AddEdge(AddEdge {
+            kind: CardEdgeType::ParentOf,
+            source,
+            target,
+        });
+        let add_json = serde_json::to_value(&add).unwrap();
+        assert_eq!(add_json["action"], "add_edge");
+        assert_eq!(add_json["kind"], "ParentOf");
+        assert_eq!(add_json["source"], source.to_string());
+        assert_eq!(add_json["target"], target.to_string());
+
+        let remove = DependencyCommand::RemoveEdge(RemoveEdge {
+            kind: CardEdgeType::Blocks,
+            source,
+            target,
+        });
+        let remove_json = serde_json::to_value(&remove).unwrap();
+        assert_eq!(remove_json["action"], "remove_edge");
+        assert_eq!(remove_json["kind"], "Blocks");
+
+        let tolerant = DependencyCommand::Remove(RemoveDependencyCommand {
+            source_id: source,
+            target_id: target,
+        });
+        let tolerant_json = serde_json::to_value(&tolerant).unwrap();
+        assert_eq!(tolerant_json["action"], "remove");
+        assert_eq!(tolerant_json["source_id"], source.to_string());
+        assert_eq!(tolerant_json["target_id"], target.to_string());
+
+        // Round-trip every variant so a future serde-attr change that
+        // breaks deserialisation also fails the test, not just the
+        // shape assertion.
+        let round_add: DependencyCommand = serde_json::from_value(add_json).unwrap();
+        let round_remove: DependencyCommand = serde_json::from_value(remove_json).unwrap();
+        let round_tolerant: DependencyCommand = serde_json::from_value(tolerant_json).unwrap();
+        assert!(matches!(
+            round_add,
+            DependencyCommand::AddEdge(AddEdge {
+                kind: CardEdgeType::ParentOf,
+                ..
+            })
+        ));
+        assert!(matches!(
+            round_remove,
+            DependencyCommand::RemoveEdge(RemoveEdge {
+                kind: CardEdgeType::Blocks,
+                ..
+            })
+        ));
+        assert!(matches!(round_tolerant, DependencyCommand::Remove(_)));
+    }
+
     #[test]
     fn test_create_subcard_command() {
         use crate::Board;

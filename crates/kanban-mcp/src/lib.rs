@@ -45,11 +45,24 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
 
 fn resolve_summaries(ctx: &McpContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
     ids.into_iter()
-        .filter_map(|id| {
-            ctx.get_card(id)
-                .ok()
-                .flatten()
-                .map(|c| CardSummary::from(&c))
+        .filter_map(|id| match ctx.get_card(id) {
+            Ok(Some(c)) => Some(CardSummary::from(&c)),
+            Ok(None) => {
+                // require_card_exists guards add/remove, so reaching
+                // this branch in production indicates a dangling edge:
+                // the graph references a card that no longer exists.
+                // Log so an operator can see and investigate.
+                tracing::warn!(
+                    "graph references unknown card id {id}; dropping from summary list (possible corruption)"
+                );
+                None
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "failed to resolve card id {id} for summary: {e}; dropping from list"
+                );
+                None
+            }
         })
         .collect()
 }
