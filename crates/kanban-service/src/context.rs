@@ -1430,4 +1430,38 @@ impl GraphOperations for KanbanContext {
         self.require_card_exists(card)?;
         Ok(self.backend.get_graph()?.related(card))
     }
+
+    fn add_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.require_card_exists(parent_id)?;
+        for child in &children {
+            self.require_card_exists(*child)?;
+        }
+        let commands: Vec<Command> = children
+            .into_iter()
+            .map(|child| {
+                Command::Dependency(DependencyCommand::AddSpawns(AddSpawns {
+                    source: parent_id,
+                    target: child,
+                }))
+            })
+            .collect();
+        self.execute(commands)
+    }
+
+    fn remove_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.require_card_exists(parent_id)?;
+        for child in &children {
+            self.require_card_exists(*child)?;
+        }
+        let commands: Vec<Command> = children
+            .into_iter()
+            .map(|child| {
+                Command::Dependency(DependencyCommand::RemoveSpawns(RemoveSpawns {
+                    source: parent_id,
+                    target: child,
+                }))
+            })
+            .collect();
+        self.execute(commands)
+    }
 }

@@ -428,4 +428,12 @@ impl GraphOperations for TuiContext {
     fn list_related(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_related(card)
     }
+    fn add_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.add_children(parent_id, children);
+        self.with_flush(r)
+    }
+    fn remove_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.remove_children(parent_id, children);
+        self.with_flush(r)
+    }
 }

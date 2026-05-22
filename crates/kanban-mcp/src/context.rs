@@ -350,4 +350,10 @@ impl GraphOperations for McpContext {
     fn list_related(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_related(card)
     }
+    fn add_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.inner.add_children(parent_id, children)
+    }
+    fn remove_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.inner.remove_children(parent_id, children)
+    }
 }

@@ -567,6 +567,115 @@ macro_rules! card_graph_tests {
                 assert!(ctx.list_card_children(parent_on_a).unwrap().is_empty());
                 assert!(ctx.list_card_parents(child_on_b).unwrap().is_empty());
             }
+
+            // --- Atomic multi-child batch (add_children / remove_children) ---
+            //
+            // The CLI's `relation add P C1 C2 C3` invocation must
+            // commit either every child or none, so a mid-list failure
+            // does not leak a partial state into in-memory or on-disk
+            // form. These tests pin the all-or-nothing contract at the
+            // service layer for both backends.
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_children_attaches_every_child_atomically() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
+
+                ctx.add_children(parent_id, vec![c1, c2]).unwrap();
+
+                let mut children = ctx.list_card_children(parent_id).unwrap();
+                children.sort();
+                let mut expected = vec![c1, c2];
+                expected.sort();
+                assert_eq!(children, expected);
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_children_rolls_back_when_a_later_child_creates_a_cycle() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
+
+                // Seed parent->c1->c2 so closing parent into c2 cycles.
+                ctx.add_child(parent_id, c1).unwrap();
+                ctx.add_child(c1, c2).unwrap();
+
+                // Batch: attach c1 AND parent as children of c2.
+                // First would succeed in isolation (c1 already child of c2);
+                // second would create cycle parent->c1->c2->parent.
+                let err = ctx
+                    .add_children(c2, vec![c1, parent_id])
+                    .expect_err("batch must fail on cycle");
+                assert!(err.is_cycle_detected(), "expected cycle, got {err:?}");
+
+                // Nothing new attached: c2 must still have only its prior children.
+                let children = ctx.list_card_children(c2).unwrap();
+                assert!(
+                    !children.contains(&c1),
+                    "c1 must not be re-attached as a child of c2 after rollback"
+                );
+                assert!(
+                    !children.contains(&parent_id),
+                    "parent must not be attached as a child of c2 after rollback"
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_add_children_rejects_unknown_child_without_partial_attach() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_id, c1, _c2) = seed_three_cards(&ctx.backend());
+                let phantom = uuid::Uuid::new_v4();
+
+                let err = ctx
+                    .add_children(parent_id, vec![c1, phantom])
+                    .expect_err("batch must fail when any child is unknown");
+                assert!(err.is_not_found(), "expected NotFound, got {err:?}");
+                assert!(
+                    err.to_string().contains(&phantom.to_string()),
+                    "error must name the missing id; got {err:?}"
+                );
+
+                let children = ctx.list_card_children(parent_id).unwrap();
+                assert!(
+                    children.is_empty(),
+                    "no children should be attached when validation fails; got {children:?}"
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_children_detaches_every_child_atomically() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
+
+                ctx.add_children(parent_id, vec![c1, c2]).unwrap();
+                ctx.remove_children(parent_id, vec![c1, c2]).unwrap();
+
+                assert!(ctx.list_card_children(parent_id).unwrap().is_empty());
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_remove_children_rolls_back_when_an_edge_is_missing() {
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
+
+                // Only c1 is attached; c2 is not.
+                ctx.add_child(parent_id, c1).unwrap();
+
+                let err = ctx
+                    .remove_children(parent_id, vec![c1, c2])
+                    .expect_err("batch must fail when any edge is missing");
+                assert!(
+                    err.is_edge_not_found(),
+                    "expected EdgeNotFound, got {err:?}"
+                );
+
+                // c1 must still be attached: the partial remove was rolled back.
+                let children = ctx.list_card_children(parent_id).unwrap();
+                assert_eq!(
+                    children,
+                    vec![c1],
+                    "rollback must restore the pre-batch state"
+                );
+            }
         }
     };
 }

@@ -60,11 +60,23 @@ pub trait GraphOperations {
     // name. These aliases mirror that vocabulary so call sites read
     // naturally; they forward to add_spawns_edge / remove_spawns_edge
     // and the list_spawns_* methods.
+    //
+    // Two perspectives on the same edge: child-first (`set_parent`,
+    // `remove_parent`) for callers thinking "give this child a
+    // parent"; parent-first (`add_child`, `remove_child`) for callers
+    // thinking "give this parent a child". Both ultimately mutate the
+    // same Spawns edge; pick whichever reads better at the call site.
 
     fn set_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
         self.add_spawns_edge(parent_id, child_id)
     }
     fn remove_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
+        self.remove_spawns_edge(parent_id, child_id)
+    }
+    fn add_child(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
+        self.add_spawns_edge(parent_id, child_id)
+    }
+    fn remove_child(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
         self.remove_spawns_edge(parent_id, child_id)
     }
     fn list_card_parents(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
@@ -73,6 +85,27 @@ pub trait GraphOperations {
     fn list_card_children(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.list_spawns_children(card_id)
     }
+
+    // --- Atomic multi-child batch (Spawns) ---
+    //
+    // CLI/MCP invocations that attach or detach several children in a
+    // single call need an all-or-nothing contract: a mid-list failure
+    // (cycle, self-ref, unknown card, missing edge) must leave both
+    // in-memory and on-disk state untouched. Implementations must
+    // run the batch inside a single transaction; the loop-of-singles
+    // shape is forbidden because it can persist a partial state.
+    //
+    // Arg order is parent-first so call sites read "attach these
+    // children to this parent" — the natural reading order for the
+    // CLI invocation `kanban relation add PARENT C1 C2 ...`.
+
+    /// Attach every `child` in `children` to `parent_id` atomically.
+    /// Rolls back the full batch on any failure.
+    fn add_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
+
+    /// Detach every `child` in `children` from `parent_id` atomically.
+    /// Rolls back the full batch on any failure.
+    fn remove_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
 }
 
 #[cfg(test)]
@@ -126,6 +159,12 @@ mod tests {
             fn list_related(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
                 Ok(Vec::new())
             }
+            fn add_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
+                Ok(())
+            }
         }
         let mut g = GraphOnly;
         let a = Uuid::new_v4();
@@ -174,6 +213,12 @@ mod tests {
             }
             fn list_related(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
                 Ok(Vec::new())
+            }
+            fn add_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
+                Ok(())
             }
         }
         let mut g = GraphOnly;
