@@ -1,44 +1,53 @@
 use crate::data_store::DataStore;
-use crate::dependencies::CardEdgeType;
+use crate::dependencies::{RelatesKind, Severity};
 use crate::KanbanResult;
+use kanban_core::Edge as _;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{Command, CommandContext};
 use crate::Card;
 
+/// Per-kind dependency commands.
+///
+/// Each variant has a single relation kind baked into its type. The
+/// previous unified `AddEdge { kind: CardEdgeType }` couldn't carry
+/// kind-specific metadata (severity on Blocks, kind on Relates), so
+/// undo replay lost that data. Splitting per kind keeps the metadata
+/// on the right command and removes the need for a runtime kind
+/// discriminator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum DependencyCommand {
-    /// Strictly add a typed edge to the right sub-graph. Replaces the
-    /// three per-kind add commands (`AddBlocks`, `AddRelatesTo`,
-    /// `SetParent`) — see [`AddEdge`]. Rejects cycles, self-edges, and
-    /// duplicates.
-    AddEdge(AddEdge),
-    /// Strictly remove a typed edge from the right sub-graph. Replaces
-    /// the three per-kind remove commands (`RemoveBlocks`,
-    /// `RemoveRelatesTo`, `RemoveParent`) — see [`RemoveEdge`]. Errors
-    /// when the edge does not exist.
-    RemoveEdge(RemoveEdge),
+    AddSpawns(AddSpawns),
+    AddBlocks(AddBlocks),
+    AddRelates(AddRelates),
+    RemoveSpawns(RemoveSpawns),
+    RemoveBlocks(RemoveBlocks),
+    RemoveRelates(RemoveRelates),
     /// Cross-cutting tolerant edge removal: severs every directed or
     /// undirected edge between two nodes across all sub-graphs. Used
-    /// primarily as the inverse of an [`AddEdge`] — undo must succeed
-    /// against an already-removed edge, so a tolerant kind-agnostic
-    /// removal is the right semantic.
+    /// primarily as the inverse of an `Add*` command — undo must
+    /// succeed against an already-removed edge, so a tolerant
+    /// kind-agnostic removal is the right semantic.
     Remove(RemoveDependencyCommand),
     /// Atomic create-card-and-link-as-subcard. Genuinely different
     /// from the edge commands — touches the board (card counter), the
-    /// card store (new card), and the graph (parent edge). Its inverse
-    /// is `DeleteCard` (polymorphic over live/archived, also strips
-    /// incident edges).
+    /// card store (new card), and the graph (parent edge). Its
+    /// inverse is `DeleteCard` (polymorphic over live/archived, also
+    /// strips incident edges).
     CreateSubcard(CreateSubcardCommand),
 }
 
 impl DependencyCommand {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         match self {
-            DependencyCommand::AddEdge(c) => c.execute(context),
-            DependencyCommand::RemoveEdge(c) => c.execute(context),
+            DependencyCommand::AddSpawns(c) => c.execute(context),
+            DependencyCommand::AddBlocks(c) => c.execute(context),
+            DependencyCommand::AddRelates(c) => c.execute(context),
+            DependencyCommand::RemoveSpawns(c) => c.execute(context),
+            DependencyCommand::RemoveBlocks(c) => c.execute(context),
+            DependencyCommand::RemoveRelates(c) => c.execute(context),
             DependencyCommand::Remove(c) => c.execute(context),
             DependencyCommand::CreateSubcard(c) => c.execute(context),
         }
@@ -46,8 +55,12 @@ impl DependencyCommand {
 
     pub fn description(&self) -> String {
         match self {
-            DependencyCommand::AddEdge(c) => c.description(),
-            DependencyCommand::RemoveEdge(c) => c.description(),
+            DependencyCommand::AddSpawns(c) => c.description(),
+            DependencyCommand::AddBlocks(c) => c.description(),
+            DependencyCommand::AddRelates(c) => c.description(),
+            DependencyCommand::RemoveSpawns(c) => c.description(),
+            DependencyCommand::RemoveBlocks(c) => c.description(),
+            DependencyCommand::RemoveRelates(c) => c.description(),
             DependencyCommand::Remove(c) => c.description(),
             DependencyCommand::CreateSubcard(c) => c.description(),
         }
@@ -55,60 +68,40 @@ impl DependencyCommand {
 
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         match self {
-            DependencyCommand::AddEdge(c) => c.capture_inverse(store),
-            DependencyCommand::RemoveEdge(c) => c.capture_inverse(store),
+            DependencyCommand::AddSpawns(c) => c.capture_inverse(store),
+            DependencyCommand::AddBlocks(c) => c.capture_inverse(store),
+            DependencyCommand::AddRelates(c) => c.capture_inverse(store),
+            DependencyCommand::RemoveSpawns(c) => c.capture_inverse(store),
+            DependencyCommand::RemoveBlocks(c) => c.capture_inverse(store),
+            DependencyCommand::RemoveRelates(c) => c.capture_inverse(store),
             DependencyCommand::Remove(c) => c.capture_inverse(store),
             DependencyCommand::CreateSubcard(c) => c.capture_inverse(store),
         }
     }
 }
 
-/// Strict add of a typed edge.
-///
-/// `kind` selects which sub-graph receives the edge. `source` and
-/// `target` use the following convention per kind:
-/// - `Spawns`:    source = parent,  target = child   (edge parent -> child)
-/// - `Blocks`:    source = blocker, target = blocked (edge blocker -> blocked)
-/// - `RelatesTo`: undirected; the pair is symmetric but source/target
-///   are stored in the order the caller provided them.
-///
-/// Strict: rejects cycles, self-references, and duplicate edges. For
-/// tolerant kind-agnostic removal (e.g. undo-replay of a previous
-/// `AddEdge`), use [`RemoveDependencyCommand`].
+// ────────────────────────────────────────────────────────────────────
+// Add* commands: per-kind, carry the kind-specific metadata.
+// ────────────────────────────────────────────────────────────────────
+
+/// Add a parent->child Spawns edge. `source` is the parent,
+/// `target` is the child.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddEdge {
-    pub kind: CardEdgeType,
+pub struct AddSpawns {
     pub source: Uuid,
     pub target: Uuid,
 }
 
-impl AddEdge {
+impl AddSpawns {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (kind, source, target) = (self.kind, self.source, self.target);
-        context.store.modify_graph(Box::new(move |graph| {
-            match kind {
-                CardEdgeType::Spawns => graph.set_parent(target, source)?,
-                CardEdgeType::Blocks => graph.set_block(source, target)?,
-                CardEdgeType::RelatesTo => graph.relate(source, target)?,
-            }
-            Ok(())
-        }))
+        let (source, target) = (self.source, self.target);
+        context
+            .store
+            .modify_graph(Box::new(move |graph| graph.set_parent(target, source)))
     }
 
     pub fn description(&self) -> String {
-        match self.kind {
-            CardEdgeType::Spawns => {
-                format!("Set parent: {} is parent of {}", self.source, self.target)
-            }
-            CardEdgeType::Blocks => format!(
-                "Add blocks dependency: {} blocks {}",
-                self.source, self.target
-            ),
-            CardEdgeType::RelatesTo => format!(
-                "Add relates-to dependency: {} <-> {}",
-                self.source, self.target
-            ),
-        }
+        format!("Set parent: {} is parent of {}", self.source, self.target)
     }
 
     /// Inverse: tolerant cross-cutting [`RemoveDependencyCommand`] so
@@ -124,55 +117,105 @@ impl AddEdge {
     }
 }
 
-/// Strict remove of a typed edge.
-///
-/// `kind` selects which sub-graph the edge is removed from. Endpoint
-/// convention matches [`AddEdge`]. Errors when the edge does not
-/// exist — for tolerant removal use [`RemoveDependencyCommand`].
+/// Add a blocker->blocked Blocks edge with a severity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoveEdge {
-    pub kind: CardEdgeType,
+pub struct AddBlocks {
     pub source: Uuid,
     pub target: Uuid,
+    #[serde(default)]
+    pub severity: Severity,
 }
 
-impl RemoveEdge {
+impl AddBlocks {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (kind, source, target) = (self.kind, self.source, self.target);
+        let (source, target, severity) = (self.source, self.target, self.severity);
         context.store.modify_graph(Box::new(move |graph| {
-            match kind {
-                CardEdgeType::Spawns => graph.remove_parent(target, source)?,
-                CardEdgeType::Blocks => graph.unblock(source, target)?,
-                CardEdgeType::RelatesTo => graph.unrelate(source, target)?,
-            }
-            Ok(())
+            graph.set_block_with_severity(source, target, severity)
         }))
     }
 
     pub fn description(&self) -> String {
-        match self.kind {
-            CardEdgeType::Spawns => format!(
-                "Remove parent: {} is no longer parent of {}",
-                self.source, self.target
-            ),
-            CardEdgeType::Blocks => format!(
-                "Remove blocks dependency: {} no longer blocks {}",
-                self.source, self.target
-            ),
-            CardEdgeType::RelatesTo => format!(
-                "Remove relates-to dependency: {} <-> {}",
-                self.source, self.target
-            ),
-        }
+        format!(
+            "Add blocks dependency ({:?}): {} blocks {}",
+            self.severity, self.source, self.target
+        )
     }
 
-    /// Inverse: strict [`AddEdge`] of the same typed edge. Replay
-    /// against a graph where the edge already exists should fail —
-    /// that indicates state divergence the user should see.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        Ok(vec![Command::Dependency(DependencyCommand::AddEdge(
-            AddEdge {
-                kind: self.kind,
+        Ok(vec![Command::Dependency(DependencyCommand::Remove(
+            RemoveDependencyCommand {
+                source_id: self.source,
+                target_id: self.target,
+            },
+        ))])
+    }
+}
+
+/// Add an undirected RelatesTo edge with a sub-kind.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddRelates {
+    pub source: Uuid,
+    pub target: Uuid,
+    #[serde(default)]
+    pub kind: RelatesKind,
+}
+
+impl AddRelates {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let (source, target, kind) = (self.source, self.target, self.kind);
+        context.store.modify_graph(Box::new(move |graph| {
+            graph.relate_with_kind(source, target, kind)
+        }))
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Add relates-to dependency ({:?}): {} <-> {}",
+            self.kind, self.source, self.target
+        )
+    }
+
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::Remove(
+            RemoveDependencyCommand {
+                source_id: self.source,
+                target_id: self.target,
+            },
+        ))])
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Remove* commands: per-kind. No metadata needed for removal because
+// the edge is identified by (kind, source, target) and kind is in
+// the variant.
+// ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveSpawns {
+    pub source: Uuid,
+    pub target: Uuid,
+}
+
+impl RemoveSpawns {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let (source, target) = (self.source, self.target);
+        context
+            .store
+            .modify_graph(Box::new(move |graph| graph.remove_parent(target, source)))
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Remove parent: {} is no longer parent of {}",
+            self.source, self.target
+        )
+    }
+
+    /// Inverse: re-add the parent edge.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Dependency(DependencyCommand::AddSpawns(
+            AddSpawns {
                 source: self.source,
                 target: self.target,
             },
@@ -180,54 +223,150 @@ impl RemoveEdge {
     }
 }
 
-/// Build the inverse-replay sequence of [`AddEdge`] commands for every
-/// edge in `graph` that matches `predicate`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveBlocks {
+    pub source: Uuid,
+    pub target: Uuid,
+}
+
+impl RemoveBlocks {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let (source, target) = (self.source, self.target);
+        context
+            .store
+            .modify_graph(Box::new(move |graph| graph.unblock(source, target)))
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Remove blocks dependency: {} no longer blocks {}",
+            self.source, self.target
+        )
+    }
+
+    /// Inverse: re-add the blocks edge. We don't know the original
+    /// severity at remove time; the capture function walks the
+    /// pre-remove graph to record it.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let graph = store.get_graph()?;
+        let severity = graph
+            .blocks_edges()
+            .iter()
+            .find(|e| e.source() == self.source && e.target() == self.target)
+            .map(|e| e.severity)
+            .unwrap_or_default();
+        Ok(vec![Command::Dependency(DependencyCommand::AddBlocks(
+            AddBlocks {
+                source: self.source,
+                target: self.target,
+                severity,
+            },
+        ))])
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveRelates {
+    pub source: Uuid,
+    pub target: Uuid,
+}
+
+impl RemoveRelates {
+    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
+        let (source, target) = (self.source, self.target);
+        context
+            .store
+            .modify_graph(Box::new(move |graph| graph.unrelate(source, target)))
+    }
+
+    pub fn description(&self) -> String {
+        format!(
+            "Remove relates-to dependency: {} <-> {}",
+            self.source, self.target
+        )
+    }
+
+    /// Inverse: re-add the relates edge. Same as RemoveBlocks: we
+    /// capture the kind from the pre-remove graph.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let graph = store.get_graph()?;
+        let (a, b) = (self.source, self.target);
+        let kind = graph
+            .relates_edges()
+            .iter()
+            .find(|e| (e.source() == a && e.target() == b) || (e.source() == b && e.target() == a))
+            .map(|e| e.kind)
+            .unwrap_or_default();
+        Ok(vec![Command::Dependency(DependencyCommand::AddRelates(
+            AddRelates {
+                source: self.source,
+                target: self.target,
+                kind,
+            },
+        ))])
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Inverse-replay helper.
+// ────────────────────────────────────────────────────────────────────
+
+/// Build inverse-replay `Add*` commands for every edge in `graph`
+/// that matches `predicate`. Each per-kind sub-graph contributes its
+/// matching edges with metadata (severity / kind) preserved.
 ///
-/// Centralises the kind→command mapping used by three capture-inverse
-/// sites:
-/// - [`RemoveDependencyCommand::capture_inverse`] (filter: edge connects `(a, b)`)
+/// Used by three capture-inverse sites:
+/// - [`RemoveDependencyCommand::capture_inverse`]
 /// - [`super::cascade_commands::DeleteCardEdges::capture_inverse`]
-///   (filter: edge involves any id in a batch)
 /// - [`super::card_commands::DeleteCard::capture_inverse`]
-///   (filter: edge involves a single card id)
 pub(super) fn edges_to_undo_commands<P>(
     graph: &crate::DependencyGraph,
     predicate: P,
 ) -> Vec<Command>
 where
-    P: Fn(CardEdgeType, Uuid, Uuid) -> bool,
+    P: Fn(Uuid, Uuid) -> bool,
 {
-    use kanban_core::Edge as _;
     let mut out = Vec::new();
     for e in graph.spawns_edges() {
-        if predicate(CardEdgeType::Spawns, e.source(), e.target()) {
-            out.push(Command::Dependency(DependencyCommand::AddEdge(AddEdge {
-                kind: CardEdgeType::Spawns,
-                source: e.source(),
-                target: e.target(),
-            })));
+        if predicate(e.source(), e.target()) {
+            out.push(Command::Dependency(DependencyCommand::AddSpawns(
+                AddSpawns {
+                    source: e.source(),
+                    target: e.target(),
+                },
+            )));
         }
     }
     for e in graph.blocks_edges() {
-        if predicate(CardEdgeType::Blocks, e.source(), e.target()) {
-            out.push(Command::Dependency(DependencyCommand::AddEdge(AddEdge {
-                kind: CardEdgeType::Blocks,
-                source: e.source(),
-                target: e.target(),
-            })));
+        if predicate(e.source(), e.target()) {
+            out.push(Command::Dependency(DependencyCommand::AddBlocks(
+                AddBlocks {
+                    source: e.source(),
+                    target: e.target(),
+                    severity: e.severity,
+                },
+            )));
         }
     }
     for e in graph.relates_edges() {
-        if predicate(CardEdgeType::RelatesTo, e.source(), e.target()) {
-            out.push(Command::Dependency(DependencyCommand::AddEdge(AddEdge {
-                kind: CardEdgeType::RelatesTo,
-                source: e.source(),
-                target: e.target(),
-            })));
+        if predicate(e.source(), e.target()) {
+            out.push(Command::Dependency(DependencyCommand::AddRelates(
+                AddRelates {
+                    source: e.source(),
+                    target: e.target(),
+                    kind: e.kind,
+                },
+            )));
         }
     }
     out
 }
+
+// ────────────────────────────────────────────────────────────────────
+// RemoveDependencyCommand — kind-agnostic tolerant remove. Used as
+// the inverse of an Add* (undo replay must tolerate already-removed
+// edges).
+// ────────────────────────────────────────────────────────────────────
 
 /// Remove a dependency between two cards (kind-agnostic, tolerant).
 ///
@@ -236,8 +375,8 @@ where
 /// existing reverse-orientation edge survives. For the undirected
 /// sub-graph the edge is symmetric and the call removes it regardless
 /// of which endpoint is `source_id`. Tolerant on miss — used as the
-/// inverse of an [`AddEdge`] so undo replay succeeds even against an
-/// already-removed edge.
+/// inverse of an [`AddSpawns`] / [`AddBlocks`] / [`AddRelates`] so
+/// undo replay succeeds even against an already-removed edge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveDependencyCommand {
     pub source_id: Uuid,
@@ -264,24 +403,19 @@ impl RemoveDependencyCommand {
         )
     }
 
-    /// Inverse: re-add every edge whose `(source, target)` matches the
-    /// orientation `(self.source_id, self.target_id)` (or the symmetric
-    /// pair for the undirected sub-graph). `disconnect` removes only
-    /// that specific oriented edge per directed sub-graph, so the
-    /// capture walks the graph and re-emits an [`AddEdge`] for each
-    /// edge `disconnect` would strip, preserving its kind.
+    /// Inverse: re-add every edge whose `(source, target)` matches
+    /// `(self.source_id, self.target_id)` (or the symmetric pair for
+    /// the undirected sub-graph). Per-kind metadata (severity, kind)
+    /// is captured from the pre-disconnect graph.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let graph = store.get_graph()?;
         let (a, b) = (self.source_id, self.target_id);
-        // Replicate the legacy `Edge::connects` semantics inline:
-        // directed sub-graphs match exact `(source, target) == (a, b)`,
-        // the undirected sub-graph matches either ordering.
-        Ok(edges_to_undo_commands(&graph, |kind, s, t| {
-            if matches!(kind, CardEdgeType::RelatesTo) {
-                (s == a && t == b) || (s == b && t == a)
-            } else {
-                s == a && t == b
-            }
+        // Directed sub-graphs only emit for the exact orientation;
+        // the undirected sub-graph emits for either ordering (which
+        // edges_to_undo_commands handles uniformly by iterating its
+        // own sub-graph).
+        Ok(edges_to_undo_commands(&graph, |s, t| {
+            (s == a && t == b) || (s == b && t == a)
         }))
     }
 }
@@ -323,10 +457,9 @@ impl CreateSubcardCommand {
         context.store.upsert_board(board)?;
         context.store.upsert_card(card)?;
 
-        context.store.modify_graph(Box::new(move |graph| {
-            graph.set_parent(card_id, parent_id)?;
-            Ok(())
-        }))
+        context
+            .store
+            .modify_graph(Box::new(move |graph| graph.set_parent(card_id, parent_id)))
     }
 
     pub fn description(&self) -> String {
@@ -356,74 +489,78 @@ mod tests {
     use super::*;
     use crate::DataStore;
 
-    fn add(kind: CardEdgeType, source: Uuid, target: Uuid) -> AddEdge {
-        AddEdge {
-            kind,
-            source,
-            target,
-        }
-    }
-
-    fn remove(kind: CardEdgeType, source: Uuid, target: Uuid) -> RemoveEdge {
-        RemoveEdge {
-            kind,
-            source,
-            target,
-        }
-    }
-
     #[test]
-    fn test_add_edge_blocks() {
-        let tc = TestContext::new();
-        let context = tc.as_command_context();
-        let blocker = Uuid::new_v4();
-        let blocked = Uuid::new_v4();
-        assert!(add(CardEdgeType::Blocks, blocker, blocked)
-            .execute(&context)
-            .is_ok());
-        let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.blockers(blocked).len(), 1);
-    }
-
-    #[test]
-    fn test_add_edge_relates_to() {
-        let tc = TestContext::new();
-        let context = tc.as_command_context();
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-        assert!(add(CardEdgeType::RelatesTo, a, b).execute(&context).is_ok());
-        let graph = tc.store.get_graph().unwrap();
-        assert_eq!(graph.related(a).len(), 1);
-        assert_eq!(graph.related(b).len(), 1);
-    }
-
-    #[test]
-    fn test_add_edge_set_parent() {
+    fn test_add_spawns_executes() {
         let tc = TestContext::new();
         let context = tc.as_command_context();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
-        assert!(add(CardEdgeType::Spawns, parent_id, child_id)
-            .execute(&context)
-            .is_ok());
+        assert!(AddSpawns {
+            source: parent_id,
+            target: child_id,
+        }
+        .execute(&context)
+        .is_ok());
         let graph = tc.store.get_graph().unwrap();
         assert_eq!(graph.children(parent_id), vec![child_id]);
-        assert_eq!(graph.parents(child_id), vec![parent_id]);
     }
 
     #[test]
-    fn test_add_edge_set_parent_prevents_cycle() {
+    fn test_add_spawns_prevents_cycle() {
         let tc = TestContext::new();
         let context = tc.as_command_context();
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
-        assert!(add(CardEdgeType::Spawns, a, b).execute(&context).is_ok());
-        // b is now child of a; making a a child of b would form a cycle.
-        assert!(add(CardEdgeType::Spawns, b, a).execute(&context).is_err());
+        assert!(AddSpawns {
+            source: a,
+            target: b
+        }
+        .execute(&context)
+        .is_ok());
+        assert!(AddSpawns {
+            source: b,
+            target: a
+        }
+        .execute(&context)
+        .is_err());
     }
 
     #[test]
-    fn test_remove_edge_parent() {
+    fn test_add_blocks_preserves_severity() {
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let blocker = Uuid::new_v4();
+        let blocked = Uuid::new_v4();
+        AddBlocks {
+            source: blocker,
+            target: blocked,
+            severity: Severity::High,
+        }
+        .execute(&context)
+        .unwrap();
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.blocks_edges()[0].severity, Severity::High);
+    }
+
+    #[test]
+    fn test_add_relates_preserves_kind() {
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        AddRelates {
+            source: a,
+            target: b,
+            kind: RelatesKind::Duplicates,
+        }
+        .execute(&context)
+        .unwrap();
+        let graph = tc.store.get_graph().unwrap();
+        assert_eq!(graph.relates_edges()[0].kind, RelatesKind::Duplicates);
+    }
+
+    #[test]
+    fn test_remove_spawns_executes() {
         let tc = TestContext::new();
         let parent_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
@@ -433,39 +570,74 @@ mod tests {
             tc.store.set_graph(graph).unwrap();
         }
         let context = tc.as_command_context();
-        assert!(remove(CardEdgeType::Spawns, parent_id, child_id)
-            .execute(&context)
-            .is_ok());
+        assert!(RemoveSpawns {
+            source: parent_id,
+            target: child_id,
+        }
+        .execute(&context)
+        .is_ok());
         let graph = tc.store.get_graph().unwrap();
         assert_eq!(graph.children(parent_id).len(), 0);
     }
 
     #[test]
-    fn test_remove_edge_parent_nonexistent_errors() {
+    fn test_remove_blocks_inverse_captures_severity_from_pre_remove_graph() {
         let tc = TestContext::new();
-        let context = tc.as_command_context();
-        assert!(remove(CardEdgeType::Spawns, Uuid::new_v4(), Uuid::new_v4())
-            .execute(&context)
-            .is_err());
-    }
-
-    #[test]
-    fn test_remove_dependency_command_tolerant() {
-        let tc = TestContext::new();
-        let context = tc.as_command_context();
-        // No edge exists; tolerant remove succeeds.
-        let cmd = RemoveDependencyCommand {
-            source_id: Uuid::new_v4(),
-            target_id: Uuid::new_v4(),
+        let blocker = Uuid::new_v4();
+        let blocked = Uuid::new_v4();
+        {
+            let mut graph = tc.store.get_graph().unwrap();
+            graph
+                .set_block_with_severity(blocker, blocked, Severity::Critical)
+                .unwrap();
+            tc.store.set_graph(graph).unwrap();
+        }
+        let cmd = RemoveBlocks {
+            source: blocker,
+            target: blocked,
         };
-        assert!(cmd.execute(&context).is_ok());
+        let inverse = cmd.capture_inverse(&tc.store).unwrap();
+        match &inverse[0] {
+            Command::Dependency(DependencyCommand::AddBlocks(a)) => {
+                assert_eq!(a.severity, Severity::Critical);
+            }
+            other => panic!("expected AddBlocks inverse, got {other:?}"),
+        }
     }
 
     #[test]
-    fn test_add_edge_inverse_is_tolerant_remove() {
-        let m = add(CardEdgeType::Blocks, Uuid::new_v4(), Uuid::new_v4());
+    fn test_remove_relates_inverse_captures_kind_from_pre_remove_graph() {
         let tc = TestContext::new();
-        let inverse = m.capture_inverse(&tc.store).unwrap();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        {
+            let mut graph = tc.store.get_graph().unwrap();
+            graph
+                .relate_with_kind(a, b, RelatesKind::Duplicates)
+                .unwrap();
+            tc.store.set_graph(graph).unwrap();
+        }
+        let cmd = RemoveRelates {
+            source: a,
+            target: b,
+        };
+        let inverse = cmd.capture_inverse(&tc.store).unwrap();
+        match &inverse[0] {
+            Command::Dependency(DependencyCommand::AddRelates(a)) => {
+                assert_eq!(a.kind, RelatesKind::Duplicates);
+            }
+            other => panic!("expected AddRelates inverse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_add_spawns_inverse_is_tolerant_remove() {
+        let tc = TestContext::new();
+        let cmd = AddSpawns {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+        };
+        let inverse = cmd.capture_inverse(&tc.store).unwrap();
         assert_eq!(inverse.len(), 1);
         assert!(matches!(
             &inverse[0],
@@ -473,24 +645,9 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_remove_edge_inverse_is_typed_add() {
-        let m = remove(CardEdgeType::Blocks, Uuid::new_v4(), Uuid::new_v4());
-        let tc = TestContext::new();
-        let inverse = m.capture_inverse(&tc.store).unwrap();
-        assert_eq!(inverse.len(), 1);
-        match &inverse[0] {
-            Command::Dependency(DependencyCommand::AddEdge(em)) => {
-                assert_eq!(em.kind, CardEdgeType::Blocks);
-            }
-            _ => panic!("expected AddEdge inverse"),
-        }
-    }
-
     /// Pin the on-disk JSON shape of `DependencyCommand` variants so a
     /// future SQLite command-log wiring (the schema exists today but
-    /// the writer is dormant) treats the collapsed `AddEdge` /
-    /// `RemoveEdge` / `Remove` / `CreateSubcard` variant names as a
+    /// the writer is dormant) treats the collapsed variant names as a
     /// backwards-compatibility contract. Any rename or reshape will
     /// fail this test loudly rather than silently breaking replay.
     #[test]
@@ -498,56 +655,44 @@ mod tests {
         let source = Uuid::nil();
         let target = Uuid::from_u128(0x42);
 
-        let add = DependencyCommand::AddEdge(AddEdge {
-            kind: CardEdgeType::Spawns,
+        // Per-kind add variants
+        let add_spawns = DependencyCommand::AddSpawns(AddSpawns { source, target });
+        let json = serde_json::to_value(&add_spawns).unwrap();
+        assert_eq!(json["action"], "add_spawns");
+
+        let add_blocks = DependencyCommand::AddBlocks(AddBlocks {
             source,
             target,
+            severity: Severity::High,
         });
-        let add_json = serde_json::to_value(&add).unwrap();
-        assert_eq!(add_json["action"], "add_edge");
-        assert_eq!(add_json["kind"], "Spawns");
-        assert_eq!(add_json["source"], source.to_string());
-        assert_eq!(add_json["target"], target.to_string());
+        let json = serde_json::to_value(&add_blocks).unwrap();
+        assert_eq!(json["action"], "add_blocks");
+        assert_eq!(json["severity"], "High");
 
-        let remove = DependencyCommand::RemoveEdge(RemoveEdge {
-            kind: CardEdgeType::Blocks,
+        let add_relates = DependencyCommand::AddRelates(AddRelates {
             source,
             target,
+            kind: RelatesKind::Duplicates,
         });
-        let remove_json = serde_json::to_value(&remove).unwrap();
-        assert_eq!(remove_json["action"], "remove_edge");
-        assert_eq!(remove_json["kind"], "Blocks");
+        let json = serde_json::to_value(&add_relates).unwrap();
+        assert_eq!(json["action"], "add_relates");
+        assert_eq!(json["kind"], "Duplicates");
 
-        let tolerant = DependencyCommand::Remove(RemoveDependencyCommand {
-            source_id: source,
-            target_id: target,
-        });
-        let tolerant_json = serde_json::to_value(&tolerant).unwrap();
-        assert_eq!(tolerant_json["action"], "remove");
-        assert_eq!(tolerant_json["source_id"], source.to_string());
-        assert_eq!(tolerant_json["target_id"], target.to_string());
+        // Per-kind remove variants
+        let remove_blocks = DependencyCommand::RemoveBlocks(RemoveBlocks { source, target });
+        let json = serde_json::to_value(&remove_blocks).unwrap();
+        assert_eq!(json["action"], "remove_blocks");
 
-        // Round-trip every variant so a future serde-attr change that
-        // breaks deserialisation also fails the test, not just the
-        // shape assertion.
-        let round_add: DependencyCommand = serde_json::from_value(add_json).unwrap();
-        let round_remove: DependencyCommand = serde_json::from_value(remove_json).unwrap();
-        let round_tolerant: DependencyCommand = serde_json::from_value(tolerant_json).unwrap();
+        // Round-trip
+        let round: DependencyCommand =
+            serde_json::from_value(serde_json::to_value(&add_blocks).unwrap()).unwrap();
         assert!(matches!(
-            round_add,
-            DependencyCommand::AddEdge(AddEdge {
-                kind: CardEdgeType::Spawns,
+            round,
+            DependencyCommand::AddBlocks(AddBlocks {
+                severity: Severity::High,
                 ..
             })
         ));
-        assert!(matches!(
-            round_remove,
-            DependencyCommand::RemoveEdge(RemoveEdge {
-                kind: CardEdgeType::Blocks,
-                ..
-            })
-        ));
-        assert!(matches!(round_tolerant, DependencyCommand::Remove(_)));
     }
 
     #[test]

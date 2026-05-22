@@ -66,6 +66,60 @@ const ALL_KINDS: [CardEdgeType; 3] = [
     CardEdgeType::RelatesTo,
 ];
 
+/// Kind-discriminated adapters over the per-kind GraphOperations
+/// methods so the parameterised tests below can loop over kinds
+/// while the underlying API is per-kind typed. Argument order
+/// (source, target, kind) matches the prior `ctx.add_card_edge(a, b,
+/// kind)` shape so the sed swap stays a name-only rename.
+fn add_by_kind(
+    ctx: &mut KanbanContext,
+    a: uuid::Uuid,
+    b: uuid::Uuid,
+    kind: CardEdgeType,
+) -> kanban_domain::KanbanResult<()> {
+    match kind {
+        CardEdgeType::Spawns => ctx.add_spawns_edge(a, b),
+        CardEdgeType::Blocks => ctx.add_blocks_edge(a, b, kanban_domain::Severity::default()),
+        CardEdgeType::RelatesTo => {
+            ctx.add_relates_edge(a, b, kanban_domain::RelatesKind::default())
+        }
+    }
+}
+fn remove_by_kind(
+    ctx: &mut KanbanContext,
+    a: uuid::Uuid,
+    b: uuid::Uuid,
+    kind: CardEdgeType,
+) -> kanban_domain::KanbanResult<()> {
+    match kind {
+        CardEdgeType::Spawns => ctx.remove_spawns_edge(a, b),
+        CardEdgeType::Blocks => ctx.remove_blocks_edge(a, b),
+        CardEdgeType::RelatesTo => ctx.remove_relates_edge(a, b),
+    }
+}
+fn list_from_by_kind(
+    ctx: &KanbanContext,
+    node: uuid::Uuid,
+    kind: CardEdgeType,
+) -> kanban_domain::KanbanResult<Vec<uuid::Uuid>> {
+    match kind {
+        CardEdgeType::Spawns => ctx.list_spawns_children(node),
+        CardEdgeType::Blocks => ctx.list_blocked(node),
+        CardEdgeType::RelatesTo => ctx.list_related(node),
+    }
+}
+fn list_to_by_kind(
+    ctx: &KanbanContext,
+    node: uuid::Uuid,
+    kind: CardEdgeType,
+) -> kanban_domain::KanbanResult<Vec<uuid::Uuid>> {
+    match kind {
+        CardEdgeType::Spawns => ctx.list_spawns_parents(node),
+        CardEdgeType::Blocks => ctx.list_blockers(node),
+        CardEdgeType::RelatesTo => ctx.list_related(node),
+    }
+}
+
 // --- Parameterised shape assertions ---
 //
 // Each helper exercises one piece of behaviour every edge kind must
@@ -79,13 +133,13 @@ fn assert_add_creates_visible_edge(
     a: uuid::Uuid,
     b: uuid::Uuid,
 ) {
-    ctx.add_card_edge(a, b, kind).unwrap();
-    let from_a = ctx.list_card_edges_from(a, kind).unwrap();
+    add_by_kind(ctx, a, b, kind).unwrap();
+    let from_a = list_from_by_kind(&ctx, a, kind).unwrap();
     assert!(
         from_a.contains(&b),
         "{kind:?}: list_card_edges_from({a:?}) should contain {b:?}; got {from_a:?}"
     );
-    let to_b = ctx.list_card_edges_to(b, kind).unwrap();
+    let to_b = list_to_by_kind(&ctx, b, kind).unwrap();
     assert!(
         to_b.contains(&a),
         "{kind:?}: list_card_edges_to({b:?}) should contain {a:?}; got {to_b:?}"
@@ -93,7 +147,7 @@ fn assert_add_creates_visible_edge(
 }
 
 fn assert_self_reference_rejected(ctx: &mut KanbanContext, kind: CardEdgeType, a: uuid::Uuid) {
-    let err = ctx.add_card_edge(a, a, kind).unwrap_err();
+    let err = add_by_kind(ctx, a, a, kind).unwrap_err();
     assert!(
         err.is_self_reference(),
         "{kind:?}: expected SelfReference, got {err:?}"
@@ -106,14 +160,14 @@ fn assert_remove_clears_edge(
     a: uuid::Uuid,
     b: uuid::Uuid,
 ) {
-    ctx.add_card_edge(a, b, kind).unwrap();
-    ctx.remove_card_edge(a, b, kind).unwrap();
+    add_by_kind(ctx, a, b, kind).unwrap();
+    remove_by_kind(ctx, a, b, kind).unwrap();
     assert!(
-        ctx.list_card_edges_from(a, kind).unwrap().is_empty(),
+        list_from_by_kind(&ctx, a, kind).unwrap().is_empty(),
         "{kind:?}: list_from({a:?}) should be empty after remove"
     );
     assert!(
-        ctx.list_card_edges_to(b, kind).unwrap().is_empty(),
+        list_to_by_kind(&ctx, b, kind).unwrap().is_empty(),
         "{kind:?}: list_to({b:?}) should be empty after remove"
     );
 }
@@ -124,7 +178,7 @@ fn assert_remove_nonexistent_errors(
     a: uuid::Uuid,
     b: uuid::Uuid,
 ) {
-    let err = ctx.remove_card_edge(a, b, kind).unwrap_err();
+    let err = remove_by_kind(ctx, a, b, kind).unwrap_err();
     assert!(
         err.is_edge_not_found(),
         "{kind:?}: expected EdgeNotFound, got {err:?}"
@@ -137,11 +191,11 @@ fn assert_add_is_undoable(
     a: uuid::Uuid,
     b: uuid::Uuid,
 ) {
-    ctx.add_card_edge(a, b, kind).unwrap();
+    add_by_kind(ctx, a, b, kind).unwrap();
     assert!(ctx.can_undo(), "{kind:?}: can_undo() after add");
     ctx.undo().unwrap();
     assert!(
-        ctx.list_card_edges_from(a, kind).unwrap().is_empty(),
+        list_from_by_kind(&ctx, a, kind).unwrap().is_empty(),
         "{kind:?}: undo should remove the edge"
     );
 }
@@ -235,14 +289,10 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(parent_id, c1, CardEdgeType::Spawns)
-                    .unwrap();
-                ctx.add_card_edge(parent_id, c2, CardEdgeType::Spawns)
-                    .unwrap();
+                add_by_kind(&mut ctx, parent_id, c1, CardEdgeType::Spawns).unwrap();
+                add_by_kind(&mut ctx, parent_id, c2, CardEdgeType::Spawns).unwrap();
 
-                let mut ids = ctx
-                    .list_card_edges_from(parent_id, CardEdgeType::Spawns)
-                    .unwrap();
+                let mut ids = list_from_by_kind(&ctx, parent_id, CardEdgeType::Spawns).unwrap();
                 ids.sort();
                 let mut expected = vec![c1, c2];
                 expected.sort();
@@ -254,14 +304,10 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (p1, p2, child_id) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(p1, child_id, CardEdgeType::Spawns)
-                    .unwrap();
-                ctx.add_card_edge(p2, child_id, CardEdgeType::Spawns)
-                    .unwrap();
+                add_by_kind(&mut ctx, p1, child_id, CardEdgeType::Spawns).unwrap();
+                add_by_kind(&mut ctx, p2, child_id, CardEdgeType::Spawns).unwrap();
 
-                let mut ids = ctx
-                    .list_card_edges_to(child_id, CardEdgeType::Spawns)
-                    .unwrap();
+                let mut ids = list_to_by_kind(&ctx, child_id, CardEdgeType::Spawns).unwrap();
                 ids.sort();
                 let mut expected = vec![p1, p2];
                 expected.sort();
@@ -275,8 +321,8 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (a, b, _) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(a, b, CardEdgeType::Spawns).unwrap();
-                let err = ctx.add_card_edge(b, a, CardEdgeType::Spawns).unwrap_err();
+                add_by_kind(&mut ctx, a, b, CardEdgeType::Spawns).unwrap();
+                let err = add_by_kind(&mut ctx, b, a, CardEdgeType::Spawns).unwrap_err();
                 assert!(
                     err.is_cycle_detected(),
                     "expected CycleDetected, got {err:?}"
@@ -288,9 +334,9 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (a, b, c) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(a, b, CardEdgeType::Blocks).unwrap();
-                ctx.add_card_edge(b, c, CardEdgeType::Blocks).unwrap();
-                let err = ctx.add_card_edge(c, a, CardEdgeType::Blocks).unwrap_err();
+                add_by_kind(&mut ctx, a, b, CardEdgeType::Blocks).unwrap();
+                add_by_kind(&mut ctx, b, c, CardEdgeType::Blocks).unwrap();
+                let err = add_by_kind(&mut ctx, c, a, CardEdgeType::Blocks).unwrap_err();
                 assert!(
                     err.is_cycle_detected(),
                     "expected CycleDetected, got {err:?}"
@@ -302,10 +348,10 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (a, b, c) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
-                ctx.add_card_edge(b, c, CardEdgeType::RelatesTo).unwrap();
+                add_by_kind(&mut ctx, a, b, CardEdgeType::RelatesTo).unwrap();
+                add_by_kind(&mut ctx, b, c, CardEdgeType::RelatesTo).unwrap();
                 // Undirected — closing the triangle is not a cycle violation.
-                ctx.add_card_edge(c, a, CardEdgeType::RelatesTo).unwrap();
+                add_by_kind(&mut ctx, c, a, CardEdgeType::RelatesTo).unwrap();
             }
 
             #[tokio::test(flavor = "multi_thread")]
@@ -313,27 +359,25 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (a, b, _) = seed_three_cards(&ctx.backend());
 
-                ctx.add_card_edge(a, b, CardEdgeType::RelatesTo).unwrap();
+                add_by_kind(&mut ctx, a, b, CardEdgeType::RelatesTo).unwrap();
 
                 // Undirected: list_from and list_to both return the neighbour
                 // from either endpoint. This is the defining property that
                 // distinguishes RelatesTo from the two DAG kinds.
                 assert_eq!(
-                    ctx.list_card_edges_from(a, CardEdgeType::RelatesTo)
-                        .unwrap(),
+                    list_from_by_kind(&ctx, a, CardEdgeType::RelatesTo).unwrap(),
                     vec![b]
                 );
                 assert_eq!(
-                    ctx.list_card_edges_to(a, CardEdgeType::RelatesTo).unwrap(),
+                    list_to_by_kind(&ctx, a, CardEdgeType::RelatesTo).unwrap(),
                     vec![b]
                 );
                 assert_eq!(
-                    ctx.list_card_edges_from(b, CardEdgeType::RelatesTo)
-                        .unwrap(),
+                    list_from_by_kind(&ctx, b, CardEdgeType::RelatesTo).unwrap(),
                     vec![a]
                 );
                 assert_eq!(
-                    ctx.list_card_edges_to(b, CardEdgeType::RelatesTo).unwrap(),
+                    list_to_by_kind(&ctx, b, CardEdgeType::RelatesTo).unwrap(),
                     vec![a]
                 );
             }
@@ -364,9 +408,8 @@ macro_rules! card_graph_tests {
                 ctx.set_parent(child_id, parent_id).unwrap();
 
                 let convenience: Vec<uuid::Uuid> = ctx.list_card_parents(child_id).unwrap();
-                let primitive: Vec<uuid::Uuid> = ctx
-                    .list_card_edges_to(child_id, CardEdgeType::Spawns)
-                    .unwrap();
+                let primitive: Vec<uuid::Uuid> =
+                    list_to_by_kind(&ctx, child_id, CardEdgeType::Spawns).unwrap();
                 assert_eq!(convenience, primitive);
             }
 
@@ -421,7 +464,7 @@ macro_rules! card_graph_tests {
                     let (mut ctx, _dir) = $open_ctx.await;
                     let (b, _, _) = seed_three_cards(&ctx.backend());
                     let phantom = uuid::Uuid::new_v4();
-                    let err = ctx.add_card_edge(phantom, b, kind).unwrap_err();
+                    let err = add_by_kind(&mut ctx, phantom, b, kind).unwrap_err();
                     assert!(
                         err.is_not_found(),
                         "{kind:?}: expected NotFound for phantom source; got {err:?}"
@@ -439,7 +482,7 @@ macro_rules! card_graph_tests {
                     let (mut ctx, _dir) = $open_ctx.await;
                     let (a, _, _) = seed_three_cards(&ctx.backend());
                     let phantom = uuid::Uuid::new_v4();
-                    let err = ctx.add_card_edge(a, phantom, kind).unwrap_err();
+                    let err = add_by_kind(&mut ctx, a, phantom, kind).unwrap_err();
                     assert!(
                         err.is_not_found(),
                         "{kind:?}: expected NotFound for phantom target; got {err:?}"
@@ -457,7 +500,7 @@ macro_rules! card_graph_tests {
                     let (mut ctx, _dir) = $open_ctx.await;
                     let (b, _, _) = seed_three_cards(&ctx.backend());
                     let phantom = uuid::Uuid::new_v4();
-                    let err = ctx.remove_card_edge(phantom, b, kind).unwrap_err();
+                    let err = remove_by_kind(&mut ctx, phantom, b, kind).unwrap_err();
                     assert!(
                         err.is_not_found(),
                         "{kind:?}: expected NotFound for phantom source; got {err:?}"
@@ -471,7 +514,7 @@ macro_rules! card_graph_tests {
                     let (mut ctx, _dir) = $open_ctx.await;
                     let (a, _, _) = seed_three_cards(&ctx.backend());
                     let phantom = uuid::Uuid::new_v4();
-                    let err = ctx.remove_card_edge(a, phantom, kind).unwrap_err();
+                    let err = remove_by_kind(&mut ctx, a, phantom, kind).unwrap_err();
                     assert!(
                         err.is_not_found(),
                         "{kind:?}: expected NotFound for phantom target; got {err:?}"
@@ -488,7 +531,7 @@ macro_rules! card_graph_tests {
                 for kind in ALL_KINDS {
                     let (ctx, _dir) = $open_ctx.await;
                     let phantom = uuid::Uuid::new_v4();
-                    let err = ctx.list_card_edges_from(phantom, kind).unwrap_err();
+                    let err = list_from_by_kind(&ctx, phantom, kind).unwrap_err();
                     assert!(
                         err.is_not_found(),
                         "{kind:?}: expected NotFound; got {err:?}"
@@ -505,7 +548,7 @@ macro_rules! card_graph_tests {
                 for kind in ALL_KINDS {
                     let (ctx, _dir) = $open_ctx.await;
                     let phantom = uuid::Uuid::new_v4();
-                    let err = ctx.list_card_edges_to(phantom, kind).unwrap_err();
+                    let err = list_to_by_kind(&ctx, phantom, kind).unwrap_err();
                     assert!(
                         err.is_not_found(),
                         "{kind:?}: expected NotFound; got {err:?}"

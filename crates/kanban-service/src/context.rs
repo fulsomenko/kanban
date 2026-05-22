@@ -1,13 +1,13 @@
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    AddEdge, BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, DependencyCommand,
-    RemoveEdge, SprintCommand,
+    AddBlocks, AddRelates, AddSpawns, BoardCommand, CardCommand, ColumnCommand, Command,
+    CommandContext, DependencyCommand, RemoveBlocks, RemoveRelates, RemoveSpawns, SprintCommand,
 };
 use kanban_domain::{
-    ArchivedCard, Board, BoardUpdate, Card, CardEdgeType, CardListFilter, CardStatus, CardSummary,
-    CardUpdate, Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, GraphOperations,
-    KanbanOperations, Snapshot, Sprint, SprintUpdate,
+    ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
+    Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, GraphOperations,
+    KanbanOperations, RelatesKind, Severity, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -1333,47 +1333,101 @@ impl KanbanContext {
 }
 
 impl GraphOperations for KanbanContext {
-    fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
-        self.require_card_exists(from)?;
-        self.require_card_exists(to)?;
-        self.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
-            AddEdge {
-                kind,
-                source: from,
-                target: to,
+    fn add_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
+        self.require_card_exists(parent_id)?;
+        self.require_card_exists(child_id)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::AddSpawns(
+            AddSpawns {
+                source: parent_id,
+                target: child_id,
             },
         ))])
     }
 
-    fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()> {
-        self.require_card_exists(from)?;
-        self.require_card_exists(to)?;
-        self.execute(vec![Command::Dependency(DependencyCommand::RemoveEdge(
-            RemoveEdge {
-                kind,
-                source: from,
-                target: to,
+    fn remove_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
+        self.require_card_exists(parent_id)?;
+        self.require_card_exists(child_id)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::RemoveSpawns(
+            RemoveSpawns {
+                source: parent_id,
+                target: child_id,
             },
         ))])
     }
 
-    fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
-        self.require_card_exists(node)?;
-        let graph = self.backend.get_graph()?;
-        Ok(match kind {
-            CardEdgeType::Spawns => graph.children(node),
-            CardEdgeType::Blocks => graph.blocked(node),
-            CardEdgeType::RelatesTo => graph.related(node),
-        })
+    fn list_spawns_children(&self, parent_id: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(parent_id)?;
+        Ok(self.backend.get_graph()?.children(parent_id))
     }
 
-    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>> {
-        self.require_card_exists(node)?;
-        let graph = self.backend.get_graph()?;
-        Ok(match kind {
-            CardEdgeType::Spawns => graph.parents(node),
-            CardEdgeType::Blocks => graph.blockers(node),
-            CardEdgeType::RelatesTo => graph.related(node),
-        })
+    fn list_spawns_parents(&self, child_id: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(child_id)?;
+        Ok(self.backend.get_graph()?.parents(child_id))
+    }
+
+    fn add_blocks_edge(
+        &mut self,
+        blocker: Uuid,
+        blocked: Uuid,
+        severity: Severity,
+    ) -> KanbanResult<()> {
+        self.require_card_exists(blocker)?;
+        self.require_card_exists(blocked)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
+            AddBlocks {
+                source: blocker,
+                target: blocked,
+                severity,
+            },
+        ))])
+    }
+
+    fn remove_blocks_edge(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()> {
+        self.require_card_exists(blocker)?;
+        self.require_card_exists(blocked)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::RemoveBlocks(
+            RemoveBlocks {
+                source: blocker,
+                target: blocked,
+            },
+        ))])
+    }
+
+    fn list_blocked(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(blocker)?;
+        Ok(self.backend.get_graph()?.blocked(blocker))
+    }
+
+    fn list_blockers(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(blocked)?;
+        Ok(self.backend.get_graph()?.blockers(blocked))
+    }
+
+    fn add_relates_edge(&mut self, a: Uuid, b: Uuid, kind: RelatesKind) -> KanbanResult<()> {
+        self.require_card_exists(a)?;
+        self.require_card_exists(b)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::AddRelates(
+            AddRelates {
+                source: a,
+                target: b,
+                kind,
+            },
+        ))])
+    }
+
+    fn remove_relates_edge(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+        self.require_card_exists(a)?;
+        self.require_card_exists(b)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::RemoveRelates(
+            RemoveRelates {
+                source: a,
+                target: b,
+            },
+        ))])
+    }
+
+    fn list_related(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(card)?;
+        Ok(self.backend.get_graph()?.related(card))
     }
 }

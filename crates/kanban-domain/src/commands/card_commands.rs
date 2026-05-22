@@ -408,7 +408,7 @@ impl DeleteCard {
         let card_id = self.card_id;
         commands.extend(super::dependency_commands::edges_to_undo_commands(
             &graph,
-            |_kind, s, t| s == card_id || t == card_id,
+            |s, t| s == card_id || t == card_id,
         ));
         Ok(commands)
     }

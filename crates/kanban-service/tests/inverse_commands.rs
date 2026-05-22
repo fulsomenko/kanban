@@ -4,12 +4,12 @@
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    ActivateSprint, AddEdge, ApplyBoardSettings, ApplyCardMetadata, ArchiveCards,
-    AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand, Command,
-    CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn, CreateSubcardCommand,
-    DeleteColumn, DependencyCommand, MoveCard, RemoveDependencyCommand, RemoveEdge,
-    SetBoardTaskListView, SetBoardTaskSort, SprintCommand, UnassignCardFromSprint, UpdateBoard,
-    UpdateCard, UpdateColumn, UpdateSprint,
+    ActivateSprint, AddBlocks, AddRelates, AddSpawns, ApplyBoardSettings, ApplyCardMetadata,
+    ArchiveCards, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand,
+    Command, CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn,
+    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveDependencyCommand,
+    RemoveSpawns, SetBoardTaskListView, SetBoardTaskSort, SprintCommand, UnassignCardFromSprint,
+    UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
     BoardUpdate, CardEdgeType, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
@@ -317,11 +317,11 @@ async fn test_inverse_add_blocks_removes_edge() -> KanbanResult<()> {
     let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
-        AddEdge {
-            kind: CardEdgeType::Blocks,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
+        AddBlocks {
             source: a.id,
             target: b.id,
+            severity: Default::default(),
         },
     ))])?;
     assert!(ctx.graph()?.contains(a.id, b.id), "edge added by forward");
@@ -343,11 +343,11 @@ async fn test_inverse_add_relates_to_removes_edge() -> KanbanResult<()> {
     let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
-        AddEdge {
-            kind: CardEdgeType::RelatesTo,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddRelates(
+        AddRelates {
             source: a.id,
             target: b.id,
+            kind: Default::default(),
         },
     ))])?;
     assert!(
@@ -370,18 +370,16 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
     let col = ctx.create_column(board.id, "C".into(), None)?;
     let parent = ctx.create_card(board.id, col.id, "Parent".into(), Default::default())?;
     let child = ctx.create_card(board.id, col.id, "Child".into(), Default::default())?;
-    ctx.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
-        AddEdge {
-            kind: CardEdgeType::Spawns,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddSpawns(
+        AddSpawns {
             source: parent.id,
             target: child.id,
         },
     ))])?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveEdge(
-        RemoveEdge {
-            kind: CardEdgeType::Spawns,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveSpawns(
+        RemoveSpawns {
             source: parent.id,
             target: child.id,
         },
@@ -585,9 +583,8 @@ async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
     let child = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
-        AddEdge {
-            kind: CardEdgeType::Spawns,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddSpawns(
+        AddSpawns {
             source: parent.id,
             target: child.id,
         },
@@ -887,11 +884,11 @@ async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<(
     let col = ctx.create_column(board.id, "C".into(), None)?;
     let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
     let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
-    ctx.execute(vec![Command::Dependency(DependencyCommand::AddEdge(
-        AddEdge {
-            kind: CardEdgeType::Blocks,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
+        AddBlocks {
             source: a.id,
             target: b.id,
+            severity: Default::default(),
         },
     ))])?;
     ctx.clear_history()?;

@@ -1,70 +1,79 @@
-use crate::{CardEdgeType, KanbanResult};
+use crate::dependencies::{RelatesKind, Severity};
+use crate::KanbanResult;
 use uuid::Uuid;
 
 /// Service-layer interface to the card-relation graph.
 ///
-/// The trait returns raw `Vec<Uuid>` rather than resolved
-/// `Vec<CardSummary>`. Surfaces that need display data resolve ids
-/// themselves at their own boundary. This keeps the contract focused
-/// on graph topology and avoids forcing consumers (notably the TUI,
-/// which already has cards in memory) to pay for resolution.
+/// Per-kind methods carry per-kind metadata (severity for blocks,
+/// kind for relates). The previous unified `add_card_edge(from, to,
+/// kind: CardEdgeType)` couldn't accept kind-specific metadata, so
+/// every blocks edge was Medium-severity and every relates edge was
+/// General-kind. Splitting per kind moves the metadata onto the
+/// signature where it belongs.
 ///
-/// Stands alone from the 51-method `KanbanOperations` god-trait
-/// (KAN-483) — there is no supertrait bound, because the trait deals
-/// only in node ids. Implementers compose `KanbanOperations` and
-/// `GraphOperations` separately when they need both.
+/// The trait returns raw `Vec<Uuid>` for list queries rather than
+/// resolved `Vec<CardSummary>`. Surfaces that need display data
+/// resolve ids themselves at their own boundary.
 ///
-/// All three `CardEdgeType` variants are wired through the trait
-/// today: parent/child (DAG), blocks (DAG), relates-to (undirected).
-/// Cycle detection, self-reference rejection, and edge-not-found
-/// behavior come from the underlying sub-graph implementation.
+/// Stands alone from the `KanbanOperations` god-trait — there is no
+/// supertrait bound, because the trait deals only in node ids.
+/// Implementers compose `KanbanOperations` and `GraphOperations`
+/// separately when they need both.
 ///
 /// # Note
-/// Cross-board parent/child is permitted at the domain layer today and
-/// this trait preserves that behavior. Board-scoping is a separate
-/// decision.
+/// Cross-board parent/child is permitted at the domain layer today
+/// and this trait preserves that behavior. Board-scoping is a
+/// separate decision.
 pub trait GraphOperations {
-    // --- Primitive methods. Every consumer can call these. ---
+    // --- Spawns (parent / child) ---
 
-    /// Add a directed edge `from -> to` of the given kind.
-    fn add_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()>;
+    /// Add a `parent -> child` Spawns edge. No metadata.
+    fn add_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()>;
+    fn remove_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()>;
+    fn list_spawns_children(&self, parent_id: Uuid) -> KanbanResult<Vec<Uuid>>;
+    fn list_spawns_parents(&self, child_id: Uuid) -> KanbanResult<Vec<Uuid>>;
 
-    /// Remove the directed edge `from -> to` of the given kind, if present.
-    fn remove_card_edge(&mut self, from: Uuid, to: Uuid, kind: CardEdgeType) -> KanbanResult<()>;
+    // --- Blocks ---
 
-    /// All direct successors of `node` reachable by a single edge of `kind`.
-    fn list_card_edges_from(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>>;
+    /// Add a `blocker -> blocked` Blocks edge with a severity.
+    fn add_blocks_edge(
+        &mut self,
+        blocker: Uuid,
+        blocked: Uuid,
+        severity: Severity,
+    ) -> KanbanResult<()>;
+    fn remove_blocks_edge(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()>;
+    /// Cards `blocker` blocks (outgoing).
+    fn list_blocked(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>>;
+    /// Cards that block `blocked` (incoming).
+    fn list_blockers(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>>;
 
-    /// All direct predecessors of `node` via a single edge of `kind`.
-    fn list_card_edges_to(&self, node: Uuid, kind: CardEdgeType) -> KanbanResult<Vec<Uuid>>;
+    // --- Relates ---
 
-    // --- Convenience defaults for the parent/child case. ---
+    /// Add an undirected `a <-> b` RelatesTo edge with a sub-kind.
+    fn add_relates_edge(&mut self, a: Uuid, b: Uuid, kind: RelatesKind) -> KanbanResult<()>;
+    fn remove_relates_edge(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()>;
+    /// Cards related to `card` via any active relates edge.
+    fn list_related(&self, card: Uuid) -> KanbanResult<Vec<Uuid>>;
+
+    // --- Convenience defaults (parent / child case) ---
     //
-    // Single canonical spelling: child-first, mirroring "set this
-    // child's parent to that one". The earlier `set_child` /
-    // `remove_child` aliases were dropped after the review flagged
-    // call sites diverging across surfaces — having two ways to
-    // express one edge is a footgun that scales linearly with caller
-    // count.
+    // The CLI / MCP / TUI surfaces all talk about parent/child by
+    // name. These aliases mirror that vocabulary so call sites read
+    // naturally; they forward to add_spawns_edge / remove_spawns_edge
+    // and the list_spawns_* methods.
 
-    /// Add the `parent -> child` edge for `child_id`.
     fn set_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
-        self.add_card_edge(parent_id, child_id, CardEdgeType::Spawns)
+        self.add_spawns_edge(parent_id, child_id)
     }
-
-    /// Remove the `parent -> child` edge for `child_id`.
     fn remove_parent(&mut self, child_id: Uuid, parent_id: Uuid) -> KanbanResult<()> {
-        self.remove_card_edge(parent_id, child_id, CardEdgeType::Spawns)
+        self.remove_spawns_edge(parent_id, child_id)
     }
-
-    /// Direct parents of `card_id` (incoming parent-of edges).
     fn list_card_parents(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.list_card_edges_to(card_id, CardEdgeType::Spawns)
+        self.list_spawns_parents(card_id)
     }
-
-    /// Direct children of `card_id` (outgoing parent-of edges).
     fn list_card_children(&self, card_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.list_card_edges_from(card_id, CardEdgeType::Spawns)
+        self.list_spawns_children(card_id)
     }
 }
 
@@ -79,87 +88,93 @@ mod tests {
 
     /// `GraphOperations` deals only in node ids (`Vec<Uuid>`); it does
     /// not need card resolution and therefore must not require the
-    /// 51-method `KanbanOperations` god-trait as a supertrait. This
-    /// test pins the decoupling at compile time by impl'ing
-    /// `GraphOperations` on a minimal struct that does not impl
-    /// `KanbanOperations`.
+    /// `KanbanOperations` god-trait as a supertrait. This test pins
+    /// the decoupling at compile time by impl'ing `GraphOperations`
+    /// on a minimal struct that does not impl `KanbanOperations`.
     #[test]
     fn trait_does_not_require_kanban_operations_supertrait() {
         struct GraphOnly;
         impl GraphOperations for GraphOnly {
-            fn add_card_edge(
-                &mut self,
-                _from: Uuid,
-                _to: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<()> {
+            fn add_spawns_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
                 Ok(())
             }
-            fn remove_card_edge(
-                &mut self,
-                _from: Uuid,
-                _to: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<()> {
+            fn remove_spawns_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
                 Ok(())
             }
-            fn list_card_edges_from(
-                &self,
-                _node: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<Vec<Uuid>> {
+            fn list_spawns_children(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
                 Ok(Vec::new())
             }
-            fn list_card_edges_to(
-                &self,
-                _node: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<Vec<Uuid>> {
+            fn list_spawns_parents(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn add_blocks_edge(&mut self, _: Uuid, _: Uuid, _: Severity) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_blocks_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn list_blocked(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn list_blockers(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn add_relates_edge(&mut self, _: Uuid, _: Uuid, _: RelatesKind) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_relates_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn list_related(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
                 Ok(Vec::new())
             }
         }
         let mut g = GraphOnly;
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
-        g.add_card_edge(a, b, CardEdgeType::Spawns).unwrap();
+        g.add_spawns_edge(a, b).unwrap();
+        g.add_blocks_edge(a, b, Severity::High).unwrap();
+        g.add_relates_edge(a, b, RelatesKind::Duplicates).unwrap();
     }
 
-    /// Canonical parent/child spelling: child-first. `set_parent` and
-    /// `remove_parent` read as "set/remove this child's parent." The
-    /// alias spellings (set_child / remove_child, parent-first) were
-    /// dropped to keep the API one-way at every call site.
+    /// Convenience methods (`set_parent` / `remove_parent` /
+    /// `list_card_parents` / `list_card_children`) compile through
+    /// the trait without an explicit per-kind constant.
     #[test]
-    fn test_canonical_parent_methods_compile_through_trait() {
+    fn test_convenience_parent_methods_compile_through_trait() {
         struct GraphOnly;
         impl GraphOperations for GraphOnly {
-            fn add_card_edge(
-                &mut self,
-                _from: Uuid,
-                _to: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<()> {
+            fn add_spawns_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
                 Ok(())
             }
-            fn remove_card_edge(
-                &mut self,
-                _from: Uuid,
-                _to: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<()> {
+            fn remove_spawns_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
                 Ok(())
             }
-            fn list_card_edges_from(
-                &self,
-                _node: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<Vec<Uuid>> {
+            fn list_spawns_children(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
                 Ok(Vec::new())
             }
-            fn list_card_edges_to(
-                &self,
-                _node: Uuid,
-                _kind: CardEdgeType,
-            ) -> KanbanResult<Vec<Uuid>> {
+            fn list_spawns_parents(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn add_blocks_edge(&mut self, _: Uuid, _: Uuid, _: Severity) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_blocks_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn list_blocked(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn list_blockers(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            fn add_relates_edge(&mut self, _: Uuid, _: Uuid, _: RelatesKind) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn remove_relates_edge(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
+                Ok(())
+            }
+            fn list_related(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
                 Ok(Vec::new())
             }
         }
@@ -168,5 +183,7 @@ mod tests {
         let child = Uuid::new_v4();
         g.set_parent(child, parent).unwrap();
         g.remove_parent(child, parent).unwrap();
+        g.list_card_parents(child).unwrap();
+        g.list_card_children(parent).unwrap();
     }
 }
