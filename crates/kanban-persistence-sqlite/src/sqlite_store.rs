@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use kanban_core::graph::LegacyEdge;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
@@ -204,31 +203,43 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
 }
 
 fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    let mut buf: Vec<(CardEdgeType, LegacyEdge)> = Vec::with_capacity(rows.len());
+    use kanban_core::EdgeBase;
+    use kanban_domain::{BlocksEdge, RelatesEdge, RelatesKind, Severity, SpawnsEdge};
+    let mut spawns: Vec<SpawnsEdge> = Vec::new();
+    let mut blocks: Vec<BlocksEdge> = Vec::new();
+    let mut relates: Vec<RelatesEdge> = Vec::new();
     for row in rows {
         let source_str: String = row.try_get("source_id").map_err(db_err)?;
         let target_str: String = row.try_get("target_id").map_err(db_err)?;
         let edge_type_str: String = row.try_get("edge_type").map_err(db_err)?;
-        let direction_str: String = row.try_get("direction").map_err(db_err)?;
-        let weight: Option<f64> = row.try_get("weight").map_err(db_err)?;
         let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
         let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
+        // direction + weight columns are legacy artefacts that
+        // the new per-kind structs do not carry; ignore them.
 
         let edge_type: CardEdgeType = p_enum(&edge_type_str, "edge_type")?;
-        let edge: LegacyEdge = LegacyEdge {
+        let base = EdgeBase {
             source: p_uuid(&source_str)?,
             target: p_uuid(&target_str)?,
-            direction: p_enum(&direction_str, "edge direction")?,
-            weight: weight.map(|w| w as f32),
             created_at: p_dt(&created_at_str)?,
             archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
         };
 
-        buf.push((edge_type, edge));
+        match edge_type {
+            CardEdgeType::Spawns => spawns.push(SpawnsEdge { base }),
+            CardEdgeType::Blocks => blocks.push(BlocksEdge {
+                base,
+                severity: Severity::default(),
+            }),
+            CardEdgeType::RelatesTo => relates.push(RelatesEdge {
+                base,
+                kind: RelatesKind::default(),
+            }),
+        }
     }
     // Route through the validating constructor — persistence never
     // bypasses graph invariants and corrupt rows fail the load.
-    DependencyGraph::from_validated_edges(buf)
+    DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
 }
 
 fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
@@ -847,21 +858,59 @@ impl SqliteStore {
             .await
             .map_err(db_err)?;
 
-        // Iterate via the DependencyGraph's public seam — persistence
-        // does not reach into sub-graph internals.
-        for (kind, edge) in graph.edges_by_kind() {
+        // Walk each typed sub-graph and write rows tagged with the
+        // matching kind. Per-kind tables (step 11) replace this
+        // uniform-table write path with one INSERT per sub-graph.
+        use kanban_core::Edge as _;
+        let directed_legacy = ser_enum(&kanban_core::EdgeDirection::Directed, "edge direction")?;
+        let bidi_legacy = ser_enum(&kanban_core::EdgeDirection::Bidirectional, "edge direction")?;
+        for e in graph.spawns_edges() {
             sqlx::query(
                 "INSERT INTO card_edges
                     (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)",
             )
-            .bind(edge.source.to_string())
-            .bind(edge.target.to_string())
-            .bind(ser_enum(&kind, "edge_type")?)
-            .bind(ser_enum(&edge.direction, "edge direction")?)
-            .bind(edge.weight.map(|w| w as f64))
-            .bind(fmt_dt(&edge.created_at))
-            .bind(opt_dt(&edge.archived_at))
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(ser_enum(&CardEdgeType::Spawns, "edge_type")?)
+            .bind(&directed_legacy)
+            .bind::<Option<f64>>(None)
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+        for e in graph.blocks_edges() {
+            sqlx::query(
+                "INSERT INTO card_edges
+                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(ser_enum(&CardEdgeType::Blocks, "edge_type")?)
+            .bind(&directed_legacy)
+            .bind::<Option<f64>>(None)
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+        for e in graph.relates_edges() {
+            sqlx::query(
+                "INSERT INTO card_edges
+                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(ser_enum(&CardEdgeType::RelatesTo, "edge_type")?)
+            .bind(&bidi_legacy)
+            .bind::<Option<f64>>(None)
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;

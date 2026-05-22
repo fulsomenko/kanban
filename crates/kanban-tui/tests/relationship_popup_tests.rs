@@ -127,7 +127,7 @@ fn test_manage_parents_popup_enter_creates_parent_edge() {
         parent_id = parent.id
     );
     assert_eq!(
-        graph.edges_of(CardEdgeType::Spawns).len(),
+        graph.spawns_edges().len(),
         1,
         "exactly one parent-of edge should be present"
     );

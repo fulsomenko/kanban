@@ -94,8 +94,8 @@ impl DeleteCardEdges {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let id_set: std::collections::HashSet<_> = self.ids.iter().copied().collect();
         let graph = store.get_graph()?;
-        Ok(edges_to_undo_commands(&graph, |edge| {
-            id_set.contains(&edge.source) || id_set.contains(&edge.target)
+        Ok(edges_to_undo_commands(&graph, |_kind, s, t| {
+            id_set.contains(&s) || id_set.contains(&t)
         }))
     }
 }

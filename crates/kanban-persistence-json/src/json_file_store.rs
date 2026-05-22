@@ -709,22 +709,9 @@ mod tests {
         use kanban_persistence::snapshot_from_json_bytes;
         let domain_snapshot = snapshot_from_json_bytes(&snapshot.data)
             .expect("snapshot must deserialize through the full domain stack after migration");
-        use kanban_domain::CardEdgeType;
-        assert_eq!(
-            domain_snapshot.graph.edges_of(CardEdgeType::Spawns).len(),
-            1
-        );
-        assert_eq!(
-            domain_snapshot.graph.edges_of(CardEdgeType::Blocks).len(),
-            1
-        );
-        assert_eq!(
-            domain_snapshot
-                .graph
-                .edges_of(CardEdgeType::RelatesTo)
-                .len(),
-            1
-        );
+        assert_eq!(domain_snapshot.graph.spawns_edges().len(), 1);
+        assert_eq!(domain_snapshot.graph.blocks_edges().len(), 1);
+        assert_eq!(domain_snapshot.graph.relates_edges().len(), 1);
     }
 
     #[tokio::test]

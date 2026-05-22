@@ -72,6 +72,23 @@ pub trait Edge {
 
     fn archive(&mut self);
     fn unarchive(&mut self);
+
+    /// Construct an edge from just its endpoints, filling per-kind
+    /// metadata with defaults. Lets the generic `Graph::add_edge` /
+    /// `UndirectedGraph::add_edge` trait methods work uniformly
+    /// across edge kinds without taking kind-specific parameters.
+    /// Kind-specific code that wants to set metadata explicitly
+    /// constructs the concrete struct directly (e.g.
+    /// `BlocksEdge::new(blocker, blocked, Severity::High)`) and
+    /// pushes it via `add_edge_with_metadata`.
+    ///
+    /// `where Self: Sized` keeps the trait object-safe (methods
+    /// taking ownership / returning `Self` aren't callable on
+    /// `&dyn Edge` anyway, but the trait itself stays usable as a
+    /// trait object for cross-kind read code).
+    fn from_endpoints(source: Uuid, target: Uuid) -> Self
+    where
+        Self: Sized;
 }
 
 impl Edge for EdgeBase {
@@ -94,6 +111,9 @@ impl Edge for EdgeBase {
     }
     fn unarchive(&mut self) {
         self.archived_at = None;
+    }
+    fn from_endpoints(source: Uuid, target: Uuid) -> Self {
+        EdgeBase::new(source, target)
     }
 }
 
@@ -191,6 +211,13 @@ impl Edge for LegacyEdge {
     }
     fn unarchive(&mut self) {
         LegacyEdge::unarchive(self);
+    }
+    fn from_endpoints(source: Uuid, target: Uuid) -> Self {
+        // Transitional impl: LegacyEdge default direction is
+        // Directed. UndirectedGraph<LegacyEdge> callers that need
+        // Bidirectional construct the edge explicitly. Once step 8
+        // drops LegacyEdge this impl goes away.
+        LegacyEdge::new(source, target, EdgeDirection::Directed)
     }
 }
 

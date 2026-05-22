@@ -1,14 +1,14 @@
 use super::super::helpers::fully_populated_snapshot;
 use super::super::BackendFactory;
 use crate::KanbanContext;
-use kanban_core::{AppConfig, EdgeDirection, LegacyEdge};
+use kanban_core::{AppConfig, EdgeBase};
 use kanban_domain::board::{SortField, SortOrder};
 use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
 use kanban_domain::task_list_view::TaskListView;
 use kanban_domain::{
-    BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, DependencyGraph,
-    FieldUpdate, KanbanOperations, KanbanResult,
+    BlocksEdge, BoardUpdate, CardUpdate, ColumnUpdate, CreateCardOptions, DependencyGraph,
+    FieldUpdate, KanbanOperations, KanbanResult, RelatesEdge, RelatesKind, Severity, SpawnsEdge,
 };
 use tempfile::TempDir;
 
@@ -280,42 +280,34 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
 
     let now = chrono::Utc::now();
     {
-        let graph = DependencyGraph::from_validated_edges([
-            (
-                CardEdgeType::Blocks,
-                LegacyEdge {
-                    source: card1.id,
-                    target: card2.id,
-                    direction: EdgeDirection::Directed,
-                    weight: Some(1.0_f32),
-                    created_at: now,
-                    archived_at: None,
-                },
-            ),
-            (
-                CardEdgeType::RelatesTo,
-                LegacyEdge {
-                    source: card1.id,
-                    target: card3.id,
-                    direction: EdgeDirection::Bidirectional,
-                    weight: None,
-                    created_at: now,
-                    archived_at: Some(now),
-                },
-            ),
-            (
-                CardEdgeType::Spawns,
-                LegacyEdge {
-                    source: card2.id,
-                    target: card3.id,
-                    direction: EdgeDirection::Directed,
-                    weight: Some(0.5_f32),
-                    created_at: now,
-                    archived_at: None,
-                },
-            ),
-        ])
-        .expect("test fixture edges must validate");
+        let spawns = vec![SpawnsEdge {
+            base: EdgeBase {
+                source: card2.id,
+                target: card3.id,
+                created_at: now,
+                archived_at: None,
+            },
+        }];
+        let blocks = vec![BlocksEdge {
+            base: EdgeBase {
+                source: card1.id,
+                target: card2.id,
+                created_at: now,
+                archived_at: None,
+            },
+            severity: Severity::default(),
+        }];
+        let relates = vec![RelatesEdge {
+            base: EdgeBase {
+                source: card1.id,
+                target: card3.id,
+                created_at: now,
+                archived_at: Some(now),
+            },
+            kind: RelatesKind::default(),
+        }];
+        let graph = DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
+            .expect("test fixture edges must validate");
         ctx.data_store().set_graph(graph).unwrap();
     }
 

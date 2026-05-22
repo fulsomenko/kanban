@@ -112,30 +112,29 @@ pub fn fully_populated_snapshot() -> Snapshot {
         original_position: 1,
     };
 
-    let graph = DependencyGraph::from_validated_edges([
-        (
-            CardEdgeType::Blocks,
-            LegacyEdge {
+    use kanban_core::EdgeBase;
+    use kanban_domain::{BlocksEdge, RelatesEdge, RelatesKind, Severity};
+    let graph = DependencyGraph::from_validated_per_kind_edges(
+        vec![],
+        vec![BlocksEdge {
+            base: EdgeBase {
                 source: card_id,
                 target: archived_card_inner_id,
-                direction: EdgeDirection::Directed,
-                weight: Some(1.5),
                 created_at: now,
                 archived_at: None,
             },
-        ),
-        (
-            CardEdgeType::RelatesTo,
-            LegacyEdge {
+            severity: Severity::default(),
+        }],
+        vec![RelatesEdge {
+            base: EdgeBase {
                 source: card_id,
                 target: archived_card_inner_id,
-                direction: EdgeDirection::Bidirectional,
-                weight: None,
                 created_at: now,
                 archived_at: Some(now),
             },
-        ),
-    ])
+            kind: RelatesKind::default(),
+        }],
+    )
     .expect("test fixture edges must validate");
 
     Snapshot {

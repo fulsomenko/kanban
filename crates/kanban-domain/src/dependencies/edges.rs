@@ -108,6 +108,9 @@ impl Edge for SpawnsEdge {
     fn unarchive(&mut self) {
         self.base.unarchive();
     }
+    fn from_endpoints(source: Uuid, target: Uuid) -> Self {
+        SpawnsEdge::new(source, target)
+    }
 }
 
 impl Edge for BlocksEdge {
@@ -129,6 +132,9 @@ impl Edge for BlocksEdge {
     fn unarchive(&mut self) {
         self.base.unarchive();
     }
+    fn from_endpoints(source: Uuid, target: Uuid) -> Self {
+        BlocksEdge::new(source, target, Severity::default())
+    }
 }
 
 impl Edge for RelatesEdge {
@@ -149,6 +155,9 @@ impl Edge for RelatesEdge {
     }
     fn unarchive(&mut self) {
         self.base.unarchive();
+    }
+    fn from_endpoints(source: Uuid, target: Uuid) -> Self {
+        RelatesEdge::new(source, target, RelatesKind::default())
     }
 }
 

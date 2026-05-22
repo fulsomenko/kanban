@@ -195,19 +195,38 @@ pub(super) fn edges_to_undo_commands<P>(
     predicate: P,
 ) -> Vec<Command>
 where
-    P: Fn(&kanban_core::LegacyEdge) -> bool,
+    P: Fn(CardEdgeType, Uuid, Uuid) -> bool,
 {
-    graph
-        .edges_by_kind()
-        .filter(|(_, edge)| predicate(edge))
-        .map(|(kind, edge)| {
-            Command::Dependency(DependencyCommand::AddEdge(AddEdge {
-                kind,
-                source: edge.source,
-                target: edge.target,
-            }))
-        })
-        .collect()
+    use kanban_core::Edge as _;
+    let mut out = Vec::new();
+    for e in graph.spawns_edges() {
+        if predicate(CardEdgeType::Spawns, e.source(), e.target()) {
+            out.push(Command::Dependency(DependencyCommand::AddEdge(AddEdge {
+                kind: CardEdgeType::Spawns,
+                source: e.source(),
+                target: e.target(),
+            })));
+        }
+    }
+    for e in graph.blocks_edges() {
+        if predicate(CardEdgeType::Blocks, e.source(), e.target()) {
+            out.push(Command::Dependency(DependencyCommand::AddEdge(AddEdge {
+                kind: CardEdgeType::Blocks,
+                source: e.source(),
+                target: e.target(),
+            })));
+        }
+    }
+    for e in graph.relates_edges() {
+        if predicate(CardEdgeType::RelatesTo, e.source(), e.target()) {
+            out.push(Command::Dependency(DependencyCommand::AddEdge(AddEdge {
+                kind: CardEdgeType::RelatesTo,
+                source: e.source(),
+                target: e.target(),
+            })));
+        }
+    }
+    out
 }
 
 /// Remove a dependency between two cards (kind-agnostic, tolerant).
@@ -254,7 +273,16 @@ impl RemoveDependencyCommand {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let graph = store.get_graph()?;
         let (a, b) = (self.source_id, self.target_id);
-        Ok(edges_to_undo_commands(&graph, |edge| edge.connects(a, b)))
+        // Replicate the legacy `Edge::connects` semantics inline:
+        // directed sub-graphs match exact `(source, target) == (a, b)`,
+        // the undirected sub-graph matches either ordering.
+        Ok(edges_to_undo_commands(&graph, |kind, s, t| {
+            if matches!(kind, CardEdgeType::RelatesTo) {
+                (s == a && t == b) || (s == b && t == a)
+            } else {
+                s == a && t == b
+            }
+        }))
     }
 }
 

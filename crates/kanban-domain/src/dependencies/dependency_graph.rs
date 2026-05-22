@@ -1,35 +1,35 @@
 use kanban_core::{
-    Cascadable, DagGraph, Directed, EdgeSet, Graph, GraphError, LegacyEdge, Undirected,
-    UndirectedGraph,
+    Cascadable, DagGraph, Directed, EdgeBase, EdgeSet, GraphError, Undirected, UndirectedGraph,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::edges::{BlocksEdge, RelatesEdge, SpawnsEdge};
 use super::CardEdgeType;
 use crate::error::DependencyError;
 use crate::{CardId, KanbanResult};
 
 /// Top-level container for all entity dependency graphs.
 ///
-/// Three discrete sub-graphs, each with its own structural rules:
+/// Three discrete sub-graphs, each with its own structural rules
+/// and its own concrete edge kind (carrying any per-kind metadata):
 ///
-/// - `parent_child`: directed acyclic, cycle + self-reference rejected
-/// - `blocks`: directed acyclic, cycle + self-reference rejected
-/// - `relates`: undirected, self-reference rejected (cycles permitted)
+/// - `parent_child: DagGraph<SpawnsEdge>` (no extra metadata today)
+/// - `blocks: DagGraph<BlocksEdge>` (carries [`Severity`])
+/// - `relates: UndirectedGraph<RelatesEdge>` (carries [`RelatesKind`])
 ///
 /// Cross-cutting operations (`archive_node`, `unarchive_node`,
 /// `remove_node`) cascade across all three. Per-edge-type convenience
-/// methods (`set_parent`, `set_block`, `relate`, etc.) delegate
-/// to the matching sub-graph and convert [`GraphError`] into the
-/// domain-level [`DependencyError`] / [`crate::KanbanError`].
+/// methods delegate to the matching sub-graph and convert
+/// [`GraphError`] into the domain-level [`DependencyError`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DependencyGraph {
     #[serde(default)]
-    pub(crate) parent_child: DagGraph,
+    pub(crate) parent_child: DagGraph<SpawnsEdge>,
     #[serde(default)]
-    pub(crate) blocks: DagGraph,
+    pub(crate) blocks: DagGraph<BlocksEdge>,
     #[serde(default)]
-    pub(crate) relates: UndirectedGraph,
+    pub(crate) relates: UndirectedGraph<RelatesEdge>,
 }
 
 impl DependencyGraph {
@@ -38,41 +38,33 @@ impl DependencyGraph {
     }
 
     /// Borrow each component graph as `&mut dyn Cascadable` for
-    /// node-level cascade operations (archive / unarchive / hard
-    /// remove + tolerant cross-cutting edge removal via the inherited
-    /// `Graph::remove_edge`). Order is `parent_child`, `blocks`,
-    /// `relates` — stable across callers. A new component graph only
-    /// needs to be added to this helper, not to every cascade method
-    /// below.
+    /// node-level cascade operations. Order is `parent_child`,
+    /// `blocks`, `relates`. A new component sub-graph only needs to
+    /// be added to this helper, not to every cascade method.
     fn cascadable_parts_mut(&mut self) -> [&mut dyn Cascadable; 3] {
         [&mut self.parent_child, &mut self.blocks, &mut self.relates]
     }
 
     /// Borrow each component graph as `&dyn EdgeSet` for read-only
-    /// edge-level queries (size, membership). Symmetric with
-    /// `cascadable_parts_mut`; lives separately because the read
-    /// surface has no business carrying mutation authority.
+    /// edge-level queries.
     fn edge_sets(&self) -> [&dyn EdgeSet; 3] {
         [&self.parent_child, &self.blocks, &self.relates]
     }
 
     // --- Cross-cutting node cascades (Cascadable surface) ---
 
-    /// Archive every edge involving `card` across all three sub-graphs.
     pub fn archive_node(&mut self, card: CardId) {
         for sg in self.cascadable_parts_mut() {
             sg.archive_node(card);
         }
     }
 
-    /// Unarchive every edge involving `card` across all three sub-graphs.
     pub fn unarchive_node(&mut self, card: CardId) {
         for sg in self.cascadable_parts_mut() {
             sg.unarchive_node(card);
         }
     }
 
-    /// Hard-remove every edge involving `card` across all three sub-graphs.
     pub fn remove_node(&mut self, card: CardId) {
         for sg in self.cascadable_parts_mut() {
             sg.remove_node(card);
@@ -81,83 +73,89 @@ impl DependencyGraph {
 
     // --- Cross-cutting edge aggregates (EdgeSet surface) ---
 
-    /// Total edge count across all three sub-graphs (active + archived).
     pub fn len(&self) -> usize {
         self.edge_sets().iter().map(|g| g.len()).sum()
     }
 
-    /// True iff every sub-graph is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Active edge count across all three sub-graphs.
     pub fn active_len(&self) -> usize {
         self.edge_sets().iter().map(|g| g.active_len()).sum()
     }
 
-    // --- Parent / child ---
+    // --- Parent / child (Spawns) ---
 
-    /// Add a `parent -> child` parent-of edge.
     pub fn set_parent(&mut self, child: CardId, parent: CardId) -> KanbanResult<()> {
-        self.parent_child.add_edge(parent, child).map_err(dep_err)
+        self.parent_child
+            .add_edge_with_metadata(SpawnsEdge::new(parent, child))
+            .map_err(dep_err)
     }
 
-    /// Remove the `parent -> child` parent-of edge.
     pub fn remove_parent(&mut self, child: CardId, parent: CardId) -> KanbanResult<()> {
+        // Use the structural `Graph::remove_edge` via the trait so the
+        // sub-graph picks the right matching semantics (directed for
+        // DAG sub-graphs).
+        use kanban_core::Graph as _;
         self.parent_child
             .remove_edge(parent, child)
             .map_err(dep_err)
     }
 
-    /// Direct children of `parent`.
     pub fn children(&self, parent: CardId) -> Vec<CardId> {
         self.parent_child.outgoing(parent)
     }
 
-    /// Direct parents of `child`.
     pub fn parents(&self, child: CardId) -> Vec<CardId> {
         self.parent_child.incoming(child)
     }
 
-    /// Transitive ancestors of `child`.
     pub fn ancestors(&self, child: CardId) -> Vec<CardId> {
         self.parent_child.ancestors(child)
     }
 
-    /// Transitive descendants of `parent`.
     pub fn descendants(&self, parent: CardId) -> Vec<CardId> {
         self.parent_child.descendants(parent)
     }
 
-    /// Count of direct children (for the `[N]` badge).
     pub fn child_count(&self, parent: CardId) -> usize {
         self.parent_child.outgoing(parent).len()
     }
 
     // --- Blocks ---
 
-    /// Add a `blocker -> blocked` blocks edge.
+    /// Add a `blocker -> blocked` edge with default
+    /// ([`Severity::Medium`]) severity.
     pub fn set_block(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
-        self.blocks.add_edge(blocker, blocked).map_err(dep_err)
+        self.set_block_with_severity(blocker, blocked, super::Severity::default())
     }
 
-    /// Remove the `blocker -> blocked` blocks edge.
+    /// Add a `blocker -> blocked` edge with an explicit severity.
+    pub fn set_block_with_severity(
+        &mut self,
+        blocker: CardId,
+        blocked: CardId,
+        severity: super::Severity,
+    ) -> KanbanResult<()> {
+        self.blocks
+            .add_edge_with_metadata(BlocksEdge::new(blocker, blocked, severity))
+            .map_err(dep_err)
+    }
+
     pub fn unblock(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
+        use kanban_core::Graph as _;
         self.blocks.remove_edge(blocker, blocked).map_err(dep_err)
     }
 
-    /// Cards `card` blocks (outgoing blocks edges).
     pub fn blocked(&self, card: CardId) -> Vec<CardId> {
         self.blocks.outgoing(card)
     }
 
-    /// Cards that block `card` (incoming blocks edges).
     pub fn blockers(&self, card: CardId) -> Vec<CardId> {
         self.blocks.incoming(card)
     }
 
-    /// True if every blocker of `card` is complete.
     pub fn can_start<F>(&self, card: CardId, is_complete: F) -> bool
     where
         F: Fn(CardId) -> bool,
@@ -167,48 +165,44 @@ impl DependencyGraph {
 
     // --- Relates ---
 
-    /// Add an undirected `a <-> b` relates edge.
+    /// Add an undirected `a <-> b` relates edge with default
+    /// ([`RelatesKind::General`]) kind.
     pub fn relate(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
-        self.relates.add_edge(a, b).map_err(dep_err)
+        self.relate_with_kind(a, b, super::RelatesKind::default())
     }
 
-    /// Remove the undirected `a <-> b` relates edge.
+    /// Add an undirected `a <-> b` relates edge with an explicit
+    /// sub-kind.
+    pub fn relate_with_kind(
+        &mut self,
+        a: CardId,
+        b: CardId,
+        kind: super::RelatesKind,
+    ) -> KanbanResult<()> {
+        self.relates
+            .add_edge_with_metadata(RelatesEdge::new(a, b, kind))
+            .map_err(dep_err)
+    }
+
     pub fn unrelate(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
+        use kanban_core::Graph as _;
         self.relates.remove_edge(a, b).map_err(dep_err)
     }
 
-    /// Cards related to `card` via any active relates edge.
     pub fn related(&self, card: CardId) -> Vec<CardId> {
         self.relates.neighbors(card)
     }
 
     /// True iff any edge between `a` and `b` exists in any sub-graph
-    /// (active or archived). Cross-cutting check across all three.
+    /// (active or archived).
     pub fn contains(&self, a: Uuid, b: Uuid) -> bool {
         self.edge_sets().iter().any(|g| g.contains(a, b))
     }
 
     /// Sever the single specific edge between `a` and `b` across all
-    /// three sub-graphs, in the orientation given by the caller.
-    ///
-    /// For the two directed sub-graphs (`parent_child`, `blocks`) only
-    /// the exact `a -> b` edge is removed; an existing `b -> a` edge
-    /// survives the call. For the undirected sub-graph (`relates`) the
-    /// edge is symmetric, so either query orientation removes it.
-    ///
-    /// Returns `true` iff at least one edge was removed across the
-    /// three sub-graphs — lets callers distinguish "this oriented edge
-    /// was disconnected" from "no such edge to remove" without needing
-    /// per-kind knowledge. Tolerant by design: missing edges are
-    /// silently ignored. Use the typed `remove_parent` / `unblock` /
-    /// `unrelate` methods when you want strict edge-not-found errors.
-    ///
-    /// Used primarily as the inverse of [`AddEdge`][crate::commands::AddEdge]:
-    /// undo replay sees the same `(a, b)` pair that the forward command
-    /// captured, so the orientation-specific semantic is what the
-    /// inverse needs. Callers wanting "strip every edge between two
-    /// nodes regardless of orientation" should walk
-    /// [`edges_by_kind`][Self::edges_by_kind] and call this twice.
+    /// three sub-graphs. For the two directed sub-graphs only the
+    /// exact `a -> b` orientation is removed; for the undirected
+    /// sub-graph either ordering removes the edge.
     pub fn disconnect(&mut self, a: Uuid, b: Uuid) -> bool {
         let mut any_removed = false;
         for sg in self.cascadable_parts_mut() {
@@ -220,79 +214,68 @@ impl DependencyGraph {
     }
 
     // --- Persistence helpers ---
-    //
-    // The two methods below are the public seam persistence backends
-    // use to round-trip edges without reaching into sub-graph internals.
-    // Callers stay layer-clean: they see `DependencyGraph` plus
-    // `CardEdgeType` and never touch `self.parent_child` / `self.blocks`
-    // / `self.relates` directly.
 
-    /// Construct a graph from `(kind, edge)` pairs, routing each edge to
-    /// the right sub-graph and running its structural invariants
-    /// (self-reference, DAG cycle) on the way in. A corrupted load
-    /// fails up front with the underlying [`DependencyError`] instead
-    /// of silently rehydrating an invariant-violating graph.
-    ///
-    /// Used by SQLite's `rows_to_graph` and by test fixtures that need
-    /// to materialise an already-existing graph state with original
-    /// `created_at` / `weight` / `archived_at` metadata preserved.
-    pub fn from_validated_edges<I>(edges: I) -> KanbanResult<Self>
-    where
-        I: IntoIterator<Item = (CardEdgeType, LegacyEdge)>,
-    {
+    /// Borrow the raw [`EdgeBase`] list for a given sub-graph as a
+    /// uniform read view. Callers needing per-kind metadata (severity,
+    /// kind) access the typed sub-graph directly via
+    /// `parent_child_edges` / `blocks_edges` / `relates_edges`.
+    pub fn edge_bases_of(&self, kind: CardEdgeType) -> Vec<EdgeBase> {
+        match kind {
+            CardEdgeType::Spawns => self
+                .parent_child
+                .edges()
+                .iter()
+                .map(|e| e.base.clone())
+                .collect(),
+            CardEdgeType::Blocks => self.blocks.edges().iter().map(|e| e.base.clone()).collect(),
+            CardEdgeType::RelatesTo => self
+                .relates
+                .edges()
+                .iter()
+                .map(|e| e.base.clone())
+                .collect(),
+        }
+    }
+
+    /// Per-kind raw edge accessors. Persistence backends and test
+    /// fixtures use these to round-trip metadata-bearing edges.
+    pub fn spawns_edges(&self) -> &[SpawnsEdge] {
+        self.parent_child.edges()
+    }
+    pub fn blocks_edges(&self) -> &[BlocksEdge] {
+        self.blocks.edges()
+    }
+    pub fn relates_edges(&self) -> &[RelatesEdge] {
+        self.relates.edges()
+    }
+
+    /// Construct a graph from per-kind edge vectors with structural
+    /// validation. Each sub-graph independently checks its
+    /// self-reference / cycle invariants on the way in; a corrupted
+    /// load fails up front instead of silently rehydrating an
+    /// invariant-violating graph.
+    pub fn from_validated_per_kind_edges(
+        spawns: Vec<SpawnsEdge>,
+        blocks: Vec<BlocksEdge>,
+        relates: Vec<RelatesEdge>,
+    ) -> KanbanResult<Self> {
         let mut graph = Self::new();
-        for (kind, edge) in edges {
-            match kind {
-                CardEdgeType::Spawns => graph
-                    .parent_child
-                    .add_edge_with_metadata(edge)
-                    .map_err(dep_err)?,
-                CardEdgeType::Blocks => {
-                    graph.blocks.add_edge_with_metadata(edge).map_err(dep_err)?
-                }
-                CardEdgeType::RelatesTo => graph
-                    .relates
-                    .add_edge_with_metadata(edge)
-                    .map_err(dep_err)?,
-            }
+        for edge in spawns {
+            graph
+                .parent_child
+                .add_edge_with_metadata(edge)
+                .map_err(dep_err)?;
+        }
+        for edge in blocks {
+            graph.blocks.add_edge_with_metadata(edge).map_err(dep_err)?;
+        }
+        for edge in relates {
+            graph
+                .relates
+                .add_edge_with_metadata(edge)
+                .map_err(dep_err)?;
         }
         Ok(graph)
-    }
-
-    /// Borrow the raw edge list for a given sub-graph (active +
-    /// archived). Persistence-shape access for callers that need to
-    /// walk one kind's edges without iterating the full graph; test
-    /// helpers also use this to assert specific kinds round-trip.
-    pub fn edges_of(&self, kind: CardEdgeType) -> &[LegacyEdge] {
-        match kind {
-            CardEdgeType::Spawns => self.parent_child.edges(),
-            CardEdgeType::Blocks => self.blocks.edges(),
-            CardEdgeType::RelatesTo => self.relates.edges(),
-        }
-    }
-
-    /// Iterate every edge in the graph paired with its
-    /// [`CardEdgeType`]. Order is `parent_child` → `blocks` → `relates`,
-    /// matching the field declaration order; within each sub-graph the
-    /// order is insertion. Lets persistence backends serialize the
-    /// graph without reaching past this type's surface.
-    pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &LegacyEdge)> + '_ {
-        self.parent_child
-            .edges()
-            .iter()
-            .map(|e| (CardEdgeType::Spawns, e))
-            .chain(
-                self.blocks
-                    .edges()
-                    .iter()
-                    .map(|e| (CardEdgeType::Blocks, e)),
-            )
-            .chain(
-                self.relates
-                    .edges()
-                    .iter()
-                    .map(|e| (CardEdgeType::RelatesTo, e)),
-            )
     }
 }
 
@@ -334,7 +317,7 @@ mod tests {
         assert_eq!(deserialized.len(), 0);
     }
 
-    // --- Parent/child convenience ---
+    // --- Parent/child (Spawns) ---
 
     #[test]
     fn test_set_parent_creates_parent_child_edge() {
@@ -416,7 +399,7 @@ mod tests {
         assert_eq!(g.child_count(parent), 2);
     }
 
-    // --- Blocks convenience ---
+    // --- Blocks ---
 
     #[test]
     fn test_add_blocks_creates_directed_edge() {
@@ -425,6 +408,26 @@ mod tests {
         g.set_block(a, b).unwrap();
         assert_eq!(g.blocked(a), vec![b]);
         assert_eq!(g.blockers(b), vec![a]);
+    }
+
+    #[test]
+    fn test_set_block_with_severity_preserves_metadata() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_block_with_severity(a, b, super::super::Severity::Critical)
+            .unwrap();
+        assert_eq!(
+            g.blocks_edges()[0].severity,
+            super::super::Severity::Critical
+        );
+    }
+
+    #[test]
+    fn test_set_block_default_is_medium_severity() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.set_block(a, b).unwrap();
+        assert_eq!(g.blocks_edges()[0].severity, super::super::Severity::Medium);
     }
 
     #[test]
@@ -453,7 +456,7 @@ mod tests {
         assert!(g.can_start(c, |_| true));
     }
 
-    // --- Relates convenience ---
+    // --- Relates ---
 
     #[test]
     fn test_add_relates_to_creates_bidirectional_edge() {
@@ -462,6 +465,29 @@ mod tests {
         g.relate(a, b).unwrap();
         assert_eq!(g.related(a), vec![b]);
         assert_eq!(g.related(b), vec![a]);
+    }
+
+    #[test]
+    fn test_relate_with_kind_preserves_metadata() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.relate_with_kind(a, b, super::super::RelatesKind::Duplicates)
+            .unwrap();
+        assert_eq!(
+            g.relates_edges()[0].kind,
+            super::super::RelatesKind::Duplicates
+        );
+    }
+
+    #[test]
+    fn test_relate_default_is_general_kind() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.relate(a, b).unwrap();
+        assert_eq!(
+            g.relates_edges()[0].kind,
+            super::super::RelatesKind::General
+        );
     }
 
     #[test]
@@ -537,24 +563,15 @@ mod tests {
         assert!(g.blocked(a).is_empty());
     }
 
-    /// `disconnect(a, b)` removes only the edge in the queried
-    /// orientation for directed sub-graphs. A `b -> a` edge in
-    /// `parent_child` or `blocks` survives a `disconnect(a, b)`
-    /// call. Pins the documented behaviour so the inverse-of-AddEdge
-    /// use case stays predictable, and guards against the cross-cutting
-    /// guarantee being silently extended into a both-orientations sweep.
     #[test]
     fn test_disconnect_preserves_opposite_orientation_edges_in_dag_subgraphs() {
         let (a, b, _) = ids();
         let mut g = DependencyGraph::new();
-        // b -> a in parent_child (b is the parent of a)
         g.set_parent(a, b).unwrap();
-        // disconnect with the opposite orientation
         assert!(
             !g.disconnect(a, b),
             "no a->b edge exists; nothing should be removed"
         );
-        // The b -> a edge must survive.
         assert_eq!(g.parents(a), vec![b]);
     }
 
