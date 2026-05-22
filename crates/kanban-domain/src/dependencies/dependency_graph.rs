@@ -24,11 +24,11 @@ use crate::{CardId, KanbanResult};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DependencyGraph {
     #[serde(default)]
-    pub(crate) parent_child: DagGraph<SpawnsEdge>,
+    parent_child: DagGraph<SpawnsEdge>,
     #[serde(default)]
-    pub(crate) blocks: DagGraph<BlocksEdge>,
+    blocks: DagGraph<BlocksEdge>,
     #[serde(default)]
-    pub(crate) relates: UndirectedGraph<RelatesEdge>,
+    relates: UndirectedGraph<RelatesEdge>,
 }
 
 impl DependencyGraph {
