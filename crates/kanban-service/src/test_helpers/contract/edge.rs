@@ -1,15 +1,22 @@
 use super::super::BackendFactory;
 use crate::KanbanContext;
 use kanban_core::{AppConfig, Edge, EdgeDirection};
-use kanban_domain::{CardEdgeType, CreateCardOptions, KanbanOperations, KanbanResult};
+use kanban_domain::{
+    CardEdgeType, CreateCardOptions, DependencyGraph, KanbanOperations, KanbanResult,
+};
 use tempfile::TempDir;
 
-/// Round-trip test helper: insert one edge of the given kind into the
-/// graph and persist. Edge type lives at the sub-graph layer so the
-/// kind is a separate parameter.
+/// Round-trip test helper: install a single edge into the graph
+/// through the validating constructor and persist.
 fn add_edge(ctx: &KanbanContext, kind: CardEdgeType, edge: Edge) {
-    let mut graph = ctx.data_store().get_graph().unwrap();
-    graph.insert_raw_edge(kind, edge);
+    let existing = ctx.data_store().get_graph().unwrap();
+    let mut pairs: Vec<(CardEdgeType, Edge)> = existing
+        .edges_by_kind()
+        .map(|(k, e)| (k, e.clone()))
+        .collect();
+    pairs.push((kind, edge));
+    let graph = DependencyGraph::from_validated_edges(pairs)
+        .expect("test fixture edges must validate");
     ctx.data_store().set_graph(graph).unwrap();
 }
 

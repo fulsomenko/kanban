@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
 use super::algorithms::would_create_cycle;
@@ -12,10 +12,28 @@ use super::traits::{Cascadable, Directed, EdgeSet, Graph};
 /// Rejects self-references and any edge whose insertion would create a
 /// cycle in the active-edge subgraph. Wraps an [`EdgeStore`] to inherit
 /// archive / unarchive semantics for soft-delete cascades.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+///
+/// `Deserialize` runs the DAG invariants against the active subset of
+/// loaded edges; a corrupted file with a cycle or self-reference fails
+/// to load up front rather than silently rehydrating into an
+/// invariant-violating state.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct DagGraph {
     #[serde(flatten)]
     store: EdgeStore,
+}
+
+impl<'de> Deserialize<'de> for DagGraph {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let store = EdgeStore::deserialize(deserializer)?;
+        let mut graph = DagGraph::default();
+        for edge in store.edges() {
+            graph
+                .add_edge_with_metadata(edge.clone())
+                .map_err(serde::de::Error::custom)?;
+        }
+        Ok(graph)
+    }
 }
 
 impl DagGraph {
@@ -46,10 +64,28 @@ impl DagGraph {
         self.store.edges()
     }
 
-    /// Insert a raw edge without DAG validation. Use only for
-    /// migrations and test fixtures.
-    pub fn insert_raw_edge(&mut self, edge: Edge) {
+    /// Add an edge while preserving caller-supplied metadata
+    /// (`created_at`, `weight`, `archived_at`).
+    ///
+    /// Runs the same self-reference and cycle invariants as the
+    /// trait's [`Graph::add_edge`]: self-references are rejected
+    /// always; cycles are rejected when the edge is active, ignored
+    /// when it is archived (archived edges are not part of the active
+    /// DAG and don't constrain new mutations). Load paths use this to
+    /// rehydrate stored edges and surface corrupt-DAG state as a
+    /// hard load failure.
+    pub fn add_edge_with_metadata(&mut self, edge: Edge) -> Result<(), GraphError> {
+        if edge.source == edge.target {
+            return Err(GraphError::SelfReference);
+        }
+        if edge.is_active() {
+            let adj = self.active_adjacency();
+            if would_create_cycle(&adj, edge.source, edge.target) {
+                return Err(GraphError::Cycle);
+            }
+        }
         self.store.add_edge(edge);
+        Ok(())
     }
 
     /// Transitive successors of `node` (descendants).
@@ -310,5 +346,62 @@ mod tests {
         g.add_edge(a, b).unwrap();
         g.archive_node(a);
         assert_eq!(g.add_edge(b, a), Ok(()));
+    }
+
+    #[test]
+    fn test_deserialize_rejects_cycle_in_active_edges() {
+        let (a, b, c) = ids();
+        let now = chrono::Utc::now();
+        let json = serde_json::json!({
+            "edges": [
+                {"source": a, "target": b, "direction": "Directed", "weight": null, "created_at": now, "archived_at": null},
+                {"source": b, "target": c, "direction": "Directed", "weight": null, "created_at": now, "archived_at": null},
+                {"source": c, "target": a, "direction": "Directed", "weight": null, "created_at": now, "archived_at": null},
+            ]
+        });
+        let result: Result<DagGraph, _> = serde_json::from_value(json);
+        let err = result.expect_err("a 3-cycle must fail to deserialize");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("cycle"),
+            "deserialize error should name the cycle invariant: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_rejects_self_reference() {
+        let a = Uuid::new_v4();
+        let now = chrono::Utc::now();
+        let json = serde_json::json!({
+            "edges": [
+                {"source": a, "target": a, "direction": "Directed", "weight": null, "created_at": now, "archived_at": null},
+            ]
+        });
+        let result: Result<DagGraph, _> = serde_json::from_value(json);
+        let err = result.expect_err("self-reference must fail to deserialize");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("self"),
+            "deserialize error should name the self-reference invariant: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_accepts_archived_edge_completing_cycle() {
+        // Archived edges don't participate in the active DAG, so a
+        // cycle that goes through an archived edge is loadable.
+        let (a, b, c) = ids();
+        let now = chrono::Utc::now();
+        let json = serde_json::json!({
+            "edges": [
+                {"source": a, "target": b, "direction": "Directed", "weight": null, "created_at": now, "archived_at": null},
+                {"source": b, "target": c, "direction": "Directed", "weight": null, "created_at": now, "archived_at": null},
+                {"source": c, "target": a, "direction": "Directed", "weight": null, "created_at": now, "archived_at": now},
+            ]
+        });
+        let graph: DagGraph = serde_json::from_value(json)
+            .expect("cycle through archived edge must be loadable");
+        assert_eq!(graph.len(), 3);
+        assert_eq!(graph.active_len(), 2);
     }
 }

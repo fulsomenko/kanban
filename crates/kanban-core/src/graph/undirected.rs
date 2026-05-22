@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
 use super::core::EdgeStore;
@@ -13,10 +13,27 @@ use super::traits::{Cascadable, EdgeSet, Graph, Undirected};
 /// `outgoing` / `incoming` distinction to ask for, and the type system
 /// will reject any caller that tries. Wraps an [`EdgeStore`] for archive
 /// parity with [`super::DagGraph`].
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+///
+/// `Deserialize` validates the self-reference invariant on every loaded
+/// edge so a corrupted file surfaces the breach at load time instead
+/// of silently rehydrating it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct UndirectedGraph {
     #[serde(flatten)]
     store: EdgeStore,
+}
+
+impl<'de> Deserialize<'de> for UndirectedGraph {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let store = EdgeStore::deserialize(deserializer)?;
+        let mut graph = UndirectedGraph::default();
+        for edge in store.edges() {
+            graph
+                .add_edge_with_metadata(edge.clone())
+                .map_err(serde::de::Error::custom)?;
+        }
+        Ok(graph)
+    }
 }
 
 impl UndirectedGraph {
@@ -44,10 +61,17 @@ impl UndirectedGraph {
         self.store.edges()
     }
 
-    /// Insert a raw edge without validation. Use only for migrations
-    /// and test fixtures.
-    pub fn insert_raw_edge(&mut self, edge: Edge) {
+    /// Add an edge while preserving caller-supplied metadata
+    /// (`created_at`, `weight`, `archived_at`). Rejects self-references
+    /// regardless of active/archived status. Load paths use this to
+    /// rehydrate stored edges and surface corrupt self-loops as a
+    /// hard load failure.
+    pub fn add_edge_with_metadata(&mut self, edge: Edge) -> Result<(), GraphError> {
+        if edge.source == edge.target {
+            return Err(GraphError::SelfReference);
+        }
         self.store.add_edge(edge);
+        Ok(())
     }
 }
 
@@ -226,5 +250,40 @@ mod tests {
         g.add_edge(b, c).unwrap();
         g.remove_node(b);
         assert_eq!(g.len(), 0);
+    }
+
+    #[test]
+    fn test_deserialize_rejects_self_reference() {
+        let a = Uuid::new_v4();
+        let now = chrono::Utc::now();
+        let json = serde_json::json!({
+            "edges": [
+                {"source": a, "target": a, "direction": "Bidirectional", "weight": null, "created_at": now, "archived_at": null},
+            ]
+        });
+        let result: Result<UndirectedGraph, _> = serde_json::from_value(json);
+        let err = result.expect_err("self-reference must fail to deserialize");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("self"),
+            "deserialize error should name the self-reference invariant: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_accepts_cycle() {
+        // Undirected graphs permit cycles by definition.
+        let (a, b, c) = ids();
+        let now = chrono::Utc::now();
+        let json = serde_json::json!({
+            "edges": [
+                {"source": a, "target": b, "direction": "Bidirectional", "weight": null, "created_at": now, "archived_at": null},
+                {"source": b, "target": c, "direction": "Bidirectional", "weight": null, "created_at": now, "archived_at": null},
+                {"source": c, "target": a, "direction": "Bidirectional", "weight": null, "created_at": now, "archived_at": null},
+            ]
+        });
+        let graph: UndirectedGraph =
+            serde_json::from_value(json).expect("undirected cycle must be loadable");
+        assert_eq!(graph.len(), 3);
     }
 }

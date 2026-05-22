@@ -1235,6 +1235,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "serde",
+ "serde_json",
  "thiserror 2.0.17",
  "uuid",
 ]

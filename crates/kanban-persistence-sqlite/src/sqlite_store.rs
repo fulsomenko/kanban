@@ -204,7 +204,7 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
 }
 
 fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    let mut graph = DependencyGraph::default();
+    let mut buf: Vec<(CardEdgeType, Edge)> = Vec::with_capacity(rows.len());
     for row in rows {
         let source_str: String = row.try_get("source_id").map_err(db_err)?;
         let target_str: String = row.try_get("target_id").map_err(db_err)?;
@@ -215,7 +215,7 @@ fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
         let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
 
         let edge_type: CardEdgeType = p_enum(&edge_type_str, "edge_type")?;
-        let untyped: Edge = Edge {
+        let edge: Edge = Edge {
             source: p_uuid(&source_str)?,
             target: p_uuid(&target_str)?,
             direction: p_enum(&direction_str, "edge direction")?,
@@ -224,11 +224,11 @@ fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
             archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
         };
 
-        // Route through the public DependencyGraph surface; persistence
-        // never touches sub-graph internals.
-        graph.insert_raw_edge(edge_type, untyped);
+        buf.push((edge_type, edge));
     }
-    Ok(graph)
+    // Route through the validating constructor — persistence never
+    // bypasses graph invariants and corrupt rows fail the load.
+    DependencyGraph::from_validated_edges(buf)
 }
 
 fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {

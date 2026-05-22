@@ -7,8 +7,8 @@ use kanban_domain::card::{CardPriority, CardStatus};
 use kanban_domain::sprint::SprintStatus;
 use kanban_domain::task_list_view::TaskListView;
 use kanban_domain::{
-    BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
-    KanbanOperations, KanbanResult,
+    BoardUpdate, CardEdgeType, CardUpdate, ColumnUpdate, CreateCardOptions, DependencyGraph,
+    FieldUpdate, KanbanOperations, KanbanResult,
 };
 use tempfile::TempDir;
 
@@ -280,40 +280,42 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
 
     let now = chrono::Utc::now();
     {
-        let mut graph = ctx.data_store().get_graph().unwrap();
-        graph.insert_raw_edge(
-            CardEdgeType::Blocks,
-            Edge {
-                source: card1.id,
-                target: card2.id,
-                direction: EdgeDirection::Directed,
-                weight: Some(1.0_f32),
-                created_at: now,
-                archived_at: None,
-            },
-        );
-        graph.insert_raw_edge(
-            CardEdgeType::RelatesTo,
-            Edge {
-                source: card1.id,
-                target: card3.id,
-                direction: EdgeDirection::Bidirectional,
-                weight: None,
-                created_at: now,
-                archived_at: Some(now),
-            },
-        );
-        graph.insert_raw_edge(
-            CardEdgeType::ParentOf,
-            Edge {
-                source: card2.id,
-                target: card3.id,
-                direction: EdgeDirection::Directed,
-                weight: Some(0.5_f32),
-                created_at: now,
-                archived_at: None,
-            },
-        );
+        let graph = DependencyGraph::from_validated_edges([
+            (
+                CardEdgeType::Blocks,
+                Edge {
+                    source: card1.id,
+                    target: card2.id,
+                    direction: EdgeDirection::Directed,
+                    weight: Some(1.0_f32),
+                    created_at: now,
+                    archived_at: None,
+                },
+            ),
+            (
+                CardEdgeType::RelatesTo,
+                Edge {
+                    source: card1.id,
+                    target: card3.id,
+                    direction: EdgeDirection::Bidirectional,
+                    weight: None,
+                    created_at: now,
+                    archived_at: Some(now),
+                },
+            ),
+            (
+                CardEdgeType::ParentOf,
+                Edge {
+                    source: card2.id,
+                    target: card3.id,
+                    direction: EdgeDirection::Directed,
+                    weight: Some(0.5_f32),
+                    created_at: now,
+                    archived_at: None,
+                },
+            ),
+        ])
+        .expect("test fixture edges must validate");
         ctx.data_store().set_graph(graph).unwrap();
     }
 

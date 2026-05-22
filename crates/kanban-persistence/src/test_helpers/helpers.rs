@@ -112,29 +112,31 @@ pub fn fully_populated_snapshot() -> Snapshot {
         original_position: 1,
     };
 
-    let mut graph = DependencyGraph::new();
-    graph.insert_raw_edge(
-        CardEdgeType::Blocks,
-        Edge {
-            source: card_id,
-            target: archived_card_inner_id,
-            direction: EdgeDirection::Directed,
-            weight: Some(1.5),
-            created_at: now,
-            archived_at: None,
-        },
-    );
-    graph.insert_raw_edge(
-        CardEdgeType::RelatesTo,
-        Edge {
-            source: card_id,
-            target: archived_card_inner_id,
-            direction: EdgeDirection::Bidirectional,
-            weight: None,
-            created_at: now,
-            archived_at: Some(now),
-        },
-    );
+    let graph = DependencyGraph::from_validated_edges([
+        (
+            CardEdgeType::Blocks,
+            Edge {
+                source: card_id,
+                target: archived_card_inner_id,
+                direction: EdgeDirection::Directed,
+                weight: Some(1.5),
+                created_at: now,
+                archived_at: None,
+            },
+        ),
+        (
+            CardEdgeType::RelatesTo,
+            Edge {
+                source: card_id,
+                target: archived_card_inner_id,
+                direction: EdgeDirection::Bidirectional,
+                weight: None,
+                created_at: now,
+                archived_at: Some(now),
+            },
+        ),
+    ])
+    .expect("test fixture edges must validate");
 
     Snapshot {
         boards: vec![board],

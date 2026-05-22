@@ -230,17 +230,36 @@ impl DependencyGraph {
     // `CardEdgeType` and never touch `self.parent_child` / `self.blocks`
     // / `self.relates` directly.
 
-    /// Insert a raw edge into the sub-graph indicated by `kind` without
-    /// structural validation. Intended for persistence-layer loaders
-    /// reading edges from a backing store — the data has already passed
-    /// validation when it was written, so re-running the cycle check on
-    /// re-load would double-pay for no benefit.
-    pub fn insert_raw_edge(&mut self, kind: CardEdgeType, edge: Edge) {
-        match kind {
-            CardEdgeType::ParentOf => self.parent_child.insert_raw_edge(edge),
-            CardEdgeType::Blocks => self.blocks.insert_raw_edge(edge),
-            CardEdgeType::RelatesTo => self.relates.insert_raw_edge(edge),
+    /// Construct a graph from `(kind, edge)` pairs, routing each edge to
+    /// the right sub-graph and running its structural invariants
+    /// (self-reference, DAG cycle) on the way in. A corrupted load
+    /// fails up front with the underlying [`DependencyError`] instead
+    /// of silently rehydrating an invariant-violating graph.
+    ///
+    /// Used by SQLite's `rows_to_graph` and by test fixtures that need
+    /// to materialise an already-existing graph state with original
+    /// `created_at` / `weight` / `archived_at` metadata preserved.
+    pub fn from_validated_edges<I>(edges: I) -> KanbanResult<Self>
+    where
+        I: IntoIterator<Item = (CardEdgeType, Edge)>,
+    {
+        let mut graph = Self::new();
+        for (kind, edge) in edges {
+            match kind {
+                CardEdgeType::ParentOf => graph
+                    .parent_child
+                    .add_edge_with_metadata(edge)
+                    .map_err(dep_err)?,
+                CardEdgeType::Blocks => {
+                    graph.blocks.add_edge_with_metadata(edge).map_err(dep_err)?
+                }
+                CardEdgeType::RelatesTo => graph
+                    .relates
+                    .add_edge_with_metadata(edge)
+                    .map_err(dep_err)?,
+            }
         }
+        Ok(graph)
     }
 
     /// Iterate every edge in the graph paired with its
