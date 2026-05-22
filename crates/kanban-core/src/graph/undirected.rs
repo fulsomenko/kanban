@@ -108,10 +108,7 @@ impl Graph for UndirectedGraph {
     }
 
     fn contains_edge(&self, from: Uuid, to: Uuid) -> bool {
-        self.store
-            .active_edges()
-            .iter()
-            .any(|e| e.connects(from, to))
+        self.store.active_edges().any(|e| e.connects(from, to))
     }
 }
 

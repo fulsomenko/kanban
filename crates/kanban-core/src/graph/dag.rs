@@ -164,28 +164,17 @@ impl Graph for DagGraph {
     }
 
     fn contains_edge(&self, from: Uuid, to: Uuid) -> bool {
-        self.store
-            .outgoing_active(from)
-            .iter()
-            .any(|e| e.target == to)
+        self.store.outgoing_active(from).any(|e| e.target == to)
     }
 }
 
 impl Directed for DagGraph {
     fn outgoing(&self, node: Uuid) -> Vec<Uuid> {
-        self.store
-            .outgoing_active(node)
-            .into_iter()
-            .map(|e| e.target)
-            .collect()
+        self.store.outgoing_active(node).map(|e| e.target).collect()
     }
 
     fn incoming(&self, node: Uuid) -> Vec<Uuid> {
-        self.store
-            .incoming_active(node)
-            .into_iter()
-            .map(|e| e.source)
-            .collect()
+        self.store.incoming_active(node).map(|e| e.source).collect()
     }
 }
 

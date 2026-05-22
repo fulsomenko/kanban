@@ -63,29 +63,27 @@ impl EdgeStore {
     }
 
     /// Get all outgoing edges from a node (where node is source)
-    pub fn outgoing(&self, node_id: Uuid) -> Vec<&Edge> {
-        self.edges.iter().filter(|e| e.source == node_id).collect()
+    pub fn outgoing(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
+        self.edges.iter().filter(move |e| e.source == node_id)
     }
 
     /// Get all incoming edges to a node (where node is target)
-    pub fn incoming(&self, node_id: Uuid) -> Vec<&Edge> {
-        self.edges.iter().filter(|e| e.target == node_id).collect()
+    pub fn incoming(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
+        self.edges.iter().filter(move |e| e.target == node_id)
     }
 
     /// Get all active outgoing edges from a node
-    pub fn outgoing_active(&self, node_id: Uuid) -> Vec<&Edge> {
+    pub fn outgoing_active(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
         self.edges
             .iter()
-            .filter(|e| e.source == node_id && e.is_active())
-            .collect()
+            .filter(move |e| e.source == node_id && e.is_active())
     }
 
     /// Get all active incoming edges to a node
-    pub fn incoming_active(&self, node_id: Uuid) -> Vec<&Edge> {
+    pub fn incoming_active(&self, node_id: Uuid) -> impl Iterator<Item = &Edge> {
         self.edges
             .iter()
-            .filter(|e| e.target == node_id && e.is_active())
-            .collect()
+            .filter(move |e| e.target == node_id && e.is_active())
     }
 
     /// Get all neighbor node IDs (connected nodes, handling bidirectional edges)
@@ -146,8 +144,8 @@ impl EdgeStore {
     }
 
     /// Get all active edges
-    pub fn active_edges(&self) -> Vec<&Edge> {
-        self.edges.iter().filter(|e| e.is_active()).collect()
+    pub fn active_edges(&self) -> impl Iterator<Item = &Edge> {
+        self.edges.iter().filter(|e| e.is_active())
     }
 
     /// Check if an edge exists between two nodes
@@ -291,10 +289,10 @@ mod tests {
         graph.add_edge(directed_edge(node_a, node_c));
         graph.add_edge(directed_edge(node_c, node_a));
 
-        assert_eq!(graph.outgoing(node_a).len(), 2);
-        assert_eq!(graph.incoming(node_a).len(), 1);
-        assert_eq!(graph.outgoing(node_b).len(), 0);
-        assert_eq!(graph.incoming(node_b).len(), 1);
+        assert_eq!(graph.outgoing(node_a).count(), 2);
+        assert_eq!(graph.incoming(node_a).count(), 1);
+        assert_eq!(graph.outgoing(node_b).count(), 0);
+        assert_eq!(graph.incoming(node_b).count(), 1);
     }
 
     #[test]
