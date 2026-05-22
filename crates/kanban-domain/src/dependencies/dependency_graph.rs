@@ -198,10 +198,27 @@ impl DependencyGraph {
         self.edge_sets().iter().any(|g| g.contains(a, b))
     }
 
-    /// Sever the single specific edge between `a` and `b` across all
-    /// three sub-graphs. For the two directed sub-graphs only the
-    /// exact `a -> b` orientation is removed; for the undirected
-    /// sub-graph either ordering removes the edge.
+    /// Cross-cutting, kind-agnostic sever: remove the `a -> b` edge
+    /// from every sub-graph that holds it. For the two directed
+    /// sub-graphs only the exact `a -> b` orientation is removed; for
+    /// the undirected sub-graph either ordering removes the edge.
+    ///
+    /// # CAUTION — picks every kind, not the one you might mean
+    ///
+    /// If `a` and `b` are connected by edges of multiple kinds
+    /// simultaneously (e.g. `a` is the parent of `b` AND `a` also
+    /// blocks `b`), this method removes BOTH. It's the right
+    /// semantic for the undo-replay path (`RemoveDependencyCommand`,
+    /// which must tolerate already-removed edges across any kind),
+    /// but the wrong one for a user-facing "remove this specific
+    /// relation" handler. For per-kind targeted removal use the kind
+    /// you mean explicitly:
+    ///
+    /// - `remove_parent(child, parent)` — parent/child only
+    /// - `unblock(blocker, blocked)`    — blocks only
+    /// - `unrelate(a, b)`               — relates only
+    ///
+    /// Returns true if any sub-graph held the edge.
     pub fn disconnect(&mut self, a: Uuid, b: Uuid) -> bool {
         let mut any_removed = false;
         for sg in self.cascadable_parts_mut() {
