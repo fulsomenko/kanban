@@ -63,7 +63,46 @@ impl Migrator {
                 }
                 // V3, V4, and V5 all share the pre-split graph schema; the
                 // split-graph transform is the only step that distinguishes them.
-                super::split_graph::migrate_to_v6_split_graph(path).await
+                //
+                // A `.v{N}.backup` is created before the split-graph step and
+                // removed on successful migration. V6 files cannot be opened by
+                // pre-V6 binaries, so this is the user's escape hatch if the
+                // upgrade has to be rolled back.
+                let backup_path = match from {
+                    FormatVersion::V3 => Some(path.with_extension("v3.backup")),
+                    FormatVersion::V4 => Some(path.with_extension("v4.backup")),
+                    FormatVersion::V5 => Some(path.with_extension("v5.backup")),
+                    _ => None,
+                };
+                if let Some(backup) = &backup_path {
+                    tokio::fs::copy(path, backup).await?;
+                    tracing::info!("Created pre-V6 backup at {}", backup.display());
+                }
+                let result = super::split_graph::migrate_to_v6_split_graph(path).await;
+                match (result, backup_path) {
+                    (Ok(()), Some(backup)) => {
+                        if let Err(e) = tokio::fs::remove_file(&backup).await {
+                            tracing::warn!(
+                                "Migration successful but failed to remove backup at {}: {}",
+                                backup.display(),
+                                e
+                            );
+                        } else {
+                            tracing::info!("Migration to V6 verified, backup removed");
+                        }
+                        Ok(())
+                    }
+                    (Ok(()), None) => Ok(()),
+                    (Err(e), Some(backup)) => {
+                        tracing::error!(
+                            "Split-graph migration failed: {}. Backup preserved at {}",
+                            e,
+                            backup.display()
+                        );
+                        Err(e)
+                    }
+                    (Err(e), None) => Err(e),
+                }
             }
             _ => Err(PersistenceError::Serialization(format!(
                 "Unsupported migration: {:?} -> {:?}",

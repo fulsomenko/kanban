@@ -36,7 +36,7 @@ use std::path::Path;
 
 /// Apply the split-graph migration to a JSON file in-place, atomic write.
 /// Output is V6.
-pub async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
+pub(crate) async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
     let content = tokio::fs::read_to_string(path).await?;
     let mut envelope: Value = serde_json::from_str(&content)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -45,9 +45,7 @@ pub async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
 
     let json_str = serde_json::to_string_pretty(&envelope)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-    let tmp_path = path.with_extension("tmp");
-    tokio::fs::write(&tmp_path, json_str.as_bytes()).await?;
-    tokio::fs::rename(&tmp_path, path).await?;
+    crate::atomic_writer::AtomicWriter::write_atomic(path, json_str.as_bytes()).await?;
     tracing::info!("Applied split-graph migration to {} (V6)", path.display());
     Ok(())
 }
@@ -59,7 +57,7 @@ pub async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<()> {
 /// would unconditionally overwrite the (split) graph with three empty
 /// sub-graph maps when no legacy `cards.edges` field exists — silent data
 /// loss for any caller that misinvokes it on a V6 file.
-pub fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceResult<()> {
+pub(crate) fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceResult<()> {
     // Idempotency guard: a V6 envelope has no legacy `cards.edges` to
     // split, and overwriting `data["graph"]` would wipe the edges
     // already in the split sub-graphs.
@@ -329,11 +327,15 @@ mod tests {
             }
         }));
         let err = transform_to_v6_split_graph_value(&mut env).unwrap_err();
-        let msg = format!("{err:?}");
-        assert!(
-            msg.contains("MysteryKind") && msg.to_lowercase().contains("unknown"),
-            "expected unknown edge_type error mentioning the offending kind, got: {msg}"
-        );
+        match err {
+            PersistenceError::Serialization(msg) => {
+                assert!(
+                    msg.contains("MysteryKind") && msg.to_lowercase().contains("unknown"),
+                    "expected unknown edge_type error mentioning the offending kind, got: {msg}"
+                );
+            }
+            other => panic!("expected PersistenceError::Serialization, got {other:?}"),
+        }
     }
 
     #[test]

@@ -106,9 +106,7 @@ fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
         .to_json_string()
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     let json_bytes = json_str.into_bytes();
-    let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, &json_bytes)?;
-    std::fs::rename(&tmp_path, path)?;
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
     let _ = std::fs::remove_file(&backup_path);
     tracing::info!("Migrated {} from V1 to V2 (sync)", path.display());
     Ok(json_bytes)
@@ -122,9 +120,7 @@ fn migrate_v2_to_v3_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
     let json_str = serde_json::to_string_pretty(&envelope)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     let json_bytes = json_str.into_bytes();
-    let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, &json_bytes)?;
-    std::fs::rename(&tmp_path, path)?;
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
     tracing::info!("Migrated {} from V2 to V3 (sync)", path.display());
     Ok(json_bytes)
 }
@@ -137,9 +133,7 @@ fn split_graph_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
     let json_str = serde_json::to_string_pretty(&envelope)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     let json_bytes = json_str.into_bytes();
-    let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, &json_bytes)?;
-    std::fs::rename(&tmp_path, path)?;
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
     tracing::info!("Applied split-graph migration to {} (sync)", path.display());
     Ok(json_bytes)
 }
@@ -224,9 +218,7 @@ impl JsonFileStore {
             self.path.display()
         );
         let bytes = Self::serialize_envelope(envelope)?;
-        let tmp_path = self.path.with_extension("tmp");
-        std::fs::write(&tmp_path, &bytes)?;
-        std::fs::rename(&tmp_path, &self.path)?;
+        AtomicWriter::write_atomic_sync(&self.path, &bytes)?;
         Ok(())
     }
 }

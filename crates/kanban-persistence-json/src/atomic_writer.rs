@@ -30,6 +30,18 @@ impl AtomicWriter {
         Ok(())
     }
 
+    /// Sync variant of [`write_atomic`]. Uses a unique random temp file
+    /// in the destination's parent directory so concurrent writers (or
+    /// stale `*.tmp` artefacts from other tooling) cannot collide.
+    pub fn write_atomic_sync(path: &Path, data: &[u8]) -> PersistenceResult<()> {
+        let parent = path.parent().unwrap_or_else(|| Path::new("."));
+        let temp_file = tempfile::NamedTempFile::new_in(parent)?;
+        let temp_path = temp_file.path().to_path_buf();
+        std::fs::write(&temp_path, data)?;
+        std::fs::rename(&temp_path, path)?;
+        Ok(())
+    }
+
     /// Read all data from a file
     pub async fn read_all(path: &Path) -> PersistenceResult<Vec<u8>> {
         let data = fs::read(path).await?;

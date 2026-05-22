@@ -15,7 +15,7 @@ use std::path::Path;
 /// created), the conflicting cards are renumbered above the current maximum
 /// rather than aborting. Cards whose `assigned_prefix` matches the board's
 /// canonical `card_prefix` always keep their original number.
-pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
+pub(crate) async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
     let content = tokio::fs::read_to_string(path).await?;
     let mut envelope: Value = serde_json::from_str(&content)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -24,16 +24,14 @@ pub async fn migrate_v2_to_v3(path: &Path) -> PersistenceResult<()> {
 
     let json_str = serde_json::to_string_pretty(&envelope)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-    let tmp_path = path.with_extension("tmp");
-    tokio::fs::write(&tmp_path, json_str.as_bytes()).await?;
-    tokio::fs::rename(&tmp_path, path).await?;
+    crate::atomic_writer::AtomicWriter::write_atomic(path, json_str.as_bytes()).await?;
     tracing::info!("Migrated {} from V2 to V3 format", path.display());
     Ok(())
 }
 
 /// Pure synchronous V2→V3 transformation on an already-parsed envelope value.
 /// Shared by both the async `migrate_v2_to_v3` and `JsonFileStore::load_sync`.
-pub fn transform_v2_to_v3_value(envelope: &mut Value) -> PersistenceResult<()> {
+pub(crate) fn transform_v2_to_v3_value(envelope: &mut Value) -> PersistenceResult<()> {
     let data = envelope
         .get_mut("data")
         .ok_or_else(|| PersistenceError::Serialization("missing 'data' field".into()))?;
