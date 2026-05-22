@@ -212,9 +212,11 @@ where
 
 /// Remove a dependency between two cards (kind-agnostic, tolerant).
 ///
-/// Severs every directed or undirected edge between `source_id` and
-/// `target_id` across all three sub-graphs via
-/// `DependencyGraph::disconnect`. Tolerant on miss — used as the
+/// Calls [`DependencyGraph::disconnect`] on `(source_id, target_id)`.
+/// For directed sub-graphs only the exact orientation is removed; an
+/// existing reverse-orientation edge survives. For the undirected
+/// sub-graph the edge is symmetric and the call removes it regardless
+/// of which endpoint is `source_id`. Tolerant on miss — used as the
 /// inverse of an [`AddEdge`] so undo replay succeeds even against an
 /// already-removed edge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,10 +245,12 @@ impl RemoveDependencyCommand {
         )
     }
 
-    /// Inverse: re-add every edge that connects (source_id, target_id).
-    /// `disconnect` strips ALL edges between the pair regardless of
-    /// kind, so the capture must walk the graph and remember each
-    /// edge's kind, then emit an [`AddEdge`] per captured edge.
+    /// Inverse: re-add every edge whose `(source, target)` matches the
+    /// orientation `(self.source_id, self.target_id)` (or the symmetric
+    /// pair for the undirected sub-graph). `disconnect` removes only
+    /// that specific oriented edge per directed sub-graph, so the
+    /// capture walks the graph and re-emits an [`AddEdge`] for each
+    /// edge `disconnect` would strip, preserving its kind.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let graph = store.get_graph()?;
         let (a, b) = (self.source_id, self.target_id);

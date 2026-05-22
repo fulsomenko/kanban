@@ -183,20 +183,35 @@ impl DependencyGraph {
 
     /// True iff any edge between `a` and `b` exists in any sub-graph
     /// (active or archived). Cross-cutting check across all three.
+    ///
+    /// Linear in total edge count: each sub-graph scans its own edge
+    /// list. For per-kind membership use the sub-graph's own
+    /// [`EdgeSet::contains`][kanban_core::EdgeSet::contains].
     pub fn contains(&self, a: Uuid, b: Uuid) -> bool {
         self.edge_sets().iter().any(|g| g.contains(a, b))
     }
 
-    /// Sever every directed or undirected edge between `a` and `b`
-    /// across all three sub-graphs. Returns `true` iff at least one
-    /// edge was removed — lets callers distinguish "the pair was
-    /// disconnected" from "no edge was there to remove" without
-    /// needing per-type knowledge.
+    /// Sever the single specific edge between `a` and `b` across all
+    /// three sub-graphs, in the orientation given by the caller.
     ///
-    /// Tolerant by design: missing edges are silently ignored. Use
-    /// the typed `remove_parent` / `unblock` / `unrelate`
-    /// methods when you want strict edge-not-found errors. Uses the
-    /// `Graph::remove_edge` inherited via `Cascadable`'s supertrait.
+    /// For the two directed sub-graphs (`parent_child`, `blocks`) only
+    /// the exact `a -> b` edge is removed; an existing `b -> a` edge
+    /// survives the call. For the undirected sub-graph (`relates`) the
+    /// edge is symmetric, so either query orientation removes it.
+    ///
+    /// Returns `true` iff at least one edge was removed across the
+    /// three sub-graphs — lets callers distinguish "this oriented edge
+    /// was disconnected" from "no such edge to remove" without needing
+    /// per-kind knowledge. Tolerant by design: missing edges are
+    /// silently ignored. Use the typed `remove_parent` / `unblock` /
+    /// `unrelate` methods when you want strict edge-not-found errors.
+    ///
+    /// Used primarily as the inverse of [`AddEdge`][crate::commands::AddEdge]:
+    /// undo replay sees the same `(a, b)` pair that the forward command
+    /// captured, so the orientation-specific semantic is what the
+    /// inverse needs. Callers wanting "strip every edge between two
+    /// nodes regardless of orientation" should walk
+    /// [`edges_by_kind`][Self::edges_by_kind] and call this twice.
     pub fn disconnect(&mut self, a: Uuid, b: Uuid) -> bool {
         let mut any_removed = false;
         for sg in self.cascadable_parts_mut() {
@@ -233,6 +248,11 @@ impl DependencyGraph {
     /// matching the field declaration order; within each sub-graph the
     /// order is insertion. Lets persistence backends serialize the
     /// graph without reaching past this type's surface.
+    ///
+    /// Walks every sub-graph end to end — linear in total edge count.
+    /// Intended for whole-graph serialisation and inverse-replay
+    /// helpers; for "does the graph have any edge involving X?" queries
+    /// use the per-kind sub-graph accessors instead.
     pub fn edges_by_kind(&self) -> impl Iterator<Item = (CardEdgeType, &Edge<()>)> + '_ {
         self.parent_child
             .edges()
@@ -278,13 +298,13 @@ mod tests {
     }
 
     #[test]
-    fn test_dependency_graph_creation() {
+    fn test_new_returns_empty_graph() {
         let graph = DependencyGraph::new();
         assert_eq!(graph.len(), 0);
     }
 
     #[test]
-    fn test_dependency_graph_serialization() {
+    fn test_default_graph_round_trips_through_serde() {
         let graph = DependencyGraph::new();
         let json = serde_json::to_string(&graph).unwrap();
         let deserialized: DependencyGraph = serde_json::from_str(&json).unwrap();
@@ -492,6 +512,36 @@ mod tests {
         assert!(g.disconnect(a, b));
         assert!(g.children(a).is_empty());
         assert!(g.blocked(a).is_empty());
+    }
+
+    /// `disconnect(a, b)` removes only the edge in the queried
+    /// orientation for directed sub-graphs. A `b -> a` edge in
+    /// `parent_child` or `blocks` survives a `disconnect(a, b)`
+    /// call. Pins the documented behaviour so the inverse-of-AddEdge
+    /// use case stays predictable, and guards against the cross-cutting
+    /// guarantee being silently extended into a both-orientations sweep.
+    #[test]
+    fn test_disconnect_preserves_opposite_orientation_edges_in_dag_subgraphs() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        // b -> a in parent_child (b is the parent of a)
+        g.set_parent(a, b).unwrap();
+        // disconnect with the opposite orientation
+        assert!(
+            !g.disconnect(a, b),
+            "no a->b edge exists; nothing should be removed"
+        );
+        // The b -> a edge must survive.
+        assert_eq!(g.parents(a), vec![b]);
+    }
+
+    #[test]
+    fn test_disconnect_removes_undirected_edge_in_either_query_orientation() {
+        let (a, b, _) = ids();
+        let mut g = DependencyGraph::new();
+        g.relate(a, b).unwrap();
+        assert!(g.disconnect(b, a), "undirected edges are symmetric");
+        assert!(g.related(a).is_empty());
     }
 
     #[test]
