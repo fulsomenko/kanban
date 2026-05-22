@@ -108,9 +108,9 @@ impl<E: Edge> EdgeSet for UndirectedGraph<E> {
     /// endpoints are `{a, b}` regardless of ordering. Aligned with
     /// `Graph::contains_edge`.
     fn contains(&self, a: E::NodeId, b: E::NodeId) -> bool {
-        self.store.active_edges().any(|e| {
-            (e.source() == a && e.target() == b) || (e.source() == b && e.target() == a)
-        })
+        self.store
+            .active_edges()
+            .any(|e| (e.source() == a && e.target() == b) || (e.source() == b && e.target() == a))
     }
     /// Symmetric any-state membership including archived edges.
     fn contains_archived(&self, a: E::NodeId, b: E::NodeId) -> bool {

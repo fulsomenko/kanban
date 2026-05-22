@@ -84,7 +84,11 @@ impl<E: Edge> DagGraph<E> {
             return Err(GraphError::SelfReference);
         }
         if edge.is_active() {
-            if self.store.outgoing_active(edge.source()).any(|e| e.target() == edge.target()) {
+            if self
+                .store
+                .outgoing_active(edge.source())
+                .any(|e| e.target() == edge.target())
+            {
                 return Err(GraphError::Duplicate);
             }
             let adj = self.store.adjacency_list();

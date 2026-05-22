@@ -92,9 +92,8 @@ impl<E: Edge> EdgeStore<E> {
     /// iff an active edge was removed.
     pub fn remove_directed_edge(&mut self, source: E::NodeId, target: E::NodeId) -> bool {
         let before = self.edges.len();
-        self.edges.retain(|e| {
-            !(e.is_active() && e.source() == source && e.target() == target)
-        });
+        self.edges
+            .retain(|e| !(e.is_active() && e.source() == source && e.target() == target));
         self.edges.len() < before
     }
 
@@ -106,8 +105,7 @@ impl<E: Edge> EdgeStore<E> {
         let before = self.edges.len();
         self.edges.retain(|e| {
             !(e.is_active()
-                && ((e.source() == a && e.target() == b)
-                    || (e.source() == b && e.target() == a)))
+                && ((e.source() == a && e.target() == b) || (e.source() == b && e.target() == a)))
         });
         self.edges.len() < before
     }
