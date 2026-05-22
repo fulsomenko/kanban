@@ -124,27 +124,48 @@ CREATE TABLE IF NOT EXISTS archived_cards (
     FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
--- Card dependency edges
--- No FK on source_id/target_id — edges are bulk-replaced on every save
--- (DELETE-all + re-INSERT). Both active and archived cards live in the
--- cards table, so a FK would be structurally valid but provides minimal
--- value given the bulk-replace strategy.
--- The CHECK constraint catches corrupt edge_type values at write time
--- rather than letting an unknown kind round-trip and bomb on the next
--- load via p_enum's deserialisation.
-CREATE TABLE IF NOT EXISTS card_edges (
+-- Card dependency edges: one table per kind.
+-- Splitting the single card_edges table into kind-specific tables
+-- mirrors the in-memory split (DagGraph<SpawnsEdge> /
+-- DagGraph<BlocksEdge> / UndirectedGraph<RelatesEdge>) and lets each
+-- table carry the metadata its kind actually needs without nullable
+-- catch-all columns. No FK on source_id/target_id — edges are
+-- bulk-replaced on every save (DELETE-all + re-INSERT).
+
+CREATE TABLE IF NOT EXISTS spawns_edges (
     source_id TEXT NOT NULL,
     target_id TEXT NOT NULL,
-    edge_type TEXT NOT NULL CHECK (edge_type IN ('Spawns', 'Blocks', 'RelatesTo')),
-    direction TEXT NOT NULL,
-    weight REAL,
     created_at TEXT NOT NULL,
     archived_at TEXT,
-    PRIMARY KEY (source_id, target_id, edge_type)
+    PRIMARY KEY (source_id, target_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_card_edges_source ON card_edges(source_id);
-CREATE INDEX IF NOT EXISTS idx_card_edges_target ON card_edges(target_id);
+CREATE TABLE IF NOT EXISTS blocks_edges (
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'Medium'
+        CHECK (severity IN ('Low', 'Medium', 'High', 'Critical')),
+    created_at TEXT NOT NULL,
+    archived_at TEXT,
+    PRIMARY KEY (source_id, target_id)
+);
+
+CREATE TABLE IF NOT EXISTS relates_edges (
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'General'
+        CHECK (kind IN ('General', 'Duplicates', 'MentionedIn')),
+    created_at TEXT NOT NULL,
+    archived_at TEXT,
+    PRIMARY KEY (source_id, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_spawns_edges_source ON spawns_edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_spawns_edges_target ON spawns_edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_edges_source ON blocks_edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_edges_target ON blocks_edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_relates_edges_source ON relates_edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_relates_edges_target ON relates_edges(target_id);
 
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_columns_board_id ON columns(board_id);

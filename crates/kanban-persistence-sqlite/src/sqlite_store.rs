@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
-    ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
-    Snapshot, Sprint, SprintLog,
+    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, KanbanResult, Snapshot,
+    Sprint, SprintLog,
 };
 use kanban_persistence::{
     PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
@@ -202,44 +202,19 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
     })
 }
 
-fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    use kanban_core::EdgeBase;
-    use kanban_domain::{BlocksEdge, RelatesEdge, RelatesKind, Severity, SpawnsEdge};
-    let mut spawns: Vec<SpawnsEdge> = Vec::new();
-    let mut blocks: Vec<BlocksEdge> = Vec::new();
-    let mut relates: Vec<RelatesEdge> = Vec::new();
-    for row in rows {
-        let source_str: String = row.try_get("source_id").map_err(db_err)?;
-        let target_str: String = row.try_get("target_id").map_err(db_err)?;
-        let edge_type_str: String = row.try_get("edge_type").map_err(db_err)?;
-        let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
-        let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
-        // direction + weight columns are legacy artefacts that
-        // the new per-kind structs do not carry; ignore them.
-
-        let edge_type: CardEdgeType = p_enum(&edge_type_str, "edge_type")?;
-        let base = EdgeBase {
-            source: p_uuid(&source_str)?,
-            target: p_uuid(&target_str)?,
-            created_at: p_dt(&created_at_str)?,
-            archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
-        };
-
-        match edge_type {
-            CardEdgeType::Spawns => spawns.push(SpawnsEdge { base }),
-            CardEdgeType::Blocks => blocks.push(BlocksEdge {
-                base,
-                severity: Severity::default(),
-            }),
-            CardEdgeType::RelatesTo => relates.push(RelatesEdge {
-                base,
-                kind: RelatesKind::default(),
-            }),
-        }
-    }
-    // Route through the validating constructor — persistence never
-    // bypasses graph invariants and corrupt rows fail the load.
-    DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
+/// Parse the four common edge columns (source / target / timestamps)
+/// shared by `spawns_edges`, `blocks_edges`, and `relates_edges`.
+fn row_to_edge_base(row: &SqliteRow) -> KanbanResult<kanban_core::EdgeBase> {
+    let source_str: String = row.try_get("source_id").map_err(db_err)?;
+    let target_str: String = row.try_get("target_id").map_err(db_err)?;
+    let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+    let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
+    Ok(kanban_core::EdgeBase {
+        source: p_uuid(&source_str)?,
+        target: p_uuid(&target_str)?,
+        created_at: p_dt(&created_at_str)?,
+        archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
+    })
 }
 
 fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
@@ -414,72 +389,34 @@ impl SqliteStore {
                 .map_err(db_err)?;
         }
 
-        Self::ensure_card_edges_check_constraint(pool).await?;
+        Self::drop_legacy_card_edges_if_present(pool).await?;
 
         Ok(())
     }
 
-    /// Rebuild `card_edges` so the table carries the current CHECK
-    /// constraint (Spawns, Blocks, RelatesTo) and any legacy
-    /// `'ParentOf'` rows are renamed to `'Spawns'` during the copy.
-    ///
-    /// Existing databases fall into three states:
-    /// - No CHECK at all (pre-CHECK schema): rows are `'ParentOf'`.
-    /// - CHECK with `'ParentOf'` (intermediate schema): rows are
-    ///   `'ParentOf'`.
-    /// - CHECK with `'Spawns'` (current schema): rows are `'Spawns'`.
-    ///
-    /// Detection: if the table's stored SQL already mentions
-    /// `'Spawns'`, we're done. Otherwise the rebuild handles both
-    /// pre-CHECK and intermediate states uniformly. The copy maps
-    /// `'ParentOf' → 'Spawns'` via a CASE so existing rows survive
-    /// the rename. SQLite can't `ALTER TABLE ... ADD CHECK`, so we
-    /// copy-rename.
-    async fn ensure_card_edges_check_constraint(pool: &Pool<Sqlite>) -> KanbanResult<()> {
-        let sql: Option<String> = sqlx::query_scalar(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_edges'",
+    /// Drop the pre-KAN-504 `card_edges` table (single table with an
+    /// `edge_type` column) if present. The per-kind `spawns_edges` /
+    /// `blocks_edges` / `relates_edges` tables created by SCHEMA
+    /// replace it; nothing of KAN-504's graph work is live so we
+    /// don't need to copy data forward — any rows in the legacy
+    /// table belong to a development-only database.
+    async fn drop_legacy_card_edges_if_present(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        let has_card_edges: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='card_edges'",
         )
-        .fetch_optional(pool)
+        .fetch_one(pool)
         .await
         .map_err(db_err)?;
-        let Some(sql) = sql else { return Ok(()) };
-        if sql.contains("CHECK") && sql.contains("Spawns") {
+        if !has_card_edges {
             return Ok(());
         }
         tracing::info!(
-            "rebuilding card_edges to add edge_type CHECK constraint and rename ParentOf to Spawns (one-time per database)"
+            "dropping legacy card_edges table (pre per-kind schema); per-kind tables take over"
         );
-        // Run the rebuild as a single multi-statement script. Splitting
-        // across multiple `.execute(pool)` calls let intermediate schema
-        // state become visible on different pool connections at
-        // different times, which surfaced as "table or index already
-        // exists" during the rename. The schema-initial CREATE
-        // statements (schema.sql) use exactly this single-script
-        // pattern.
         sqlx::raw_sql(
             "DROP INDEX IF EXISTS idx_card_edges_source;
              DROP INDEX IF EXISTS idx_card_edges_target;
-             CREATE TABLE card_edges_new (
-                source_id TEXT NOT NULL,
-                target_id TEXT NOT NULL,
-                edge_type TEXT NOT NULL CHECK (edge_type IN ('Spawns', 'Blocks', 'RelatesTo')),
-                direction TEXT NOT NULL,
-                weight REAL,
-                created_at TEXT NOT NULL,
-                archived_at TEXT,
-                PRIMARY KEY (source_id, target_id, edge_type)
-             );
-             INSERT INTO card_edges_new
-                (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-             SELECT source_id, target_id,
-                    CASE WHEN edge_type = 'ParentOf' THEN 'Spawns' ELSE edge_type END,
-                    direction, weight, created_at, archived_at
-             FROM card_edges
-             WHERE edge_type IN ('ParentOf', 'Spawns', 'Blocks', 'RelatesTo');
-             DROP TABLE card_edges;
-             ALTER TABLE card_edges_new RENAME TO card_edges;
-             CREATE INDEX idx_card_edges_source ON card_edges(source_id);
-             CREATE INDEX idx_card_edges_target ON card_edges(target_id);",
+             DROP TABLE IF EXISTS card_edges;",
         )
         .execute(pool)
         .await
@@ -830,14 +767,53 @@ impl SqliteStore {
     async fn get_graph_with_conn(
         conn: &mut sqlx::SqliteConnection,
     ) -> KanbanResult<DependencyGraph> {
-        let rows = sqlx::query(
-            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
-             FROM card_edges",
+        use kanban_core::EdgeBase;
+        use kanban_domain::{BlocksEdge, RelatesEdge, SpawnsEdge};
+
+        let mut spawns: Vec<SpawnsEdge> = Vec::new();
+        for row in
+            sqlx::query("SELECT source_id, target_id, created_at, archived_at FROM spawns_edges")
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(db_err)?
+        {
+            spawns.push(SpawnsEdge {
+                base: row_to_edge_base(&row)?,
+            });
+        }
+
+        let mut blocks: Vec<BlocksEdge> = Vec::new();
+        for row in sqlx::query(
+            "SELECT source_id, target_id, severity, created_at, archived_at FROM blocks_edges",
         )
         .fetch_all(&mut *conn)
         .await
-        .map_err(db_err)?;
-        rows_to_graph(&rows)
+        .map_err(db_err)?
+        {
+            let severity_str: String = row.try_get("severity").map_err(db_err)?;
+            blocks.push(BlocksEdge {
+                base: row_to_edge_base(&row)?,
+                severity: p_enum(&severity_str, "severity")?,
+            });
+        }
+
+        let mut relates: Vec<RelatesEdge> = Vec::new();
+        for row in sqlx::query(
+            "SELECT source_id, target_id, kind, created_at, archived_at FROM relates_edges",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db_err)?
+        {
+            let kind_str: String = row.try_get("kind").map_err(db_err)?;
+            relates.push(RelatesEdge {
+                base: row_to_edge_base(&row)?,
+                kind: p_enum(&kind_str, "relates kind")?,
+            });
+        }
+
+        let _ = EdgeBase::new; // keep import in scope for symmetry; suppress unused
+        DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
     }
 
     async fn modify_graph_async(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
@@ -853,28 +829,29 @@ impl SqliteStore {
         conn: &mut sqlx::SqliteConnection,
         graph: &DependencyGraph,
     ) -> KanbanResult<()> {
-        sqlx::query("DELETE FROM card_edges")
+        use kanban_core::Edge as _;
+
+        sqlx::query("DELETE FROM spawns_edges")
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM blocks_edges")
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM relates_edges")
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
 
-        // Walk each typed sub-graph and write rows tagged with the
-        // matching kind. The temporary `direction` / `weight` columns
-        // on the legacy single-table schema get hardcoded fillers —
-        // step 11 splits this into per-kind tables that drop those
-        // columns entirely.
-        use kanban_core::Edge as _;
         for e in graph.spawns_edges() {
             sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO spawns_edges
+                    (source_id, target_id, created_at, archived_at)
+                 VALUES (?, ?, ?, ?)",
             )
             .bind(e.source().to_string())
             .bind(e.target().to_string())
-            .bind(ser_enum(&CardEdgeType::Spawns, "edge_type")?)
-            .bind("Directed")
-            .bind::<Option<f64>>(None)
             .bind(fmt_dt(&e.created_at()))
             .bind(opt_dt(&e.archived_at()))
             .execute(&mut *conn)
@@ -883,15 +860,13 @@ impl SqliteStore {
         }
         for e in graph.blocks_edges() {
             sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO blocks_edges
+                    (source_id, target_id, severity, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?)",
             )
             .bind(e.source().to_string())
             .bind(e.target().to_string())
-            .bind(ser_enum(&CardEdgeType::Blocks, "edge_type")?)
-            .bind("Directed")
-            .bind::<Option<f64>>(None)
+            .bind(ser_enum(&e.severity, "severity")?)
             .bind(fmt_dt(&e.created_at()))
             .bind(opt_dt(&e.archived_at()))
             .execute(&mut *conn)
@@ -900,15 +875,13 @@ impl SqliteStore {
         }
         for e in graph.relates_edges() {
             sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO relates_edges
+                    (source_id, target_id, kind, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?)",
             )
             .bind(e.source().to_string())
             .bind(e.target().to_string())
-            .bind(ser_enum(&CardEdgeType::RelatesTo, "edge_type")?)
-            .bind("Bidirectional")
-            .bind::<Option<f64>>(None)
+            .bind(ser_enum(&e.kind, "relates kind")?)
             .bind(fmt_dt(&e.created_at()))
             .bind(opt_dt(&e.archived_at()))
             .execute(&mut *conn)
@@ -951,7 +924,15 @@ impl SqliteStore {
             .await
             .map_err(db_err)?;
 
-        sqlx::query("DELETE FROM card_edges")
+        sqlx::query("DELETE FROM spawns_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM blocks_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM relates_edges")
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
@@ -1133,14 +1114,8 @@ impl SqliteStore {
     }
 
     async fn get_graph_async(&self) -> KanbanResult<DependencyGraph> {
-        let rows = sqlx::query(
-            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
-             FROM card_edges",
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(db_err)?;
-        rows_to_graph(&rows)
+        let mut conn = self.pool.acquire().await.map_err(db_err)?;
+        Self::get_graph_with_conn(&mut conn).await
     }
 
     async fn write_column_with_conn(
@@ -1870,38 +1845,80 @@ mod tests {
         });
     }
 
-    /// Existing databases that pre-date the Spawns rename have rows
-    /// with edge_type='ParentOf'. The migration step that rebuilds
-    /// card_edges to add the new CHECK constraint must also rename
-    /// those rows to 'Spawns', otherwise the next save (which uses
-    /// ser_enum to write 'Spawns') would coexist with stale 'ParentOf'
-    /// rows that then violate the new CHECK on any further mutation.
-    ///
-    /// Drives the test through the public open path twice: first to
-    /// create a clean database, then we hand-rewrite the card_edges
-    /// table to the legacy shape (drop CHECK, swap rows back to
-    /// 'ParentOf'), then re-open to verify the migration upgrades it.
-    /// Reusing SqliteStore::open for the setup avoids the schema-mismatch
-    /// pitfalls of a from-scratch CREATE TABLE in the test.
+    /// Per-kind tables hard-reject metadata outside their respective
+    /// CHECK constraints. Pin the constraint via a direct insert
+    /// attempt so any future schema relaxation has to choose
+    /// whether to drop or update this test.
     #[test]
-    fn test_open_migrates_legacy_parent_of_rows_to_spawns() {
+    fn test_blocks_edges_rejects_unknown_severity() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("check.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let insert = sqlx::query(
+                "INSERT INTO blocks_edges
+                    (source_id, target_id, severity, created_at, archived_at)
+                 VALUES (?, ?, 'Catastrophic', ?, NULL)",
+            )
+            .bind(uuid::Uuid::nil().to_string())
+            .bind(uuid::Uuid::from_u128(0x42).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await;
+            assert!(
+                insert.is_err(),
+                "CHECK on severity must reject 'Catastrophic'; got {:?}",
+                insert
+            );
+        });
+    }
+
+    #[test]
+    fn test_relates_edges_rejects_unknown_kind() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("check_relates.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let insert = sqlx::query(
+                "INSERT INTO relates_edges
+                    (source_id, target_id, kind, created_at, archived_at)
+                 VALUES (?, ?, 'Unknown', ?, NULL)",
+            )
+            .bind(uuid::Uuid::nil().to_string())
+            .bind(uuid::Uuid::from_u128(0x42).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await;
+            assert!(insert.is_err());
+        });
+    }
+
+    /// SqliteStore::open drops the pre-KAN-504 `card_edges` table on
+    /// first encounter so the per-kind tables can take over.
+    /// Pre-KAN-504 graph work is not live anywhere, so the data on
+    /// such a table is dev-only and the drop is safe.
+    #[test]
+    fn test_open_drops_legacy_card_edges_table() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("legacy.sqlite3");
         let rt = make_rt();
-
         rt.block_on(async {
-            // First open creates the database via schema.sql with the
-            // new CHECK constraint and the Spawns variant.
-            let store = SqliteStore::open(&path).await.unwrap();
-
-            // Downgrade card_edges to the pre-Spawns shape: a table
-            // without CHECK, containing a single 'ParentOf' row. This
-            // simulates a database created before the rename landed.
+            // Pre-seed the legacy table by direct sqlx access without
+            // going through SqliteStore::open (the open path would
+            // drop it before we could inspect).
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    sqlx::sqlite::SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
             sqlx::raw_sql(
-                "DROP INDEX IF EXISTS idx_card_edges_source;
-                 DROP INDEX IF EXISTS idx_card_edges_target;
-                 DROP TABLE card_edges;
-                 CREATE TABLE card_edges (
+                "CREATE TABLE card_edges (
                     source_id TEXT NOT NULL,
                     target_id TEXT NOT NULL,
                     edge_type TEXT NOT NULL,
@@ -1910,53 +1927,33 @@ mod tests {
                     created_at TEXT NOT NULL,
                     archived_at TEXT,
                     PRIMARY KEY (source_id, target_id, edge_type)
-                 );",
+                )",
             )
-            .execute(store.pool())
+            .execute(&pool)
             .await
             .unwrap();
-            sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, 'ParentOf', 'Directed', NULL, ?, NULL)",
-            )
-            .bind(uuid::Uuid::nil().to_string())
-            .bind(uuid::Uuid::from_u128(0x42).to_string())
-            .bind(chrono::Utc::now().to_rfc3339())
-            .execute(store.pool())
-            .await
-            .unwrap();
-            drop(store);
+            drop(pool);
 
-            // Re-opening must rebuild the table and rename the row.
+            // Opening triggers the drop + per-kind table creation.
             let store = SqliteStore::open(&path).await.unwrap();
+            let has_card_edges: bool = sqlx::query_scalar(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='card_edges'",
+            )
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+            assert!(!has_card_edges, "legacy card_edges table must be dropped");
 
-            let kind: String = sqlx::query_scalar("SELECT edge_type FROM card_edges LIMIT 1")
+            for table in ["spawns_edges", "blocks_edges", "relates_edges"] {
+                let has: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='{}'",
+                    table
+                ))
                 .fetch_one(store.pool())
                 .await
                 .unwrap();
-            assert_eq!(
-                kind, "Spawns",
-                "legacy 'ParentOf' row must rename to 'Spawns'"
-            );
-
-            // The new CHECK constraint must now reject any attempt to
-            // write a legacy 'ParentOf' value.
-            let insert_legacy = sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, 'ParentOf', 'Directed', NULL, ?, NULL)",
-            )
-            .bind(uuid::Uuid::from_u128(0x100).to_string())
-            .bind(uuid::Uuid::from_u128(0x200).to_string())
-            .bind(chrono::Utc::now().to_rfc3339())
-            .execute(store.pool())
-            .await;
-            assert!(
-                insert_legacy.is_err(),
-                "post-migration CHECK should reject 'ParentOf'; got {:?}",
-                insert_legacy
-            );
+                assert!(has, "{table} must exist after open");
+            }
         });
     }
 
