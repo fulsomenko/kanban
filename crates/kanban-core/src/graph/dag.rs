@@ -368,6 +368,31 @@ mod tests {
         );
     }
 
+    /// The graph machinery is parameterised over the `Edge::NodeId`
+    /// associated type, not pinned to `Uuid`. This test pins the
+    /// abstraction unlock by instantiating a `DagGraph` over an edge
+    /// whose endpoints are `u32` rather than `Uuid` and exercising
+    /// cycle / reachability over it. If the unlock ever regresses
+    /// (e.g. someone re-hardcodes `Uuid` in algorithms.rs or
+    /// EdgeStore), this test fails to compile.
+    #[test]
+    fn test_dag_graph_works_with_non_uuid_node_id() {
+        use crate::graph::edge::EdgeBase;
+        let mut g: DagGraph<EdgeBase<u32>> = DagGraph::new();
+        g.add_edge_with_metadata(EdgeBase::new(1u32, 2u32)).unwrap();
+        g.add_edge_with_metadata(EdgeBase::new(2u32, 3u32)).unwrap();
+        assert_eq!(
+            g.add_edge_with_metadata(EdgeBase::new(3u32, 1u32)),
+            Err(GraphError::Cycle),
+            "cycle detection works over u32 node ids"
+        );
+        assert_eq!(g.outgoing(1), vec![2u32]);
+        assert_eq!(g.incoming(3), vec![2u32]);
+        let mut desc = g.descendants(1);
+        desc.sort();
+        assert_eq!(desc, vec![2u32, 3u32]);
+    }
+
     #[test]
     fn test_deserialize_accepts_archived_edge_completing_cycle() {
         let (a, b, c) = ids();

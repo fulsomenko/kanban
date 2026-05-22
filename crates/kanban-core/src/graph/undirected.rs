@@ -266,6 +266,25 @@ mod tests {
         );
     }
 
+    /// Companion to `dag.rs::test_dag_graph_works_with_non_uuid_node_id`:
+    /// the undirected graph is also fully generic over `Edge::NodeId`.
+    /// Pinned to catch regressions if anything in the algorithms or
+    /// the store ever re-hardcodes `Uuid`.
+    #[test]
+    fn test_undirected_graph_works_with_non_uuid_node_id() {
+        let mut g: UndirectedGraph<EdgeBase<u32>> = UndirectedGraph::new();
+        g.add_edge_with_metadata(EdgeBase::new(1u32, 2u32)).unwrap();
+        g.add_edge_with_metadata(EdgeBase::new(2u32, 3u32)).unwrap();
+        // Cycle permitted on undirected.
+        g.add_edge_with_metadata(EdgeBase::new(3u32, 1u32)).unwrap();
+        assert_eq!(g.neighbors(1).len(), 2);
+        assert!(g.contains_edge(1, 2));
+        assert!(
+            g.contains_edge(2, 1),
+            "symmetric containment over u32 nodes"
+        );
+    }
+
     #[test]
     fn test_deserialize_accepts_cycle() {
         let (a, b, c) = ids();
