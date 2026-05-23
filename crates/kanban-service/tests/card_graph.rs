@@ -92,7 +92,7 @@ fn remove_by_kind(
     match kind {
         CardEdgeType::Spawns => ctx.detach_child(a, b),
         CardEdgeType::Blocks => ctx.unblock(a, b),
-        CardEdgeType::RelatesTo => ctx.unrelate(a, b),
+        CardEdgeType::RelatesTo => ctx.dissociate(a, b),
     }
 }
 fn list_from_by_kind(

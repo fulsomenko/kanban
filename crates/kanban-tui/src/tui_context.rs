@@ -416,8 +416,8 @@ impl GraphOperations for TuiContext {
         let r = self.inner.relate(a, b, kind);
         self.with_flush(r)
     }
-    fn unrelate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
-        let r = self.inner.unrelate(a, b);
+    fn dissociate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+        let r = self.inner.dissociate(a, b);
         self.with_flush(r)
     }
     fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {

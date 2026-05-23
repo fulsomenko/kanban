@@ -339,8 +339,8 @@ impl GraphOperations for McpContext {
     fn relate(&mut self, a: Uuid, b: Uuid, kind: kanban_domain::RelatesKind) -> KanbanResult<()> {
         self.inner.relate(a, b, kind)
     }
-    fn unrelate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
-        self.inner.unrelate(a, b)
+    fn dissociate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+        self.inner.dissociate(a, b)
     }
     fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_related_to(card)

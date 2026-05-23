@@ -82,7 +82,7 @@ pub trait GraphOperations {
     fn relate(&mut self, a: Uuid, b: Uuid, kind: RelatesKind) -> KanbanResult<()>;
 
     /// Remove the undirected `a <-> b` RelatesTo edge.
-    fn unrelate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()>;
+    fn dissociate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()>;
 
     /// Cards related to `card` via any active relates edge.
     fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>>;
@@ -133,7 +133,7 @@ mod tests {
             fn relate(&mut self, _: Uuid, _: Uuid, _: RelatesKind) -> KanbanResult<()> {
                 Ok(())
             }
-            fn unrelate(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
+            fn dissociate(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
                 Ok(())
             }
             fn list_related_to(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
@@ -190,7 +190,7 @@ mod tests {
             fn relate(&mut self, _: Uuid, _: Uuid, _: RelatesKind) -> KanbanResult<()> {
                 Ok(())
             }
-            fn unrelate(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
+            fn dissociate(&mut self, _: Uuid, _: Uuid) -> KanbanResult<()> {
                 Ok(())
             }
             fn list_related_to(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {

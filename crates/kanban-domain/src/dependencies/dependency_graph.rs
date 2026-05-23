@@ -188,7 +188,7 @@ impl DependencyGraph {
             .map_err(dep_err)
     }
 
-    pub fn unrelate(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
+    pub fn dissociate(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {
         use kanban_core::Graph as _;
         self.relates.remove_edge(a, b).map_err(dep_err)
     }

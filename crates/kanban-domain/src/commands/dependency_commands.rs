@@ -307,7 +307,7 @@ impl RemoveRelates {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let (source, target, tolerate) = (self.source, self.target, self.tolerate_missing);
         context.store.modify_graph(Box::new(move |graph| {
-            match graph.unrelate(source, target) {
+            match graph.dissociate(source, target) {
                 Ok(()) => Ok(()),
                 Err(e) if tolerate && e.is_edge_not_found() => Ok(()),
                 Err(e) => Err(e),

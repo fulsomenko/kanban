@@ -1424,7 +1424,7 @@ impl GraphOperations for KanbanContext {
         ))])
     }
 
-    fn unrelate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+    fn dissociate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
         self.require_card_exists(a)?;
         self.require_card_exists(b)?;
         self.execute(vec![Command::Dependency(DependencyCommand::RemoveRelates(
