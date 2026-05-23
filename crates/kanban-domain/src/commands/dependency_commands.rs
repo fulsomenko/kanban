@@ -611,6 +611,121 @@ mod tests {
         }
     }
 
+    /// Inverse round-trip across every Severity variant. A single-variant
+    /// test (Critical above) doesn't catch the case where the impl
+    /// silently casts or defaults a non-Default variant. Parameterised
+    /// over Low / Medium / High / Critical — if any variant gets dropped
+    /// the test fails on that variant.
+    #[test]
+    fn test_remove_blocks_inverse_preserves_severity_across_all_variants() {
+        for severity in [
+            Severity::Low,
+            Severity::Medium,
+            Severity::High,
+            Severity::Critical,
+        ] {
+            let tc = TestContext::new();
+            let blocker = Uuid::new_v4();
+            let blocked = Uuid::new_v4();
+            {
+                let mut graph = tc.store.get_graph().unwrap();
+                graph
+                    .set_block_with_severity(blocker, blocked, severity)
+                    .unwrap();
+                tc.store.set_graph(graph).unwrap();
+            }
+            let cmd = RemoveBlocks {
+                source: blocker,
+                target: blocked,
+                tolerate_missing: false,
+            };
+            let inverse = cmd.capture_inverse(&tc.store).unwrap();
+            match &inverse[0] {
+                Command::Dependency(DependencyCommand::AddBlocks(a)) => {
+                    assert_eq!(
+                        a.severity, severity,
+                        "severity {severity:?} must round-trip through capture_inverse"
+                    );
+                }
+                other => panic!("expected AddBlocks inverse for {severity:?}, got {other:?}"),
+            }
+        }
+    }
+
+    /// Same shape for RelatesKind. The undirected sub-graph means
+    /// orientation matching also matters — see the dedicated test
+    /// below.
+    #[test]
+    fn test_remove_relates_inverse_preserves_kind_across_all_variants() {
+        for kind in [
+            RelatesKind::General,
+            RelatesKind::Duplicates,
+            RelatesKind::MentionedIn,
+        ] {
+            let tc = TestContext::new();
+            let a = Uuid::new_v4();
+            let b = Uuid::new_v4();
+            {
+                let mut graph = tc.store.get_graph().unwrap();
+                graph.relate_with_kind(a, b, kind).unwrap();
+                tc.store.set_graph(graph).unwrap();
+            }
+            let cmd = RemoveRelates {
+                source: a,
+                target: b,
+                tolerate_missing: false,
+            };
+            let inverse = cmd.capture_inverse(&tc.store).unwrap();
+            match &inverse[0] {
+                Command::Dependency(DependencyCommand::AddRelates(a)) => {
+                    assert_eq!(
+                        a.kind, kind,
+                        "kind {kind:?} must round-trip through capture_inverse"
+                    );
+                }
+                other => panic!("expected AddRelates inverse for {kind:?}, got {other:?}"),
+            }
+        }
+    }
+
+    /// RelatesEdge is undirected: if the user added with (a, b) but
+    /// removes with (b, a), `RemoveRelates::capture_inverse` must still
+    /// find the original edge and recover its kind. The impl uses
+    /// either-orientation matching for exactly this reason — pinning
+    /// the property protects it from a silent regression to
+    /// directional-only matching.
+    #[test]
+    fn test_remove_relates_inverse_finds_edge_in_reversed_orientation() {
+        let tc = TestContext::new();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        {
+            let mut graph = tc.store.get_graph().unwrap();
+            // Edge added in (a, b) orientation
+            graph
+                .relate_with_kind(a, b, RelatesKind::MentionedIn)
+                .unwrap();
+            tc.store.set_graph(graph).unwrap();
+        }
+        // Remove issued in (b, a) orientation
+        let cmd = RemoveRelates {
+            source: b,
+            target: a,
+            tolerate_missing: false,
+        };
+        let inverse = cmd.capture_inverse(&tc.store).unwrap();
+        match &inverse[0] {
+            Command::Dependency(DependencyCommand::AddRelates(restored)) => {
+                assert_eq!(
+                    restored.kind,
+                    RelatesKind::MentionedIn,
+                    "reversed-orientation remove must still recover the original kind"
+                );
+            }
+            other => panic!("expected AddRelates inverse, got {other:?}"),
+        }
+    }
+
     /// Per-kind inverse: an AddSpawns undoes via a tolerant RemoveSpawns,
     /// not a kind-agnostic Remove. A `[AddSpawns(a,b), AddBlocks(a,b)]`
     /// batch's reverse-order undo now leaves each forward independently
