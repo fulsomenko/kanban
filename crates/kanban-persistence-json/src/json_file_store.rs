@@ -58,10 +58,7 @@ impl JsonEnvelope {
     pub fn new(data: serde_json::Value) -> Self {
         Self {
             version: 2,
-            metadata: PersistenceMetadata {
-                instance_id: Uuid::new_v4(),
-                saved_at: chrono::Utc::now(),
-            },
+            metadata: PersistenceMetadata::new(Uuid::new_v4()),
             data,
         }
     }

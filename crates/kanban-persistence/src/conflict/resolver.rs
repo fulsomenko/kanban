@@ -50,11 +50,15 @@ mod tests {
         let local = PersistenceMetadata {
             instance_id: Uuid::new_v4(),
             saved_at: now,
+            writer_version: None,
+            writer_commit: None,
         };
 
         let external = PersistenceMetadata {
             instance_id: Uuid::new_v4(),
             saved_at: later,
+            writer_version: None,
+            writer_commit: None,
         };
 
         assert!(resolver.should_use_external(&local, &external));
@@ -69,11 +73,15 @@ mod tests {
         let local = PersistenceMetadata {
             instance_id: Uuid::new_v4(),
             saved_at: now,
+            writer_version: None,
+            writer_commit: None,
         };
 
         let external = PersistenceMetadata {
             instance_id: Uuid::new_v4(),
             saved_at: earlier,
+            writer_version: None,
+            writer_commit: None,
         };
 
         assert!(!resolver.should_use_external(&local, &external));
@@ -88,11 +96,15 @@ mod tests {
         let local = PersistenceMetadata {
             instance_id: id,
             saved_at: now,
+            writer_version: None,
+            writer_commit: None,
         };
 
         let external = PersistenceMetadata {
             instance_id: id,
             saved_at: now,
+            writer_version: None,
+            writer_commit: None,
         };
 
         // Equal timestamps -> use local
