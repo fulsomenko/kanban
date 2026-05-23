@@ -152,6 +152,7 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
         .horizontal_margin(1)
         .constraints([
             Constraint::Length(rows.len() as u16),
+            Constraint::Length(1), // blank row between diagnostics and log sections
             Constraint::Min(0),
             Constraint::Length(2),
         ])
@@ -167,9 +168,12 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
             } else {
                 Style::default()
             };
+            // Leading space on the label so the row content aligns with the
+            // "Log entries" title below (the title carries its own leading
+            // space inside the border).
             Line::from(vec![
                 Span::styled(
-                    format!("{:<10}", row.label),
+                    format!(" {:<10}", row.label),
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
@@ -192,8 +196,8 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ));
-    let log_inner = log_block.inner(chunks[1]);
-    frame.render_widget(log_block, chunks[1]);
+    let log_inner = log_block.inner(chunks[2]);
+    frame.render_widget(log_block, chunks[2]);
 
     let viewport_height = log_inner.height as usize;
     let total_entries = total;
@@ -240,7 +244,7 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
             .fg(Color::DarkGray)
             .add_modifier(Modifier::ITALIC),
     )));
-    frame.render_widget(Paragraph::new(footer_lines), chunks[2]);
+    frame.render_widget(Paragraph::new(footer_lines), chunks[3]);
 }
 
 #[cfg(test)]
