@@ -295,9 +295,9 @@ Per-kind dependency commands routed through the command bus. Each variant has a 
 
 ```rust
 pub enum DependencyCommand {
-    AddSpawns(AddSpawns),         // parent -> child
-    AddBlocks(AddBlocks),         // blocker -> blocked, with Severity
-    AddRelates(AddRelates),       // a <-> b, with RelatesKind
+    AddSpawns(AddSpawns),         // parent -> child; as_archived flag for cascade-undo
+    AddBlocks(AddBlocks),         // blocker -> blocked, with Severity; as_archived flag
+    AddRelates(AddRelates),       // a <-> b, with RelatesKind; as_archived flag
     RemoveSpawns(RemoveSpawns),   // tolerate_missing flag for inverse replay
     RemoveBlocks(RemoveBlocks),   // tolerate_missing flag for inverse replay
     RemoveRelates(RemoveRelates), // tolerate_missing flag for inverse replay
@@ -308,6 +308,11 @@ pub enum DependencyCommand {
 `CreateSubcard` is atomic create-card-and-link-as-subcard — genuinely different from the edge commands because it touches the board (card counter), the card store (new card), and the graph (parent edge) in one step. Its inverse is `DeleteCard`, which is polymorphic over live / archived and strips incident edges in the same pass.
 
 The previously kind-agnostic `RemoveDependencyCommand` was removed; each `Add*` now captures a per-kind `Remove*` inverse with `tolerate_missing = true`, so a `[AddSpawns(a,b), AddBlocks(a,b)]` batch undoes each kind independently instead of having the first inverse wipe both.
+
+Both `Add*` and `Remove*` carry per-paradigm flags with `#[serde(default)]` so legacy command-log entries replay unchanged:
+
+- **`tolerate_missing: bool`** on `Remove*` — swallows `EdgeNotFound` during inverse replay so undo succeeds against an already-removed edge. User-initiated paths set this `false` (strict); inverse-capture sets it `true`.
+- **`as_archived: bool`** on `Add*` — inserts the edge already in the archived state. Used by cascade-undo (`DeleteCard` / `DeleteCardEdges`) to preserve the active/archived split across delete/undo cycles. User-initiated paths leave this `false` (edges land active); `edges_to_undo_commands` sets it from `!e.is_active()` per restored edge so archived incident edges restore as archived instead of silently reviving to active.
 
 ---
 
