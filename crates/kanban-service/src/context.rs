@@ -1333,7 +1333,7 @@ impl KanbanContext {
 }
 
 impl GraphOperations for KanbanContext {
-    fn spawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+    fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
         self.require_card_exists(parent)?;
         for child in &children {
             self.require_card_exists(*child)?;
@@ -1350,7 +1350,7 @@ impl GraphOperations for KanbanContext {
         self.execute(commands)
     }
 
-    fn unspawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+    fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
         self.require_card_exists(parent)?;
         for child in &children {
             self.require_card_exists(*child)?;

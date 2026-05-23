@@ -37,21 +37,21 @@ pub trait GraphOperations {
     /// Attach every `child` in `children` to `parent` atomically.
     /// Rolls back the full batch on any failure (cycle, self-ref,
     /// unknown card).
-    fn spawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
+    fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
 
     /// Detach every `child` in `children` from `parent` atomically.
     /// Rolls back the full batch on any failure.
-    fn unspawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
+    fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
 
-    /// Singular convenience: forwards to [`spawn_children`] with a
+    /// Singular convenience: forwards to [`attach_children`] with a
     /// one-element batch. The atomic primitive is the plural.
-    fn spawn_child(&mut self, parent: Uuid, child: Uuid) -> KanbanResult<()> {
-        self.spawn_children(parent, vec![child])
+    fn attach_child(&mut self, parent: Uuid, child: Uuid) -> KanbanResult<()> {
+        self.attach_children(parent, vec![child])
     }
 
-    /// Singular convenience: forwards to [`unspawn_children`].
-    fn unspawn_child(&mut self, parent: Uuid, child: Uuid) -> KanbanResult<()> {
-        self.unspawn_children(parent, vec![child])
+    /// Singular convenience: forwards to [`detach_children`].
+    fn detach_child(&mut self, parent: Uuid, child: Uuid) -> KanbanResult<()> {
+        self.detach_children(parent, vec![child])
     }
 
     /// List direct children of `parent`.
@@ -106,10 +106,10 @@ mod tests {
     fn trait_does_not_require_kanban_operations_supertrait() {
         struct GraphOnly;
         impl GraphOperations for GraphOnly {
-            fn spawn_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
+            fn attach_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
                 Ok(())
             }
-            fn unspawn_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
+            fn detach_children(&mut self, _: Uuid, _: Vec<Uuid>) -> KanbanResult<()> {
                 Ok(())
             }
             fn list_children_of(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
@@ -143,30 +143,30 @@ mod tests {
         let mut g = GraphOnly;
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
-        g.spawn_child(a, b).unwrap();
+        g.attach_child(a, b).unwrap();
         g.block(a, b, Severity::High).unwrap();
         g.relate(a, b, RelatesKind::Duplicates).unwrap();
     }
 
-    /// The singular `spawn_child` is a default method on the trait
-    /// that forwards to `spawn_children(parent, vec![child])`. This
+    /// The singular `attach_child` is a default method on the trait
+    /// that forwards to `attach_children(parent, vec![child])`. This
     /// pins the composition direction (singular → plural) so any
     /// future implementor that overrides the singular cannot
-    /// silently bypass the atomic batch path. Same for `unspawn_child`.
+    /// silently bypass the atomic batch path. Same for `detach_child`.
     #[test]
-    fn test_spawn_child_default_routes_through_spawn_children() {
+    fn test_attach_child_default_routes_through_attach_children() {
         use std::cell::RefCell;
         struct Recorder {
-            spawn_calls: RefCell<Vec<(Uuid, Vec<Uuid>)>>,
-            unspawn_calls: RefCell<Vec<(Uuid, Vec<Uuid>)>>,
+            attach_calls: RefCell<Vec<(Uuid, Vec<Uuid>)>>,
+            detach_calls: RefCell<Vec<(Uuid, Vec<Uuid>)>>,
         }
         impl GraphOperations for Recorder {
-            fn spawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-                self.spawn_calls.borrow_mut().push((parent, children));
+            fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+                self.attach_calls.borrow_mut().push((parent, children));
                 Ok(())
             }
-            fn unspawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-                self.unspawn_calls.borrow_mut().push((parent, children));
+            fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+                self.detach_calls.borrow_mut().push((parent, children));
                 Ok(())
             }
             fn list_children_of(&self, _: Uuid) -> KanbanResult<Vec<Uuid>> {
@@ -198,22 +198,22 @@ mod tests {
             }
         }
         let mut r = Recorder {
-            spawn_calls: RefCell::new(Vec::new()),
-            unspawn_calls: RefCell::new(Vec::new()),
+            attach_calls: RefCell::new(Vec::new()),
+            detach_calls: RefCell::new(Vec::new()),
         };
         let parent = Uuid::new_v4();
         let child = Uuid::new_v4();
-        r.spawn_child(parent, child).unwrap();
-        r.unspawn_child(parent, child).unwrap();
+        r.attach_child(parent, child).unwrap();
+        r.detach_child(parent, child).unwrap();
         assert_eq!(
-            r.spawn_calls.borrow().as_slice(),
+            r.attach_calls.borrow().as_slice(),
             &[(parent, vec![child])],
-            "spawn_child must route through spawn_children with vec![child]"
+            "attach_child must route through attach_children with vec![child]"
         );
         assert_eq!(
-            r.unspawn_calls.borrow().as_slice(),
+            r.detach_calls.borrow().as_slice(),
             &[(parent, vec![child])],
-            "unspawn_child must route through unspawn_children with vec![child]"
+            "detach_child must route through detach_children with vec![child]"
         );
     }
 }

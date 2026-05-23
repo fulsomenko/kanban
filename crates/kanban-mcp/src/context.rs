@@ -307,11 +307,11 @@ impl KanbanOperations for McpContext {
 }
 
 impl GraphOperations for McpContext {
-    fn spawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        self.inner.spawn_children(parent, children)
+    fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.inner.attach_children(parent, children)
     }
-    fn unspawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        self.inner.unspawn_children(parent, children)
+    fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.inner.detach_children(parent, children)
     }
     fn list_children_of(&self, parent: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_children_of(parent)

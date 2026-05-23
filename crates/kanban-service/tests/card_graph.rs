@@ -78,7 +78,7 @@ fn add_by_kind(
     kind: CardEdgeType,
 ) -> kanban_domain::KanbanResult<()> {
     match kind {
-        CardEdgeType::Spawns => ctx.spawn_child(a, b),
+        CardEdgeType::Spawns => ctx.attach_child(a, b),
         CardEdgeType::Blocks => ctx.block(a, b, kanban_domain::Severity::default()),
         CardEdgeType::RelatesTo => ctx.relate(a, b, kanban_domain::RelatesKind::default()),
     }
@@ -90,7 +90,7 @@ fn remove_by_kind(
     kind: CardEdgeType,
 ) -> kanban_domain::KanbanResult<()> {
     match kind {
-        CardEdgeType::Spawns => ctx.unspawn_child(a, b),
+        CardEdgeType::Spawns => ctx.detach_child(a, b),
         CardEdgeType::Blocks => ctx.unblock(a, b),
         CardEdgeType::RelatesTo => ctx.unrelate(a, b),
     }
@@ -387,7 +387,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
 
-                ctx.spawn_child(parent_id, child_id).unwrap();
+                ctx.attach_child(parent_id, child_id).unwrap();
 
                 let children = ctx.list_children_of(parent_id).unwrap();
                 assert_eq!(children.len(), 1);
@@ -403,7 +403,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
 
-                ctx.spawn_child(parent_id, child_id).unwrap();
+                ctx.attach_child(parent_id, child_id).unwrap();
 
                 let convenience: Vec<uuid::Uuid> = ctx.list_parents_of(child_id).unwrap();
                 let primitive: Vec<uuid::Uuid> =
@@ -423,7 +423,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
 
-                ctx.spawn_child(parent_on_a, child_on_b).unwrap();
+                ctx.attach_child(parent_on_a, child_on_b).unwrap();
 
                 let children = ctx.list_children_of(parent_on_a).unwrap();
                 assert_eq!(children, vec![child_on_b], "child visible from parent side");
@@ -437,7 +437,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
 
-                ctx.spawn_child(parent_on_a, child_on_b).unwrap();
+                ctx.attach_child(parent_on_a, child_on_b).unwrap();
                 ctx.save().await.unwrap();
 
                 // Re-read graph from the backend rather than the in-memory
@@ -559,8 +559,8 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
 
-                ctx.spawn_child(parent_on_a, child_on_b).unwrap();
-                ctx.unspawn_child(parent_on_a, child_on_b).unwrap();
+                ctx.attach_child(parent_on_a, child_on_b).unwrap();
+                ctx.detach_child(parent_on_a, child_on_b).unwrap();
 
                 assert!(ctx.list_children_of(parent_on_a).unwrap().is_empty());
                 assert!(ctx.list_parents_of(child_on_b).unwrap().is_empty());
@@ -579,7 +579,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
-                ctx.spawn_children(parent_id, vec![c1, c2]).unwrap();
+                ctx.attach_children(parent_id, vec![c1, c2]).unwrap();
 
                 let mut children = ctx.list_children_of(parent_id).unwrap();
                 children.sort();
@@ -594,14 +594,14 @@ macro_rules! card_graph_tests {
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
                 // Seed parent->c1->c2 so closing parent into c2 cycles.
-                ctx.spawn_child(parent_id, c1).unwrap();
-                ctx.spawn_child(c1, c2).unwrap();
+                ctx.attach_child(parent_id, c1).unwrap();
+                ctx.attach_child(c1, c2).unwrap();
 
                 // Batch: attach c1 AND parent as children of c2.
                 // First would succeed in isolation (c1 already child of c2);
                 // second would create cycle parent->c1->c2->parent.
                 let err = ctx
-                    .spawn_children(c2, vec![c1, parent_id])
+                    .attach_children(c2, vec![c1, parent_id])
                     .expect_err("batch must fail on cycle");
                 assert!(err.is_cycle_detected(), "expected cycle, got {err:?}");
 
@@ -624,7 +624,7 @@ macro_rules! card_graph_tests {
                 let phantom = uuid::Uuid::new_v4();
 
                 let err = ctx
-                    .spawn_children(parent_id, vec![c1, phantom])
+                    .attach_children(parent_id, vec![c1, phantom])
                     .expect_err("batch must fail when any child is unknown");
                 assert!(err.is_not_found(), "expected NotFound, got {err:?}");
                 assert!(
@@ -644,8 +644,8 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
-                ctx.spawn_children(parent_id, vec![c1, c2]).unwrap();
-                ctx.unspawn_children(parent_id, vec![c1, c2]).unwrap();
+                ctx.attach_children(parent_id, vec![c1, c2]).unwrap();
+                ctx.detach_children(parent_id, vec![c1, c2]).unwrap();
 
                 assert!(ctx.list_children_of(parent_id).unwrap().is_empty());
             }
@@ -656,10 +656,10 @@ macro_rules! card_graph_tests {
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
                 // Only c1 is attached; c2 is not.
-                ctx.spawn_child(parent_id, c1).unwrap();
+                ctx.attach_child(parent_id, c1).unwrap();
 
                 let err = ctx
-                    .unspawn_children(parent_id, vec![c1, c2])
+                    .detach_children(parent_id, vec![c1, c2])
                     .expect_err("batch must fail when any edge is missing");
                 assert!(
                     err.is_edge_not_found(),
@@ -698,7 +698,7 @@ async fn open_ctx_at_path(backend: Arc<dyn KanbanBackend>) -> KanbanContext {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_spawn_children_batch_failure_preserves_on_disk_state_json_reopen() {
+async fn test_attach_children_batch_failure_preserves_on_disk_state_json_reopen() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("test.json");
 
@@ -715,13 +715,13 @@ async fn test_spawn_children_batch_failure_preserves_on_disk_state_json_reopen()
         c2 = b;
 
         // Seed parent -> c1 -> c2 so closing parent into c2 cycles.
-        ctx.spawn_child(parent_id, c1).unwrap();
-        ctx.spawn_child(c1, c2).unwrap();
+        ctx.attach_child(parent_id, c1).unwrap();
+        ctx.attach_child(c1, c2).unwrap();
         ctx.save().await.unwrap();
 
         // Batch with mid-list cycle: must fail and roll back.
         let err = ctx
-            .spawn_children(c2, vec![c1, parent_id])
+            .attach_children(c2, vec![c1, parent_id])
             .expect_err("batch must fail on cycle");
         assert!(err.is_cycle_detected());
 
@@ -752,7 +752,7 @@ async fn test_spawn_children_batch_failure_preserves_on_disk_state_json_reopen()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_spawn_children_batch_failure_preserves_on_disk_state_sqlite_reopen() {
+async fn test_attach_children_batch_failure_preserves_on_disk_state_sqlite_reopen() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("test.sqlite");
     let path_str = path.to_str().unwrap().to_string();
@@ -769,12 +769,12 @@ async fn test_spawn_children_batch_failure_preserves_on_disk_state_sqlite_reopen
         c1 = a;
         c2 = b;
 
-        ctx.spawn_child(parent_id, c1).unwrap();
-        ctx.spawn_child(c1, c2).unwrap();
+        ctx.attach_child(parent_id, c1).unwrap();
+        ctx.attach_child(c1, c2).unwrap();
         ctx.save().await.unwrap();
 
         let err = ctx
-            .spawn_children(c2, vec![c1, parent_id])
+            .attach_children(c2, vec![c1, parent_id])
             .expect_err("batch must fail on cycle");
         assert!(err.is_cycle_detected());
 

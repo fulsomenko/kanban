@@ -1237,7 +1237,7 @@ impl KanbanMcpServer {
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
             let child_id = ctx.resolve_card_id(&req.child)?;
             let parent_id = ctx.resolve_card_id(&req.parent)?;
-            ctx.spawn_child(parent_id, child_id)
+            ctx.attach_child(parent_id, child_id)
                 .map_err(|e| mcp_enrich_add_error(e, &parent_raw, &child_raw))?;
             Ok((child_id, parent_id))
         })
@@ -1258,7 +1258,7 @@ impl KanbanMcpServer {
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
             let child_id = ctx.resolve_card_id(&req.child)?;
             let parent_id = ctx.resolve_card_id(&req.parent)?;
-            ctx.unspawn_child(parent_id, child_id)
+            ctx.detach_child(parent_id, child_id)
                 .map_err(|e| mcp_enrich_remove_error(e, &parent_raw, &child_raw))?;
             Ok((child_id, parent_id))
         })

@@ -132,7 +132,7 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
     match action {
         RelationAction::Add { parent, children } => {
             // Resolve raw identifiers up front, then commit all
-            // edges in a single atomic batch via `spawn_children`.
+            // edges in a single atomic batch via `attach_children`.
             // The service rolls the entire batch back on any failure
             // (cycle / self-ref / unknown card), so a mid-list error
             // never leaves a partial state in memory or on disk.
@@ -142,7 +142,7 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
                 "parent":   parent_uuid.to_string(),
                 "children": serde_json::to_value(&child_uuids)?,
             });
-            ctx.spawn_children(parent_uuid, child_uuids)
+            ctx.attach_children(parent_uuid, child_uuids)
                 .map_err(|e| enrich_add_error_for_batch(e, &parent, &children))?;
             ctx.save().await?;
             Ok(response)
@@ -154,7 +154,7 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
                 "parent":   parent_uuid.to_string(),
                 "children": serde_json::to_value(&child_uuids)?,
             });
-            ctx.unspawn_children(parent_uuid, child_uuids)
+            ctx.detach_children(parent_uuid, child_uuids)
                 .map_err(|e| enrich_remove_error_for_batch(e, &parent, &children))?;
             ctx.save().await?;
             Ok(response)

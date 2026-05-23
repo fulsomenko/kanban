@@ -379,12 +379,12 @@ impl KanbanOperations for TuiContext {
 }
 
 impl GraphOperations for TuiContext {
-    fn spawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        let r = self.inner.spawn_children(parent, children);
+    fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.attach_children(parent, children);
         self.with_flush(r)
     }
-    fn unspawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        let r = self.inner.unspawn_children(parent, children);
+    fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.detach_children(parent, children);
         self.with_flush(r)
     }
     fn list_children_of(&self, parent: Uuid) -> KanbanResult<Vec<Uuid>> {

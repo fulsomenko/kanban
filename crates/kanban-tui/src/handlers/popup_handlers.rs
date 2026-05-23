@@ -602,9 +602,9 @@ impl App {
                                 let was_selected =
                                     self.relationship.selected.contains(&selected_card_id);
                                 let result = if was_selected {
-                                    self.ctx.unspawn_child(parent_id, child_id)
+                                    self.ctx.detach_child(parent_id, child_id)
                                 } else {
-                                    self.ctx.spawn_child(parent_id, child_id)
+                                    self.ctx.attach_child(parent_id, child_id)
                                 };
                                 if result.is_ok() {
                                     if was_selected {
