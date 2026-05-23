@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 /// Production code paths are per-kind: each relation has its own
 /// concrete edge struct ([`super::SpawnsEdge`] / [`super::BlocksEdge`]
 /// / [`super::RelatesEdge`]), per-kind sub-graphs
-/// (`DagGraph<SpawnsEdge>` etc.), per-kind GraphOperations methods
-/// (`add_spawns_edge` / `add_blocks_edge(severity)` /
-/// `add_relates_edge(kind)`), and per-kind DependencyCommand variants.
-/// This enum exists only where a uniform discriminator is genuinely
-/// useful: cross-kind test parameterisation, cross-kind cross-kind
-/// debugging tools, and the `requires_dag` / `allows_cycles` checks
-/// below.
+/// (`DagGraph<SpawnsEdge>` etc.), per-kind GraphOperations verb pairs
+/// (`attach_child(ren)` / `detach_child(ren)` for Spawns, `block` /
+/// `unblock` for Blocks, `relate` / `dissociate` for Relates), and
+/// per-kind DependencyCommand variants. This enum exists only where
+/// a uniform discriminator is genuinely useful: cross-kind test
+/// parameterisation, cross-kind debugging tools, and the
+/// `requires_dag` / `allows_cycles` checks below.
 ///
 /// Grammar is "source [variant] target": A `Blocks` B, A `RelatesTo`
 /// B, A `Spawns` B.
