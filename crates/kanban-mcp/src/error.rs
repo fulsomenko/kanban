@@ -33,7 +33,15 @@ impl From<KanbanMcpError> for McpError {
     fn from(e: KanbanMcpError) -> Self {
         match e {
             KanbanMcpError::Domain(d) => {
-                if matches!(&d, KanbanError::Domain(_)) {
+                // INVALID_PARAMS for anything that's "the inputs the client
+                // gave us are wrong": validation/lookup failures (Domain) and
+                // version mismatches on the data file the client pointed at
+                // (UnsupportedFutureVersion). Everything else is a server-side
+                // failure the client can't fix by rewording its request.
+                if matches!(
+                    &d,
+                    KanbanError::Domain(_) | KanbanError::UnsupportedFutureVersion { .. }
+                ) {
                     McpError::invalid_params(d.to_string(), None)
                 } else {
                     McpError::internal_error(d.to_string(), None)

@@ -37,6 +37,56 @@ async fn board_create_list_get() {
     assert_eq!(fetched.name, "Test Board");
 }
 
+/// Opening a future-format JSON file via the MCP surface must surface as
+/// `McpError::invalid_params`, not `internal_error`. The data file the client
+/// pointed at is the precondition that failed — that's the same category as
+/// any other invalid argument. Without this mapping, an LLM client sees
+/// "internal error" for what is fundamentally "your file is too new for this
+/// binary" and has no way to suggest the right fix.
+#[tokio::test]
+async fn open_future_version_file_returns_invalid_params() {
+    use kanban_mcp::error::KanbanMcpError;
+    use rmcp::model::ErrorCode;
+    use serde_json::json;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("future.json");
+    let v99 = json!({
+        "version": 99,
+        "metadata": {
+            "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+            "saved_at": "2030-01-01T00:00:00Z"
+        },
+        "data": {}
+    });
+    std::fs::write(&path, v99.to_string()).unwrap();
+
+    let store_manager = default_store_manager();
+    let err = McpContext::new(
+        &store_manager,
+        &path.to_string_lossy(),
+        AppConfig::default(),
+    )
+    .await
+    .err()
+    .expect("v99 file must be refused");
+
+    // KanbanError → KanbanMcpError → McpError (rmcp::model::ErrorData) is the
+    // path every MCP tool handler walks via `?`. We follow it here to pin the
+    // wire-level error_code, not just the Rust variant.
+    let mcp_err: rmcp::model::ErrorData = KanbanMcpError::Domain(err).into();
+    assert_eq!(
+        mcp_err.code,
+        ErrorCode::INVALID_PARAMS,
+        "UnsupportedFutureVersion must map to INVALID_PARAMS, got: {mcp_err:?}"
+    );
+    assert!(
+        mcp_err.message.contains("upgrade kanban"),
+        "error message must include the upgrade hint, got: {}",
+        mcp_err.message
+    );
+}
+
 #[tokio::test]
 async fn board_get_nonexistent() {
     let (ctx, _tmp) = setup().await;
