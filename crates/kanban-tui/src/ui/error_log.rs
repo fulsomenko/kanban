@@ -146,19 +146,18 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
         app.ctx.persistence_metadata().as_ref(),
     );
     let total = app.with_error_log(|log| log.entries.len());
-    let header_height = (rows.len() as u16) + 2; // rows + blank line + "{n} entries"
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .horizontal_margin(1)
         .constraints([
-            Constraint::Length(header_height),
+            Constraint::Length(rows.len() as u16),
             Constraint::Min(0),
             Constraint::Length(2),
         ])
         .split(inner);
 
-    let mut header_lines: Vec<Line> = rows
+    let header_lines: Vec<Line> = rows
         .into_iter()
         .map(|row| {
             let value_style = if row.warn {
@@ -179,16 +178,24 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
             ])
         })
         .collect();
-    header_lines.push(Line::from(""));
-    header_lines.push(Line::from(Span::styled(
-        format!("{total} entries"),
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD),
-    )));
     frame.render_widget(Paragraph::new(header_lines), chunks[0]);
 
-    let viewport_height = chunks[1].height as usize;
+    // Log entries sit inside a bordered block whose top border doubles as
+    // the visual separator between the diagnostics rows above and the
+    // entries below. The title carries the section header + entry count.
+    let log_block = Block::default()
+        .borders(Borders::TOP)
+        .border_style(Style::default().fg(Color::DarkGray))
+        .title(Span::styled(
+            format!(" Log entries ({total}) "),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ));
+    let log_inner = log_block.inner(chunks[1]);
+    frame.render_widget(log_block, chunks[1]);
+
+    let viewport_height = log_inner.height as usize;
     let total_entries = total;
 
     let scroll_offset = app.ui_state.error_log_list.get_scroll_offset();
@@ -216,7 +223,7 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
             .collect()
     });
 
-    frame.render_widget(Paragraph::new(visible), chunks[1]);
+    frame.render_widget(Paragraph::new(visible), log_inner);
 
     let items_above = scroll_offset.min(total_entries);
     let items_below = total_entries.saturating_sub(scroll_offset + viewport_height);
