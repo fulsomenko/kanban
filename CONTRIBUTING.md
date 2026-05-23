@@ -151,6 +151,67 @@ When adding a new field to any struct in `kanban-domain` (e.g., `Card`, `Board`,
 
    The roundtrip test (`full_roundtrip_preserves_all_fields`) will fail until all three are updated.
 
+### Adding a New Card-Relation Kind
+
+The card-relation graph is designed to be extensible. To add a fourth
+relation kind (e.g. "duplicates", a board-scoped variant, etc.), the
+moving parts are:
+
+1. **Define the edge struct** in `kanban-domain/src/dependencies/edges.rs`.
+   Embed `EdgeBase` via `#[serde(flatten)]` and add any per-kind metadata
+   (severity-like enum, weight, label, …):
+   ```rust
+   pub struct MyEdge {
+       #[serde(flatten)] pub base: EdgeBase,
+       pub my_metadata: MyMeta,
+   }
+   ```
+   Implement `Edge for MyEdge` (the trait surface in
+   `kanban-core::graph::edge`). `from_endpoints` must construct a default-
+   metadata instance so the generic `Graph::add_edge` path works.
+
+2. **Add a sub-graph** to `DependencyGraph` in
+   `kanban-domain/src/dependencies/dependency_graph.rs` — pick `DagGraph<MyEdge>`
+   (directed, cycle-rejecting) or `UndirectedGraph<MyEdge>` (no direction,
+   cycles permitted). Register it in `cascadable_parts_mut()` and
+   `edge_sets()` — every cross-cutting cascade (`archive_node`,
+   `remove_node`, `len`, `contains`) then picks it up automatically.
+   Add per-kind convenience methods (`my_action`, `un_my_action`, listing
+   accessors) and a `my_edges()` raw accessor for the persistence layer.
+
+3. **Add per-kind commands** in
+   `kanban-domain/src/commands/dependency_commands.rs`:
+   - `AddMyKind { source, target, my_metadata: MyMeta }`
+   - `RemoveMyKind { source, target, #[serde(default)] tolerate_missing: bool }`
+   - Wire them through the `DependencyCommand` enum's `execute` /
+     `description` / `capture_inverse` dispatchers.
+   - `AddMyKind::capture_inverse` returns a tolerant `RemoveMyKind`;
+     `RemoveMyKind::capture_inverse` reads pre-remove metadata.
+
+4. **Add `GraphOperations` trait methods** in
+   `kanban-domain/src/graph_operations.rs` for the new kind. Mirror the
+   pattern of `block`/`unblock` (single-edge directed) or
+   `relate`/`dissociate` (undirected) depending on direction.
+
+5. **Implement the new trait methods** on `KanbanContext` in
+   `kanban-service/src/context.rs`, `CliContext`, `McpContext`, `TuiContext`.
+
+6. **Persistence**:
+   - **JSON** — add a `my_kind: { edges: [...] }` key to the V6 envelope
+     (no migration needed if a field is added cleanly with
+     `#[serde(default)]`); otherwise bump to V7 with a transform step in
+     `kanban-persistence-json/src/migration/`.
+   - **SQLite** — add a `my_kind_edges` table in
+     `kanban-persistence-sqlite/src/schema.sql` with appropriate columns
+     and CHECK constraints; add read/write paths in `sqlite_store.rs`.
+
+7. **App surfaces** — expose via `kanban relation` subcommands (CLI),
+   `tool_*` handlers (MCP), and TUI popup hooks as needed.
+
+8. **Tests** — parameterise existing graph tests over the new kind in
+   `kanban-service/tests/card_graph.rs::card_graph_tests!`, and add
+   inverse round-trip tests in `inverse_commands.rs`.
+
 ### Adding New Features
 
 **Domain First Approach:**

@@ -157,15 +157,30 @@ fn test_manage_parents_popup_cycle_surfaces_error_banner_to_user() {
         .unwrap();
     let a = app
         .ctx
-        .create_card(board.id, column.id, "A".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            column.id,
+            "A".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
     let b = app
         .ctx
-        .create_card(board.id, column.id, "B".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            column.id,
+            "B".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
     let c = app
         .ctx
-        .create_card(board.id, column.id, "C".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            column.id,
+            "C".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
     // a -> b
     app.ctx.attach_child(a.id, b.id).unwrap();

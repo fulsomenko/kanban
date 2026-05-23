@@ -20,7 +20,7 @@
 - **Zero latency** — pure keyboard flow — hjkl, never reach for the mouse
 - **Your data is a file on your disk** — private, offline, always yours
 - **Git-native** — generate branch names and `git checkout` commands from any card
-- **LLM-native** — full MCP server (40 tools) works with Claude Code, Cursor, and any MCP client
+- **LLM-native** — full MCP server (46 tools) works with Claude Code, Cursor, and any MCP client
 - **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
 
 ---
@@ -142,7 +142,7 @@ VS Code is known not to work in the current implementation.
 - Multiple boards, each with custom columns and WIP limits
 - Rich cards: title, description, priority (Low/Medium/High/Critical), status (Todo/InProgress/Blocked/Done), story points, due dates
 - Card numbering with configurable prefix (e.g. `KAN-42`)
-- Card dependencies: parent/child relationships with cycle detection
+- Card relations: parent/child (Spawns), blocking (with severity), and undirected relates (with sub-kind) — each with cycle / self-reference detection and dedicated `kanban relation` CLI + MCP tools
 - Archive and restore cards
 
 ### Sprint Planning
@@ -173,7 +173,7 @@ VS Code is known not to work in the current implementation.
 ### Interfaces
 - **TUI** — full keyboard-driven terminal UI
 - **CLI** — scriptable; all operations, JSON output, pagination
-- **MCP server** — 40 tools for LLM integration
+- **MCP server** — 46 tools for LLM integration
 
 ---
 
@@ -374,7 +374,7 @@ graph LR
 
 - [x] Progressive auto-save
 - [x] Full CLI interface
-- [x] Card dependencies (parent/child)
+- [x] Card relations (parent/child, blocks with severity, relates with sub-kind)
 - [x] Multiple storage backends (JSON + SQLite)
 - [x] MCP server for LLM integration
 - [x] Full undo/redo

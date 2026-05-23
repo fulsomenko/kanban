@@ -609,13 +609,9 @@ impl App {
                                 match result {
                                     Ok(()) => {
                                         if was_selected {
-                                            self.relationship
-                                                .selected
-                                                .remove(&selected_card_id);
+                                            self.relationship.selected.remove(&selected_card_id);
                                         } else {
-                                            self.relationship
-                                                .selected
-                                                .insert(selected_card_id);
+                                            self.relationship.selected.insert(selected_card_id);
                                         }
                                     }
                                     Err(e) => {
