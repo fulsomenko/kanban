@@ -77,6 +77,16 @@ pub(crate) fn transform_to_v6_split_graph_value(envelope: &mut Value) -> Persist
         if let Some(cards) = graph.get("cards") {
             if let Some(edges) = cards.get("edges").and_then(|v| v.as_array()) {
                 for edge in edges {
+                    // Validate the entry is a JSON object before reaching
+                    // for fields. A corrupt file with a null / primitive
+                    // / array entry would otherwise silently degrade into
+                    // a "missing edge_type" diagnostic that hides the
+                    // real problem (the entry isn't an object at all).
+                    if !edge.is_object() {
+                        return Err(PersistenceError::Serialization(format!(
+                            "split-graph migration: expected object in cards.edges, got {edge}"
+                        )));
+                    }
                     let kind = edge
                         .get("edge_type")
                         .and_then(|v| v.as_str())
@@ -395,6 +405,8 @@ mod tests {
         let err = transform_to_v6_split_graph_value(&mut env).unwrap_err();
         assert!(format!("{err:?}").to_lowercase().contains("edge_type"));
     }
+
+    // NEW_TESTS_PLACEHOLDER
 
     /// `transform_to_v6_split_graph_value` is `pub`. If a caller
     /// accidentally invokes it on an already-V6 envelope (with edges in
