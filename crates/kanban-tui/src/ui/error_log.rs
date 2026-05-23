@@ -10,50 +10,89 @@ use ratatui::{
     Frame,
 };
 
-/// Build the header text shown above the log entries in the Diagnostics
+/// One row in the diagnostics header. `warn` flags rows that indicate a
+/// version mismatch — currently just the Writer row when the file was
+/// produced by a kanban newer than this binary.
+struct DiagnosticsRow {
+    label: &'static str,
+    value: String,
+    warn: bool,
+}
+
+/// Build the header rows shown above the log entries in the Diagnostics
 /// popup. Pure: takes only the inputs it renders so it can be unit-tested
 /// without spinning up an `App`.
-///
-/// Returns one `(label, value)` row per fact. Renders to plain Strings; the
-/// caller is responsible for any per-row styling.
 fn diagnostics_rows(
     save_file: Option<&str>,
     metadata: Option<&PersistenceMetadata>,
-) -> Vec<(&'static str, String)> {
-    let mut rows: Vec<(&'static str, String)> = Vec::new();
+) -> Vec<DiagnosticsRow> {
+    let mut rows: Vec<DiagnosticsRow> = Vec::new();
 
-    rows.push((
-        "File",
-        save_file.map(str::to_string).unwrap_or_else(|| "(in-memory)".to_string()),
-    ));
+    rows.push(DiagnosticsRow {
+        label: "File",
+        value: save_file
+            .map(str::to_string)
+            .unwrap_or_else(|| "(in-memory)".to_string()),
+        warn: false,
+    });
 
     let format = metadata
         .and_then(|m| m.format_version)
         .map(|v| format!("v{v}"))
         .unwrap_or_else(|| "unknown".to_string());
-    rows.push(("Format", format));
+    rows.push(DiagnosticsRow {
+        label: "Format",
+        value: format,
+        warn: false,
+    });
 
+    let writer_is_newer = metadata
+        .and_then(|m| m.writer_version.as_deref())
+        .map(|v| version_is_newer_than_self(v, kanban_core::KANBAN_VERSION))
+        .unwrap_or(false);
     let writer = match metadata {
         Some(m) => match (m.writer_version.as_deref(), m.writer_commit.as_deref()) {
-            (Some(v), Some(c)) => format!("kanban {v} ({})", short_commit(c)),
-            (Some(v), None) => format!("kanban {v}"),
+            (Some(v), Some(c)) => {
+                let base = format!("kanban {v} ({})", short_commit(c));
+                if writer_is_newer {
+                    format!("{base} (newer than this binary)")
+                } else {
+                    base
+                }
+            }
+            (Some(v), None) => {
+                if writer_is_newer {
+                    format!("kanban {v} (newer than this binary)")
+                } else {
+                    format!("kanban {v}")
+                }
+            }
             (None, _) => "unknown (pre-stamp file)".to_string(),
         },
         None => "(no metadata)".to_string(),
     };
-    rows.push(("Writer", writer));
+    rows.push(DiagnosticsRow {
+        label: "Writer",
+        value: writer,
+        warn: writer_is_newer,
+    });
 
-    rows.push((
-        "Binary",
-        format!(
+    rows.push(DiagnosticsRow {
+        label: "Binary",
+        value: format!(
             "kanban {} ({})",
             kanban_core::KANBAN_VERSION,
             short_commit(kanban_core::KANBAN_COMMIT)
         ),
-    ));
+        warn: false,
+    });
 
     if let Some(m) = metadata {
-        rows.push(("Saved at", m.saved_at.to_rfc3339()));
+        rows.push(DiagnosticsRow {
+            label: "Saved at",
+            value: m.saved_at.to_rfc3339(),
+            warn: false,
+        });
     }
 
     rows
@@ -64,6 +103,29 @@ fn short_commit(c: &str) -> String {
         c.to_string()
     } else {
         c.chars().take(8).collect()
+    }
+}
+
+/// Compare two `MAJOR.MINOR.PATCH` strings. Returns `true` when `file_version`
+/// is strictly greater than `self_version`. Unparseable strings (pre-release
+/// suffixes, missing dots, etc.) conservatively return `false` — the
+/// diagnostics row stays calm rather than crying wolf.
+fn version_is_newer_than_self(file_version: &str, self_version: &str) -> bool {
+    fn parse(s: &str) -> Option<(u32, u32, u32)> {
+        let mut parts = s.split('.');
+        let a = parts.next()?.parse().ok()?;
+        let b = parts.next()?.parse().ok()?;
+        let c_raw = parts.next()?;
+        // Reject anything past the patch number, including prerelease suffixes.
+        if parts.next().is_some() {
+            return None;
+        }
+        let c = c_raw.parse().ok()?;
+        Some((a, b, c))
+    }
+    match (parse(file_version), parse(self_version)) {
+        (Some(file), Some(me)) => file > me,
+        _ => false,
     }
 }
 
@@ -98,15 +160,22 @@ pub fn render_error_log_popup(app: &App, frame: &mut Frame) {
 
     let mut header_lines: Vec<Line> = rows
         .into_iter()
-        .map(|(label, value)| {
+        .map(|row| {
+            let value_style = if row.warn {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
             Line::from(vec![
                 Span::styled(
-                    format!("{label:<10}"),
+                    format!("{:<10}", row.label),
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(value),
+                Span::styled(row.value, value_style),
             ])
         })
         .collect();
@@ -173,16 +242,21 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use uuid::Uuid;
 
-    fn rows_to_map(rows: Vec<(&'static str, String)>) -> std::collections::HashMap<&'static str, String> {
-        rows.into_iter().collect()
+    fn rows_to_map(
+        rows: Vec<DiagnosticsRow>,
+    ) -> std::collections::HashMap<&'static str, (String, bool)> {
+        rows.into_iter()
+            .map(|r| (r.label, (r.value, r.warn)))
+            .collect()
     }
 
     #[test]
     fn test_diagnostics_rows_with_no_save_file_and_no_metadata() {
         let rows = rows_to_map(diagnostics_rows(None, None));
-        assert_eq!(rows.get("File").unwrap(), "(in-memory)");
-        assert_eq!(rows.get("Format").unwrap(), "unknown");
-        assert_eq!(rows.get("Writer").unwrap(), "(no metadata)");
+        assert_eq!(rows.get("File").unwrap().0, "(in-memory)");
+        assert_eq!(rows.get("Format").unwrap().0, "unknown");
+        assert_eq!(rows.get("Writer").unwrap().0, "(no metadata)");
+        assert!(!rows.get("Writer").unwrap().1, "no metadata must not warn");
         assert!(rows.contains_key("Binary"));
         assert!(!rows.contains_key("Saved at"));
     }
@@ -197,11 +271,13 @@ mod tests {
             format_version: Some(6),
         };
         let rows = rows_to_map(diagnostics_rows(Some("/tmp/board.json"), Some(&meta)));
-        assert_eq!(rows.get("File").unwrap(), "/tmp/board.json");
-        assert_eq!(rows.get("Format").unwrap(), "v6");
-        let writer = rows.get("Writer").unwrap();
+        assert_eq!(rows.get("File").unwrap().0, "/tmp/board.json");
+        assert_eq!(rows.get("Format").unwrap().0, "v6");
+        let (writer, warn) = rows.get("Writer").unwrap();
         assert!(writer.contains("0.6.0"), "writer line: {writer}");
         assert!(writer.contains("18e98c48"), "must show short commit: {writer}");
+        // Writer == self_version, so no mismatch.
+        assert!(!warn, "matching version must not warn");
         assert!(rows.contains_key("Saved at"));
     }
 
@@ -215,8 +291,64 @@ mod tests {
             format_version: Some(6),
         };
         let rows = rows_to_map(diagnostics_rows(Some("/tmp/legacy.json"), Some(&meta)));
-        assert_eq!(rows.get("Writer").unwrap(), "unknown (pre-stamp file)");
-        assert_eq!(rows.get("Format").unwrap(), "v6");
+        assert_eq!(rows.get("Writer").unwrap().0, "unknown (pre-stamp file)");
+        assert!(
+            !rows.get("Writer").unwrap().1,
+            "missing stamp must not warn"
+        );
+        assert_eq!(rows.get("Format").unwrap().0, "v6");
+    }
+
+    #[test]
+    fn test_diagnostics_rows_warns_when_writer_version_newer_than_binary() {
+        // Construct a writer version that is guaranteed to be greater than the
+        // current binary's. We bump the major component so this is robust
+        // against any future CARGO_PKG_VERSION bump.
+        let (major, _minor, _patch) = parse_version(kanban_core::KANBAN_VERSION).unwrap();
+        let future = format!("{}.0.0", major + 1);
+        let meta = PersistenceMetadata {
+            instance_id: Uuid::nil(),
+            saved_at: Utc.with_ymd_and_hms(2030, 1, 1, 0, 0, 0).unwrap(),
+            writer_version: Some(future.clone()),
+            writer_commit: Some("abcdef0123456789".into()),
+            format_version: Some(6),
+        };
+        let rows = rows_to_map(diagnostics_rows(Some("/tmp/future.json"), Some(&meta)));
+        let (writer, warn) = rows.get("Writer").unwrap();
+        assert!(*warn, "future writer must warn: {writer}");
+        assert!(
+            writer.contains("newer than this binary"),
+            "writer line must call out the mismatch: {writer}"
+        );
+    }
+
+    #[test]
+    fn test_version_is_newer_handles_major_minor_patch() {
+        assert!(version_is_newer_than_self("1.0.0", "0.9.9"));
+        assert!(version_is_newer_than_self("0.7.0", "0.6.9"));
+        assert!(version_is_newer_than_self("0.6.1", "0.6.0"));
+        assert!(!version_is_newer_than_self("0.6.0", "0.6.0"));
+        assert!(!version_is_newer_than_self("0.5.9", "0.6.0"));
+    }
+
+    #[test]
+    fn test_version_is_newer_returns_false_on_unparseable_strings() {
+        // Prerelease suffixes, leading 'v', empty strings: conservatively
+        // do not warn.
+        assert!(!version_is_newer_than_self("0.7.0-rc1", "0.6.0"));
+        assert!(!version_is_newer_than_self("v0.7.0", "0.6.0"));
+        assert!(!version_is_newer_than_self("", "0.6.0"));
+        assert!(!version_is_newer_than_self("garbage", "0.6.0"));
+    }
+
+    /// Test helper exposed within the test module so the warns-when-newer
+    /// test can construct a guaranteed-greater version without hard-coding it.
+    fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
+        let mut parts = s.split('.');
+        let a = parts.next()?.parse().ok()?;
+        let b = parts.next()?.parse().ok()?;
+        let c = parts.next()?.parse().ok()?;
+        Some((a, b, c))
     }
 
     #[test]
