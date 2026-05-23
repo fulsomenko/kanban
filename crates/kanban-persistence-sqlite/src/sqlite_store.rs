@@ -1751,10 +1751,23 @@ impl PersistenceStore for SqliteStore {
         self.apply_snapshot_async(domain_snapshot)
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
+
+        let metadata = PersistenceMetadata::new(self.instance_id)
+            .with_writer_stamp(kanban_core::KANBAN_VERSION, kanban_core::KANBAN_COMMIT);
+        sqlx::query(
+            "UPDATE metadata SET saved_at = ?, writer_version = ?, writer_commit = ? WHERE id = 1",
+        )
+        .bind(metadata.saved_at.to_rfc3339())
+        .bind(metadata.writer_version.as_deref())
+        .bind(metadata.writer_commit.as_deref())
+        .execute(&self.pool)
+        .await
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
+
         self.checkpoint()
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
-        Ok(PersistenceMetadata::new(self.instance_id))
+        Ok(metadata)
     }
 
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
@@ -1764,7 +1777,22 @@ impl PersistenceStore for SqliteStore {
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
         let data = serde_json::to_vec(&domain_snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let meta = PersistenceMetadata::new(self.instance_id);
+
+        let row: (String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        let saved_at = DateTime::parse_from_rfc3339(&row.0)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?
+            .with_timezone(&Utc);
+        let meta = PersistenceMetadata {
+            instance_id: self.instance_id,
+            saved_at,
+            writer_version: row.1,
+            writer_commit: row.2,
+        };
         Ok((
             StoreSnapshot {
                 data,
@@ -2119,6 +2147,131 @@ mod tests {
                 .unwrap();
                 assert!(exists, "metadata.{col} column must exist on fresh DB");
             }
+        });
+    }
+
+    #[test]
+    fn test_save_stamps_writer_version_and_commit_into_metadata_row() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stamped.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            let store_snap = StoreSnapshot {
+                data,
+                metadata: PersistenceMetadata::new(store.instance_id()),
+            };
+            let returned = PersistenceStore::save(&store, store_snap).await.unwrap();
+
+            assert_eq!(
+                returned.writer_version.as_deref(),
+                Some(kanban_core::KANBAN_VERSION),
+            );
+            assert_eq!(
+                returned.writer_commit.as_deref(),
+                Some(kanban_core::KANBAN_COMMIT),
+            );
+
+            let row: (Option<String>, Option<String>) =
+                sqlx::query_as("SELECT writer_version, writer_commit FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(row.0.as_deref(), Some(kanban_core::KANBAN_VERSION));
+            assert_eq!(row.1.as_deref(), Some(kanban_core::KANBAN_COMMIT));
+        });
+    }
+
+    #[test]
+    fn test_load_returns_writer_stamp_from_metadata_row() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("loaded.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            PersistenceStore::save(
+                &store,
+                StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(store.instance_id()),
+                },
+            )
+            .await
+            .unwrap();
+
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert_eq!(
+                meta.writer_version.as_deref(),
+                Some(kanban_core::KANBAN_VERSION),
+            );
+            assert_eq!(
+                meta.writer_commit.as_deref(),
+                Some(kanban_core::KANBAN_COMMIT),
+            );
+        });
+    }
+
+    #[test]
+    fn test_load_legacy_db_without_stamp_returns_none_writer_fields() {
+        // Pre-KAN-522 DB: metadata row exists, schema_version was bumped to
+        // current by migrate(), but writer_version/writer_commit are still
+        // NULL because no save has happened since the ALTER.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy_load.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2024-01-01T00:00:00Z', 1);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let store = SqliteStore::open(&path).await.unwrap();
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert!(meta.writer_version.is_none());
+            assert!(meta.writer_commit.is_none());
         });
     }
 
