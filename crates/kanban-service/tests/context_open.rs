@@ -38,6 +38,30 @@ async fn test_can_undo_returns_false_on_fresh_context() {
     assert!(!ctx.can_redo());
 }
 
+/// `KanbanContext::persistence_metadata` delegates to the backend and surfaces
+/// the writer-stamp recorded on the most recent save.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_context_persistence_metadata_returns_writer_stamp_after_save() -> KanbanResult<()> {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("md.json");
+    let mut ctx = KanbanContext::open(make_json_backend(&path), AppConfig::default()).await?;
+    ctx.create_board("Stamped".into(), None)?;
+    ctx.save().await?;
+
+    let meta = ctx
+        .persistence_metadata()
+        .expect("metadata must be exposed after save");
+    assert_eq!(
+        meta.writer_version.as_deref(),
+        Some(kanban_core::KANBAN_VERSION),
+    );
+    assert_eq!(
+        meta.writer_commit.as_deref(),
+        Some(kanban_core::KANBAN_COMMIT),
+    );
+    Ok(())
+}
+
 /// `KanbanContext::open_deferred` with a JSON backend must not touch the filesystem.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_open_context_json_does_no_io_at_construction() {

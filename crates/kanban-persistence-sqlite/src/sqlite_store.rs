@@ -475,7 +475,48 @@ impl SqliteStore {
         &self.pool
     }
 
+    /// Read the metadata singleton row from the DB. Cheap (single row, indexed by primary key).
+    /// Returns `Ok(None)` if the row is absent — only possible on a brand-new DB
+    /// before `load_or_create_instance_id` has run, which the public API doesn't expose.
+    pub fn read_metadata_sync(&self) -> KanbanResult<Option<PersistenceMetadata>> {
+        run(async {
+            let row: Option<(String, String, Option<String>, Option<String>)> = sqlx::query_as(
+                "SELECT instance_id, saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+            )
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_err)?;
+            let Some(row) = row else {
+                return Ok(None);
+            };
+            let instance_id = p_uuid(&row.0)?;
+            let saved_at = p_dt(&row.1)?;
+            Ok(Some(PersistenceMetadata {
+                instance_id,
+                saved_at,
+                writer_version: row.2,
+                writer_commit: row.3,
+            }))
+        })
+    }
+
     pub async fn checkpoint(&self) -> KanbanResult<()> {
+        // Stamp the writer identity onto the metadata row before truncating
+        // the WAL. Anything in the WAL is about to land in the main DB file,
+        // so attribution should land in the same step. Callers that just
+        // want pure WAL handling shouldn't be calling checkpoint; the only
+        // existing callers (PersistenceStore::save, SqliteBackend::flush)
+        // both want the stamp.
+        sqlx::query(
+            "UPDATE metadata SET saved_at = ?, writer_version = ?, writer_commit = ? WHERE id = 1",
+        )
+        .bind(Utc::now().to_rfc3339())
+        .bind(kanban_core::KANBAN_VERSION)
+        .bind(kanban_core::KANBAN_COMMIT)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| KanbanError::Database(e.to_string()))?;
+
         sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&self.pool)
             .await
@@ -1752,22 +1793,29 @@ impl PersistenceStore for SqliteStore {
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
-        let metadata = PersistenceMetadata::new(self.instance_id)
-            .with_writer_stamp(kanban_core::KANBAN_VERSION, kanban_core::KANBAN_COMMIT);
-        sqlx::query(
-            "UPDATE metadata SET saved_at = ?, writer_version = ?, writer_commit = ? WHERE id = 1",
-        )
-        .bind(metadata.saved_at.to_rfc3339())
-        .bind(metadata.writer_version.as_deref())
-        .bind(metadata.writer_commit.as_deref())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| PersistenceError::Database(e.to_string()))?;
-
+        // checkpoint() owns the writer-stamp UPDATE plus WAL flush.
         self.checkpoint()
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
-        Ok(metadata)
+
+        // Read back what checkpoint() just wrote so the caller sees the same
+        // stamp that landed on disk.
+        let (saved_at_str, writer_version, writer_commit): (String, Option<String>, Option<String>) =
+            sqlx::query_as(
+                "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        let saved_at = DateTime::parse_from_rfc3339(&saved_at_str)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?
+            .with_timezone(&Utc);
+        Ok(PersistenceMetadata {
+            instance_id: self.instance_id,
+            saved_at,
+            writer_version,
+            writer_commit,
+        })
     }
 
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {

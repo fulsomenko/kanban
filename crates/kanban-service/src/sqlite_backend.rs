@@ -7,7 +7,7 @@ use kanban_domain::{
     ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanResult,
     Snapshot, Sprint,
 };
-use kanban_persistence::PersistenceStore;
+use kanban_persistence::{PersistenceMetadata, PersistenceStore};
 use kanban_persistence_sqlite::SqliteStore;
 use uuid::Uuid;
 
@@ -198,5 +198,9 @@ impl crate::backend::KanbanBackend for SqliteBackend {
 
     fn instance_id(&self) -> Uuid {
         <SqliteStore as PersistenceStore>::instance_id(&self.db)
+    }
+
+    fn persistence_metadata(&self) -> Option<PersistenceMetadata> {
+        self.db.read_metadata_sync().ok().flatten()
     }
 }

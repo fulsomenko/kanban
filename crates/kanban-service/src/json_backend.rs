@@ -26,6 +26,10 @@ pub struct JsonDataStore {
     file_store: Arc<dyn PersistenceStore + Send + Sync>,
     /// `None` until first access. Populated by `ensure_loaded()`.
     inner: RwLock<Option<InMemoryStore>>,
+    /// Most-recent metadata observed from the underlying file. Updated on
+    /// load (via `ensure_loaded`) and after each save. Backs the F12
+    /// diagnostics panel.
+    last_metadata: RwLock<Option<PersistenceMetadata>>,
     dirty: AtomicBool,
 }
 
@@ -34,6 +38,7 @@ impl JsonDataStore {
         Self {
             file_store,
             inner: RwLock::new(None),
+            last_metadata: RwLock::new(None),
             dirty: AtomicBool::new(false),
         }
     }
@@ -61,10 +66,14 @@ impl JsonDataStore {
             .load_sync()
             .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
 
-        if let Some((ss, _meta)) = loaded {
+        if let Some((ss, meta)) = loaded {
             let snapshot = snapshot_from_json_bytes(&ss.data)
                 .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
             store.apply_snapshot(snapshot)?;
+            let mut guard = self.last_metadata.write().map_err(|_| {
+                KanbanError::Internal("json_backend: last_metadata RwLock poisoned".into())
+            })?;
+            *guard = Some(meta);
         }
 
         // Acquire write lock only to swap in the built store.
@@ -116,10 +125,16 @@ impl JsonDataStore {
             .map_err(|e| KanbanError::Internal(format!("json_backend: snapshot serialise: {e}")))?;
         let metadata = PersistenceMetadata::new(self.file_store.instance_id());
 
-        self.file_store
+        let returned = self
+            .file_store
             .save(StoreSnapshot { data, metadata })
             .await
             .map_err(KanbanError::from)?;
+
+        let mut guard = self.last_metadata.write().map_err(|_| {
+            KanbanError::Internal("json_backend: last_metadata RwLock poisoned".into())
+        })?;
+        *guard = Some(returned);
 
         Ok(())
     }
@@ -339,6 +354,15 @@ impl KanbanBackend for JsonDataStore {
     fn instance_id(&self) -> Uuid {
         self.file_store.instance_id()
     }
+
+    fn persistence_metadata(&self) -> Option<PersistenceMetadata> {
+        // Surface what we've observed; do NOT trigger a load here — the
+        // backend may be queried before any DataStore call (e.g. when the TUI
+        // renders its diagnostics panel on startup), and we don't want
+        // persistence_metadata() to do I/O. ensure_loaded populates the
+        // cache as a side effect of any DataStore call, which is enough.
+        self.last_metadata.read().ok().and_then(|g| g.clone())
+    }
 }
 
 #[cfg(test)]
@@ -350,6 +374,36 @@ mod tests {
 
     fn make_store(path: &std::path::Path) -> JsonDataStore {
         JsonDataStore::new(Arc::new(JsonFileStore::new(path)))
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_json_backend_exposes_metadata_after_flush() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("md.json");
+        let jds = make_store(&path);
+        // Trigger a write so flush has something to persist.
+        jds.upsert_board(Board::new("B".to_string(), None)).unwrap();
+        jds.flush().await.unwrap();
+        let meta = jds
+            .persistence_metadata()
+            .expect("flushed JSON backend must expose metadata");
+        assert_eq!(
+            meta.writer_version.as_deref(),
+            Some(kanban_core::KANBAN_VERSION),
+        );
+        assert_eq!(
+            meta.writer_commit.as_deref(),
+            Some(kanban_core::KANBAN_COMMIT),
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_json_backend_metadata_is_none_before_any_load_or_save() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("untouched.json");
+        let jds = make_store(&path);
+        // No DataStore call yet → ensure_loaded never ran → cache empty.
+        assert!(jds.persistence_metadata().is_none());
     }
 
     /// Verifies that `ensure_loaded` no longer relies on `block_in_place`, so

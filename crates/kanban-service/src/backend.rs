@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use kanban_domain::command_store::CommandStore;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{InMemoryStore, KanbanError, KanbanResult};
+use kanban_persistence::PersistenceMetadata;
 use uuid::Uuid;
 
 /// Combines the entity-level CRUD interface (`DataStore`) with the command
@@ -49,6 +50,14 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
     /// Stable instance UUID used for own-write detection in file watchers.
     fn instance_id(&self) -> Uuid {
         Uuid::nil()
+    }
+
+    /// Metadata about the underlying persistence store (file format version,
+    /// writer kanban version, writer commit, last save time). Returns `None`
+    /// for in-memory backends or when no metadata has been observed yet.
+    /// Surfaced by the TUI's F12 diagnostics panel.
+    fn persistence_metadata(&self) -> Option<PersistenceMetadata> {
+        None
     }
 
     /// Run `f` as an atomic batch: every mutation commits or rolls
@@ -124,6 +133,13 @@ mod tests {
         store.reload().await.expect("reload should be a no-op");
     }
 
+    #[test]
+    fn test_in_memory_backend_returns_none_persistence_metadata() {
+        let store = InMemoryStore::new();
+        let backend: &dyn KanbanBackend = &store;
+        assert!(backend.persistence_metadata().is_none());
+    }
+
     // SQLite KanbanBackend lifecycle tests
     #[cfg(feature = "sqlite")]
     mod sqlite_backend_tests {
@@ -150,6 +166,29 @@ mod tests {
                 .flush()
                 .await
                 .expect("WAL checkpoint should not error");
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_sqlite_backend_exposes_metadata_after_flush() {
+            use crate::backend::KanbanBackend;
+            use crate::sqlite_backend::SqliteBackend;
+
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("md.sqlite3");
+            let backend = SqliteBackend::open(path.to_str().unwrap()).await.unwrap();
+            backend.flush().await.unwrap();
+            let meta = backend
+                .persistence_metadata()
+                .expect("flushed sqlite backend must expose metadata");
+            assert_eq!(
+                meta.writer_version.as_deref(),
+                Some(kanban_core::KANBAN_VERSION),
+                "flushed sqlite backend must stamp writer_version"
+            );
+            assert_eq!(
+                meta.writer_commit.as_deref(),
+                Some(kanban_core::KANBAN_COMMIT),
+            );
         }
 
         #[tokio::test(flavor = "multi_thread")]
