@@ -1344,6 +1344,7 @@ impl GraphOperations for KanbanContext {
                 Command::Dependency(DependencyCommand::AddSpawns(AddSpawns {
                     source: parent,
                     target: child,
+                    as_archived: false,
                 }))
             })
             .collect();
@@ -1386,6 +1387,7 @@ impl GraphOperations for KanbanContext {
                 source: blocker,
                 target: blocked,
                 severity,
+                as_archived: false,
             },
         ))])
     }
@@ -1420,6 +1422,7 @@ impl GraphOperations for KanbanContext {
                 source: a,
                 target: b,
                 kind,
+                as_archived: false,
             },
         ))])
     }

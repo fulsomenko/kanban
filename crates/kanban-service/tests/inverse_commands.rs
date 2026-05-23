@@ -322,6 +322,7 @@ async fn test_inverse_add_blocks_removes_edge() -> KanbanResult<()> {
             source: a.id,
             target: b.id,
             severity: Default::default(),
+            as_archived: false,
         },
     ))])?;
     assert!(ctx.graph()?.contains(a.id, b.id), "edge added by forward");
@@ -348,6 +349,7 @@ async fn test_inverse_add_relates_to_removes_edge() -> KanbanResult<()> {
             source: a.id,
             target: b.id,
             kind: Default::default(),
+            as_archived: false,
         },
     ))])?;
     assert!(
@@ -374,6 +376,7 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
         AddSpawns {
             source: parent.id,
             target: child.id,
+            as_archived: false,
         },
     ))])?;
     ctx.clear_history()?;
@@ -588,6 +591,7 @@ async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
         AddSpawns {
             source: parent.id,
             target: child.id,
+            as_archived: false,
         },
     ))])?;
     assert!(
@@ -894,6 +898,7 @@ async fn test_inverse_remove_blocks_restores_blocks_edge() -> KanbanResult<()> {
             source: a.id,
             target: b.id,
             severity: Default::default(),
+            as_archived: false,
         },
     ))])?;
     ctx.clear_history()?;
@@ -1456,3 +1461,5 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
     );
     Ok(())
 }
+
+// NEW_CASCADE_TEST_PLACEHOLDER

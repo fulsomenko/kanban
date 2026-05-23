@@ -97,6 +97,21 @@ impl DependencyGraph {
             .map_err(dep_err)
     }
 
+    /// Insert a parent->child Spawns edge already in the archived
+    /// state. Used by cascade-undo (`DeleteCard` / `DeleteCardEdges`)
+    /// to restore archived incident edges as archived, not active.
+    /// `DagGraph::add_edge_with_metadata` skips the duplicate and
+    /// cycle checks for archived edges, so this is structurally
+    /// equivalent to load-time rehydration of a historical edge.
+    pub fn add_archived_spawns(&mut self, parent: CardId, child: CardId) -> KanbanResult<()> {
+        use kanban_core::Edge as _;
+        let mut edge = SpawnsEdge::new(parent, child);
+        edge.archive();
+        self.parent_child
+            .add_edge_with_metadata(edge)
+            .map_err(dep_err)
+    }
+
     pub fn remove_parent(&mut self, child: CardId, parent: CardId) -> KanbanResult<()> {
         // Use the structural `Graph::remove_edge` via the trait so the
         // sub-graph picks the right matching semantics (directed for
@@ -147,6 +162,21 @@ impl DependencyGraph {
             .map_err(dep_err)
     }
 
+    /// Insert a blocker->blocked Blocks edge already in the archived
+    /// state, preserving the supplied `severity`. See
+    /// [`add_archived_spawns`] for the cascade-undo rationale.
+    pub fn add_archived_blocks(
+        &mut self,
+        blocker: CardId,
+        blocked: CardId,
+        severity: super::Severity,
+    ) -> KanbanResult<()> {
+        use kanban_core::Edge as _;
+        let mut edge = BlocksEdge::new(blocker, blocked, severity);
+        edge.archive();
+        self.blocks.add_edge_with_metadata(edge).map_err(dep_err)
+    }
+
     pub fn unblock(&mut self, blocker: CardId, blocked: CardId) -> KanbanResult<()> {
         use kanban_core::Graph as _;
         self.blocks.remove_edge(blocker, blocked).map_err(dep_err)
@@ -186,6 +216,21 @@ impl DependencyGraph {
         self.relates
             .add_edge_with_metadata(RelatesEdge::new(a, b, kind))
             .map_err(dep_err)
+    }
+
+    /// Insert an undirected RelatesTo edge already in the archived
+    /// state, preserving the supplied `kind`. See
+    /// [`add_archived_spawns`] for the cascade-undo rationale.
+    pub fn add_archived_relates(
+        &mut self,
+        a: CardId,
+        b: CardId,
+        kind: super::RelatesKind,
+    ) -> KanbanResult<()> {
+        use kanban_core::Edge as _;
+        let mut edge = RelatesEdge::new(a, b, kind);
+        edge.archive();
+        self.relates.add_edge_with_metadata(edge).map_err(dep_err)
     }
 
     pub fn dissociate(&mut self, a: CardId, b: CardId) -> KanbanResult<()> {

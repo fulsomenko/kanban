@@ -79,14 +79,28 @@ impl DependencyCommand {
 pub struct AddSpawns {
     pub source: Uuid,
     pub target: Uuid,
+    /// When `true`, insert the edge already in the archived state.
+    /// Used by cascade-undo (`DeleteCard` / `DeleteCardEdges`) to
+    /// preserve the archive state of incident edges across delete/undo
+    /// cycles. User-initiated `attach_child(ren)` paths leave this
+    /// `false` (default) so edges land active.
+    ///
+    /// `#[serde(default)]` lets legacy command-log entries (pre-fix)
+    /// deserialise with `false`, matching their original semantics.
+    #[serde(default)]
+    pub as_archived: bool,
 }
 
 impl AddSpawns {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (source, target) = (self.source, self.target);
-        context
-            .store
-            .modify_graph(Box::new(move |graph| graph.set_parent(target, source)))
+        let (source, target, as_archived) = (self.source, self.target, self.as_archived);
+        context.store.modify_graph(Box::new(move |graph| {
+            if as_archived {
+                graph.add_archived_spawns(source, target)
+            } else {
+                graph.set_parent(target, source)
+            }
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -117,13 +131,21 @@ pub struct AddBlocks {
     pub target: Uuid,
     #[serde(default)]
     pub severity: Severity,
+    /// See [`AddSpawns::as_archived`] for the cascade-undo rationale.
+    #[serde(default)]
+    pub as_archived: bool,
 }
 
 impl AddBlocks {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (source, target, severity) = (self.source, self.target, self.severity);
+        let (source, target, severity, as_archived) =
+            (self.source, self.target, self.severity, self.as_archived);
         context.store.modify_graph(Box::new(move |graph| {
-            graph.set_block_with_severity(source, target, severity)
+            if as_archived {
+                graph.add_archived_blocks(source, target, severity)
+            } else {
+                graph.set_block_with_severity(source, target, severity)
+            }
         }))
     }
 
@@ -154,13 +176,21 @@ pub struct AddRelates {
     pub target: Uuid,
     #[serde(default)]
     pub kind: RelatesKind,
+    /// See [`AddSpawns::as_archived`] for the cascade-undo rationale.
+    #[serde(default)]
+    pub as_archived: bool,
 }
 
 impl AddRelates {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (source, target, kind) = (self.source, self.target, self.kind);
+        let (source, target, kind, as_archived) =
+            (self.source, self.target, self.kind, self.as_archived);
         context.store.modify_graph(Box::new(move |graph| {
-            graph.relate_with_kind(source, target, kind)
+            if as_archived {
+                graph.add_archived_relates(source, target, kind)
+            } else {
+                graph.relate_with_kind(source, target, kind)
+            }
         }))
     }
 
@@ -232,12 +262,15 @@ impl RemoveSpawns {
         )
     }
 
-    /// Inverse: re-add the parent edge.
+    /// Inverse: re-add the parent edge (as active — user-initiated
+    /// removes only fire against active edges, so the original state
+    /// was active).
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         Ok(vec![Command::Dependency(DependencyCommand::AddSpawns(
             AddSpawns {
                 source: self.source,
                 target: self.target,
+                as_archived: false,
             },
         ))])
     }
@@ -288,6 +321,7 @@ impl RemoveBlocks {
                 source: self.source,
                 target: self.target,
                 severity,
+                as_archived: false,
             },
         ))])
     }
@@ -338,6 +372,7 @@ impl RemoveRelates {
                 source: self.source,
                 target: self.target,
                 kind,
+                as_archived: false,
             },
         ))])
     }
@@ -349,7 +384,11 @@ impl RemoveRelates {
 
 /// Build inverse-replay `Add*` commands for every edge in `graph`
 /// that matches `predicate`. Each per-kind sub-graph contributes its
-/// matching edges with metadata (severity / kind) preserved.
+/// matching edges with metadata (severity / kind) and archive state
+/// preserved. Archived edges restore as archived; active edges restore
+/// as active. Without this distinction, cascade-undo silently revived
+/// archived incident edges to active state — losing the soft-delete
+/// history that `archive_node` had recorded.
 ///
 /// Used by the cascade capture-inverse sites that need to restore
 /// edges of every kind touching one or more nodes:
@@ -362,6 +401,7 @@ pub(super) fn edges_to_undo_commands<P>(
 where
     P: Fn(Uuid, Uuid) -> bool,
 {
+    use kanban_core::Edge as _;
     let mut out = Vec::new();
     for e in graph.spawns_edges() {
         if predicate(e.source(), e.target()) {
@@ -369,6 +409,7 @@ where
                 AddSpawns {
                     source: e.source(),
                     target: e.target(),
+                    as_archived: !e.is_active(),
                 },
             )));
         }
@@ -380,6 +421,7 @@ where
                     source: e.source(),
                     target: e.target(),
                     severity: e.severity,
+                    as_archived: !e.is_active(),
                 },
             )));
         }
@@ -391,6 +433,7 @@ where
                     source: e.source(),
                     target: e.target(),
                     kind: e.kind,
+                    as_archived: !e.is_active(),
                 },
             )));
         }
@@ -476,6 +519,7 @@ mod tests {
         assert!(AddSpawns {
             source: parent_id,
             target: child_id,
+            as_archived: false,
         }
         .execute(&context)
         .is_ok());
@@ -491,13 +535,15 @@ mod tests {
         let b = Uuid::new_v4();
         assert!(AddSpawns {
             source: a,
-            target: b
+            target: b,
+            as_archived: false,
         }
         .execute(&context)
         .is_ok());
         assert!(AddSpawns {
             source: b,
-            target: a
+            target: a,
+            as_archived: false,
         }
         .execute(&context)
         .is_err());
@@ -513,6 +559,7 @@ mod tests {
             source: blocker,
             target: blocked,
             severity: Severity::High,
+            as_archived: false,
         }
         .execute(&context)
         .unwrap();
@@ -530,6 +577,7 @@ mod tests {
             source: a,
             target: b,
             kind: RelatesKind::Duplicates,
+            as_archived: false,
         }
         .execute(&context)
         .unwrap();
@@ -688,6 +736,8 @@ mod tests {
         }
     }
 
+    // NEW_TESTS_PLACEHOLDER
+
     /// RelatesEdge is undirected: if the user added with (a, b) but
     /// removes with (b, a), `RemoveRelates::capture_inverse` must still
     /// find the original edge and recover its kind. The impl uses
@@ -736,6 +786,7 @@ mod tests {
         let cmd = AddSpawns {
             source: Uuid::new_v4(),
             target: Uuid::new_v4(),
+            as_archived: false,
         };
         let inverse = cmd.capture_inverse(&tc.store).unwrap();
         assert_eq!(inverse.len(), 1);
@@ -754,6 +805,7 @@ mod tests {
             source: Uuid::new_v4(),
             target: Uuid::new_v4(),
             severity: Severity::High,
+            as_archived: false,
         };
         let inverse = cmd.capture_inverse(&tc.store).unwrap();
         assert_eq!(inverse.len(), 1);
@@ -772,6 +824,7 @@ mod tests {
             source: Uuid::new_v4(),
             target: Uuid::new_v4(),
             kind: RelatesKind::Duplicates,
+            as_archived: false,
         };
         let inverse = cmd.capture_inverse(&tc.store).unwrap();
         assert_eq!(inverse.len(), 1);
@@ -853,7 +906,11 @@ mod tests {
         let target = Uuid::from_u128(0x42);
 
         // Per-kind add variants
-        let add_spawns = DependencyCommand::AddSpawns(AddSpawns { source, target });
+        let add_spawns = DependencyCommand::AddSpawns(AddSpawns {
+            source,
+            target,
+            as_archived: false,
+        });
         let json = serde_json::to_value(&add_spawns).unwrap();
         assert_eq!(json["action"], "add_spawns");
 
@@ -861,6 +918,7 @@ mod tests {
             source,
             target,
             severity: Severity::High,
+            as_archived: false,
         });
         let json = serde_json::to_value(&add_blocks).unwrap();
         assert_eq!(json["action"], "add_blocks");
@@ -870,6 +928,7 @@ mod tests {
             source,
             target,
             kind: RelatesKind::Duplicates,
+            as_archived: false,
         });
         let json = serde_json::to_value(&add_relates).unwrap();
         assert_eq!(json["action"], "add_relates");
