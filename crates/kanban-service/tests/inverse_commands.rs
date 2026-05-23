@@ -915,6 +915,57 @@ async fn test_inverse_remove_blocks_restores_blocks_edge() -> KanbanResult<()> {
     Ok(())
 }
 
+/// Pin the end-to-end tolerate_missing replay path: after an
+/// `AddSpawns`, the captured inverse is a `RemoveSpawns` with
+/// `tolerate_missing = true`. If a later command independently removes
+/// the same edge (here a user-initiated detach), the undo of the
+/// original AddSpawns must still succeed — the captured inverse's
+/// tolerant-Remove path swallows the EdgeNotFound on replay.
+///
+/// Unit-level tolerance is already pinned in `dependency_commands.rs`
+/// (`test_remove_spawns_tolerant_succeeds_on_missing_edge`); this test
+/// exercises the same branch through the full execute / undo machinery
+/// so a regression that bypasses tolerate_missing somewhere in the
+/// service layer (e.g. accidentally constructing the inverse with
+/// strict semantics) would fail here.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_attach_replays_tolerant_remove_after_independent_detach() -> KanbanResult<()>
+{
+    use kanban_domain::GraphOperations;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let parent = ctx.create_card(board.id, col.id, "P".into(), Default::default())?;
+    let child = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    // Forward 1: attach. Captured inverse = RemoveSpawns(tolerate_missing=true).
+    ctx.attach_child(parent.id, child.id)?;
+    assert!(ctx.graph()?.contains(parent.id, child.id));
+
+    // Independent removal: the edge is gone from the graph by the time
+    // we undo the original attach. The captured inverse should now
+    // execute against an absent edge and succeed via tolerate_missing.
+    ctx.detach_child(parent.id, child.id)?;
+    assert!(!ctx.graph()?.contains(parent.id, child.id));
+
+    // Undo the most recent command (the detach), then undo the attach.
+    // The second undo replays the tolerant RemoveSpawns inverse against
+    // an edge that no longer exists; without tolerate_missing this
+    // would fail with EdgeNotFound.
+    assert!(ctx.undo()?, "undo the detach");
+    assert!(
+        ctx.graph()?.contains(parent.id, child.id),
+        "undo of detach restores the edge"
+    );
+    assert!(ctx.undo()?, "undo the attach (tolerant remove inverse)");
+    assert!(
+        !ctx.graph()?.contains(parent.id, child.id),
+        "undo of attach removes the edge"
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_inverse_create_card_removes_card_and_archive_trail() -> KanbanResult<()> {
     use kanban_domain::commands::CreateCard;
