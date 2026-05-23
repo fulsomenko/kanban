@@ -38,6 +38,53 @@ async fn test_can_undo_returns_false_on_fresh_context() {
     assert!(!ctx.can_redo());
 }
 
+/// A future-format JSON file must surface as the typed
+/// `KanbanError::UnsupportedFutureVersion` variant through the service-layer
+/// stack — not as a stringified `Internal(...)`. Otherwise downstream surfaces
+/// (CLI / MCP / TUI) can't discriminate the case and `is_unsupported_future_version()`
+/// returns false.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_context_open_returns_typed_unsupported_future_version_for_v99_json_file() {
+    use serde_json::json;
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("future.json");
+    let v99 = json!({
+        "version": 99,
+        "metadata": {
+            "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+            "saved_at": "2030-01-01T00:00:00Z"
+        },
+        "data": {}
+    });
+    std::fs::write(&path, v99.to_string()).unwrap();
+
+    // KanbanContext::open is what every surface (CLI, MCP, TUI) calls.
+    // The first command_count() inside open() triggers ensure_loaded which
+    // hits the refusal guard. Use boards() to force the same load path via
+    // a non-deferred call too.
+    let backend = make_json_backend(&path);
+    let ctx = KanbanContext::open(backend, AppConfig::default()).await;
+
+    match ctx {
+        Err(e) => assert!(
+            e.is_unsupported_future_version(),
+            "expected typed UnsupportedFutureVersion variant, got: {e:?}"
+        ),
+        Ok(ctx) => {
+            // KanbanContext::open may not trigger the read on a JSON backend
+            // until the first DataStore call; try once and assert the typed
+            // error then.
+            let err = ctx
+                .boards()
+                .expect_err("listing boards on a v99 file must fail");
+            assert!(
+                err.is_unsupported_future_version(),
+                "expected typed UnsupportedFutureVersion variant, got: {err:?}"
+            );
+        }
+    }
+}
+
 /// `KanbanContext::persistence_metadata` delegates to the backend and surfaces
 /// the writer-stamp recorded on the most recent save.
 #[tokio::test(flavor = "multi_thread")]

@@ -61,10 +61,13 @@ impl JsonDataStore {
         // Perform all I/O and build the store outside any lock.
         let store = InMemoryStore::new();
 
-        let loaded = self
-            .file_store
-            .load_sync()
-            .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
+        // Convert via the From impl rather than stringifying — that way typed
+        // variants such as `UnsupportedFutureVersion` and `ConflictDetected`
+        // survive across the persistence/service boundary and reach the user
+        // surfaces (CLI, MCP, TUI) intact. Stringifying them flattens
+        // everything into KanbanError::Internal and breaks discriminators
+        // like KanbanError::is_unsupported_future_version().
+        let loaded = self.file_store.load_sync().map_err(KanbanError::from)?;
 
         if let Some((ss, meta)) = loaded {
             let snapshot = snapshot_from_json_bytes(&ss.data)
