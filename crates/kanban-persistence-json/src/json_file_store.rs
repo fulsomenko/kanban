@@ -246,9 +246,11 @@ impl PersistenceStore for JsonFileStore {
             }
         }
 
-        // Update metadata with current instance and time
+        // Update metadata with current instance, time, and writer identity
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
+        snapshot.metadata.writer_version = Some(kanban_core::KANBAN_VERSION.to_string());
+        snapshot.metadata.writer_commit = Some(kanban_core::KANBAN_COMMIT.to_string());
 
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -527,6 +529,63 @@ mod tests {
             ),
             "expected UnsupportedFutureVersion, got: {err:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_save_stamps_writer_version_and_commit() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("stamped.json");
+        let store = JsonFileStore::new(&file_path);
+
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&json!({ "boards": [], "columns": [] })).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+        store.save(snapshot).await.unwrap();
+
+        let bytes = tokio::fs::read(&file_path).await.unwrap();
+        let envelope: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            envelope["metadata"]["writer_version"]
+                .as_str()
+                .map(str::to_string),
+            Some(kanban_core::KANBAN_VERSION.to_string()),
+        );
+        assert_eq!(
+            envelope["metadata"]["writer_commit"]
+                .as_str()
+                .map(str::to_string),
+            Some(kanban_core::KANBAN_COMMIT.to_string()),
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_legacy_file_without_writer_stamp_succeeds() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("legacy_no_stamp.json");
+        let legacy = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        tokio::fs::write(&file_path, legacy.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (_, metadata) = store.load().await.unwrap();
+        assert!(metadata.writer_version.is_none());
+        assert!(metadata.writer_commit.is_none());
     }
 
     #[test]
