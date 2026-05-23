@@ -679,7 +679,121 @@ mod tests {
         }
     }
 
-// NEW_TESTS_PLACEHOLDER
+    /// Per-kind inverse: an AddSpawns undoes via a tolerant RemoveSpawns,
+    /// not a kind-agnostic Remove. A `[AddSpawns(a,b), AddBlocks(a,b)]`
+    /// batch's reverse-order undo now leaves each forward independently
+    /// undone instead of having the first inverse wipe both kinds.
+    #[test]
+    fn test_add_spawns_inverse_is_tolerant_remove_spawns() {
+        let tc = TestContext::new();
+        let cmd = AddSpawns {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+        };
+        let inverse = cmd.capture_inverse(&tc.store).unwrap();
+        assert_eq!(inverse.len(), 1);
+        match &inverse[0] {
+            Command::Dependency(DependencyCommand::RemoveSpawns(r)) => {
+                assert!(r.tolerate_missing, "undo inverse must tolerate missing");
+            }
+            other => panic!("expected RemoveSpawns inverse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_add_blocks_inverse_is_tolerant_remove_blocks() {
+        let tc = TestContext::new();
+        let cmd = AddBlocks {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+            severity: Severity::High,
+        };
+        let inverse = cmd.capture_inverse(&tc.store).unwrap();
+        assert_eq!(inverse.len(), 1);
+        match &inverse[0] {
+            Command::Dependency(DependencyCommand::RemoveBlocks(r)) => {
+                assert!(r.tolerate_missing, "undo inverse must tolerate missing");
+            }
+            other => panic!("expected RemoveBlocks inverse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_add_relates_inverse_is_tolerant_remove_relates() {
+        let tc = TestContext::new();
+        let cmd = AddRelates {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+            kind: RelatesKind::Duplicates,
+        };
+        let inverse = cmd.capture_inverse(&tc.store).unwrap();
+        assert_eq!(inverse.len(), 1);
+        match &inverse[0] {
+            Command::Dependency(DependencyCommand::RemoveRelates(r)) => {
+                assert!(r.tolerate_missing, "undo inverse must tolerate missing");
+            }
+            other => panic!("expected RemoveRelates inverse, got {other:?}"),
+        }
+    }
+
+    /// `tolerate_missing = true` swallows EdgeNotFound; the
+    /// user-initiated path (default `false`) propagates the error so
+    /// the surface can render "no such edge to remove". This decouples
+    /// replay tolerance from kind-agnosticism.
+    #[test]
+    fn test_remove_spawns_tolerant_succeeds_on_missing_edge() {
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let result = RemoveSpawns {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+            tolerate_missing: true,
+        }
+        .execute(&context);
+        assert!(result.is_ok(), "tolerant remove must swallow EdgeNotFound");
+    }
+
+    #[test]
+    fn test_remove_spawns_strict_errors_on_missing_edge() {
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let result = RemoveSpawns {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+            tolerate_missing: false,
+        }
+        .execute(&context);
+        assert!(
+            result.unwrap_err().is_edge_not_found(),
+            "strict remove must propagate EdgeNotFound"
+        );
+    }
+
+    #[test]
+    fn test_remove_blocks_tolerant_succeeds_on_missing_edge() {
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let result = RemoveBlocks {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+            tolerate_missing: true,
+        }
+        .execute(&context);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_remove_relates_tolerant_succeeds_on_missing_edge() {
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let result = RemoveRelates {
+            source: Uuid::new_v4(),
+            target: Uuid::new_v4(),
+            tolerate_missing: true,
+        }
+        .execute(&context);
+        assert!(result.is_ok());
+    }
 
     /// Pin the on-disk JSON shape of `DependencyCommand` variants so a
     /// future SQLite command-log wiring (the schema exists today but
@@ -722,6 +836,23 @@ mod tests {
         });
         let json = serde_json::to_value(&remove_blocks).unwrap();
         assert_eq!(json["action"], "remove_blocks");
+        assert_eq!(json["tolerate_missing"], false);
+
+        // Backwards-compat: pre-tolerance JSON (no `tolerate_missing`
+        // field) deserialises with `tolerate_missing = false` via
+        // `#[serde(default)]`. Old command-log entries stay valid.
+        let legacy: DependencyCommand = serde_json::from_value(serde_json::json!({
+            "action": "remove_spawns",
+            "source": source,
+            "target": target
+        }))
+        .expect("legacy remove_spawns without tolerate_missing must deserialise");
+        match legacy {
+            DependencyCommand::RemoveSpawns(r) => {
+                assert!(!r.tolerate_missing, "default must be strict");
+            }
+            other => panic!("expected RemoveSpawns, got {other:?}"),
+        }
 
         // Round-trip
         let round: DependencyCommand =
