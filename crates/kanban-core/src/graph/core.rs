@@ -34,10 +34,16 @@ impl<E> EdgeStore<E> {
         Self::default()
     }
 
-    /// Push an edge onto the store. Caller is responsible for any
-    /// structural invariants (cycle / self-ref) — sub-graph types
-    /// enforce them before calling.
-    pub fn add_edge(&mut self, edge: E) {
+    /// Push an edge onto the store, skipping structural invariants.
+    ///
+    /// Crate-private: the only legitimate callers are
+    /// `DagGraph::add_edge_with_metadata` and
+    /// `UndirectedGraph::add_edge_with_metadata`, both of which run
+    /// the relevant invariants (self-ref, duplicate, cycle) before
+    /// pushing. Exposing this further would let an external wrapper
+    /// silently bypass those checks — the trait surface (`Graph`,
+    /// `Directed`, `Undirected`) is the public entry point.
+    pub(crate) fn add_edge(&mut self, edge: E) {
         self.edges.push(edge);
     }
 
