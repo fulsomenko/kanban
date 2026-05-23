@@ -606,11 +606,26 @@ impl App {
                                 } else {
                                     self.ctx.attach_child(parent_id, child_id)
                                 };
-                                if result.is_ok() {
-                                    if was_selected {
-                                        self.relationship.selected.remove(&selected_card_id);
-                                    } else {
-                                        self.relationship.selected.insert(selected_card_id);
+                                match result {
+                                    Ok(()) => {
+                                        if was_selected {
+                                            self.relationship
+                                                .selected
+                                                .remove(&selected_card_id);
+                                        } else {
+                                            self.relationship
+                                                .selected
+                                                .insert(selected_card_id);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        // Surface the rejection to the user
+                                        // (cycle / self-ref / duplicate / unknown
+                                        // card). Without this the popup would
+                                        // look like a silent no-op.
+                                        self.set_error(format!(
+                                            "Failed to toggle relationship: {e}"
+                                        ));
                                     }
                                 }
                             }

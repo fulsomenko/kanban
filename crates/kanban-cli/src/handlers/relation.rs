@@ -42,8 +42,8 @@ fn resolve_children(ctx: &CliContext, raw: &[String]) -> KanbanCliResult<Vec<Uui
         .collect()
 }
 
-/// Batch-mode enrichment for `set_parents`. The atomic batch returns a
-/// single error rather than the per-child error the loop-of-singles
+/// Batch-mode enrichment for `attach_children`. The atomic batch returns
+/// a single error rather than the per-child error the loop-of-singles
 /// produced, so the hint identifies the parent and the offending child
 /// where the variant lets us narrow it down:
 /// - `SelfReference`: the offending child is exactly the one whose
@@ -89,7 +89,7 @@ fn enrich_add_error_for_batch(
     }
 }
 
-/// Batch-mode enrichment for `remove_parents`. `EdgeNotFound` is the
+/// Batch-mode enrichment for `detach_children`. `EdgeNotFound` is the
 /// only reachable dependency-variant failure on a remove: the hint
 /// names the parent and the children list so the user can see which
 /// invocation failed without re-reading scrollback.
