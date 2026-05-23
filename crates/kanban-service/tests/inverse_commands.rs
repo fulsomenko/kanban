@@ -1462,4 +1462,74 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
     Ok(())
 }
 
-// NEW_CASCADE_TEST_PLACEHOLDER
+/// Cascade-undo must preserve the archive state of incident edges.
+/// Pre-fix, `edges_to_undo_commands` issued `Add*` commands that
+/// always landed active, so an archived edge incident to a deleted
+/// card would silently revive on undo — losing the soft-delete state
+/// the user had recorded. Post-fix, the helper sets `as_archived`
+/// from `!e.is_active()` so archived edges restore as archived and
+/// active edges restore as active.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_cascade_preserves_archived_incident_edge_state() -> KanbanResult<()> {
+    use kanban_core::Edge as _;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
+    let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
+    let c = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    // Two edges incident to A: one to B (will be archived), one to C
+    // (will stay active).
+    let mut graph = ctx.graph()?;
+    graph.set_block(a.id, b.id).unwrap();
+    graph.set_block(a.id, c.id).unwrap();
+    // Archive node B; the cascade archives the A->B edge but leaves
+    // A->C active (B is not incident to A->C).
+    graph.archive_node(b.id);
+    ctx.backend().set_graph(graph)?;
+    ctx.clear_history()?;
+
+    // Baseline counts (active = 1, archived = 1).
+    let baseline = ctx.graph()?;
+    assert_eq!(baseline.len(), 2, "two incident edges in history");
+    assert_eq!(baseline.active_len(), 1, "one active");
+    assert!(
+        baseline.contains_archived(a.id, b.id),
+        "A->B archived in baseline"
+    );
+    assert!(baseline.contains(a.id, c.id), "A->C active in baseline");
+
+    // Delete the board (cascade removes A, B, C and all their edges).
+    ctx.delete_board(board.id)?;
+    assert_eq!(ctx.graph()?.len(), 0, "graph cleared by cascade");
+
+    // Undo restores everything.
+    assert!(ctx.undo()?);
+
+    let restored = ctx.graph()?;
+    assert_eq!(restored.len(), 2, "both edges restored in history");
+    assert_eq!(
+        restored.active_len(),
+        1,
+        "active count preserved (A->C stays active, A->B stays archived)"
+    );
+    assert!(
+        restored.contains_archived(a.id, b.id) && !restored.contains(a.id, b.id),
+        "A->B restored as archived"
+    );
+    assert!(restored.contains(a.id, c.id), "A->C restored as active");
+
+    // Per-edge active flag round-trip.
+    let blocks: Vec<_> = restored.blocks_edges().iter().collect();
+    let ab = blocks
+        .iter()
+        .find(|e| e.source() == a.id && e.target() == b.id)
+        .expect("A->B restored");
+    let ac = blocks
+        .iter()
+        .find(|e| e.source() == a.id && e.target() == c.id)
+        .expect("A->C restored");
+    assert!(!ab.is_active(), "A->B archived state preserved");
+    assert!(ac.is_active(), "A->C active state preserved");
+    Ok(())
+}

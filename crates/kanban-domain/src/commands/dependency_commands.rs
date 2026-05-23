@@ -736,7 +736,112 @@ mod tests {
         }
     }
 
-    // NEW_TESTS_PLACEHOLDER
+    /// `as_archived: true` on `AddSpawns` inserts the edge already in
+    /// the archived state. Used by cascade-undo to preserve the
+    /// archive state of incident edges across DeleteCard / undo
+    /// cycles. Without this branch, restoring an archived incident
+    /// edge as active would silently lose soft-delete history.
+    #[test]
+    fn test_add_spawns_with_as_archived_true_inserts_archived_edge() {
+        use kanban_core::Edge as _;
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let parent = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        AddSpawns {
+            source: parent,
+            target: child,
+            as_archived: true,
+        }
+        .execute(&context)
+        .unwrap();
+        let graph = tc.store.get_graph().unwrap();
+        // Active accessors must not see the edge.
+        assert!(graph.children(parent).is_empty(), "active children empty");
+        // Archived history must contain it.
+        let edges = graph.spawns_edges();
+        assert_eq!(edges.len(), 1, "edge present in history");
+        assert!(!edges[0].is_active(), "edge is archived");
+    }
+
+    #[test]
+    fn test_add_blocks_with_as_archived_true_inserts_archived_edge_with_severity() {
+        use kanban_core::Edge as _;
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let blocker = Uuid::new_v4();
+        let blocked = Uuid::new_v4();
+        AddBlocks {
+            source: blocker,
+            target: blocked,
+            severity: Severity::Critical,
+            as_archived: true,
+        }
+        .execute(&context)
+        .unwrap();
+        let graph = tc.store.get_graph().unwrap();
+        assert!(graph.blocked(blocker).is_empty(), "active blocked empty");
+        let edges = graph.blocks_edges();
+        assert_eq!(edges.len(), 1);
+        assert!(!edges[0].is_active(), "edge archived");
+        assert_eq!(
+            edges[0].severity,
+            Severity::Critical,
+            "severity preserved through archived insert"
+        );
+    }
+
+    #[test]
+    fn test_add_relates_with_as_archived_true_inserts_archived_edge_with_kind() {
+        use kanban_core::Edge as _;
+        let tc = TestContext::new();
+        let context = tc.as_command_context();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        AddRelates {
+            source: a,
+            target: b,
+            kind: RelatesKind::Duplicates,
+            as_archived: true,
+        }
+        .execute(&context)
+        .unwrap();
+        let graph = tc.store.get_graph().unwrap();
+        assert!(graph.related(a).is_empty(), "active related empty");
+        let edges = graph.relates_edges();
+        assert_eq!(edges.len(), 1);
+        assert!(!edges[0].is_active(), "edge archived");
+        assert_eq!(
+            edges[0].kind,
+            RelatesKind::Duplicates,
+            "kind preserved through archived insert"
+        );
+    }
+
+    /// Backwards-compat: legacy command-log entries that pre-date the
+    /// `as_archived` field deserialise with `as_archived = false`
+    /// (active), matching the original semantics. `#[serde(default)]`
+    /// keeps replay equivalence for all old logs.
+    #[test]
+    fn test_add_spawns_legacy_json_without_as_archived_defaults_to_false() {
+        let source = Uuid::nil();
+        let target = Uuid::from_u128(0x42);
+        let legacy: DependencyCommand = serde_json::from_value(serde_json::json!({
+            "action": "add_spawns",
+            "source": source,
+            "target": target,
+        }))
+        .expect("legacy add_spawns without as_archived must deserialise");
+        match legacy {
+            DependencyCommand::AddSpawns(a) => {
+                assert!(
+                    !a.as_archived,
+                    "default must be active for backwards-compat"
+                );
+            }
+            other => panic!("expected AddSpawns, got {other:?}"),
+        }
+    }
 
     /// RelatesEdge is undirected: if the user added with (a, b) but
     /// removes with (b, a), `RemoveRelates::capture_inverse` must still
