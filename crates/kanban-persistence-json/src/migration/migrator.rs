@@ -14,7 +14,11 @@ impl Migrator {
     pub fn detect_version_from_value(value: &Value) -> PersistenceResult<FormatVersion> {
         // V2+ files have a "version" field at root level
         if let Some(version) = value.get("version").and_then(|v| v.as_u64()) {
-            let v = version as u32;
+            // Saturate-on-overflow rather than truncate: a `version` field
+            // that exceeds u32::MAX is still a "future version" the binary
+            // doesn't understand, not the wrapped-around small number a
+            // naive `as u32` would yield.
+            let v: u32 = u32::try_from(version).unwrap_or(u32::MAX);
             return FormatVersion::from_u32(v).ok_or(PersistenceError::UnsupportedFutureVersion {
                 file_version: v,
                 binary_max: FormatVersion::MAX.as_u32(),
@@ -412,6 +416,27 @@ mod tests {
                     file_version: 99,
                     binary_max: 6
                 }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_detect_version_from_value_rejects_u32_overflow_that_truncates_to_valid_version() {
+        // 2^32 + 6 truncates to 6 under a naive `as u32` cast — which would
+        // be silently accepted as V6. The guard must refuse it as a future
+        // version instead.
+        let truncates_to_v6 = json!({
+            "version": (1u64 << 32) + 6,
+            "metadata": {},
+            "data": {}
+        });
+        let err = Migrator::detect_version_from_value(&truncates_to_v6)
+            .expect_err("version > u32::MAX must be refused, not truncated to V6");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion { binary_max: 6, .. }
             ),
             "expected UnsupportedFutureVersion, got: {err:?}"
         );
