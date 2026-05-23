@@ -78,10 +78,10 @@ fn add_by_kind(
     kind: CardEdgeType,
 ) -> kanban_domain::KanbanResult<()> {
     match kind {
-        CardEdgeType::Spawns => ctx.add_spawns_edge(a, b),
-        CardEdgeType::Blocks => ctx.add_blocks_edge(a, b, kanban_domain::Severity::default()),
+        CardEdgeType::Spawns => ctx.spawn_child(a, b),
+        CardEdgeType::Blocks => ctx.block(a, b, kanban_domain::Severity::default()),
         CardEdgeType::RelatesTo => {
-            ctx.add_relates_edge(a, b, kanban_domain::RelatesKind::default())
+            ctx.relate(a, b, kanban_domain::RelatesKind::default())
         }
     }
 }
@@ -92,9 +92,9 @@ fn remove_by_kind(
     kind: CardEdgeType,
 ) -> kanban_domain::KanbanResult<()> {
     match kind {
-        CardEdgeType::Spawns => ctx.remove_spawns_edge(a, b),
-        CardEdgeType::Blocks => ctx.remove_blocks_edge(a, b),
-        CardEdgeType::RelatesTo => ctx.remove_relates_edge(a, b),
+        CardEdgeType::Spawns => ctx.unspawn_child(a, b),
+        CardEdgeType::Blocks => ctx.unblock(a, b),
+        CardEdgeType::RelatesTo => ctx.unrelate(a, b),
     }
 }
 fn list_from_by_kind(
@@ -103,9 +103,9 @@ fn list_from_by_kind(
     kind: CardEdgeType,
 ) -> kanban_domain::KanbanResult<Vec<uuid::Uuid>> {
     match kind {
-        CardEdgeType::Spawns => ctx.list_spawns_children(node),
-        CardEdgeType::Blocks => ctx.list_blocked(node),
-        CardEdgeType::RelatesTo => ctx.list_related(node),
+        CardEdgeType::Spawns => ctx.list_children_of(node),
+        CardEdgeType::Blocks => ctx.list_blocked_by(node),
+        CardEdgeType::RelatesTo => ctx.list_related_to(node),
     }
 }
 fn list_to_by_kind(
@@ -114,9 +114,9 @@ fn list_to_by_kind(
     kind: CardEdgeType,
 ) -> kanban_domain::KanbanResult<Vec<uuid::Uuid>> {
     match kind {
-        CardEdgeType::Spawns => ctx.list_spawns_parents(node),
-        CardEdgeType::Blocks => ctx.list_blockers(node),
-        CardEdgeType::RelatesTo => ctx.list_related(node),
+        CardEdgeType::Spawns => ctx.list_parents_of(node),
+        CardEdgeType::Blocks => ctx.list_blockers_of(node),
+        CardEdgeType::RelatesTo => ctx.list_related_to(node),
     }
 }
 
@@ -389,13 +389,13 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
 
-                ctx.set_parent(child_id, parent_id).unwrap();
+                ctx.spawn_child(parent_id, child_id).unwrap();
 
-                let children = ctx.list_card_children(parent_id).unwrap();
+                let children = ctx.list_children_of(parent_id).unwrap();
                 assert_eq!(children.len(), 1);
                 assert_eq!(children[0], child_id);
 
-                let parents = ctx.list_card_parents(child_id).unwrap();
+                let parents = ctx.list_parents_of(child_id).unwrap();
                 assert_eq!(parents.len(), 1);
                 assert_eq!(parents[0], parent_id);
             }
@@ -405,9 +405,9 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, child_id, _) = seed_three_cards(&ctx.backend());
 
-                ctx.set_parent(child_id, parent_id).unwrap();
+                ctx.spawn_child(parent_id, child_id).unwrap();
 
-                let convenience: Vec<uuid::Uuid> = ctx.list_card_parents(child_id).unwrap();
+                let convenience: Vec<uuid::Uuid> = ctx.list_parents_of(child_id).unwrap();
                 let primitive: Vec<uuid::Uuid> =
                     list_to_by_kind(&ctx, child_id, CardEdgeType::Spawns).unwrap();
                 assert_eq!(convenience, primitive);
@@ -425,12 +425,12 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
 
-                ctx.set_parent(child_on_b, parent_on_a).unwrap();
+                ctx.spawn_child(parent_on_a, child_on_b).unwrap();
 
-                let children = ctx.list_card_children(parent_on_a).unwrap();
+                let children = ctx.list_children_of(parent_on_a).unwrap();
                 assert_eq!(children, vec![child_on_b], "child visible from parent side");
 
-                let parents = ctx.list_card_parents(child_on_b).unwrap();
+                let parents = ctx.list_parents_of(child_on_b).unwrap();
                 assert_eq!(parents, vec![parent_on_a], "parent visible from child side");
             }
 
@@ -439,7 +439,7 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
 
-                ctx.set_parent(child_on_b, parent_on_a).unwrap();
+                ctx.spawn_child(parent_on_a, child_on_b).unwrap();
                 ctx.save().await.unwrap();
 
                 // Re-read graph from the backend rather than the in-memory
@@ -561,11 +561,11 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_on_a, child_on_b) = seed_two_boards_one_card_each(&ctx.backend());
 
-                ctx.set_parent(child_on_b, parent_on_a).unwrap();
-                ctx.remove_parent(child_on_b, parent_on_a).unwrap();
+                ctx.spawn_child(parent_on_a, child_on_b).unwrap();
+                ctx.unspawn_child(parent_on_a, child_on_b).unwrap();
 
-                assert!(ctx.list_card_children(parent_on_a).unwrap().is_empty());
-                assert!(ctx.list_card_parents(child_on_b).unwrap().is_empty());
+                assert!(ctx.list_children_of(parent_on_a).unwrap().is_empty());
+                assert!(ctx.list_parents_of(child_on_b).unwrap().is_empty());
             }
 
             // --- Atomic multi-child batch (add_children / remove_children) ---
@@ -581,9 +581,9 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
-                ctx.add_children(parent_id, vec![c1, c2]).unwrap();
+                ctx.spawn_children(parent_id, vec![c1, c2]).unwrap();
 
-                let mut children = ctx.list_card_children(parent_id).unwrap();
+                let mut children = ctx.list_children_of(parent_id).unwrap();
                 children.sort();
                 let mut expected = vec![c1, c2];
                 expected.sort();
@@ -596,19 +596,19 @@ macro_rules! card_graph_tests {
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
                 // Seed parent->c1->c2 so closing parent into c2 cycles.
-                ctx.add_child(parent_id, c1).unwrap();
-                ctx.add_child(c1, c2).unwrap();
+                ctx.spawn_child(parent_id, c1).unwrap();
+                ctx.spawn_child(c1, c2).unwrap();
 
                 // Batch: attach c1 AND parent as children of c2.
                 // First would succeed in isolation (c1 already child of c2);
                 // second would create cycle parent->c1->c2->parent.
                 let err = ctx
-                    .add_children(c2, vec![c1, parent_id])
+                    .spawn_children(c2, vec![c1, parent_id])
                     .expect_err("batch must fail on cycle");
                 assert!(err.is_cycle_detected(), "expected cycle, got {err:?}");
 
                 // Nothing new attached: c2 must still have only its prior children.
-                let children = ctx.list_card_children(c2).unwrap();
+                let children = ctx.list_children_of(c2).unwrap();
                 assert!(
                     !children.contains(&c1),
                     "c1 must not be re-attached as a child of c2 after rollback"
@@ -626,7 +626,7 @@ macro_rules! card_graph_tests {
                 let phantom = uuid::Uuid::new_v4();
 
                 let err = ctx
-                    .add_children(parent_id, vec![c1, phantom])
+                    .spawn_children(parent_id, vec![c1, phantom])
                     .expect_err("batch must fail when any child is unknown");
                 assert!(err.is_not_found(), "expected NotFound, got {err:?}");
                 assert!(
@@ -634,7 +634,7 @@ macro_rules! card_graph_tests {
                     "error must name the missing id; got {err:?}"
                 );
 
-                let children = ctx.list_card_children(parent_id).unwrap();
+                let children = ctx.list_children_of(parent_id).unwrap();
                 assert!(
                     children.is_empty(),
                     "no children should be attached when validation fails; got {children:?}"
@@ -646,10 +646,10 @@ macro_rules! card_graph_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
-                ctx.add_children(parent_id, vec![c1, c2]).unwrap();
-                ctx.remove_children(parent_id, vec![c1, c2]).unwrap();
+                ctx.spawn_children(parent_id, vec![c1, c2]).unwrap();
+                ctx.unspawn_children(parent_id, vec![c1, c2]).unwrap();
 
-                assert!(ctx.list_card_children(parent_id).unwrap().is_empty());
+                assert!(ctx.list_children_of(parent_id).unwrap().is_empty());
             }
 
             #[tokio::test(flavor = "multi_thread")]
@@ -658,10 +658,10 @@ macro_rules! card_graph_tests {
                 let (parent_id, c1, c2) = seed_three_cards(&ctx.backend());
 
                 // Only c1 is attached; c2 is not.
-                ctx.add_child(parent_id, c1).unwrap();
+                ctx.spawn_child(parent_id, c1).unwrap();
 
                 let err = ctx
-                    .remove_children(parent_id, vec![c1, c2])
+                    .unspawn_children(parent_id, vec![c1, c2])
                     .expect_err("batch must fail when any edge is missing");
                 assert!(
                     err.is_edge_not_found(),
@@ -669,7 +669,7 @@ macro_rules! card_graph_tests {
                 );
 
                 // c1 must still be attached: the partial remove was rolled back.
-                let children = ctx.list_card_children(parent_id).unwrap();
+                let children = ctx.list_children_of(parent_id).unwrap();
                 assert_eq!(
                     children,
                     vec![c1],

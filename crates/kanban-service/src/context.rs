@@ -1333,45 +1333,52 @@ impl KanbanContext {
 }
 
 impl GraphOperations for KanbanContext {
-    fn add_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
-        self.require_card_exists(parent_id)?;
-        self.require_card_exists(child_id)?;
-        self.execute(vec![Command::Dependency(DependencyCommand::AddSpawns(
-            AddSpawns {
-                source: parent_id,
-                target: child_id,
-            },
-        ))])
+    fn spawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.require_card_exists(parent)?;
+        for child in &children {
+            self.require_card_exists(*child)?;
+        }
+        let commands: Vec<Command> = children
+            .into_iter()
+            .map(|child| {
+                Command::Dependency(DependencyCommand::AddSpawns(AddSpawns {
+                    source: parent,
+                    target: child,
+                }))
+            })
+            .collect();
+        self.execute(commands)
     }
 
-    fn remove_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
-        self.require_card_exists(parent_id)?;
-        self.require_card_exists(child_id)?;
-        self.execute(vec![Command::Dependency(DependencyCommand::RemoveSpawns(
-            RemoveSpawns {
-                source: parent_id,
-                target: child_id,
-                tolerate_missing: false,
-            },
-        ))])
+    fn unspawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.require_card_exists(parent)?;
+        for child in &children {
+            self.require_card_exists(*child)?;
+        }
+        let commands: Vec<Command> = children
+            .into_iter()
+            .map(|child| {
+                Command::Dependency(DependencyCommand::RemoveSpawns(RemoveSpawns {
+                    source: parent,
+                    target: child,
+                    tolerate_missing: false,
+                }))
+            })
+            .collect();
+        self.execute(commands)
     }
 
-    fn list_spawns_children(&self, parent_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.require_card_exists(parent_id)?;
-        Ok(self.backend.get_graph()?.children(parent_id))
+    fn list_children_of(&self, parent: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(parent)?;
+        Ok(self.backend.get_graph()?.children(parent))
     }
 
-    fn list_spawns_parents(&self, child_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.require_card_exists(child_id)?;
-        Ok(self.backend.get_graph()?.parents(child_id))
+    fn list_parents_of(&self, child: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(child)?;
+        Ok(self.backend.get_graph()?.parents(child))
     }
 
-    fn add_blocks_edge(
-        &mut self,
-        blocker: Uuid,
-        blocked: Uuid,
-        severity: Severity,
-    ) -> KanbanResult<()> {
+    fn block(&mut self, blocker: Uuid, blocked: Uuid, severity: Severity) -> KanbanResult<()> {
         self.require_card_exists(blocker)?;
         self.require_card_exists(blocked)?;
         self.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
@@ -1383,7 +1390,7 @@ impl GraphOperations for KanbanContext {
         ))])
     }
 
-    fn remove_blocks_edge(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()> {
+    fn unblock(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()> {
         self.require_card_exists(blocker)?;
         self.require_card_exists(blocked)?;
         self.execute(vec![Command::Dependency(DependencyCommand::RemoveBlocks(
@@ -1395,17 +1402,17 @@ impl GraphOperations for KanbanContext {
         ))])
     }
 
-    fn list_blocked(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>> {
+    fn list_blocked_by(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.require_card_exists(blocker)?;
         Ok(self.backend.get_graph()?.blocked(blocker))
     }
 
-    fn list_blockers(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
+    fn list_blockers_of(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.require_card_exists(blocked)?;
         Ok(self.backend.get_graph()?.blockers(blocked))
     }
 
-    fn add_relates_edge(&mut self, a: Uuid, b: Uuid, kind: RelatesKind) -> KanbanResult<()> {
+    fn relate(&mut self, a: Uuid, b: Uuid, kind: RelatesKind) -> KanbanResult<()> {
         self.require_card_exists(a)?;
         self.require_card_exists(b)?;
         self.execute(vec![Command::Dependency(DependencyCommand::AddRelates(
@@ -1417,7 +1424,7 @@ impl GraphOperations for KanbanContext {
         ))])
     }
 
-    fn remove_relates_edge(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+    fn unrelate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
         self.require_card_exists(a)?;
         self.require_card_exists(b)?;
         self.execute(vec![Command::Dependency(DependencyCommand::RemoveRelates(
@@ -1429,43 +1436,8 @@ impl GraphOperations for KanbanContext {
         ))])
     }
 
-    fn list_related(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
+    fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.require_card_exists(card)?;
         Ok(self.backend.get_graph()?.related(card))
-    }
-
-    fn add_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        self.require_card_exists(parent_id)?;
-        for child in &children {
-            self.require_card_exists(*child)?;
-        }
-        let commands: Vec<Command> = children
-            .into_iter()
-            .map(|child| {
-                Command::Dependency(DependencyCommand::AddSpawns(AddSpawns {
-                    source: parent_id,
-                    target: child,
-                }))
-            })
-            .collect();
-        self.execute(commands)
-    }
-
-    fn remove_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        self.require_card_exists(parent_id)?;
-        for child in &children {
-            self.require_card_exists(*child)?;
-        }
-        let commands: Vec<Command> = children
-            .into_iter()
-            .map(|child| {
-                Command::Dependency(DependencyCommand::RemoveSpawns(RemoveSpawns {
-                    source: parent_id,
-                    target: child,
-                    tolerate_missing: false,
-                }))
-            })
-            .collect();
-        self.execute(commands)
     }
 }

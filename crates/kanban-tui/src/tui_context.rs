@@ -379,61 +379,53 @@ impl KanbanOperations for TuiContext {
 }
 
 impl GraphOperations for TuiContext {
-    fn add_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
-        let r = self.inner.add_spawns_edge(parent_id, child_id);
+    fn spawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.spawn_children(parent, children);
         self.with_flush(r)
     }
-    fn remove_spawns_edge(&mut self, parent_id: Uuid, child_id: Uuid) -> KanbanResult<()> {
-        let r = self.inner.remove_spawns_edge(parent_id, child_id);
+    fn unspawn_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.unspawn_children(parent, children);
         self.with_flush(r)
     }
-    fn list_spawns_children(&self, parent_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.inner.list_spawns_children(parent_id)
+    fn list_children_of(&self, parent: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_children_of(parent)
     }
-    fn list_spawns_parents(&self, child_id: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.inner.list_spawns_parents(child_id)
+    fn list_parents_of(&self, child: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_parents_of(child)
     }
-    fn add_blocks_edge(
+    fn block(
         &mut self,
         blocker: Uuid,
         blocked: Uuid,
         severity: kanban_domain::Severity,
     ) -> KanbanResult<()> {
-        let r = self.inner.add_blocks_edge(blocker, blocked, severity);
+        let r = self.inner.block(blocker, blocked, severity);
         self.with_flush(r)
     }
-    fn remove_blocks_edge(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()> {
-        let r = self.inner.remove_blocks_edge(blocker, blocked);
+    fn unblock(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()> {
+        let r = self.inner.unblock(blocker, blocked);
         self.with_flush(r)
     }
-    fn list_blocked(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.inner.list_blocked(blocker)
+    fn list_blocked_by(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_blocked_by(blocker)
     }
-    fn list_blockers(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.inner.list_blockers(blocked)
+    fn list_blockers_of(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_blockers_of(blocked)
     }
-    fn add_relates_edge(
+    fn relate(
         &mut self,
         a: Uuid,
         b: Uuid,
         kind: kanban_domain::RelatesKind,
     ) -> KanbanResult<()> {
-        let r = self.inner.add_relates_edge(a, b, kind);
+        let r = self.inner.relate(a, b, kind);
         self.with_flush(r)
     }
-    fn remove_relates_edge(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
-        let r = self.inner.remove_relates_edge(a, b);
+    fn unrelate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+        let r = self.inner.unrelate(a, b);
         self.with_flush(r)
     }
-    fn list_related(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
-        self.inner.list_related(card)
-    }
-    fn add_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        let r = self.inner.add_children(parent_id, children);
-        self.with_flush(r)
-    }
-    fn remove_children(&mut self, parent_id: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
-        let r = self.inner.remove_children(parent_id, children);
-        self.with_flush(r)
+    fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_related_to(card)
     }
 }

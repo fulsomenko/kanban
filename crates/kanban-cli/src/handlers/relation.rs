@@ -132,34 +132,36 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
     match action {
         RelationAction::Add { parent, children } => {
             // Resolve raw identifiers up front, then commit all
-            // edges in a single atomic batch via `add_children`. The
-            // service rolls the entire batch back on any failure
+            // edges in a single atomic batch via `spawn_children`.
+            // The service rolls the entire batch back on any failure
             // (cycle / self-ref / unknown card), so a mid-list error
             // never leaves a partial state in memory or on disk.
             let parent_uuid = ctx.resolve_card_id(&parent)?;
             let child_uuids = resolve_children(ctx, &children)?;
-            ctx.add_children(parent_uuid, child_uuids.clone())
+            let response = serde_json::json!({
+                "parent":   parent_uuid.to_string(),
+                "children": serde_json::to_value(&child_uuids)?,
+            });
+            ctx.spawn_children(parent_uuid, child_uuids)
                 .map_err(|e| enrich_add_error_for_batch(e, &parent, &children))?;
             ctx.save().await?;
-            Ok(serde_json::json!({
-                "parent":   parent_uuid.to_string(),
-                "children": child_uuids.iter().map(|u| u.to_string()).collect::<Vec<_>>(),
-            }))
+            Ok(response)
         }
         RelationAction::Remove { parent, children } => {
             let parent_uuid = ctx.resolve_card_id(&parent)?;
             let child_uuids = resolve_children(ctx, &children)?;
-            ctx.remove_children(parent_uuid, child_uuids.clone())
+            let response = serde_json::json!({
+                "parent":   parent_uuid.to_string(),
+                "children": serde_json::to_value(&child_uuids)?,
+            });
+            ctx.unspawn_children(parent_uuid, child_uuids)
                 .map_err(|e| enrich_remove_error_for_batch(e, &parent, &children))?;
             ctx.save().await?;
-            Ok(serde_json::json!({
-                "parent":   parent_uuid.to_string(),
-                "children": child_uuids.iter().map(|u| u.to_string()).collect::<Vec<_>>(),
-            }))
+            Ok(response)
         }
         RelationAction::Parents { card, sort, order } => {
             let uuid = ctx.resolve_card_id(&card)?;
-            let ids = ctx.list_card_parents(uuid)?;
+            let ids = ctx.list_parents_of(uuid)?;
             let cards = resolve_cards(ctx, ids);
             Ok(serde_json::to_value(sort_and_summarize(
                 cards, sort, order,
@@ -167,7 +169,7 @@ async fn run(ctx: &mut CliContext, action: RelationAction) -> KanbanCliResult<se
         }
         RelationAction::Children { card, sort, order } => {
             let uuid = ctx.resolve_card_id(&card)?;
-            let ids = ctx.list_card_children(uuid)?;
+            let ids = ctx.list_children_of(uuid)?;
             let cards = resolve_cards(ctx, ids);
             Ok(serde_json::to_value(sort_and_summarize(
                 cards, sort, order,
