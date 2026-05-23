@@ -58,10 +58,36 @@ pub(crate) async fn migrate_to_v6_split_graph(path: &Path) -> PersistenceResult<
 /// sub-graph maps when no legacy `cards.edges` field exists — silent data
 /// loss for any caller that misinvokes it on a V6 file.
 pub(crate) fn transform_to_v6_split_graph_value(envelope: &mut Value) -> PersistenceResult<()> {
-    // Idempotency guard: a V6 envelope has no legacy `cards.edges` to
-    // split, and overwriting `data["graph"]` would wipe the edges
-    // already in the split sub-graphs.
+    // Idempotency guards: skip the transform when there's nothing to
+    // split. Two independent conditions warrant a skip:
+    //
+    // 1. The envelope already declares `version: 6` (the normal
+    //    no-op path when this is called against a fresh V6 file).
+    // 2. The envelope's `data.graph` is already in V6 split shape
+    //    (any of the `parent_child` / `blocks` / `relates` sub-graph
+    //    keys present). This catches the regression where an older
+    //    binary writes back the file with `version: 3..5` but keeps
+    //    the V6-shape data intact; without this check, the transform
+    //    falls through, finds no legacy `graph.cards.edges` array,
+    //    and silently overwrites the populated sub-graphs with empty
+    //    ones — destroying every edge.
+    //
+    // When (2) fires we still bump the version field, so the file
+    // exits in a properly-self-consistent V6 state.
     if envelope.get("version").and_then(|v| v.as_u64()) == Some(6) {
+        return Ok(());
+    }
+    let has_v6_shape = envelope
+        .get("data")
+        .and_then(|d| d.get("graph"))
+        .map(|g| {
+            g.get("parent_child").is_some()
+                || g.get("blocks").is_some()
+                || g.get("relates").is_some()
+        })
+        .unwrap_or(false);
+    if has_v6_shape {
+        envelope["version"] = Value::Number(6.into());
         return Ok(());
     }
 
@@ -451,6 +477,8 @@ mod tests {
             "numeric edge entry must produce a clear diagnostic; got: {err:?}"
         );
     }
+
+    // NEW_TEST_PLACEHOLDER
 
     /// `transform_to_v6_split_graph_value` is `pub`. If a caller
     /// accidentally invokes it on an already-V6 envelope (with edges in
