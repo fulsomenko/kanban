@@ -17,7 +17,10 @@ use std::sync::Arc;
 /// version via `migrate()` before the test could observe the pre-bumped
 /// state. Writes only the `metadata` table; the rest of the schema is
 /// created by `SqliteStore::open` on first real load.
-#[doc(hidden)]
+///
+/// Gated behind the `test-helpers` feature so it does not ship in release
+/// binaries. Mirrors the pattern in `kanban-persistence::test_helpers`.
+#[cfg(feature = "test-helpers")]
 pub async fn write_test_metadata_with_schema_version(
     path: &std::path::Path,
     version: u32,
@@ -55,7 +58,10 @@ pub async fn write_test_metadata_with_schema_version(
 /// the metadata row's `schema_version` without going through `SqliteStore::open`
 /// (which would normalise it). Used by integration tests that want to assert
 /// a refused open didn't bump the on-disk version.
-#[doc(hidden)]
+///
+/// Gated behind the `test-helpers` feature; see the sibling function for
+/// rationale.
+#[cfg(feature = "test-helpers")]
 pub async fn read_test_schema_version(
     path: &std::path::Path,
 ) -> Result<Option<u32>, PersistenceError> {

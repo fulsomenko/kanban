@@ -56,7 +56,7 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 kanban-domain = { path = "../kanban-domain", version = "^0.6" }
 kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.6" }
-kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.6" }
+kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.6", features = ["test-helpers"] }
 kanban-service = { path = "../kanban-service", version = "^0.6" }
 tempfile.workspace = true
 tokio.workspace = true
