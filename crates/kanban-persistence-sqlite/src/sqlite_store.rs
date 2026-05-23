@@ -1114,8 +1114,15 @@ impl SqliteStore {
     }
 
     async fn get_graph_async(&self) -> KanbanResult<DependencyGraph> {
-        let mut conn = self.pool.acquire().await.map_err(db_err)?;
-        Self::get_graph_with_conn(&mut conn).await
+        // Wrap the three per-kind edge reads in a single transaction so
+        // a concurrent writer between query 1 (spawns) and query 3
+        // (relates) cannot yield an inconsistent in-memory snapshot.
+        // SQLite under WAL gives the transaction a stable read view; the
+        // tx is read-only and is committed without writes.
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        let graph = Self::get_graph_with_conn(&mut tx).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(graph)
     }
 
     async fn write_column_with_conn(
