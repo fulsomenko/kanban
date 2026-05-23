@@ -273,7 +273,7 @@ pub fn handle_create_card_key(&mut self) {
 - **Progressive Auto-Save**: Changes saved immediately after each operation (not just on exit)
 - **Async Processing**: Commands queued immediately via bounded channel, processed by background worker
 - **Conflict Detection**: Multi-instance changes detected via file metadata (timestamp + size + content hash)
-- **Format Versioning**: Automatic V1→V2 migration on load with backup creation
+- **Format Versioning**: JSON envelope versioned V1..V6 (current shipped is V6); reader auto-migrates older files on load via the V1→V2→V3→…→V6 chain, writing `.v{N}.backup` for V3/V4/V5 starting points before the split-graph step. SQLite uses `metadata.schema_version` (currently `1`) plus one-shot legacy-table drops on open.
 - **Multi-Instance Support**: Last-write-wins resolution for concurrent edits (see [CONFLICT_RESOLUTION.md](CONFLICT_RESOLUTION.md) for data loss scenarios and limitations)
 - **Atomic Writes**: Crash-safe write pattern (temp file → atomic rename) prevents corruption
 - **Own-Write Detection**: Metadata-based filtering prevents false positives from our own saves
