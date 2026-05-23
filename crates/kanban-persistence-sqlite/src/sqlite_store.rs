@@ -20,6 +20,11 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// stamp fresh databases and to refuse files written by a future binary.
 pub const SUPPORTED_SCHEMA_VERSION: u32 = 2;
 
+/// (instance_id, saved_at, writer_version, writer_commit, schema_version).
+/// Tuple shape returned by the metadata-singleton SELECT — extracted to a
+/// type alias to keep clippy's type-complexity lint happy.
+type MetadataRow = (String, String, Option<String>, Option<String>, u32);
+
 /// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
@@ -480,8 +485,9 @@ impl SqliteStore {
     /// before `load_or_create_instance_id` has run, which the public API doesn't expose.
     pub fn read_metadata_sync(&self) -> KanbanResult<Option<PersistenceMetadata>> {
         run(async {
-            let row: Option<(String, String, Option<String>, Option<String>)> = sqlx::query_as(
-                "SELECT instance_id, saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+            let row: Option<MetadataRow> = sqlx::query_as(
+                "SELECT instance_id, saved_at, writer_version, writer_commit, schema_version \
+                 FROM metadata WHERE id = 1",
             )
             .fetch_optional(&self.pool)
             .await
@@ -496,28 +502,36 @@ impl SqliteStore {
                 saved_at,
                 writer_version: row.2,
                 writer_commit: row.3,
-                format_version: Some(SUPPORTED_SCHEMA_VERSION),
+                format_version: Some(row.4),
             }))
         })
     }
 
-    pub async fn checkpoint(&self) -> KanbanResult<()> {
-        // Stamp the writer identity onto the metadata row before truncating
-        // the WAL. Anything in the WAL is about to land in the main DB file,
-        // so attribution should land in the same step. Callers that just
-        // want pure WAL handling shouldn't be calling checkpoint; the only
-        // existing callers (PersistenceStore::save, SqliteBackend::flush)
-        // both want the stamp.
+    /// Record the current binary as the most-recent writer of this DB by
+    /// stamping `saved_at`, `writer_version`, and `writer_commit` into the
+    /// metadata singleton row. Returns the timestamp it wrote so callers can
+    /// echo it back into a `PersistenceMetadata` without re-reading the row.
+    ///
+    /// Separated from [`checkpoint`] so each function does one thing — see
+    /// the post-PR-288 review for the SRP rationale.
+    pub async fn stamp_writer(&self) -> KanbanResult<DateTime<Utc>> {
+        let now = Utc::now();
         sqlx::query(
             "UPDATE metadata SET saved_at = ?, writer_version = ?, writer_commit = ? WHERE id = 1",
         )
-        .bind(Utc::now().to_rfc3339())
+        .bind(now.to_rfc3339())
         .bind(kanban_core::KANBAN_VERSION)
         .bind(kanban_core::KANBAN_COMMIT)
         .execute(&self.pool)
         .await
         .map_err(|e| KanbanError::Database(e.to_string()))?;
+        Ok(now)
+    }
 
+    /// Truncate the WAL. Pure I/O step; does not touch the writer-stamp
+    /// columns. Callers that want a durable save with attribution should
+    /// invoke [`stamp_writer`] alongside this.
+    pub async fn checkpoint(&self) -> KanbanResult<()> {
         sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&self.pool)
             .await
@@ -1794,31 +1808,25 @@ impl PersistenceStore for SqliteStore {
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
-        // checkpoint() owns the writer-stamp UPDATE plus WAL flush.
+        let saved_at = self
+            .stamp_writer()
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
         self.checkpoint()
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
 
-        // Read back what checkpoint() just wrote so the caller sees the same
-        // stamp that landed on disk.
-        let (saved_at_str, writer_version, writer_commit): (
-            String,
-            Option<String>,
-            Option<String>,
-        ) = sqlx::query_as(
-            "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| PersistenceError::Database(e.to_string()))?;
-        let saved_at = DateTime::parse_from_rfc3339(&saved_at_str)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?
-            .with_timezone(&Utc);
+        // Values are all knowable inline — stamp_writer just wrote them and
+        // returned the timestamp, the writer/commit are compile-time consts.
+        // format_version is SUPPORTED because migrate() on open() normalised
+        // schema_version to SUPPORTED and nothing in the save path touches
+        // it. The read paths (load, read_metadata_sync) re-read from the row
+        // to honour the "DB is the source of truth" contract.
         Ok(PersistenceMetadata {
             instance_id: self.instance_id,
             saved_at,
-            writer_version,
-            writer_commit,
+            writer_version: Some(kanban_core::KANBAN_VERSION.to_string()),
+            writer_commit: Some(kanban_core::KANBAN_COMMIT.to_string()),
             format_version: Some(SUPPORTED_SCHEMA_VERSION),
         })
     }
@@ -1831,8 +1839,9 @@ impl PersistenceStore for SqliteStore {
         let data = serde_json::to_vec(&domain_snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        let row: (String, Option<String>, Option<String>) = sqlx::query_as(
-            "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+        let row: (String, Option<String>, Option<String>, u32) = sqlx::query_as(
+            "SELECT saved_at, writer_version, writer_commit, schema_version \
+             FROM metadata WHERE id = 1",
         )
         .fetch_one(&self.pool)
         .await
@@ -1845,7 +1854,7 @@ impl PersistenceStore for SqliteStore {
             saved_at,
             writer_version: row.1,
             writer_commit: row.2,
-            format_version: Some(SUPPORTED_SCHEMA_VERSION),
+            format_version: Some(row.3),
         };
         Ok((
             StoreSnapshot {
@@ -2166,6 +2175,142 @@ mod tests {
             assert!(
                 store.get_card(card_id).unwrap().is_none(),
                 "get_card should return None for permanently deleted card"
+            );
+        });
+    }
+
+    #[test]
+    fn test_read_metadata_sync_reflects_actual_schema_version_from_db_row() {
+        // Contract: PersistenceMetadata.format_version is the format the DB
+        // is currently at, not whatever the binary's SUPPORTED happens to be.
+        // After open(), the two coincide (migrate normalises). We manually
+        // UPDATE schema_version below to a value that differs from SUPPORTED
+        // and confirm the read reflects the DB, not the const.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("drift.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            sqlx::query("UPDATE metadata SET schema_version = 1 WHERE id = 1")
+                .execute(&store.pool)
+                .await
+                .unwrap();
+
+            let meta = store
+                .read_metadata_sync()
+                .unwrap()
+                .expect("metadata row should exist");
+            assert_eq!(
+                meta.format_version,
+                Some(1),
+                "format_version must reflect the DB row (1), not the binary's SUPPORTED ({SUPPORTED_SCHEMA_VERSION})"
+            );
+        });
+    }
+
+    #[test]
+    fn test_load_reports_actual_schema_version_in_metadata() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("load_drift.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            // Seed the row so load() has something to read.
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            PersistenceStore::save(
+                &store,
+                StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(store.instance_id()),
+                },
+            )
+            .await
+            .unwrap();
+            sqlx::query("UPDATE metadata SET schema_version = 1 WHERE id = 1")
+                .execute(&store.pool)
+                .await
+                .unwrap();
+
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert_eq!(
+                meta.format_version,
+                Some(1),
+                "load() must report the DB's actual schema_version, not the const"
+            );
+        });
+    }
+
+    #[test]
+    fn test_stamp_writer_updates_metadata_row_and_returns_timestamp() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stamped.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            // Wipe what migrate-on-open already wrote so the assertion is clean.
+            sqlx::query(
+                "UPDATE metadata SET writer_version = NULL, writer_commit = NULL WHERE id = 1",
+            )
+            .execute(&store.pool)
+            .await
+            .unwrap();
+
+            let before = Utc::now();
+            let stamped_at = store.stamp_writer().await.unwrap();
+            let after = Utc::now();
+
+            assert!(
+                stamped_at >= before && stamped_at <= after,
+                "returned timestamp must be in [before, after]: {stamped_at:?}"
+            );
+
+            let (saved_at_str, wv, wc): (String, Option<String>, Option<String>) = sqlx::query_as(
+                "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+            )
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+            assert_eq!(wv.as_deref(), Some(kanban_core::KANBAN_VERSION));
+            assert_eq!(wc.as_deref(), Some(kanban_core::KANBAN_COMMIT));
+            assert_eq!(saved_at_str, stamped_at.to_rfc3339());
+        });
+    }
+
+    #[test]
+    fn test_checkpoint_alone_does_not_stamp_writer_fields() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("ckpt_only.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            sqlx::query(
+                "UPDATE metadata SET writer_version = NULL, writer_commit = NULL WHERE id = 1",
+            )
+            .execute(&store.pool)
+            .await
+            .unwrap();
+
+            store.checkpoint().await.unwrap();
+
+            let (wv, wc): (Option<String>, Option<String>) =
+                sqlx::query_as("SELECT writer_version, writer_commit FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert!(
+                wv.is_none() && wc.is_none(),
+                "checkpoint() must be WAL-only post-split; got wv={wv:?} wc={wc:?}"
             );
         });
     }

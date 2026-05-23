@@ -193,6 +193,10 @@ impl crate::backend::KanbanBackend for SqliteBackend {
     }
 
     async fn flush(&self) -> KanbanResult<()> {
+        // Stamp before truncating the WAL: anything in the WAL is about to
+        // land in the main DB, so the writer attribution should land
+        // alongside it.
+        self.db.stamp_writer().await?;
         self.db.checkpoint().await
     }
 
