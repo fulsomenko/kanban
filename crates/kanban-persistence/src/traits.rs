@@ -20,6 +20,12 @@ pub struct PersistenceMetadata {
     /// or builds without a git checkout (`"unknown"` is also possible).
     #[serde(default)]
     pub writer_commit: Option<String>,
+    /// Format version of the loaded file as the backend understands it
+    /// (JSON envelope version, SQLite schema_version). `None` when not
+    /// populated by the backend. Display-only — backends still own version
+    /// negotiation.
+    #[serde(default, skip_serializing)]
+    pub format_version: Option<u32>,
 }
 
 impl PersistenceMetadata {
@@ -29,6 +35,7 @@ impl PersistenceMetadata {
             saved_at: Utc::now(),
             writer_version: None,
             writer_commit: None,
+            format_version: None,
         }
     }
 

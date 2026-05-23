@@ -134,6 +134,10 @@ impl TuiContext {
         self.inner.data_store()
     }
 
+    pub fn persistence_metadata(&self) -> Option<kanban_persistence::PersistenceMetadata> {
+        self.inner.persistence_metadata()
+    }
+
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn inner_mut(&mut self) -> &mut KanbanContext {
         &mut self.inner

@@ -496,6 +496,7 @@ impl SqliteStore {
                 saved_at,
                 writer_version: row.2,
                 writer_commit: row.3,
+                format_version: Some(SUPPORTED_SCHEMA_VERSION),
             }))
         })
     }
@@ -1815,6 +1816,7 @@ impl PersistenceStore for SqliteStore {
             saved_at,
             writer_version,
             writer_commit,
+            format_version: Some(SUPPORTED_SCHEMA_VERSION),
         })
     }
 
@@ -1840,6 +1842,7 @@ impl PersistenceStore for SqliteStore {
             saved_at,
             writer_version: row.1,
             writer_commit: row.2,
+            format_version: Some(SUPPORTED_SCHEMA_VERSION),
         };
         Ok((
             StoreSnapshot {

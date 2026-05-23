@@ -313,11 +313,12 @@ impl PersistenceStore for JsonFileStore {
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let mut metadata = envelope.metadata;
+        metadata.format_version = Some(envelope.version);
         let snapshot = StoreSnapshot {
             data,
-            metadata: envelope.metadata.clone(),
+            metadata: metadata.clone(),
         };
-        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -372,11 +373,12 @@ impl PersistenceStore for JsonFileStore {
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let mut metadata = envelope.metadata;
+        metadata.format_version = Some(envelope.version);
         let snapshot = StoreSnapshot {
             data,
-            metadata: envelope.metadata.clone(),
+            metadata: metadata.clone(),
         };
-        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;

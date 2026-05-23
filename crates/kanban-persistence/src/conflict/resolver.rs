@@ -51,6 +51,7 @@ mod tests {
             instance_id: Uuid::new_v4(),
             saved_at: now,
             writer_version: None,
+            format_version: None,
             writer_commit: None,
         };
 
@@ -58,6 +59,7 @@ mod tests {
             instance_id: Uuid::new_v4(),
             saved_at: later,
             writer_version: None,
+            format_version: None,
             writer_commit: None,
         };
 
@@ -74,6 +76,7 @@ mod tests {
             instance_id: Uuid::new_v4(),
             saved_at: now,
             writer_version: None,
+            format_version: None,
             writer_commit: None,
         };
 
@@ -81,6 +84,7 @@ mod tests {
             instance_id: Uuid::new_v4(),
             saved_at: earlier,
             writer_version: None,
+            format_version: None,
             writer_commit: None,
         };
 
@@ -97,6 +101,7 @@ mod tests {
             instance_id: id,
             saved_at: now,
             writer_version: None,
+            format_version: None,
             writer_commit: None,
         };
 
@@ -104,6 +109,7 @@ mod tests {
             instance_id: id,
             saved_at: now,
             writer_version: None,
+            format_version: None,
             writer_commit: None,
         };
 
