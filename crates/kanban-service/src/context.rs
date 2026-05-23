@@ -1351,6 +1351,7 @@ impl GraphOperations for KanbanContext {
             RemoveSpawns {
                 source: parent_id,
                 target: child_id,
+                tolerate_missing: false,
             },
         ))])
     }
@@ -1389,6 +1390,7 @@ impl GraphOperations for KanbanContext {
             RemoveBlocks {
                 source: blocker,
                 target: blocked,
+                tolerate_missing: false,
             },
         ))])
     }
@@ -1422,6 +1424,7 @@ impl GraphOperations for KanbanContext {
             RemoveRelates {
                 source: a,
                 target: b,
+                tolerate_missing: false,
             },
         ))])
     }
@@ -1459,6 +1462,7 @@ impl GraphOperations for KanbanContext {
                 Command::Dependency(DependencyCommand::RemoveSpawns(RemoveSpawns {
                     source: parent_id,
                     target: child,
+                    tolerate_missing: false,
                 }))
             })
             .collect();

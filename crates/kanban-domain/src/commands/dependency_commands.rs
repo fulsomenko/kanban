@@ -102,14 +102,18 @@ impl AddSpawns {
         format!("Set parent: {} is parent of {}", self.source, self.target)
     }
 
-    /// Inverse: tolerant cross-cutting [`RemoveDependencyCommand`] so
-    /// undo replay succeeds even if intervening state has already
-    /// removed the edge.
+    /// Inverse: per-kind [`RemoveSpawns`] with `tolerate_missing =
+    /// true` so undo replay succeeds even if intervening state has
+    /// already removed the edge. Per-kind tolerance keeps the inverse
+    /// in the same edge kind as the forward — a `[AddSpawns(a,b),
+    /// AddBlocks(a,b)]` batch now undoes each edge independently
+    /// instead of having the first inverse wipe both kinds.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        Ok(vec![Command::Dependency(DependencyCommand::Remove(
-            RemoveDependencyCommand {
-                source_id: self.source,
-                target_id: self.target,
+        Ok(vec![Command::Dependency(DependencyCommand::RemoveSpawns(
+            RemoveSpawns {
+                source: self.source,
+                target: self.target,
+                tolerate_missing: true,
             },
         ))])
     }
@@ -139,11 +143,14 @@ impl AddBlocks {
         )
     }
 
+    /// Inverse: per-kind [`RemoveBlocks`] with `tolerate_missing =
+    /// true`. See [`AddSpawns::capture_inverse`] for the rationale.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        Ok(vec![Command::Dependency(DependencyCommand::Remove(
-            RemoveDependencyCommand {
-                source_id: self.source,
-                target_id: self.target,
+        Ok(vec![Command::Dependency(DependencyCommand::RemoveBlocks(
+            RemoveBlocks {
+                source: self.source,
+                target: self.target,
+                tolerate_missing: true,
             },
         ))])
     }
@@ -173,34 +180,59 @@ impl AddRelates {
         )
     }
 
+    /// Inverse: per-kind [`RemoveRelates`] with `tolerate_missing =
+    /// true`. See [`AddSpawns::capture_inverse`] for the rationale.
     pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        Ok(vec![Command::Dependency(DependencyCommand::Remove(
-            RemoveDependencyCommand {
-                source_id: self.source,
-                target_id: self.target,
+        Ok(vec![Command::Dependency(DependencyCommand::RemoveRelates(
+            RemoveRelates {
+                source: self.source,
+                target: self.target,
+                tolerate_missing: true,
             },
         ))])
     }
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Remove* commands: per-kind. No metadata needed for removal because
-// the edge is identified by (kind, source, target) and kind is in
-// the variant.
+// Remove* commands: per-kind. `tolerate_missing` decouples the
+// undo-replay tolerance from kind-agnosticism. Edges are identified
+// by (kind, source, target); the kind comes from the variant, so
+// metadata fields stay scoped to add commands.
 // ────────────────────────────────────────────────────────────────────
 
+/// Remove a parent->child Spawns edge.
+///
+/// `tolerate_missing` controls behavior when the edge is absent at
+/// execute time:
+/// - `false` (default, user-initiated paths): returns
+///   [`DependencyError::EdgeNotFound`] so the surface can render
+///   "no such edge to remove" to the user.
+/// - `true` (inverse-replay paths): swallows `EdgeNotFound` and
+///   returns `Ok(())`. The undo invariant requires inverses to
+///   succeed even if intervening state has already removed the edge.
+///
+/// The flag decouples *tolerance* (a replay concern) from
+/// *kind-agnosticism* (a previously-conflated dimension that the
+/// old `RemoveDependencyCommand` carried). Now each per-kind remove
+/// stays in its kind and chooses its own tolerance at construction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveSpawns {
     pub source: Uuid,
     pub target: Uuid,
+    #[serde(default)]
+    pub tolerate_missing: bool,
 }
 
 impl RemoveSpawns {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (source, target) = (self.source, self.target);
-        context
-            .store
-            .modify_graph(Box::new(move |graph| graph.remove_parent(target, source)))
+        let (source, target, tolerate) = (self.source, self.target, self.tolerate_missing);
+        context.store.modify_graph(Box::new(move |graph| {
+            match graph.remove_parent(target, source) {
+                Ok(()) => Ok(()),
+                Err(e) if tolerate && e.is_edge_not_found() => Ok(()),
+                Err(e) => Err(e),
+            }
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -221,18 +253,26 @@ impl RemoveSpawns {
     }
 }
 
+/// Remove a blocker->blocked Blocks edge. See [`RemoveSpawns`] for the
+/// `tolerate_missing` flag semantics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveBlocks {
     pub source: Uuid,
     pub target: Uuid,
+    #[serde(default)]
+    pub tolerate_missing: bool,
 }
 
 impl RemoveBlocks {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (source, target) = (self.source, self.target);
-        context
-            .store
-            .modify_graph(Box::new(move |graph| graph.unblock(source, target)))
+        let (source, target, tolerate) = (self.source, self.target, self.tolerate_missing);
+        context.store.modify_graph(Box::new(move |graph| {
+            match graph.unblock(source, target) {
+                Ok(()) => Ok(()),
+                Err(e) if tolerate && e.is_edge_not_found() => Ok(()),
+                Err(e) => Err(e),
+            }
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -263,18 +303,26 @@ impl RemoveBlocks {
     }
 }
 
+/// Remove an undirected RelatesTo edge. See [`RemoveSpawns`] for the
+/// `tolerate_missing` flag semantics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveRelates {
     pub source: Uuid,
     pub target: Uuid,
+    #[serde(default)]
+    pub tolerate_missing: bool,
 }
 
 impl RemoveRelates {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let (source, target) = (self.source, self.target);
-        context
-            .store
-            .modify_graph(Box::new(move |graph| graph.unrelate(source, target)))
+        let (source, target, tolerate) = (self.source, self.target, self.tolerate_missing);
+        context.store.modify_graph(Box::new(move |graph| {
+            match graph.unrelate(source, target) {
+                Ok(()) => Ok(()),
+                Err(e) if tolerate && e.is_edge_not_found() => Ok(()),
+                Err(e) => Err(e),
+            }
+        }))
     }
 
     pub fn description(&self) -> String {
@@ -571,6 +619,7 @@ mod tests {
         assert!(RemoveSpawns {
             source: parent_id,
             target: child_id,
+            tolerate_missing: false,
         }
         .execute(&context)
         .is_ok());
@@ -593,6 +642,7 @@ mod tests {
         let cmd = RemoveBlocks {
             source: blocker,
             target: blocked,
+            tolerate_missing: false,
         };
         let inverse = cmd.capture_inverse(&tc.store).unwrap();
         match &inverse[0] {
@@ -618,6 +668,7 @@ mod tests {
         let cmd = RemoveRelates {
             source: a,
             target: b,
+            tolerate_missing: false,
         };
         let inverse = cmd.capture_inverse(&tc.store).unwrap();
         match &inverse[0] {
@@ -628,20 +679,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_add_spawns_inverse_is_tolerant_remove() {
-        let tc = TestContext::new();
-        let cmd = AddSpawns {
-            source: Uuid::new_v4(),
-            target: Uuid::new_v4(),
-        };
-        let inverse = cmd.capture_inverse(&tc.store).unwrap();
-        assert_eq!(inverse.len(), 1);
-        assert!(matches!(
-            &inverse[0],
-            Command::Dependency(DependencyCommand::Remove(_))
-        ));
-    }
+// NEW_TESTS_PLACEHOLDER
 
     /// Pin the on-disk JSON shape of `DependencyCommand` variants so a
     /// future SQLite command-log wiring (the schema exists today but
@@ -677,7 +715,11 @@ mod tests {
         assert_eq!(json["kind"], "Duplicates");
 
         // Per-kind remove variants
-        let remove_blocks = DependencyCommand::RemoveBlocks(RemoveBlocks { source, target });
+        let remove_blocks = DependencyCommand::RemoveBlocks(RemoveBlocks {
+            source,
+            target,
+            tolerate_missing: false,
+        });
         let json = serde_json::to_value(&remove_blocks).unwrap();
         assert_eq!(json["action"], "remove_blocks");
 

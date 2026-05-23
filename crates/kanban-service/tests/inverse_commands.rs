@@ -382,6 +382,7 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
         RemoveSpawns {
             source: parent.id,
             target: child.id,
+            tolerate_missing: false,
         },
     ))])?;
     assert!(
