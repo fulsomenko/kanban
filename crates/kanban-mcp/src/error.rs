@@ -5,24 +5,26 @@ use thiserror::Error;
 /// MCP-boundary error type.
 ///
 /// Wraps [`KanbanError`] for the domain layer plus MCP-specific
-/// concerns (parameter parsing, identifier resolution). Tool handlers
-/// thread this through with `?`; the boundary converts to the rmcp
-/// [`McpError`] for transmission to the client.
+/// concerns (handler-enriched messages). Tool handlers thread this
+/// through with `?`; the boundary converts to the rmcp [`McpError`]
+/// for transmission to the client.
+///
+/// Handler-enriched messages (built from the user's raw identifiers
+/// to produce hints like "cycle detected: making KAN-5 a parent of
+/// KAN-7 would create a cycle") flow through the `Resolution`
+/// variant, which renders the hint verbatim. This is symmetric with
+/// the CLI-side `KanbanCliError::Resolution`: both surfaces use the
+/// same `messages::*` helpers and must render the result the same
+/// way. The `INVALID_PARAMS` error code on the wire encodes the
+/// semantic category; the human-readable message stays clean.
 #[derive(Error, Debug)]
 pub enum KanbanMcpError {
     #[error(transparent)]
     Domain(#[from] KanbanError),
-    /// Identifier resolution failed at the MCP boundary.
-    ///
-    /// Display renders the hint verbatim — symmetric with
-    /// `KanbanCliError::Resolution`. The `INVALID_PARAMS` error code
-    /// (assigned at conversion to `McpError`) encodes the semantic
-    /// category; the message stays human-readable without a wrapper
-    /// prefix.
+    /// Handler-enriched user-facing message at the MCP boundary.
+    /// Display renders the hint verbatim, no prefix.
     #[error("{hint}")]
     Resolution { hint: String },
-    #[error("invalid parameter: {0}")]
-    InvalidParam(String),
 }
 
 pub type KanbanMcpResult<T> = Result<T, KanbanMcpError>;
@@ -38,7 +40,6 @@ impl From<KanbanMcpError> for McpError {
                 }
             }
             KanbanMcpError::Resolution { .. } => McpError::invalid_params(e.to_string(), None),
-            KanbanMcpError::InvalidParam(_) => McpError::invalid_params(e.to_string(), None),
         }
     }
 }

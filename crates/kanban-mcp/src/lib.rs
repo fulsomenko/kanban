@@ -75,6 +75,12 @@ fn kanban_err_to_mcp(e: KanbanError) -> McpError {
 /// anonymous DependencyError from a parent-edge add into a message
 /// that names both sides of the edge, using the user's raw
 /// identifiers. Non-dependency errors pass through to Domain.
+///
+/// Enriched messages flow through the `Resolution` variant so the
+/// rendered hint is verbatim (no "invalid parameter: " prefix),
+/// matching the CLI's `KanbanCliError::Resolution` rendering — both
+/// sides share the same `messages::*` helpers, so symmetrical
+/// rendering is the only way the two surfaces stay in step.
 fn mcp_enrich_add_error(
     e: KanbanError,
     parent_raw: &str,
@@ -84,13 +90,19 @@ fn mcp_enrich_add_error(
     use kanban_domain::error::{DependencyError, DomainError};
     match e {
         KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => {
-            error::KanbanMcpError::InvalidParam(messages::parent_cycle(parent_raw, child_raw))
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_cycle(parent_raw, child_raw),
+            }
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => {
-            error::KanbanMcpError::InvalidParam(messages::parent_self_reference(parent_raw))
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_self_reference(parent_raw),
+            }
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => {
-            error::KanbanMcpError::InvalidParam(messages::parent_duplicate(parent_raw, child_raw))
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_duplicate(parent_raw, child_raw),
+            }
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => e.into(),
         other => other.into(),
@@ -106,9 +118,9 @@ fn mcp_enrich_remove_error(
     use kanban_domain::error::{DependencyError, DomainError};
     match e {
         KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => {
-            error::KanbanMcpError::InvalidParam(messages::parent_edge_not_found(
-                parent_raw, child_raw,
-            ))
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_edge_not_found(parent_raw, child_raw),
+            }
         }
         KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => e.into(),
         KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => e.into(),
