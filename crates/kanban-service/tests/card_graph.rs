@@ -682,3 +682,114 @@ macro_rules! card_graph_tests {
 
 card_graph_tests!(json, open_json_ctx());
 card_graph_tests!(sqlite, open_sqlite_ctx());
+
+// ─── On-disk atomicity round-trip ─────────────────────────────────
+//
+// The parameterised tests above pin in-memory rollback. These two
+// tests pin the *on-disk* claim from the PR description: a failed
+// batch leaves the persisted file in its pre-attempt state, verified
+// by reopening the same file in a fresh `KanbanContext` and inspecting
+// the rehydrated graph. One per backend — same body, same file path
+// shape, different store factory — so JSON and SQLite both have to
+// honour the all-or-nothing on-disk contract.
+
+async fn open_ctx_at_path(
+    backend: Arc<dyn KanbanBackend>,
+) -> KanbanContext {
+    KanbanContext::open(backend, AppConfig::default())
+        .await
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_spawn_children_batch_failure_preserves_on_disk_state_json_reopen() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("test.json");
+
+    let parent_id: uuid::Uuid;
+    let c1: uuid::Uuid;
+    let c2: uuid::Uuid;
+    {
+        let backend: Arc<dyn KanbanBackend> =
+            Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(&path))));
+        let mut ctx = open_ctx_at_path(Arc::clone(&backend)).await;
+        let (p, a, b) = seed_three_cards(&ctx.backend());
+        parent_id = p;
+        c1 = a;
+        c2 = b;
+
+        // Seed parent -> c1 -> c2 so closing parent into c2 cycles.
+        ctx.spawn_child(parent_id, c1).unwrap();
+        ctx.spawn_child(c1, c2).unwrap();
+        ctx.save().await.unwrap();
+
+        // Batch with mid-list cycle: must fail and roll back.
+        let err = ctx
+            .spawn_children(c2, vec![c1, parent_id])
+            .expect_err("batch must fail on cycle");
+        assert!(err.is_cycle_detected());
+
+        // Saving after a failed batch is idempotent: dirty was never
+        // flipped by execute() so this is a no-op, but reproduces
+        // the production flow.
+        ctx.save().await.unwrap();
+    }
+
+    // Reopen the same file in a fresh context. The on-disk graph
+    // must match the pre-batch state — no edge from the failed
+    // batch survived to disk.
+    let reopen_backend: Arc<dyn KanbanBackend> =
+        Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(&path))));
+    let reopen = open_ctx_at_path(reopen_backend).await;
+    let c2_children = reopen.list_children_of(c2).unwrap();
+    assert!(
+        c2_children.is_empty(),
+        "on-disk graph reopened from JSON must not contain the failed batch's edges; \
+         got c2 children = {c2_children:?}"
+    );
+    let parent_children = reopen.list_children_of(parent_id).unwrap();
+    assert_eq!(parent_children, vec![c1], "pre-batch parent->c1 must survive");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_spawn_children_batch_failure_preserves_on_disk_state_sqlite_reopen() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("test.sqlite");
+    let path_str = path.to_str().unwrap().to_string();
+
+    let parent_id: uuid::Uuid;
+    let c1: uuid::Uuid;
+    let c2: uuid::Uuid;
+    {
+        let backend: Arc<dyn KanbanBackend> =
+            Arc::new(SqliteBackend::open(&path_str).await.unwrap());
+        let mut ctx = open_ctx_at_path(Arc::clone(&backend)).await;
+        let (p, a, b) = seed_three_cards(&ctx.backend());
+        parent_id = p;
+        c1 = a;
+        c2 = b;
+
+        ctx.spawn_child(parent_id, c1).unwrap();
+        ctx.spawn_child(c1, c2).unwrap();
+        ctx.save().await.unwrap();
+
+        let err = ctx
+            .spawn_children(c2, vec![c1, parent_id])
+            .expect_err("batch must fail on cycle");
+        assert!(err.is_cycle_detected());
+
+        ctx.save().await.unwrap();
+    }
+
+    let reopen_backend: Arc<dyn KanbanBackend> =
+        Arc::new(SqliteBackend::open(&path_str).await.unwrap());
+    let reopen = open_ctx_at_path(reopen_backend).await;
+    let c2_children = reopen.list_children_of(c2).unwrap();
+    assert!(
+        c2_children.is_empty(),
+        "on-disk graph reopened from SQLite must not contain the failed batch's edges; \
+         got c2 children = {c2_children:?}"
+    );
+    let parent_children = reopen.list_children_of(parent_id).unwrap();
+    assert_eq!(parent_children, vec![c1], "pre-batch parent->c1 must survive");
+}
