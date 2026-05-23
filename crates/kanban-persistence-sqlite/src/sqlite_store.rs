@@ -278,6 +278,23 @@ impl SqliteStore {
 
         Self::migrate(&pool).await?;
 
+        // KAN-522: refuse files written by a future kanban. Read after
+        // migrate() so a legacy database that just had its schema_version
+        // bumped to current doesn't false-positive.
+        let schema_version: Option<u32> =
+            sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                .fetch_optional(&pool)
+                .await
+                .map_err(|e| KanbanError::Database(e.to_string()))?;
+        if let Some(v) = schema_version {
+            if v > SUPPORTED_SCHEMA_VERSION {
+                return Err(KanbanError::UnsupportedFutureVersion {
+                    file_version: v,
+                    binary_max: SUPPORTED_SCHEMA_VERSION,
+                });
+            }
+        }
+
         let instance_id = Self::load_or_create_instance_id(&pool).await?;
 
         Ok(Self {
@@ -2102,6 +2119,55 @@ mod tests {
                 .unwrap();
                 assert!(exists, "metadata.{col} column must exist on fresh DB");
             }
+        });
+    }
+
+    #[test]
+    fn test_open_rejects_future_schema_version() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("future.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 2,
+                    writer_version TEXT,
+                    writer_commit TEXT
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2030-01-01T00:00:00Z', 99);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let err = SqliteStore::open(&path)
+                .await
+                .err()
+                .expect("schema_version 99 must be refused");
+            assert!(
+                matches!(
+                    err,
+                    KanbanError::UnsupportedFutureVersion {
+                        file_version: 99,
+                        binary_max: SUPPORTED_SCHEMA_VERSION
+                    }
+                ),
+                "expected UnsupportedFutureVersion, got: {err:?}"
+            );
         });
     }
 
