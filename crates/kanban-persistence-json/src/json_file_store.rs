@@ -520,7 +520,9 @@ mod tests {
         std::fs::write(&file_path, v99.to_string()).unwrap();
 
         let store = JsonFileStore::new(&file_path);
-        let err = store.load_sync().expect_err("v99 must refuse to load (sync)");
+        let err = store
+            .load_sync()
+            .expect_err("v99 must refuse to load (sync)");
         assert!(
             matches!(
                 err,

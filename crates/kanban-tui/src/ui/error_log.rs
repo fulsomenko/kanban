@@ -286,7 +286,10 @@ mod tests {
         assert_eq!(rows.get("Format").unwrap().0, "v6");
         let (writer, warn) = rows.get("Writer").unwrap();
         assert!(writer.contains("0.6.0"), "writer line: {writer}");
-        assert!(writer.contains("18e98c48"), "must show short commit: {writer}");
+        assert!(
+            writer.contains("18e98c48"),
+            "must show short commit: {writer}"
+        );
         // Writer == self_version, so no mismatch.
         assert!(!warn, "matching version must not warn");
         assert!(rows.contains_key("Saved at"));

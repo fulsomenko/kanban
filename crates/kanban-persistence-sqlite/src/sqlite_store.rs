@@ -1801,13 +1801,16 @@ impl PersistenceStore for SqliteStore {
 
         // Read back what checkpoint() just wrote so the caller sees the same
         // stamp that landed on disk.
-        let (saved_at_str, writer_version, writer_commit): (String, Option<String>, Option<String>) =
-            sqlx::query_as(
-                "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
-            )
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        let (saved_at_str, writer_version, writer_commit): (
+            String,
+            Option<String>,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
         let saved_at = DateTime::parse_from_rfc3339(&saved_at_str)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?
             .with_timezone(&Utc);
@@ -2174,10 +2177,11 @@ mod tests {
         let rt = make_rt();
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
-            let version: u32 = sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
-                .fetch_one(&store.pool)
-                .await
-                .unwrap();
+            let version: u32 =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
             assert_eq!(version, SUPPORTED_SCHEMA_VERSION);
         });
     }
