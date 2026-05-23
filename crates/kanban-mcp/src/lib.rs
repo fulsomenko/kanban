@@ -1596,6 +1596,72 @@ impl ServerHandler for KanbanMcpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    use rmcp::model::ErrorCode;
+
+    // ─── Enrich helpers: symmetry with CLI ────────────────────────
+    //
+    // Both the CLI handler's enrich_*_error and the MCP enrich
+    // helpers feed user-facing hints from the same `messages::*`
+    // string-builders. The MCP path renders those hints verbatim
+    // (no "invalid parameter: " prefix) so the two surfaces stay in
+    // step. INVALID_PARAMS on the wire carries the semantic category.
+    //
+    // Pin both: the rendered McpError.message must equal the bare
+    // hint produced by the shared message helper, and the error
+    // code must be INVALID_PARAMS (the resolution category).
+
+    #[test]
+    fn test_mcp_enrich_add_error_cycle_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_cycle("KAN-5", "KAN-7"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_add_error_self_reference_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)),
+            "KAN-5",
+            "KAN-5",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_self_reference("KAN-5"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_add_error_duplicate_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_duplicate("KAN-5", "KAN-7"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_remove_error_edge_not_found_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_remove_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(
+            err.message,
+            messages::parent_edge_not_found("KAN-5", "KAN-7")
+        );
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
 
     // parse_priority
 
