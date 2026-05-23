@@ -26,4 +26,4 @@ pub use paginated_list::{
 pub use pagination::{Page, PageInfo};
 pub use selection::SelectionState;
 pub use traits::Editable;
-pub use version::VERSION;
+pub use version::{KANBAN_COMMIT, KANBAN_VERSION, VERSION};
