@@ -4,12 +4,12 @@
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    ActivateSprint, AddBlocksDependencyCommand, AddRelatesToDependencyCommand, ApplyBoardSettings,
-    ApplyCardMetadata, ArchiveCards, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand,
-    ColumnCommand, Command, CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn,
-    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveDependencyCommand,
-    RemoveParentCommand, SetBoardTaskListView, SetBoardTaskSort, SetParentCommand, SprintCommand,
-    UnassignCardFromSprint, UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
+    ActivateSprint, AddBlocks, AddRelates, AddSpawns, ApplyBoardSettings, ApplyCardMetadata,
+    ArchiveCards, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand,
+    Command, CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn,
+    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveBlocks, RemoveSpawns,
+    SetBoardTaskListView, SetBoardTaskSort, SprintCommand, UnassignCardFromSprint, UpdateBoard,
+    UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
     BoardUpdate, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,
@@ -318,19 +318,18 @@ async fn test_inverse_add_blocks_removes_edge() -> KanbanResult<()> {
     ctx.clear_history()?;
 
     ctx.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
-        AddBlocksDependencyCommand {
-            blocker_id: a.id,
-            blocked_id: b.id,
+        AddBlocks {
+            source: a.id,
+            target: b.id,
+            severity: Default::default(),
+            as_archived: false,
         },
     ))])?;
-    assert!(
-        ctx.graph()?.cards.has_edge(a.id, b.id),
-        "edge added by forward"
-    );
+    assert!(ctx.graph()?.contains(a.id, b.id), "edge added by forward");
 
     assert!(ctx.undo()?);
     assert!(
-        !ctx.graph()?.cards.has_edge(a.id, b.id),
+        !ctx.graph()?.contains(a.id, b.id),
         "edge removed by inverse"
     );
     Ok(())
@@ -345,20 +344,22 @@ async fn test_inverse_add_relates_to_removes_edge() -> KanbanResult<()> {
     let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::AddRelatesTo(
-        AddRelatesToDependencyCommand {
-            card_a_id: a.id,
-            card_b_id: b.id,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddRelates(
+        AddRelates {
+            source: a.id,
+            target: b.id,
+            kind: Default::default(),
+            as_archived: false,
         },
     ))])?;
     assert!(
-        ctx.graph()?.cards.has_edge(a.id, b.id),
+        ctx.graph()?.contains(a.id, b.id),
         "relates edge added by forward"
     );
 
     assert!(ctx.undo()?);
     assert!(
-        !ctx.graph()?.cards.has_edge(a.id, b.id),
+        !ctx.graph()?.contains(a.id, b.id),
         "relates edge removed by inverse"
     );
     Ok(())
@@ -371,28 +372,30 @@ async fn test_inverse_remove_parent_reestablishes_relation() -> KanbanResult<()>
     let col = ctx.create_column(board.id, "C".into(), None)?;
     let parent = ctx.create_card(board.id, col.id, "Parent".into(), Default::default())?;
     let child = ctx.create_card(board.id, col.id, "Child".into(), Default::default())?;
-    ctx.execute(vec![Command::Dependency(DependencyCommand::SetParent(
-        SetParentCommand {
-            child_id: child.id,
-            parent_id: parent.id,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddSpawns(
+        AddSpawns {
+            source: parent.id,
+            target: child.id,
+            as_archived: false,
         },
     ))])?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveParent(
-        RemoveParentCommand {
-            child_id: child.id,
-            parent_id: parent.id,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveSpawns(
+        RemoveSpawns {
+            source: parent.id,
+            target: child.id,
+            tolerate_missing: false,
         },
     ))])?;
     assert!(
-        !ctx.graph()?.cards.has_edge(parent.id, child.id),
+        !ctx.graph()?.contains(parent.id, child.id),
         "parent edge removed by forward"
     );
 
     assert!(ctx.undo()?);
     assert!(
-        ctx.graph()?.cards.has_edge(parent.id, child.id),
+        ctx.graph()?.contains(parent.id, child.id),
         "parent edge re-established by inverse"
     );
     Ok(())
@@ -584,20 +587,21 @@ async fn test_inverse_set_parent_removes_edge() -> KanbanResult<()> {
     let child = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::SetParent(
-        SetParentCommand {
-            child_id: child.id,
-            parent_id: parent.id,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::AddSpawns(
+        AddSpawns {
+            source: parent.id,
+            target: child.id,
+            as_archived: false,
         },
     ))])?;
     assert!(
-        ctx.graph()?.cards.has_edge(parent.id, child.id),
+        ctx.graph()?.contains(parent.id, child.id),
         "parent edge added"
     );
 
     assert!(ctx.undo()?);
     assert!(
-        !ctx.graph()?.cards.has_edge(parent.id, child.id),
+        !ctx.graph()?.contains(parent.id, child.id),
         "parent edge removed by inverse"
     );
     Ok(())
@@ -624,7 +628,7 @@ async fn test_inverse_create_subcard_removes_card_and_archive_trail() -> KanbanR
         },
     ))])?;
     assert_eq!(ctx.cards()?.len(), 2);
-    assert!(ctx.graph()?.cards.has_edge(parent.id, subcard_id));
+    assert!(ctx.graph()?.contains(parent.id, subcard_id));
 
     assert!(ctx.undo()?);
     assert_eq!(ctx.cards()?.len(), 1, "subcard gone");
@@ -633,7 +637,7 @@ async fn test_inverse_create_subcard_removes_card_and_archive_trail() -> KanbanR
         "no archive trail — undoing CreateSubcard fully removes the card"
     );
     assert!(
-        !ctx.graph()?.cards.has_edge(parent.id, subcard_id),
+        !ctx.graph()?.contains(parent.id, subcard_id),
         "parent edge cleaned up by the archive step in the inverse batch"
     );
     Ok(())
@@ -878,33 +882,91 @@ async fn test_inverse_compact_column_positions_restores_gaps() -> KanbanResult<(
     Ok(())
 }
 
+/// End-to-end execute → undo round-trip for a user-initiated blocks
+/// remove. The per-kind `RemoveBlocks::capture_inverse` reads the
+/// pre-remove graph to recover the severity, so undo re-adds the
+/// edge with the original metadata intact.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<()> {
+async fn test_inverse_remove_blocks_restores_blocks_edge() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
     let col = ctx.create_column(board.id, "C".into(), None)?;
     let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
     let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
     ctx.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
-        AddBlocksDependencyCommand {
-            blocker_id: a.id,
-            blocked_id: b.id,
+        AddBlocks {
+            source: a.id,
+            target: b.id,
+            severity: Default::default(),
+            as_archived: false,
         },
     ))])?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::Remove(
-        RemoveDependencyCommand {
-            source_id: a.id,
-            target_id: b.id,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveBlocks(
+        RemoveBlocks {
+            source: a.id,
+            target: b.id,
+            tolerate_missing: false,
         },
     ))])?;
-    assert!(!ctx.graph()?.cards.has_edge(a.id, b.id));
+    assert!(!ctx.graph()?.contains(a.id, b.id));
 
     assert!(ctx.undo()?);
     assert!(
-        ctx.graph()?.cards.has_edge(a.id, b.id),
+        ctx.graph()?.contains(a.id, b.id),
         "edge restored by inverse"
+    );
+    Ok(())
+}
+
+/// Pin the end-to-end tolerate_missing replay path: after an
+/// `AddSpawns`, the captured inverse is a `RemoveSpawns` with
+/// `tolerate_missing = true`. If a later command independently removes
+/// the same edge (here a user-initiated detach), the undo of the
+/// original AddSpawns must still succeed — the captured inverse's
+/// tolerant-Remove path swallows the EdgeNotFound on replay.
+///
+/// Unit-level tolerance is already pinned in `dependency_commands.rs`
+/// (`test_remove_spawns_tolerant_succeeds_on_missing_edge`); this test
+/// exercises the same branch through the full execute / undo machinery
+/// so a regression that bypasses tolerate_missing somewhere in the
+/// service layer (e.g. accidentally constructing the inverse with
+/// strict semantics) would fail here.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_attach_replays_tolerant_remove_after_independent_detach() -> KanbanResult<()>
+{
+    use kanban_domain::GraphOperations;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let parent = ctx.create_card(board.id, col.id, "P".into(), Default::default())?;
+    let child = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    ctx.clear_history()?;
+
+    // Forward 1: attach. Captured inverse = RemoveSpawns(tolerate_missing=true).
+    ctx.attach_child(parent.id, child.id)?;
+    assert!(ctx.graph()?.contains(parent.id, child.id));
+
+    // Independent removal: the edge is gone from the graph by the time
+    // we undo the original attach. The captured inverse should now
+    // execute against an absent edge and succeed via tolerate_missing.
+    ctx.detach_child(parent.id, child.id)?;
+    assert!(!ctx.graph()?.contains(parent.id, child.id));
+
+    // Undo the most recent command (the detach), then undo the attach.
+    // The second undo replays the tolerant RemoveSpawns inverse against
+    // an edge that no longer exists; without tolerate_missing this
+    // would fail with EdgeNotFound.
+    assert!(ctx.undo()?, "undo the detach");
+    assert!(
+        ctx.graph()?.contains(parent.id, child.id),
+        "undo of detach restores the edge"
+    );
+    assert!(ctx.undo()?, "undo the attach (tolerant remove inverse)");
+    assert!(
+        !ctx.graph()?.contains(parent.id, child.id),
+        "undo of attach removes the edge"
     );
     Ok(())
 }
@@ -1314,8 +1376,6 @@ async fn test_undo_chain_through_archive_create_create_column_succeeds() -> Kanb
 /// reverse-order inverse batch.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
-    use kanban_domain::dependencies::CardGraphExt;
-
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("Cascade".into(), Some("CSC".into()))?;
     let todo = ctx.create_column(board.id, "TODO".into(), None)?;
@@ -1330,7 +1390,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
 
     // Add a graph edge so the cascade has something to clean up.
     let mut graph = ctx.graph()?;
-    graph.cards.add_blocks(c1.id, c3.id).unwrap();
+    graph.set_block(c1.id, c3.id).unwrap();
     ctx.backend().set_graph(graph)?;
     ctx.clear_history()?;
 
@@ -1348,7 +1408,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
         .collect();
     let baseline_sprint_ids: std::collections::HashSet<_> =
         baseline.sprints.iter().map(|s| s.id).collect();
-    let baseline_edge_count = baseline.graph.cards.edges().len();
+    let baseline_edge_count = baseline.graph.len();
     assert!(baseline_edge_count > 0, "fixture must include graph edges");
 
     ctx.delete_board(board.id)?;
@@ -1358,11 +1418,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
     assert!(ctx.cards()?.is_empty(), "live cards deleted");
     assert!(ctx.archived_cards()?.is_empty(), "archived cards deleted");
     assert!(ctx.sprints()?.is_empty(), "sprints deleted");
-    assert_eq!(
-        ctx.graph()?.cards.edges().len(),
-        0,
-        "card graph edges deleted"
-    );
+    assert_eq!(ctx.graph()?.len(), 0, "card graph edges deleted");
 
     assert!(ctx.undo()?, "cascade undo must succeed");
 
@@ -1390,7 +1446,7 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
     );
     assert_eq!(restored_sprint_ids, baseline_sprint_ids, "sprints restored");
     assert_eq!(
-        restored.graph.cards.edges().len(),
+        restored.graph.len(),
         baseline_edge_count,
         "graph edges restored"
     );
@@ -1403,5 +1459,77 @@ async fn test_inverse_delete_board_restores_full_cascade() -> KanbanResult<()> {
         Some(sprint_a.id),
         "card sprint binding survives cascade undo"
     );
+    Ok(())
+}
+
+/// Cascade-undo must preserve the archive state of incident edges.
+/// Pre-fix, `edges_to_undo_commands` issued `Add*` commands that
+/// always landed active, so an archived edge incident to a deleted
+/// card would silently revive on undo — losing the soft-delete state
+/// the user had recorded. Post-fix, the helper sets `as_archived`
+/// from `!e.is_active()` so archived edges restore as archived and
+/// active edges restore as active.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inverse_cascade_preserves_archived_incident_edge_state() -> KanbanResult<()> {
+    use kanban_core::Edge as _;
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
+    let b = ctx.create_card(board.id, col.id, "B".into(), Default::default())?;
+    let c = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    // Two edges incident to A: one to B (will be archived), one to C
+    // (will stay active).
+    let mut graph = ctx.graph()?;
+    graph.set_block(a.id, b.id).unwrap();
+    graph.set_block(a.id, c.id).unwrap();
+    // Archive node B; the cascade archives the A->B edge but leaves
+    // A->C active (B is not incident to A->C).
+    graph.archive_node(b.id);
+    ctx.backend().set_graph(graph)?;
+    ctx.clear_history()?;
+
+    // Baseline counts (active = 1, archived = 1).
+    let baseline = ctx.graph()?;
+    assert_eq!(baseline.len(), 2, "two incident edges in history");
+    assert_eq!(baseline.active_len(), 1, "one active");
+    assert!(
+        baseline.contains_archived(a.id, b.id),
+        "A->B archived in baseline"
+    );
+    assert!(baseline.contains(a.id, c.id), "A->C active in baseline");
+
+    // Delete the board (cascade removes A, B, C and all their edges).
+    ctx.delete_board(board.id)?;
+    assert_eq!(ctx.graph()?.len(), 0, "graph cleared by cascade");
+
+    // Undo restores everything.
+    assert!(ctx.undo()?);
+
+    let restored = ctx.graph()?;
+    assert_eq!(restored.len(), 2, "both edges restored in history");
+    assert_eq!(
+        restored.active_len(),
+        1,
+        "active count preserved (A->C stays active, A->B stays archived)"
+    );
+    assert!(
+        restored.contains_archived(a.id, b.id) && !restored.contains(a.id, b.id),
+        "A->B restored as archived"
+    );
+    assert!(restored.contains(a.id, c.id), "A->C restored as active");
+
+    // Per-edge active flag round-trip.
+    let blocks: Vec<_> = restored.blocks_edges().iter().collect();
+    let ab = blocks
+        .iter()
+        .find(|e| e.source() == a.id && e.target() == b.id)
+        .expect("A->B restored");
+    let ac = blocks
+        .iter()
+        .find(|e| e.source() == a.id && e.target() == c.id)
+        .expect("A->C restored");
+    assert!(!ab.is_active(), "A->B archived state preserved");
+    assert!(ac.is_active(), "A->C active state preserved");
     Ok(())
 }

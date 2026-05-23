@@ -1,13 +1,16 @@
 pub mod context;
+pub mod error;
 pub mod server;
 
+pub use error::{KanbanMcpError, KanbanMcpResult};
 pub use server::McpServer;
 
 use context::McpContext;
 use kanban_core::{resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
-    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardSummary,
+    CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, GraphOperations, KanbanOperations,
+    SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_service::StoreManager;
@@ -40,10 +43,89 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
     Ok(CallToolResult::success(vec![Content::text(json)]))
 }
 
+fn resolve_summaries(ctx: &McpContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
+    ids.into_iter()
+        .filter_map(|id| match ctx.get_card(id) {
+            Ok(Some(c)) => Some(CardSummary::from(&c)),
+            Ok(None) => {
+                // require_card_exists guards add/remove, so reaching
+                // this branch in production indicates a dangling edge:
+                // the graph references a card that no longer exists.
+                // Log so an operator can see and investigate.
+                tracing::warn!(
+                    "graph references unknown card id {id}; dropping from summary list (possible corruption)"
+                );
+                None
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "failed to resolve card id {id} for summary: {e}; dropping from list"
+                );
+                None
+            }
+        })
+        .collect()
+}
+
 fn kanban_err_to_mcp(e: KanbanError) -> McpError {
-    match &e {
-        KanbanError::Domain(_) => McpError::invalid_params(e.to_string(), None),
-        _ => McpError::internal_error(e.to_string(), None),
+    error::KanbanMcpError::Domain(e).into()
+}
+
+/// Symmetric with the CLI handler's `enrich_add_error`: rewrite an
+/// anonymous DependencyError from a parent-edge add into a message
+/// that names both sides of the edge, using the user's raw
+/// identifiers. Non-dependency errors pass through to Domain.
+///
+/// Enriched messages flow through the `Resolution` variant so the
+/// rendered hint is verbatim (no "invalid parameter: " prefix),
+/// matching the CLI's `KanbanCliError::Resolution` rendering — both
+/// sides share the same `messages::*` helpers, so symmetrical
+/// rendering is the only way the two surfaces stay in step.
+fn mcp_enrich_add_error(
+    e: KanbanError,
+    parent_raw: &str,
+    child_raw: &str,
+) -> error::KanbanMcpError {
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    match e {
+        KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_cycle(parent_raw, child_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_self_reference(parent_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_duplicate(parent_raw, child_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => e.into(),
+        other => other.into(),
+    }
+}
+
+fn mcp_enrich_remove_error(
+    e: KanbanError,
+    parent_raw: &str,
+    child_raw: &str,
+) -> error::KanbanMcpError {
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    match e {
+        KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_edge_not_found(parent_raw, child_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => e.into(),
+        KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => e.into(),
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => e.into(),
+        other => other.into(),
     }
 }
 
@@ -127,12 +209,13 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
 /// intentional perf tradeoff: typical MCP usage is single-process, and the
 /// reload cost (file read + parse) is significant relative to the read
 /// itself.
-async fn locked_read<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
+async fn locked_read<T, E, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
-    F: FnOnce(&McpContext) -> Result<T, McpError>,
+    F: FnOnce(&McpContext) -> Result<T, E>,
+    E: Into<McpError>,
 {
     let guard = ctx.lock().await;
-    f(&guard)
+    f(&guard).map_err(Into::into)
 }
 
 /// Acquire the context lock, reload from disk, run the closure with mutable
@@ -152,13 +235,14 @@ where
 /// metadata (mtime / instance_id) and skips the full reload when no
 /// external write has occurred would let undo history persist across calls
 /// in the same session. Track as `KanbanBackend::reload_if_changed()`.
-async fn locked_write<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
+async fn locked_write<T, E, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
-    F: FnOnce(&mut McpContext) -> Result<T, McpError>,
+    F: FnOnce(&mut McpContext) -> Result<T, E>,
+    E: Into<McpError>,
 {
     let mut guard = ctx.lock().await;
     guard.reload().await.map_err(kanban_err_to_mcp)?;
-    let result = f(&mut guard)?;
+    let result = f(&mut guard).map_err(Into::into)?;
     guard.save().await.map_err(kanban_err_to_mcp)?;
     Ok(result)
 }
@@ -500,6 +584,36 @@ pub struct GetCardGitCheckoutRequest {
     pub card: String,
 }
 
+// Card relations (parent/child)
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SetCardParentRequest {
+    #[schemars(description = "UUID or identifier of the child card (e.g. 'KAN-5')")]
+    pub child: String,
+    #[schemars(description = "UUID or identifier of the parent card (e.g. 'KAN-2')")]
+    pub parent: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RemoveCardParentRequest {
+    #[schemars(description = "UUID or identifier of the child card")]
+    pub child: String,
+    #[schemars(description = "UUID or identifier of the parent card")]
+    pub parent: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListCardParentsRequest {
+    #[schemars(description = "UUID or identifier of the card whose parents to list")]
+    pub card: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListCardChildrenRequest {
+    #[schemars(description = "UUID or identifier of the card whose children to list")]
+    pub card: String,
+}
+
 // Multi-card operations
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -729,7 +843,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_board(&req.board)?;
             ctx.delete_board(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -809,7 +923,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_column_global(&req.column)?;
             ctx.delete_column(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -989,7 +1103,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.archive_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1023,7 +1137,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.delete_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1107,6 +1221,80 @@ impl KanbanMcpServer {
         })
         .await?;
         to_call_tool_result_json(serde_json::json!({"command": command}))
+    }
+
+    // Card relations (parent/child)
+
+    #[tool(
+        description = "Add a parent -> child edge between two cards. Rejects cycles and self-references."
+    )]
+    pub async fn tool_set_card_parent(
+        &self,
+        Parameters(req): Parameters<SetCardParentRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let parent_raw = req.parent.clone();
+        let child_raw = req.child.clone();
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let child_id = ctx.resolve_card_id(&req.child)?;
+            let parent_id = ctx.resolve_card_id(&req.parent)?;
+            ctx.attach_child(parent_id, child_id)
+                .map_err(|e| mcp_enrich_add_error(e, &parent_raw, &child_raw))?;
+            Ok((child_id, parent_id))
+        })
+        .await?;
+        to_call_tool_result_json(serde_json::json!({
+            "parent": parent_id.to_string(),
+            "child":  child_id.to_string(),
+        }))
+    }
+
+    #[tool(description = "Remove a parent -> child edge between two cards.")]
+    pub async fn tool_remove_card_parent(
+        &self,
+        Parameters(req): Parameters<RemoveCardParentRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let parent_raw = req.parent.clone();
+        let child_raw = req.child.clone();
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let child_id = ctx.resolve_card_id(&req.child)?;
+            let parent_id = ctx.resolve_card_id(&req.parent)?;
+            ctx.detach_child(parent_id, child_id)
+                .map_err(|e| mcp_enrich_remove_error(e, &parent_raw, &child_raw))?;
+            Ok((child_id, parent_id))
+        })
+        .await?;
+        to_call_tool_result_json(serde_json::json!({
+            "parent": parent_id.to_string(),
+            "child":  child_id.to_string(),
+        }))
+    }
+
+    #[tool(description = "List direct parents of a card.")]
+    pub async fn tool_list_card_parents(
+        &self,
+        Parameters(req): Parameters<ListCardParentsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let parents = locked_read(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let id = ctx.resolve_card_id(&req.card)?;
+            let ids = ctx.list_parents_of(id)?;
+            Ok(resolve_summaries(ctx, ids))
+        })
+        .await?;
+        to_call_tool_result(&parents)
+    }
+
+    #[tool(description = "List direct children of a card.")]
+    pub async fn tool_list_card_children(
+        &self,
+        Parameters(req): Parameters<ListCardChildrenRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let children = locked_read(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let id = ctx.resolve_card_id(&req.card)?;
+            let ids = ctx.list_children_of(id)?;
+            Ok(resolve_summaries(ctx, ids))
+        })
+        .await?;
+        to_call_tool_result(&children)
     }
 
     // Multi-card operations
@@ -1294,7 +1482,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.delete_sprint(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1408,6 +1596,72 @@ impl ServerHandler for KanbanMcpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    use rmcp::model::ErrorCode;
+
+    // ─── Enrich helpers: symmetry with CLI ────────────────────────
+    //
+    // Both the CLI handler's enrich_*_error and the MCP enrich
+    // helpers feed user-facing hints from the same `messages::*`
+    // string-builders. The MCP path renders those hints verbatim
+    // (no "invalid parameter: " prefix) so the two surfaces stay in
+    // step. INVALID_PARAMS on the wire carries the semantic category.
+    //
+    // Pin both: the rendered McpError.message must equal the bare
+    // hint produced by the shared message helper, and the error
+    // code must be INVALID_PARAMS (the resolution category).
+
+    #[test]
+    fn test_mcp_enrich_add_error_cycle_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_cycle("KAN-5", "KAN-7"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_add_error_self_reference_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)),
+            "KAN-5",
+            "KAN-5",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_self_reference("KAN-5"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_add_error_duplicate_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_duplicate("KAN-5", "KAN-7"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_remove_error_edge_not_found_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_remove_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(
+            err.message,
+            messages::parent_edge_not_found("KAN-5", "KAN-7")
+        );
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
 
     // parse_priority
 
@@ -1589,5 +1843,50 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file gone");
         let err = kanban_err_to_mcp(KanbanError::Io(io_err));
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+    }
+
+    // resolve_summaries: graph-vs-store divergence
+
+    /// `resolve_summaries` silently filters ids whose card no longer
+    /// exists in the store. This documents the behaviour: if the
+    /// graph references a dangling id (e.g. a cascade race or a
+    /// hand-edited file), the list_card_* tools return fewer entries
+    /// than the graph reports rather than erroring. The caller may
+    /// see N parents on a child while only M < N appear in the
+    /// rendered summaries.
+    #[tokio::test]
+    async fn resolve_summaries_silently_drops_ids_not_present_in_store() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = StoreManager::new(kanban_service::default_registry());
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx.create_board("Test".into(), Some("TST".into())).unwrap();
+        let column = ctx.create_column(board.id, "TODO".into(), None).unwrap();
+        let card = ctx
+            .create_card(
+                board.id,
+                column.id,
+                "Real".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+
+        let ghost = Uuid::new_v4();
+        let summaries = resolve_summaries(&ctx, vec![card.id, ghost]);
+
+        assert_eq!(
+            summaries.len(),
+            1,
+            "ghost id with no backing card should be silently filtered; got {summaries:?}"
+        );
+        assert_eq!(summaries[0].id, card.id);
     }
 }

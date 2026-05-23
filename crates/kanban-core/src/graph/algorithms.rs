@@ -1,18 +1,26 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use uuid::Uuid;
+use std::hash::Hash;
 
-/// Check if adding an edge would create a cycle in a directed graph
+/// Check if adding an edge would create a cycle in a directed graph.
 ///
 /// Uses DFS to detect if there's already a path from target to source.
 /// If such a path exists, adding source->target would create a cycle.
-pub fn would_create_cycle(adj_list: &HashMap<Uuid, Vec<Uuid>>, source: Uuid, target: Uuid) -> bool {
-    // Check if there's a path from target to source
-    // If yes, adding source->target creates a cycle
+///
+/// Generic over any node identity type `N` that satisfies the basic
+/// `Copy + Eq + Hash` shape — the algorithm doesn't care what `N` is
+/// as long as it can key a HashMap.
+pub fn would_create_cycle<N: Copy + Eq + Hash>(
+    adj_list: &HashMap<N, Vec<N>>,
+    source: N,
+    target: N,
+) -> bool {
+    // Check if there's a path from target to source.
+    // If yes, adding source->target creates a cycle.
     has_path(adj_list, target, source)
 }
 
-/// Check if a path exists from start to end using DFS
-fn has_path(adj_list: &HashMap<Uuid, Vec<Uuid>>, start: Uuid, end: Uuid) -> bool {
+/// Check if a path exists from start to end using DFS.
+fn has_path<N: Copy + Eq + Hash>(adj_list: &HashMap<N, Vec<N>>, start: N, end: N) -> bool {
     if start == end {
         return true;
     }
@@ -39,8 +47,8 @@ fn has_path(adj_list: &HashMap<Uuid, Vec<Uuid>>, start: Uuid, end: Uuid) -> bool
     false
 }
 
-/// Detect if the graph contains any cycles using DFS
-pub fn has_cycle(adj_list: &HashMap<Uuid, Vec<Uuid>>) -> bool {
+/// Detect if the graph contains any cycles using DFS.
+pub fn has_cycle<N: Copy + Eq + Hash>(adj_list: &HashMap<N, Vec<N>>) -> bool {
     let mut visited = HashSet::new();
     let mut rec_stack = HashSet::new();
 
@@ -54,11 +62,11 @@ pub fn has_cycle(adj_list: &HashMap<Uuid, Vec<Uuid>>) -> bool {
     false
 }
 
-fn has_cycle_util(
-    adj_list: &HashMap<Uuid, Vec<Uuid>>,
-    node: Uuid,
-    visited: &mut HashSet<Uuid>,
-    rec_stack: &mut HashSet<Uuid>,
+fn has_cycle_util<N: Copy + Eq + Hash>(
+    adj_list: &HashMap<N, Vec<N>>,
+    node: N,
+    visited: &mut HashSet<N>,
+    rec_stack: &mut HashSet<N>,
 ) -> bool {
     visited.insert(node);
     rec_stack.insert(node);
@@ -79,8 +87,8 @@ fn has_cycle_util(
     false
 }
 
-/// Get all nodes reachable from a given node (transitive closure) using BFS
-pub fn reachable_from(adj_list: &HashMap<Uuid, Vec<Uuid>>, start: Uuid) -> HashSet<Uuid> {
+/// Get all nodes reachable from a given node (transitive closure) using BFS.
+pub fn reachable_from<N: Copy + Eq + Hash>(adj_list: &HashMap<N, Vec<N>>, start: N) -> HashSet<N> {
     let mut reachable = HashSet::new();
     let mut queue = VecDeque::new();
 
@@ -103,6 +111,7 @@ pub fn reachable_from(adj_list: &HashMap<Uuid, Vec<Uuid>>, start: Uuid) -> HashS
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     #[test]
     fn test_would_create_cycle_simple() {

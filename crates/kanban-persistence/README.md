@@ -123,8 +123,15 @@ pub struct PersistenceMetadata {
 ### `FormatVersion`
 
 ```rust
-pub enum FormatVersion { V1, V2 }
+pub enum FormatVersion { V1, V2, V3, V4, V5, V6 }
 ```
+
+Current shipped version is V6 (introduced by KAN-504): splits the dependency
+graph from a single edge-type-tagged list into three typed sub-graphs
+(`parent_child`, `blocks`, `relates`) keyed by relation kind. The JSON
+backend chains V1→V2→V3→V4→V5→V6 migrations on load; the SQLite backend
+ships the per-kind tables directly. See `kanban-persistence-json`'s
+`migration/split_graph.rs` for the JSON V6 transform.
 
 ### `PersistenceError`
 

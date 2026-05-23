@@ -142,6 +142,38 @@ History is captured before every mutating operation. Stacks are capped at 100 en
 | `delete_sprint(id)` | Delete a sprint |
 | `carry_over_sprint_cards(from, to)` | Move uncompleted cards to a new sprint |
 
+### Card Relations (GraphOperations)
+
+`KanbanContext` also implements the `GraphOperations` trait from
+`kanban-domain`, which is the service-layer entry point for the card
+dependency graph (parent/child, blocks, relates). The CLI relation
+handler and the MCP relation tools both consume `&dyn GraphOperations`
+through their respective context wrappers.
+
+| Method | Description |
+|--------|-------------|
+| `attach_children(parent, children)` | Atomic batch: attach every child to `parent`; full rollback on any failure (cycle, self-reference, unknown card, duplicate) |
+| `attach_child(parent, child)` | Singular convenience; default-method forward to `attach_children(parent, vec![child])` |
+| `detach_children(parent, children)` | Atomic batch: detach every child from `parent`; rolls back on missing edge |
+| `detach_child(parent, child)` | Singular convenience; default-method forward to `detach_children` |
+| `list_children_of(parent)` | List direct children (active edges only) |
+| `list_parents_of(child)` | List direct parents (active edges only) |
+| `block(blocker, blocked, severity)` | Add a directed blocks edge with `Severity` metadata |
+| `unblock(blocker, blocked)` | Remove the directed blocks edge |
+| `list_blocked_by(blocker)` | Cards `blocker` blocks (outgoing) |
+| `list_blockers_of(blocked)` | Cards that block `blocked` (incoming) |
+| `relate(a, b, kind)` | Add an undirected relates edge with `RelatesKind` metadata |
+| `dissociate(a, b)` | Remove the undirected relates edge |
+| `list_related_to(card)` | Cards related to `card` via any active relates edge |
+
+The plural methods are the atomic primitives; singular methods are
+default-impl forwards that wrap a single id in `vec![]` so every
+mutation routes through the same `KanbanContext::execute(Vec<Command>)`
+transactional path. Cross-board parent/child is permitted at the
+service layer; board-scoping is a separate caller decision. Every
+mutation method validates participant card existence up front and
+returns `NotFound` on stale ids before the command reaches the graph.
+
 ---
 
 ## `BatchOperationResult`

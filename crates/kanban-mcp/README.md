@@ -1,6 +1,6 @@
 # kanban-mcp
 
-Model Context Protocol (MCP) server for kanban project management. Provides 40 tools covering boards, columns, cards, sprints, bulk operations, import/export, and undo/redo.
+Model Context Protocol (MCP) server for kanban project management. Provides 44 tools covering boards, columns, cards, card relations (parent/child), sprints, bulk operations, import/export, and undo/redo.
 
 ## Architecture
 
@@ -131,6 +131,17 @@ Most tool inputs accept either an opaque UUID or a friendlier reference, resolve
 |------|-------------|-----------------|
 | `tool_get_card_branch_name` | Get git branch name for a card | `card: String` |
 | `tool_get_card_git_checkout` | Get `git checkout -b <branch>` command | `card: String` |
+
+### Card Relations (4 tools)
+
+| Tool | Description | Required params |
+|------|-------------|-----------------|
+| `tool_set_card_parent` | Add a parent → child edge between two cards. Rejects cycles and self-reference. | `child: String`, `parent: String` |
+| `tool_remove_card_parent` | Remove a parent → child edge. | `child: String`, `parent: String` |
+| `tool_list_card_parents` | List direct parents of a card (returns `Vec<CardSummary>`). | `card: String` |
+| `tool_list_card_children` | List direct children of a card (returns `Vec<CardSummary>`). | `card: String` |
+
+All identifiers accept UUIDs or card identifiers like `KAN-5` per the rules in the Identifiers section. Cross-board parent/child is permitted today.
 
 ### Bulk Card Operations (3 tools)
 

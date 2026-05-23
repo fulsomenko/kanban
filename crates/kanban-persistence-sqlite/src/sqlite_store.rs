@@ -2,11 +2,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use kanban_core::graph::{Edge, Graph};
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
-    ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
-    Snapshot, Sprint, SprintLog,
+    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, KanbanResult, Snapshot,
+    Sprint, SprintLog,
 };
 use kanban_persistence::{
     PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
@@ -56,6 +55,19 @@ fn p_dt(s: &str) -> KanbanResult<DateTime<Utc>> {
 fn p_enum<T: serde::de::DeserializeOwned>(s: &str, label: &str) -> KanbanResult<T> {
     serde_json::from_value(serde_json::Value::String(s.to_owned()))
         .map_err(|_| ser_err(format!("unknown {label} variant: {s}")))
+}
+
+/// Render a unit-variant enum to its serde wire name (e.g.
+/// `CardEdgeType::Spawns -> "ParentOf"`). Symmetric with [`p_enum`].
+/// Avoids coupling the on-disk format to `#[derive(Debug)]`, which is
+/// easy to customize and would break the read/write round-trip silently.
+fn ser_enum<T: serde::Serialize + std::fmt::Debug>(v: &T, label: &str) -> KanbanResult<String> {
+    match serde_json::to_value(v).map_err(ser_err)? {
+        serde_json::Value::String(s) => Ok(s),
+        other => Err(ser_err(format!(
+            "{label} did not serialise to a JSON string: {other}"
+        ))),
+    }
 }
 
 fn fmt_dt(dt: &DateTime<Utc>) -> String {
@@ -190,28 +202,19 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
     })
 }
 
-fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    let mut graph: Graph<CardEdgeType> = Graph::new();
-    for row in rows {
-        let source_str: String = row.try_get("source_id").map_err(db_err)?;
-        let target_str: String = row.try_get("target_id").map_err(db_err)?;
-        let edge_type_str: String = row.try_get("edge_type").map_err(db_err)?;
-        let direction_str: String = row.try_get("direction").map_err(db_err)?;
-        let weight: Option<f64> = row.try_get("weight").map_err(db_err)?;
-        let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
-        let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
-
-        graph.add_edge(Edge {
-            source: p_uuid(&source_str)?,
-            target: p_uuid(&target_str)?,
-            edge_type: p_enum(&edge_type_str, "edge_type")?,
-            direction: p_enum(&direction_str, "edge direction")?,
-            weight: weight.map(|w| w as f32),
-            created_at: p_dt(&created_at_str)?,
-            archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
-        });
-    }
-    Ok(DependencyGraph { cards: graph })
+/// Parse the four common edge columns (source / target / timestamps)
+/// shared by `spawns_edges`, `blocks_edges`, and `relates_edges`.
+fn row_to_edge_base(row: &SqliteRow) -> KanbanResult<kanban_core::EdgeBase> {
+    let source_str: String = row.try_get("source_id").map_err(db_err)?;
+    let target_str: String = row.try_get("target_id").map_err(db_err)?;
+    let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+    let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
+    Ok(kanban_core::EdgeBase {
+        source: p_uuid(&source_str)?,
+        target: p_uuid(&target_str)?,
+        created_at: p_dt(&created_at_str)?,
+        archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
+    })
 }
 
 fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
@@ -386,6 +389,38 @@ impl SqliteStore {
                 .map_err(db_err)?;
         }
 
+        Self::drop_legacy_card_edges_if_present(pool).await?;
+
+        Ok(())
+    }
+
+    /// Drop the pre-KAN-504 `card_edges` table (single table with an
+    /// `edge_type` column) if present. The per-kind `spawns_edges` /
+    /// `blocks_edges` / `relates_edges` tables created by SCHEMA
+    /// replace it; nothing of KAN-504's graph work is live so we
+    /// don't need to copy data forward — any rows in the legacy
+    /// table belong to a development-only database.
+    async fn drop_legacy_card_edges_if_present(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        let has_card_edges: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='card_edges'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+        if !has_card_edges {
+            return Ok(());
+        }
+        tracing::info!(
+            "dropping legacy card_edges table (pre per-kind schema); per-kind tables take over"
+        );
+        sqlx::raw_sql(
+            "DROP INDEX IF EXISTS idx_card_edges_source;
+             DROP INDEX IF EXISTS idx_card_edges_target;
+             DROP TABLE IF EXISTS card_edges;",
+        )
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
         Ok(())
     }
 
@@ -732,14 +767,53 @@ impl SqliteStore {
     async fn get_graph_with_conn(
         conn: &mut sqlx::SqliteConnection,
     ) -> KanbanResult<DependencyGraph> {
-        let rows = sqlx::query(
-            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
-             FROM card_edges",
+        use kanban_core::EdgeBase;
+        use kanban_domain::{BlocksEdge, RelatesEdge, SpawnsEdge};
+
+        let mut spawns: Vec<SpawnsEdge> = Vec::new();
+        for row in
+            sqlx::query("SELECT source_id, target_id, created_at, archived_at FROM spawns_edges")
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(db_err)?
+        {
+            spawns.push(SpawnsEdge {
+                base: row_to_edge_base(&row)?,
+            });
+        }
+
+        let mut blocks: Vec<BlocksEdge> = Vec::new();
+        for row in sqlx::query(
+            "SELECT source_id, target_id, severity, created_at, archived_at FROM blocks_edges",
         )
         .fetch_all(&mut *conn)
         .await
-        .map_err(db_err)?;
-        rows_to_graph(&rows)
+        .map_err(db_err)?
+        {
+            let severity_str: String = row.try_get("severity").map_err(db_err)?;
+            blocks.push(BlocksEdge {
+                base: row_to_edge_base(&row)?,
+                severity: p_enum(&severity_str, "severity")?,
+            });
+        }
+
+        let mut relates: Vec<RelatesEdge> = Vec::new();
+        for row in sqlx::query(
+            "SELECT source_id, target_id, kind, created_at, archived_at FROM relates_edges",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db_err)?
+        {
+            let kind_str: String = row.try_get("kind").map_err(db_err)?;
+            relates.push(RelatesEdge {
+                base: row_to_edge_base(&row)?,
+                kind: p_enum(&kind_str, "relates kind")?,
+            });
+        }
+
+        let _ = EdgeBase::<uuid::Uuid>::new; // keep import in scope for symmetry; suppress unused
+        DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
     }
 
     async fn modify_graph_async(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
@@ -755,24 +829,61 @@ impl SqliteStore {
         conn: &mut sqlx::SqliteConnection,
         graph: &DependencyGraph,
     ) -> KanbanResult<()> {
-        sqlx::query("DELETE FROM card_edges")
+        use kanban_core::Edge as _;
+
+        sqlx::query("DELETE FROM spawns_edges")
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM blocks_edges")
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM relates_edges")
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
 
-        for edge in graph.cards.edges() {
+        for e in graph.spawns_edges() {
             sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO spawns_edges
+                    (source_id, target_id, created_at, archived_at)
+                 VALUES (?, ?, ?, ?)",
             )
-            .bind(edge.source.to_string())
-            .bind(edge.target.to_string())
-            .bind(format!("{:?}", edge.edge_type))
-            .bind(format!("{:?}", edge.direction))
-            .bind(edge.weight.map(|w| w as f64))
-            .bind(fmt_dt(&edge.created_at))
-            .bind(opt_dt(&edge.archived_at))
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+        for e in graph.blocks_edges() {
+            sqlx::query(
+                "INSERT INTO blocks_edges
+                    (source_id, target_id, severity, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(ser_enum(&e.severity, "severity")?)
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+        for e in graph.relates_edges() {
+            sqlx::query(
+                "INSERT INTO relates_edges
+                    (source_id, target_id, kind, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(ser_enum(&e.kind, "relates kind")?)
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
@@ -813,7 +924,15 @@ impl SqliteStore {
             .await
             .map_err(db_err)?;
 
-        sqlx::query("DELETE FROM card_edges")
+        sqlx::query("DELETE FROM spawns_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM blocks_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM relates_edges")
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
@@ -995,14 +1114,15 @@ impl SqliteStore {
     }
 
     async fn get_graph_async(&self) -> KanbanResult<DependencyGraph> {
-        let rows = sqlx::query(
-            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
-             FROM card_edges",
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(db_err)?;
-        rows_to_graph(&rows)
+        // Wrap the three per-kind edge reads in a single transaction so
+        // a concurrent writer between query 1 (spawns) and query 3
+        // (relates) cannot yield an inconsistent in-memory snapshot.
+        // SQLite under WAL gives the transaction a stable read view; the
+        // tx is read-only and is committed without writes.
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        let graph = Self::get_graph_with_conn(&mut tx).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(graph)
     }
 
     async fn write_column_with_conn(
@@ -1728,6 +1848,118 @@ mod tests {
                     wal_path.metadata().unwrap().len() < 32 * 1024,
                     "WAL file should be minimal after save+checkpoint"
                 );
+            }
+        });
+    }
+
+    /// Per-kind tables hard-reject metadata outside their respective
+    /// CHECK constraints. Pin the constraint via a direct insert
+    /// attempt so any future schema relaxation has to choose
+    /// whether to drop or update this test.
+    #[test]
+    fn test_blocks_edges_rejects_unknown_severity() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("check.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let insert = sqlx::query(
+                "INSERT INTO blocks_edges
+                    (source_id, target_id, severity, created_at, archived_at)
+                 VALUES (?, ?, 'Catastrophic', ?, NULL)",
+            )
+            .bind(uuid::Uuid::nil().to_string())
+            .bind(uuid::Uuid::from_u128(0x42).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await;
+            assert!(
+                insert.is_err(),
+                "CHECK on severity must reject 'Catastrophic'; got {:?}",
+                insert
+            );
+        });
+    }
+
+    #[test]
+    fn test_relates_edges_rejects_unknown_kind() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("check_relates.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let insert = sqlx::query(
+                "INSERT INTO relates_edges
+                    (source_id, target_id, kind, created_at, archived_at)
+                 VALUES (?, ?, 'Unknown', ?, NULL)",
+            )
+            .bind(uuid::Uuid::nil().to_string())
+            .bind(uuid::Uuid::from_u128(0x42).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await;
+            assert!(insert.is_err());
+        });
+    }
+
+    /// SqliteStore::open drops the pre-KAN-504 `card_edges` table on
+    /// first encounter so the per-kind tables can take over.
+    /// Pre-KAN-504 graph work is not live anywhere, so the data on
+    /// such a table is dev-only and the drop is safe.
+    #[test]
+    fn test_open_drops_legacy_card_edges_table() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            // Pre-seed the legacy table by direct sqlx access without
+            // going through SqliteStore::open (the open path would
+            // drop it before we could inspect).
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    sqlx::sqlite::SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE card_edges (
+                    source_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    edge_type TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    weight REAL,
+                    created_at TEXT NOT NULL,
+                    archived_at TEXT,
+                    PRIMARY KEY (source_id, target_id, edge_type)
+                )",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            drop(pool);
+
+            // Opening triggers the drop + per-kind table creation.
+            let store = SqliteStore::open(&path).await.unwrap();
+            let has_card_edges: bool = sqlx::query_scalar(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='card_edges'",
+            )
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+            assert!(!has_card_edges, "legacy card_edges table must be dropped");
+
+            for table in ["spawns_edges", "blocks_edges", "relates_edges"] {
+                let has: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='{}'",
+                    table
+                ))
+                .fetch_one(store.pool())
+                .await
+                .unwrap();
+                assert!(has, "{table} must exist after open");
             }
         });
     }

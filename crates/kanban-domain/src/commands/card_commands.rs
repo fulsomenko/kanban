@@ -1,6 +1,5 @@
 use super::{Command, CommandContext};
 use crate::data_store::DataStore;
-use crate::dependencies::card_graph::CardGraphExt;
 use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult, SprintLog};
 use chrono::{DateTime, Utc};
 use kanban_core::Editable;
@@ -353,7 +352,7 @@ impl RestoreCard {
 
         let card_id = self.card_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.unarchive_node(card_id);
+            graph.unarchive_node(card_id);
             Ok(())
         }))?;
         Ok(())
@@ -379,7 +378,7 @@ impl DeleteCard {
         context.store.delete_archived_card(self.card_id)?;
         let card_id = self.card_id;
         context.store.modify_graph(Box::new(move |graph| {
-            graph.cards.remove_card_edges(card_id);
+            graph.remove_node(card_id);
             Ok(())
         }))?;
         Ok(())
@@ -393,7 +392,6 @@ impl DeleteCard {
     /// archived, or — defensively — both) via `ImportEntities`, then
     /// re-add every incident graph edge.
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        use crate::dependencies::CardEdgeType;
         let live = store.get_card(self.card_id)?;
         let archived = store.get_archived_card(self.card_id)?;
         if live.is_none() && archived.is_none() {
@@ -407,32 +405,11 @@ impl DeleteCard {
             },
         ))];
         let graph = store.get_graph()?;
-        for edge in graph.cards.edges() {
-            if !edge.involves(self.card_id) {
-                continue;
-            }
-            let cmd = match edge.edge_type {
-                CardEdgeType::Blocks => {
-                    super::DependencyCommand::AddBlocks(super::AddBlocksDependencyCommand {
-                        blocker_id: edge.source,
-                        blocked_id: edge.target,
-                    })
-                }
-                CardEdgeType::RelatesTo => {
-                    super::DependencyCommand::AddRelatesTo(super::AddRelatesToDependencyCommand {
-                        card_a_id: edge.source,
-                        card_b_id: edge.target,
-                    })
-                }
-                CardEdgeType::ParentOf => {
-                    super::DependencyCommand::SetParent(super::SetParentCommand {
-                        child_id: edge.target,
-                        parent_id: edge.source,
-                    })
-                }
-            };
-            commands.push(Command::Dependency(cmd));
-        }
+        let card_id = self.card_id;
+        commands.extend(super::dependency_commands::edges_to_undo_commands(
+            &graph,
+            |s, t| s == card_id || t == card_id,
+        ));
         Ok(commands)
     }
 }
@@ -484,7 +461,7 @@ impl ArchiveCards {
         }
         context.store.modify_graph(Box::new(move |graph| {
             for id in &valid_ids {
-                graph.cards.archive_card_edges(*id);
+                graph.archive_node(*id);
             }
             Ok(())
         }))?;

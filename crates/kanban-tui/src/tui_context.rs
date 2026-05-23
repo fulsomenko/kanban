@@ -3,7 +3,7 @@ use kanban_domain::commands::Command;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    ColumnUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
+    ColumnUpdate, CreateCardOptions, GraphOperations, KanbanOperations, Sprint, SprintUpdate,
 };
 use kanban_service::backend::KanbanBackend;
 use kanban_service::KanbanContext;
@@ -375,5 +375,52 @@ impl KanbanOperations for TuiContext {
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
         let r = self.inner.import_board(data);
         self.with_flush(r)
+    }
+}
+
+impl GraphOperations for TuiContext {
+    fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.attach_children(parent, children);
+        self.with_flush(r)
+    }
+    fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        let r = self.inner.detach_children(parent, children);
+        self.with_flush(r)
+    }
+    fn list_children_of(&self, parent: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_children_of(parent)
+    }
+    fn list_parents_of(&self, child: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_parents_of(child)
+    }
+    fn block(
+        &mut self,
+        blocker: Uuid,
+        blocked: Uuid,
+        severity: kanban_domain::Severity,
+    ) -> KanbanResult<()> {
+        let r = self.inner.block(blocker, blocked, severity);
+        self.with_flush(r)
+    }
+    fn unblock(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()> {
+        let r = self.inner.unblock(blocker, blocked);
+        self.with_flush(r)
+    }
+    fn list_blocked_by(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_blocked_by(blocker)
+    }
+    fn list_blockers_of(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_blockers_of(blocked)
+    }
+    fn relate(&mut self, a: Uuid, b: Uuid, kind: kanban_domain::RelatesKind) -> KanbanResult<()> {
+        let r = self.inner.relate(a, b, kind);
+        self.with_flush(r)
+    }
+    fn dissociate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+        let r = self.inner.dissociate(a, b);
+        self.with_flush(r)
+    }
+    fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.inner.list_related_to(card)
     }
 }

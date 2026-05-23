@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use kanban_core::VERSION;
 
@@ -23,6 +23,8 @@ pub enum Commands {
     Column(ColumnCommand),
     /// Card operations
     Card(CardCommand),
+    /// Card-relation operations (parent/child)
+    Relation(RelationCommand),
     /// Sprint operations
     Sprint(SprintCommand),
     /// Export board data
@@ -256,6 +258,99 @@ pub enum CardAction {
         /// Sprint UUID, name, or number (must be on the same board as all selected cards)
         #[arg(long)]
         sprint: String,
+    },
+}
+
+// Relation commands
+
+/// Sort key for `kanban relation parents` / `children` output.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum SortKey {
+    CardNumber,
+    Priority,
+    Points,
+    CreatedAt,
+    UpdatedAt,
+    Status,
+    Position,
+}
+
+/// Sort direction.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+impl SortKey {
+    pub fn to_sort_by(self) -> kanban_domain::sort::SortBy {
+        use kanban_domain::sort::SortBy;
+        match self {
+            SortKey::CardNumber => SortBy::CardNumber,
+            SortKey::Priority => SortBy::Priority,
+            SortKey::Points => SortBy::Points,
+            SortKey::CreatedAt => SortBy::CreatedAt,
+            SortKey::UpdatedAt => SortBy::UpdatedAt,
+            SortKey::Status => SortBy::Status,
+            SortKey::Position => SortBy::Position,
+        }
+    }
+}
+
+impl SortDir {
+    pub fn to_sort_order(self) -> kanban_domain::SortOrder {
+        match self {
+            SortDir::Asc => kanban_domain::SortOrder::Ascending,
+            SortDir::Desc => kanban_domain::SortOrder::Descending,
+        }
+    }
+}
+
+#[derive(Args)]
+pub struct RelationCommand {
+    #[command(subcommand)]
+    pub action: RelationAction,
+}
+
+#[derive(Subcommand)]
+pub enum RelationAction {
+    /// Add parent → child edges between one parent and one or more children
+    Add {
+        /// Parent card UUID or identifier (e.g. KAN-2)
+        parent: String,
+        /// One or more child cards (UUID or identifier)
+        #[arg(required = true, num_args = 1..)]
+        children: Vec<String>,
+    },
+    /// Remove parent → child edges between one parent and one or more children
+    Remove {
+        /// Parent card UUID or identifier (e.g. KAN-2)
+        parent: String,
+        /// One or more child cards (UUID or identifier)
+        #[arg(required = true, num_args = 1..)]
+        children: Vec<String>,
+    },
+    /// List direct parents of a card
+    Parents {
+        /// Card UUID or identifier
+        card: String,
+        /// Sort key for the returned list
+        #[arg(long, value_enum, default_value_t = SortKey::CardNumber)]
+        sort: SortKey,
+        /// Sort direction
+        #[arg(long, value_enum, default_value_t = SortDir::Asc)]
+        order: SortDir,
+    },
+    /// List direct children of a card
+    Children {
+        /// Card UUID or identifier
+        card: String,
+        /// Sort key for the returned list
+        #[arg(long, value_enum, default_value_t = SortKey::CardNumber)]
+        sort: SortKey,
+        /// Sort direction
+        #[arg(long, value_enum, default_value_t = SortDir::Asc)]
+        order: SortDir,
     },
 }
 

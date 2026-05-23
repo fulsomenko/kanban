@@ -3,7 +3,7 @@ use crate::components::sprint_assign_list::{
     build_entries, next_selectable, prev_selectable, sprint_id_of, SprintAssignEntry,
 };
 use crossterm::event::KeyCode;
-use kanban_domain::{KanbanOperations, SortField, SortOrder};
+use kanban_domain::{GraphOperations, KanbanOperations, SortField, SortOrder};
 
 const PRIORITY_COUNT: usize = 4;
 
@@ -594,41 +594,34 @@ impl App {
                             if let Some(current_card) = self.model.cards().get(card_idx) {
                                 let current_card_id = current_card.id;
 
-                                if self.relationship.selected.contains(&selected_card_id) {
-                                    // Remove relationship
-                                    let (child_id, parent_id) = if is_parent_mode {
-                                        (current_card_id, selected_card_id)
-                                    } else {
-                                        (selected_card_id, current_card_id)
-                                    };
-                                    let cmd = kanban_domain::commands::Command::Dependency(
-                                        kanban_domain::commands::DependencyCommand::RemoveParent(
-                                            kanban_domain::commands::RemoveParentCommand {
-                                                child_id,
-                                                parent_id,
-                                            },
-                                        ),
-                                    );
-                                    if self.execute_command(cmd).is_ok() {
-                                        self.relationship.selected.remove(&selected_card_id);
-                                    }
+                                let (child_id, parent_id) = if is_parent_mode {
+                                    (current_card_id, selected_card_id)
                                 } else {
-                                    // Add relationship
-                                    let (child_id, parent_id) = if is_parent_mode {
-                                        (current_card_id, selected_card_id)
-                                    } else {
-                                        (selected_card_id, current_card_id)
-                                    };
-                                    let cmd = kanban_domain::commands::Command::Dependency(
-                                        kanban_domain::commands::DependencyCommand::SetParent(
-                                            kanban_domain::commands::SetParentCommand {
-                                                child_id,
-                                                parent_id,
-                                            },
-                                        ),
-                                    );
-                                    if self.execute_command(cmd).is_ok() {
-                                        self.relationship.selected.insert(selected_card_id);
+                                    (selected_card_id, current_card_id)
+                                };
+                                let was_selected =
+                                    self.relationship.selected.contains(&selected_card_id);
+                                let result = if was_selected {
+                                    self.ctx.detach_child(parent_id, child_id)
+                                } else {
+                                    self.ctx.attach_child(parent_id, child_id)
+                                };
+                                match result {
+                                    Ok(()) => {
+                                        if was_selected {
+                                            self.relationship.selected.remove(&selected_card_id);
+                                        } else {
+                                            self.relationship.selected.insert(selected_card_id);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        // Surface the rejection to the user
+                                        // (cycle / self-ref / duplicate / unknown
+                                        // card). Without this the popup would
+                                        // look like a silent no-op.
+                                        self.set_error(format!(
+                                            "Failed to toggle relationship: {e}"
+                                        ));
                                     }
                                 }
                             }

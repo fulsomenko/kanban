@@ -909,3 +909,219 @@ async fn tool_assign_card_to_sprint_resolves_by_name_then_mutates() {
     let body2 = text_payload(&r2);
     assert!(body2["sprint_id"].is_string());
 }
+
+// ============================================================================
+// Card-relation tool surface (KAN-504).
+// ============================================================================
+
+use kanban_mcp::{
+    ListCardChildrenRequest, ListCardParentsRequest, RemoveCardParentRequest, SetCardParentRequest,
+};
+
+async fn setup_server_with_two_cards() -> (KanbanMcpServer, TempDir, String, String) {
+    let (server, dir) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Parent".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Child".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+        }))
+        .await
+        .unwrap();
+    (server, dir, "KAN-1".to_string(), "KAN-2".to_string())
+}
+
+#[tokio::test]
+async fn tool_set_card_parent_resolves_identifiers_and_persists() {
+    let (server, _tmp, parent, child) = setup_server_with_two_cards().await;
+
+    let r = server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: child.clone(),
+            parent: parent.clone(),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&r);
+    assert!(body["parent"].is_string());
+    assert!(body["child"].is_string());
+
+    let listed = server
+        .tool_list_card_parents(Parameters(ListCardParentsRequest {
+            card: child.clone(),
+        }))
+        .await
+        .unwrap();
+    let listed_body = text_payload(&listed);
+    let parents = listed_body.as_array().expect("array");
+    assert_eq!(parents.len(), 1);
+    assert_eq!(parents[0]["title"], "Parent");
+}
+
+#[tokio::test]
+async fn tool_set_card_parent_cycle_returns_mcp_error() {
+    use rmcp::model::ErrorCode;
+
+    let (server, _tmp, a, b) = setup_server_with_two_cards().await;
+
+    server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: b.clone(),
+            parent: a.clone(),
+        }))
+        .await
+        .unwrap();
+
+    // Closing the cycle b -> a should fail at the MCP boundary.
+    let err = server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: a.clone(),
+            parent: b.clone(),
+        }))
+        .await
+        .unwrap_err();
+
+    // KanbanMcpError maps domain errors (which DependencyError::CycleDetected
+    // is) to INVALID_PARAMS at the boundary. Pin the JSON-RPC code so the
+    // contract is not just stringly typed, and verify the cycle is the
+    // source by inspecting the (typed) message.
+    assert_eq!(
+        err.code,
+        ErrorCode::INVALID_PARAMS,
+        "domain errors must surface as INVALID_PARAMS at the MCP boundary"
+    );
+    assert!(
+        err.message.contains("cycle"),
+        "message should mention cycle; got: {}",
+        err.message
+    );
+    // The MCP boundary enriches cycle errors with the raw user
+    // identifiers, same as CLI. Pin both sides of the edge so the
+    // shared message formatter stays load-bearing across surfaces.
+    assert!(
+        err.message.contains(&a) && err.message.contains(&b),
+        "cycle message should name both cards; got: {}",
+        err.message
+    );
+}
+
+/// Self-reference at the MCP boundary surfaces as INVALID_PARAMS and
+/// names the offending card, matching the CLI UX. Pins the shared
+/// enrichment path on the self-ref branch (the cycle test pins the
+/// cycle branch).
+#[tokio::test]
+async fn tool_set_card_parent_self_reference_returns_invalid_params_with_card_identifier() {
+    use rmcp::model::ErrorCode;
+
+    let (server, _tmp, a, _b) = setup_server_with_two_cards().await;
+
+    let err = server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: a.clone(),
+            parent: a.clone(),
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    let msg = err.message.to_lowercase();
+    assert!(
+        msg.contains("self"),
+        "self-reference message must name the invariant; got: {}",
+        err.message
+    );
+    assert!(
+        err.message.contains(&a),
+        "self-reference message must name the offending card; got: {}",
+        err.message
+    );
+}
+
+#[tokio::test]
+async fn tool_list_card_parents_returns_summaries() {
+    let (server, _tmp, parent, child) = setup_server_with_two_cards().await;
+
+    server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: child.clone(),
+            parent: parent.clone(),
+        }))
+        .await
+        .unwrap();
+
+    let listed = server
+        .tool_list_card_parents(Parameters(ListCardParentsRequest {
+            card: child.clone(),
+        }))
+        .await
+        .unwrap();
+    let arr = text_payload(&listed);
+    let parents = arr.as_array().expect("array");
+    assert_eq!(parents.len(), 1);
+    assert_eq!(parents[0]["title"], "Parent");
+    assert!(parents[0]["id"].is_string());
+
+    let children = server
+        .tool_list_card_children(Parameters(ListCardChildrenRequest {
+            card: parent.clone(),
+        }))
+        .await
+        .unwrap();
+    let arr = text_payload(&children);
+    let cs = arr.as_array().expect("array");
+    assert_eq!(cs.len(), 1);
+    assert_eq!(cs[0]["title"], "Child");
+}
+
+#[tokio::test]
+async fn tool_remove_card_parent_returns_error_when_edge_missing() {
+    use rmcp::model::ErrorCode;
+
+    let (server, _tmp, parent, child) = setup_server_with_two_cards().await;
+
+    let err = server
+        .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+            child: child.clone(),
+            parent: parent.clone(),
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    let msg = err.message.to_lowercase();
+    assert!(
+        msg.contains("not found") || msg.contains("missing") || msg.contains("does not exist"),
+        "expected edge-not-found message, got: {msg}"
+    );
+}

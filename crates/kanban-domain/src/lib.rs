@@ -13,6 +13,7 @@ pub mod editable;
 pub mod export;
 pub mod field_update;
 pub mod filter;
+pub mod graph_operations;
 pub mod in_memory_store;
 pub mod operations;
 pub mod query;
@@ -34,11 +35,14 @@ pub use card::{
     CreateCardOptions,
 };
 pub use column::{Column, ColumnId, ColumnUpdate};
-pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, DependencyGraph};
+pub use dependencies::{
+    BlocksEdge, CardEdgeType, DependencyGraph, RelatesEdge, RelatesKind, Severity, SpawnsEdge,
+};
 pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities};
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
+pub use graph_operations::GraphOperations;
 pub use operations::{CardListFilter, KanbanOperations};
 pub use query::{
     sprint::{

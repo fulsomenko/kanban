@@ -1,12 +1,33 @@
 use super::super::BackendFactory;
 use crate::KanbanContext;
-use kanban_core::{AppConfig, Edge, EdgeDirection};
-use kanban_domain::{CardEdgeType, CreateCardOptions, KanbanOperations, KanbanResult};
+use kanban_core::{AppConfig, EdgeBase};
+use kanban_domain::{
+    BlocksEdge, CardEdgeType, CreateCardOptions, DependencyGraph, KanbanOperations, KanbanResult,
+    RelatesEdge, RelatesKind, Severity, SpawnsEdge,
+};
 use tempfile::TempDir;
 
-fn add_edge(ctx: &KanbanContext, edge: Edge<CardEdgeType>) {
-    let mut graph = ctx.data_store().get_graph().unwrap();
-    graph.cards.add_edge(edge);
+/// Round-trip test helper: install a single edge into the graph
+/// through the validating constructor and persist. Re-snapshots the
+/// existing per-kind sub-graphs so the new edge lands alongside.
+fn add_edge(ctx: &KanbanContext, kind: CardEdgeType, base: EdgeBase) {
+    let existing = ctx.data_store().get_graph().unwrap();
+    let mut spawns: Vec<SpawnsEdge> = existing.spawns_edges().to_vec();
+    let mut blocks: Vec<BlocksEdge> = existing.blocks_edges().to_vec();
+    let mut relates: Vec<RelatesEdge> = existing.relates_edges().to_vec();
+    match kind {
+        CardEdgeType::Spawns => spawns.push(SpawnsEdge { base }),
+        CardEdgeType::Blocks => blocks.push(BlocksEdge {
+            base,
+            severity: Severity::default(),
+        }),
+        CardEdgeType::RelatesTo => relates.push(RelatesEdge {
+            base,
+            kind: RelatesKind::default(),
+        }),
+    }
+    let graph = DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
+        .expect("test fixture edges must validate");
     ctx.data_store().set_graph(graph).unwrap();
 }
 
@@ -40,12 +61,10 @@ pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResul
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
-        Edge {
+        CardEdgeType::Blocks,
+        EdgeBase {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::Blocks,
-            direction: EdgeDirection::Directed,
-            weight: Some(1.0_f32),
             created_at: now,
             archived_at: None,
         },
@@ -55,15 +74,12 @@ pub async fn test_blocks_edge_roundtrip(factory: &BackendFactory) -> KanbanResul
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.blocks_edges();
     assert_eq!(edges.len(), 1);
     let e = &edges[0];
-    assert_eq!(e.source, card_a.id);
-    assert_eq!(e.target, card_b.id);
-    assert_eq!(e.edge_type, CardEdgeType::Blocks);
-    assert_eq!(e.direction, EdgeDirection::Directed);
-    assert!((e.weight.unwrap() - 1.0).abs() < f32::EPSILON);
-    assert!(e.archived_at.is_none());
+    assert_eq!(e.base.source, card_a.id);
+    assert_eq!(e.base.target, card_b.id);
+    assert!(e.base.archived_at.is_none());
     Ok(())
 }
 
@@ -87,12 +103,10 @@ pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanR
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
-        Edge {
+        CardEdgeType::RelatesTo,
+        EdgeBase {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::RelatesTo,
-            direction: EdgeDirection::Bidirectional,
-            weight: None,
             created_at: now,
             archived_at: None,
         },
@@ -102,12 +116,9 @@ pub async fn test_relates_to_edge_roundtrip(factory: &BackendFactory) -> KanbanR
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.relates_edges();
     assert_eq!(edges.len(), 1);
-    let e = &edges[0];
-    assert_eq!(e.edge_type, CardEdgeType::RelatesTo);
-    assert_eq!(e.direction, EdgeDirection::Bidirectional);
-    assert!(e.weight.is_none());
+    assert!(edges[0].base.archived_at.is_none());
     Ok(())
 }
 
@@ -141,12 +152,10 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
-        Edge {
+        CardEdgeType::Spawns,
+        EdgeBase {
             source: parent.id,
             target: child.id,
-            edge_type: CardEdgeType::ParentOf,
-            direction: EdgeDirection::Directed,
-            weight: None,
             created_at: now,
             archived_at: None,
         },
@@ -156,9 +165,8 @@ pub async fn test_parent_of_edge_roundtrip(factory: &BackendFactory) -> KanbanRe
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.spawns_edges();
     assert_eq!(edges.len(), 1);
-    assert_eq!(edges[0].edge_type, CardEdgeType::ParentOf);
     Ok(())
 }
 
@@ -182,12 +190,10 @@ pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanRes
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
-        Edge {
+        CardEdgeType::Blocks,
+        EdgeBase {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::Blocks,
-            direction: EdgeDirection::Directed,
-            weight: Some(2.5_f32),
             created_at: now,
             archived_at: Some(now),
         },
@@ -197,10 +203,9 @@ pub async fn test_archived_edge_roundtrip(factory: &BackendFactory) -> KanbanRes
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
     let graph = ctx.graph()?;
-    let edges = graph.cards.edges();
+    let edges = graph.blocks_edges();
     assert_eq!(edges.len(), 1);
-    assert!(edges[0].archived_at.is_some());
-    assert!((edges[0].weight.unwrap() - 2.5).abs() < f32::EPSILON);
+    assert!(edges[0].base.archived_at.is_some());
     Ok(())
 }
 
@@ -227,36 +232,30 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     let now = chrono::Utc::now();
     add_edge(
         &ctx,
-        Edge {
+        CardEdgeType::Blocks,
+        EdgeBase {
             source: card_a.id,
             target: card_b.id,
-            edge_type: CardEdgeType::Blocks,
-            direction: EdgeDirection::Directed,
-            weight: None,
             created_at: now,
             archived_at: None,
         },
     );
     add_edge(
         &ctx,
-        Edge {
+        CardEdgeType::Spawns,
+        EdgeBase {
             source: card_b.id,
             target: card_c.id,
-            edge_type: CardEdgeType::ParentOf,
-            direction: EdgeDirection::Directed,
-            weight: Some(3.0_f32),
             created_at: now,
             archived_at: None,
         },
     );
     add_edge(
         &ctx,
-        Edge {
+        CardEdgeType::RelatesTo,
+        EdgeBase {
             source: card_a.id,
             target: card_c.id,
-            edge_type: CardEdgeType::RelatesTo,
-            direction: EdgeDirection::Bidirectional,
-            weight: None,
             created_at: now,
             archived_at: Some(now),
         },
@@ -265,7 +264,7 @@ pub async fn test_multiple_edges_roundtrip(factory: &BackendFactory) -> KanbanRe
     ctx.save().await.unwrap();
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
 
-    assert_eq!(ctx.graph()?.cards.edges().len(), 3);
+    assert_eq!(ctx.graph()?.len(), 3);
     Ok(())
 }
 
@@ -280,6 +279,6 @@ pub async fn test_empty_graph_roundtrip(factory: &BackendFactory) -> KanbanResul
     ctx.save().await.unwrap();
 
     let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
-    assert!(ctx.graph()?.cards.edges().is_empty());
+    assert_eq!(ctx.graph()?.len(), 0);
     Ok(())
 }

@@ -14,7 +14,10 @@ pub use config::{
     DEFAULT_STORAGE_BACKEND,
 };
 pub use error::{CoreError, CoreResult};
-pub use graph::{Edge, EdgeDirection, Graph, GraphNode};
+pub use graph::{
+    Cascadable, DagGraph, Directed, Edge, EdgeBase, EdgeSet, EdgeStore, Graph, GraphError,
+    GraphNode, Undirected, UndirectedGraph,
+};
 pub use input::InputState;
 pub use logging::{LogEntry, Loggable};
 pub use paginated_list::{

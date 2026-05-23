@@ -42,8 +42,9 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 
-# Error handling (for main.rs only)
+# Error handling
 anyhow.workspace = true
+thiserror.workspace = true
 
 # CLI arguments
 clap.workspace = true

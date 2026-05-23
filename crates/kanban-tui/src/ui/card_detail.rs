@@ -63,8 +63,6 @@ pub(super) fn render_relationship_boxes(
 }
 
 pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) {
-    use kanban_domain::dependencies::CardGraphExt;
-
     if let Some(card) = app.get_card_for_detail_view() {
         let card = &card;
         if let Some(board_idx) = app.selection.active_board_index {
@@ -73,8 +71,8 @@ pub(super) fn render_card_detail_view(app: &App, frame: &mut Frame, area: Rect) 
                 let card_id = card.id;
 
                 // Get parent and child information
-                let parents = app.model.graph().cards.parents(card_id);
-                let children = app.model.graph().cards.children(card_id);
+                let parents = app.model.graph().parents(card_id);
+                let children = app.model.graph().children(card_id);
                 let child_count = children.len();
 
                 let constraints = vec![

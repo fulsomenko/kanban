@@ -1,9 +1,8 @@
 use chrono::Utc;
-use kanban_core::{Edge, EdgeDirection};
 use kanban_domain::card::{Card, CardPriority, CardStatus};
 use kanban_domain::sprint::{Sprint, SprintStatus};
 use kanban_domain::Snapshot;
-use kanban_domain::{ArchivedCard, Board, CardEdgeType, Column, DependencyGraph, SprintLog};
+use kanban_domain::{ArchivedCard, Board, Column, DependencyGraph, SprintLog};
 use uuid::Uuid;
 
 pub fn fully_populated_snapshot() -> Snapshot {
@@ -112,25 +111,30 @@ pub fn fully_populated_snapshot() -> Snapshot {
         original_position: 1,
     };
 
-    let mut graph = DependencyGraph::new();
-    graph.cards.add_edge(Edge {
-        source: card_id,
-        target: archived_card_inner_id,
-        edge_type: CardEdgeType::Blocks,
-        direction: EdgeDirection::Directed,
-        weight: Some(1.5),
-        created_at: now,
-        archived_at: None,
-    });
-    graph.cards.add_edge(Edge {
-        source: card_id,
-        target: archived_card_inner_id,
-        edge_type: CardEdgeType::RelatesTo,
-        direction: EdgeDirection::Bidirectional,
-        weight: None,
-        created_at: now,
-        archived_at: Some(now),
-    });
+    use kanban_core::EdgeBase;
+    use kanban_domain::{BlocksEdge, RelatesEdge, RelatesKind, Severity};
+    let graph = DependencyGraph::from_validated_per_kind_edges(
+        vec![],
+        vec![BlocksEdge {
+            base: EdgeBase {
+                source: card_id,
+                target: archived_card_inner_id,
+                created_at: now,
+                archived_at: None,
+            },
+            severity: Severity::default(),
+        }],
+        vec![RelatesEdge {
+            base: EdgeBase {
+                source: card_id,
+                target: archived_card_inner_id,
+                created_at: now,
+                archived_at: Some(now),
+            },
+            kind: RelatesKind::default(),
+        }],
+    )
+    .expect("test fixture edges must validate");
 
     Snapshot {
         boards: vec![board],

@@ -1128,25 +1128,23 @@ mod tests {
 
     #[test]
     fn test_modify_graph_atomic_on_error_leaves_graph_unchanged() {
-        use crate::dependencies::CardGraphExt;
-
         let store = InMemoryStore::new();
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
 
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(a, b).unwrap();
+        graph.set_block(a, b).unwrap();
         store.set_graph(graph).unwrap();
 
         let result = store.modify_graph(Box::new(move |graph| {
-            graph.cards.remove_card_edges(a);
+            graph.remove_node(a);
             Err(crate::KanbanError::validation("rollback"))
         }));
         assert!(result.is_err());
 
         let graph = store.get_graph().unwrap();
         assert_eq!(
-            graph.cards.edges().len(),
+            graph.len(),
             1,
             "modify_graph should not apply partial changes on error"
         );

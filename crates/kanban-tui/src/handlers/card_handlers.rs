@@ -771,8 +771,6 @@ impl App {
     }
 
     pub fn handle_manage_children_from_list(&mut self) {
-        use kanban_domain::dependencies::CardGraphExt;
-
         // Get the currently selected card from the list view
         let card = match self.get_selected_card_in_context() {
             Some(c) => c,
@@ -793,7 +791,7 @@ impl App {
 
         // Get ancestors to exclude (would create cycle)
         let graph = self.model.graph();
-        let ancestors = graph.cards.ancestors(card_id);
+        let ancestors = graph.ancestors(card_id);
 
         // Get cards from current board, excluding self and ancestors
         let columns = self.model.columns();
@@ -815,7 +813,7 @@ impl App {
         // Get current children (for checkbox display)
         let graph = self.model.graph();
         let current_children: std::collections::HashSet<_> =
-            graph.cards.children(card_id).into_iter().collect();
+            graph.children(card_id).into_iter().collect();
 
         // Store the card index so the popup knows which card we're managing
         let cards = self.model.cards();

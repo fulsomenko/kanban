@@ -292,9 +292,10 @@ mod tests {
                 sprint_id: Uuid::new_v4(),
                 timestamp: chrono::Utc::now(),
             })),
-            Command::Dependency(DependencyCommand::Remove(RemoveDependencyCommand {
-                source_id: Uuid::new_v4(),
-                target_id: Uuid::new_v4(),
+            Command::Dependency(DependencyCommand::RemoveSpawns(RemoveSpawns {
+                source: Uuid::new_v4(),
+                target: Uuid::new_v4(),
+                tolerate_missing: false,
             })),
         ];
         for cmd in commands {
