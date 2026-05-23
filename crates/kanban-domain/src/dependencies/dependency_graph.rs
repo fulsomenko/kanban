@@ -212,38 +212,6 @@ impl DependencyGraph {
         self.edge_sets().iter().any(|g| g.contains_archived(a, b))
     }
 
-    /// Cross-cutting, kind-agnostic sever: remove the **active**
-    /// `a -> b` edge from every sub-graph that holds it. For the two
-    /// directed sub-graphs only the exact `a -> b` orientation is
-    /// removed; for the undirected sub-graph either ordering removes
-    /// the edge. Archived edges are preserved across all sub-graphs.
-    ///
-    /// # CAUTION — picks every kind, not the one you might mean
-    ///
-    /// If `a` and `b` are connected by edges of multiple kinds
-    /// simultaneously (e.g. `a` is the parent of `b` AND `a` also
-    /// blocks `b`), this method removes BOTH. It's the right
-    /// semantic for the undo-replay path (`RemoveDependencyCommand`,
-    /// which must tolerate already-removed edges across any kind),
-    /// but the wrong one for a user-facing "remove this specific
-    /// relation" handler. For per-kind targeted removal use the kind
-    /// you mean explicitly:
-    ///
-    /// - `remove_parent(child, parent)` — parent/child only
-    /// - `unblock(blocker, blocked)`    — blocks only
-    /// - `unrelate(a, b)`               — relates only
-    ///
-    /// Returns true if any sub-graph held an active edge.
-    pub fn disconnect(&mut self, a: Uuid, b: Uuid) -> bool {
-        let mut any_removed = false;
-        for sg in self.cascadable_parts_mut() {
-            if sg.remove_edge(a, b).is_ok() {
-                any_removed = true;
-            }
-        }
-        any_removed
-    }
-
     // --- Persistence helpers ---
 
     /// Per-kind raw edge accessors. Persistence backends and test
@@ -653,71 +621,6 @@ mod tests {
         g.relate(a, c).unwrap();
         g.remove_node(a);
         assert_eq!(g.len(), 0);
-    }
-
-    // --- Cross-cutting tolerant removal ---
-
-    #[test]
-    fn test_disconnect_returns_true_when_edge_existed_in_any_subgraph() {
-        let (a, b, _) = ids();
-        let mut g = DependencyGraph::new();
-        g.set_block(a, b).unwrap();
-        assert!(g.disconnect(a, b), "edge existed in blocks; expected true");
-        assert!(!g.disconnect(a, b), "edge already gone; expected false");
-    }
-
-    #[test]
-    fn test_disconnect_returns_false_when_no_edge_exists() {
-        let (a, b, _) = ids();
-        let mut g = DependencyGraph::new();
-        assert!(!g.disconnect(a, b), "no edge present in any subgraph");
-    }
-
-    #[test]
-    fn test_disconnect_removes_from_every_subgraph_holding_pair() {
-        let (a, b, _) = ids();
-        let mut g = DependencyGraph::new();
-        g.set_parent(b, a).unwrap();
-        g.set_block(a, b).unwrap();
-        assert!(g.disconnect(a, b));
-        assert!(g.children(a).is_empty());
-        assert!(g.blocked(a).is_empty());
-    }
-
-    #[test]
-    fn test_disconnect_preserves_opposite_orientation_edges_in_dag_subgraphs() {
-        let (a, b, _) = ids();
-        let mut g = DependencyGraph::new();
-        g.set_parent(a, b).unwrap();
-        assert!(
-            !g.disconnect(a, b),
-            "no a->b edge exists; nothing should be removed"
-        );
-        assert_eq!(g.parents(a), vec![b]);
-    }
-
-    #[test]
-    fn test_disconnect_preserves_archived_edges() {
-        let (a, b, _) = ids();
-        let mut g = DependencyGraph::new();
-        g.set_block(a, b).unwrap();
-        g.archive_node(a);
-        // Disconnect now finds no ACTIVE a->b edge and returns false;
-        // the archived record stays intact.
-        assert!(!g.disconnect(a, b));
-        assert!(
-            g.contains_archived(a, b),
-            "archived record must survive disconnect"
-        );
-    }
-
-    #[test]
-    fn test_disconnect_removes_undirected_edge_in_either_query_orientation() {
-        let (a, b, _) = ids();
-        let mut g = DependencyGraph::new();
-        g.relate(a, b).unwrap();
-        assert!(g.disconnect(b, a), "undirected edges are symmetric");
-        assert!(g.related(a).is_empty());
     }
 
     // --- Active-only contains vs contains_archived ---

@@ -23,12 +23,6 @@ pub enum DependencyCommand {
     RemoveSpawns(RemoveSpawns),
     RemoveBlocks(RemoveBlocks),
     RemoveRelates(RemoveRelates),
-    /// Cross-cutting tolerant edge removal: severs every directed or
-    /// undirected edge between two nodes across all sub-graphs. Used
-    /// primarily as the inverse of an `Add*` command — undo must
-    /// succeed against an already-removed edge, so a tolerant
-    /// kind-agnostic removal is the right semantic.
-    Remove(RemoveDependencyCommand),
     /// Atomic create-card-and-link-as-subcard. Genuinely different
     /// from the edge commands — touches the board (card counter), the
     /// card store (new card), and the graph (parent edge). Its
@@ -46,7 +40,6 @@ impl DependencyCommand {
             DependencyCommand::RemoveSpawns(c) => c.execute(context),
             DependencyCommand::RemoveBlocks(c) => c.execute(context),
             DependencyCommand::RemoveRelates(c) => c.execute(context),
-            DependencyCommand::Remove(c) => c.execute(context),
             DependencyCommand::CreateSubcard(c) => c.execute(context),
         }
     }
@@ -59,7 +52,6 @@ impl DependencyCommand {
             DependencyCommand::RemoveSpawns(c) => c.description(),
             DependencyCommand::RemoveBlocks(c) => c.description(),
             DependencyCommand::RemoveRelates(c) => c.description(),
-            DependencyCommand::Remove(c) => c.description(),
             DependencyCommand::CreateSubcard(c) => c.description(),
         }
     }
@@ -72,7 +64,6 @@ impl DependencyCommand {
             DependencyCommand::RemoveSpawns(c) => c.capture_inverse(store),
             DependencyCommand::RemoveBlocks(c) => c.capture_inverse(store),
             DependencyCommand::RemoveRelates(c) => c.capture_inverse(store),
-            DependencyCommand::Remove(c) => c.capture_inverse(store),
             DependencyCommand::CreateSubcard(c) => c.capture_inverse(store),
         }
     }
@@ -212,9 +203,8 @@ impl AddRelates {
 ///   succeed even if intervening state has already removed the edge.
 ///
 /// The flag decouples *tolerance* (a replay concern) from
-/// *kind-agnosticism* (a previously-conflated dimension that the
-/// old `RemoveDependencyCommand` carried). Now each per-kind remove
-/// stays in its kind and chooses its own tolerance at construction.
+/// *kind-agnosticism* (a separate dimension). Each per-kind remove
+/// stays in its own kind and chooses its tolerance at construction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveSpawns {
     pub source: Uuid,
@@ -361,8 +351,8 @@ impl RemoveRelates {
 /// that matches `predicate`. Each per-kind sub-graph contributes its
 /// matching edges with metadata (severity / kind) preserved.
 ///
-/// Used by three capture-inverse sites:
-/// - [`RemoveDependencyCommand::capture_inverse`]
+/// Used by the cascade capture-inverse sites that need to restore
+/// edges of every kind touching one or more nodes:
 /// - [`super::cascade_commands::DeleteCardEdges::capture_inverse`]
 /// - [`super::card_commands::DeleteCard::capture_inverse`]
 pub(super) fn edges_to_undo_commands<P>(
@@ -406,64 +396,6 @@ where
         }
     }
     out
-}
-
-// ────────────────────────────────────────────────────────────────────
-// RemoveDependencyCommand — kind-agnostic tolerant remove. Used as
-// the inverse of an Add* (undo replay must tolerate already-removed
-// edges).
-// ────────────────────────────────────────────────────────────────────
-
-/// Remove a dependency between two cards (kind-agnostic, tolerant).
-///
-/// Calls [`DependencyGraph::disconnect`] on `(source_id, target_id)`.
-/// For directed sub-graphs only the exact orientation is removed; an
-/// existing reverse-orientation edge survives. For the undirected
-/// sub-graph the edge is symmetric and the call removes it regardless
-/// of which endpoint is `source_id`. Tolerant on miss — used as the
-/// inverse of an [`AddSpawns`] / [`AddBlocks`] / [`AddRelates`] so
-/// undo replay succeeds even against an already-removed edge.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoveDependencyCommand {
-    pub source_id: Uuid,
-    pub target_id: Uuid,
-}
-
-impl RemoveDependencyCommand {
-    pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
-        let source_id = self.source_id;
-        let target_id = self.target_id;
-        context.store.modify_graph(Box::new(move |graph| {
-            // No-op-on-miss is intentional here: undo replay against a
-            // graph where the edge is already gone must still succeed.
-            // The bool return is informational for direct callers.
-            let _removed = graph.disconnect(source_id, target_id);
-            Ok(())
-        }))
-    }
-
-    pub fn description(&self) -> String {
-        format!(
-            "Remove dependency: {} -> {}",
-            self.source_id, self.target_id
-        )
-    }
-
-    /// Inverse: re-add every edge whose `(source, target)` matches
-    /// `(self.source_id, self.target_id)` (or the symmetric pair for
-    /// the undirected sub-graph). Per-kind metadata (severity, kind)
-    /// is captured from the pre-disconnect graph.
-    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
-        let graph = store.get_graph()?;
-        let (a, b) = (self.source_id, self.target_id);
-        // Directed sub-graphs only emit for the exact orientation;
-        // the undirected sub-graph emits for either ordering (which
-        // edges_to_undo_commands handles uniformly by iterating its
-        // own sub-graph).
-        Ok(edges_to_undo_commands(&graph, |s, t| {
-            (s == a && t == b) || (s == b && t == a)
-        }))
-    }
 }
 
 /// Create a new card as a subcard of a parent card

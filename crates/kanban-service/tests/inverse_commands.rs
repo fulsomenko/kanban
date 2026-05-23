@@ -7,8 +7,9 @@ use kanban_domain::commands::{
     ActivateSprint, AddBlocks, AddRelates, AddSpawns, ApplyBoardSettings, ApplyCardMetadata,
     ArchiveCards, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand,
     Command, CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn,
-    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveDependencyCommand,
-    RemoveSpawns, SetBoardTaskListView, SetBoardTaskSort, SprintCommand, UnassignCardFromSprint,
+    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard,
+    RemoveBlocks, RemoveSpawns, SetBoardTaskListView, SetBoardTaskSort, SprintCommand,
+    UnassignCardFromSprint,
     UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
@@ -878,8 +879,12 @@ async fn test_inverse_compact_column_positions_restores_gaps() -> KanbanResult<(
     Ok(())
 }
 
+/// End-to-end execute → undo round-trip for a user-initiated blocks
+/// remove. The per-kind `RemoveBlocks::capture_inverse` reads the
+/// pre-remove graph to recover the severity, so undo re-adds the
+/// edge with the original metadata intact.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<()> {
+async fn test_inverse_remove_blocks_restores_blocks_edge() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
     let board = ctx.create_board("B".into(), None)?;
     let col = ctx.create_column(board.id, "C".into(), None)?;
@@ -894,10 +899,11 @@ async fn test_inverse_remove_dependency_restores_blocks_edge() -> KanbanResult<(
     ))])?;
     ctx.clear_history()?;
 
-    ctx.execute(vec![Command::Dependency(DependencyCommand::Remove(
-        RemoveDependencyCommand {
-            source_id: a.id,
-            target_id: b.id,
+    ctx.execute(vec![Command::Dependency(DependencyCommand::RemoveBlocks(
+        RemoveBlocks {
+            source: a.id,
+            target: b.id,
+            tolerate_missing: false,
         },
     ))])?;
     assert!(!ctx.graph()?.contains(a.id, b.id));
