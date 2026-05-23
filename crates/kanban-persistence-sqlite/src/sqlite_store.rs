@@ -269,6 +269,34 @@ impl SqliteStore {
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
 
+        // KAN-522: refuse a future-version DB BEFORE any schema-modifying
+        // step runs. Otherwise the legacy-table drops, the SCHEMA's
+        // CREATE TABLE IF NOT EXISTS for tables the file lacks, and
+        // migrate()'s ALTERs would all mutate a file we're about to refuse.
+        // Probe sqlite_master first so a fresh DB (no metadata table yet)
+        // proceeds normally without error.
+        let metadata_table_exists: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='metadata'",
+        )
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| KanbanError::Database(e.to_string()))?;
+        if metadata_table_exists {
+            let pre_migrate_version: Option<u32> =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_optional(&pool)
+                    .await
+                    .map_err(|e| KanbanError::Database(e.to_string()))?;
+            if let Some(v) = pre_migrate_version {
+                if v > SUPPORTED_SCHEMA_VERSION {
+                    return Err(KanbanError::UnsupportedFutureVersion {
+                        file_version: v,
+                        binary_max: SUPPORTED_SCHEMA_VERSION,
+                    });
+                }
+            }
+        }
+
         // Drop the legacy command_log table (pre-KAN-405 schema with
         // columns `idx` / `cmd_json`) before SCHEMA runs, so the new
         // command_log schema (`batch_index` / `commands_json` / `created_at`)
@@ -283,9 +311,10 @@ impl SqliteStore {
 
         Self::migrate(&pool).await?;
 
-        // KAN-522: refuse files written by a future kanban. Read after
-        // migrate() so a legacy database that just had its schema_version
-        // bumped to current doesn't false-positive.
+        // Belt-and-braces: re-check after migrate so a malicious or hand-edited
+        // post-migrate row can't slip through. Practically unreachable because
+        // the pre-migrate guard above already caught it; kept as defence in
+        // depth and as the test boundary for `test_open_rejects_future_schema_version`.
         let schema_version: Option<u32> =
             sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
                 .fetch_optional(&pool)

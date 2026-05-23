@@ -28,6 +28,39 @@ fn kanban_no_config(dir: &std::path::Path) -> Command {
 mod future_version_tests {
     use super::*;
 
+    /// SQLite parallel of the JSON refusal test below. The data preservation
+    /// contract is stronger than byte-equality (SQLite's WAL setup touches
+    /// the file header just by opening) — we instead pin that the on-disk
+    /// schema_version was NOT normalised down from 99, which would prove the
+    /// migrate() bumping ran on a refused file.
+    #[test]
+    fn test_cli_refuses_to_open_v99_sqlite_file_without_normalising_schema_version() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("future.db");
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(kanban_persistence_sqlite::write_test_metadata_with_schema_version(&file, 99))
+            .unwrap();
+
+        kanban_no_config(dir.path())
+            .args([file.to_str().unwrap(), "board", "list"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("v99"))
+            .stderr(predicate::str::contains("upgrade kanban"));
+
+        let post_refusal_version = rt
+            .block_on(kanban_persistence_sqlite::read_test_schema_version(&file))
+            .unwrap();
+        assert_eq!(
+            post_refusal_version,
+            Some(99),
+            "refusal must not bump schema_version — migrate() ran on a refused file"
+        );
+    }
+
     /// Pointing the CLI at a JSON file written by a future kanban must fail
     /// loudly: non-zero exit code with the typed UnsupportedFutureVersion
     /// message on stderr. The data on disk must not be touched. Mirrors what

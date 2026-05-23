@@ -87,6 +87,42 @@ async fn open_future_version_file_returns_invalid_params() {
     );
 }
 
+/// SQLite parallel of the JSON future-version MCP test above. Same wire-level
+/// expectation: `ErrorCode::INVALID_PARAMS`, message mentions "upgrade kanban".
+#[tokio::test(flavor = "multi_thread")]
+async fn open_future_version_sqlite_file_returns_invalid_params() {
+    use kanban_mcp::error::KanbanMcpError;
+    use rmcp::model::ErrorCode;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("future.db");
+    kanban_persistence_sqlite::write_test_metadata_with_schema_version(&path, 99)
+        .await
+        .unwrap();
+
+    let store_manager = default_store_manager();
+    let err = McpContext::new(
+        &store_manager,
+        &path.to_string_lossy(),
+        AppConfig::default(),
+    )
+    .await
+    .err()
+    .expect("v99 SQLite DB must be refused");
+
+    let mcp_err: rmcp::model::ErrorData = KanbanMcpError::Domain(err).into();
+    assert_eq!(
+        mcp_err.code,
+        ErrorCode::INVALID_PARAMS,
+        "UnsupportedFutureVersion (sqlite path) must map to INVALID_PARAMS, got: {mcp_err:?}"
+    );
+    assert!(
+        mcp_err.message.contains("upgrade kanban"),
+        "error message must include the upgrade hint, got: {}",
+        mcp_err.message
+    );
+}
+
 #[tokio::test]
 async fn board_get_nonexistent() {
     let (ctx, _tmp) = setup().await;

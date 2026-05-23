@@ -102,9 +102,11 @@ impl StoreManager {
         if self.is_sqlite(locator) {
             #[cfg(feature = "sqlite")]
             {
-                let backend = crate::sqlite_backend::SqliteBackend::open(locator)
-                    .await
-                    .map_err(|e| KanbanError::Database(e.to_string()))?;
+                // Propagate via `?` (no stringification) so typed variants like
+                // UnsupportedFutureVersion survive across make_backend to the
+                // CLI / MCP / TUI surfaces, mirroring the JSON path's preserved
+                // From<PersistenceError> for KanbanError mapping.
+                let backend = crate::sqlite_backend::SqliteBackend::open(locator).await?;
                 return Ok(std::sync::Arc::new(backend));
             }
             #[cfg(not(feature = "sqlite"))]

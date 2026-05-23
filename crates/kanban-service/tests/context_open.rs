@@ -85,6 +85,29 @@ async fn test_context_open_returns_typed_unsupported_future_version_for_v99_json
     }
 }
 
+/// SQLite parallel of the JSON future-version test above. A SQLite file
+/// whose `metadata.schema_version` exceeds `SUPPORTED_SCHEMA_VERSION` must
+/// surface as the typed `KanbanError::UnsupportedFutureVersion` through
+/// `KanbanContext::open` — not as a stringified `Database(...)` or `Internal`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_context_open_returns_typed_unsupported_future_version_for_v99_sqlite_file() {
+    use kanban_service::sqlite_backend::SqliteBackend;
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("future.db");
+    kanban_persistence_sqlite::write_test_metadata_with_schema_version(&path, 99)
+        .await
+        .unwrap();
+
+    let err = match SqliteBackend::open(path.to_str().unwrap()).await {
+        Ok(_) => panic!("v99 SQLite DB must refuse to open via SqliteBackend"),
+        Err(e) => e,
+    };
+    assert!(
+        err.is_unsupported_future_version(),
+        "expected typed UnsupportedFutureVersion variant, got: {err:?}"
+    );
+}
+
 /// `KanbanContext::persistence_metadata` delegates to the backend and surfaces
 /// the writer-stamp recorded on the most recent save.
 #[tokio::test(flavor = "multi_thread")]
