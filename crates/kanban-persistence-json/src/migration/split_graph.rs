@@ -478,7 +478,53 @@ mod tests {
         );
     }
 
-    // NEW_TEST_PLACEHOLDER
+    /// Data-loss regression pin. Discovered during a smoke test: an
+    /// older binary (that doesn't know about V6) wrote back the file
+    /// with `version: 3` while keeping the V6-shape data structure
+    /// intact (the three sub-graph keys with their edges). When the
+    /// V6-aware binary then loaded that file, the migration's
+    /// idempotency guard saw `version != 6`, fell through to the
+    /// transform, found no `graph.cards.edges` legacy array, and
+    /// silently overwrote `data["graph"]` with three empty sub-graphs
+    /// — destroying every edge the user had recorded.
+    ///
+    /// The fix strengthens the idempotency guard to also detect the
+    /// V6 data shape (any of the three sub-graph keys present),
+    /// preserving the populated sub-graphs and just bumping the
+    /// version field.
+    #[test]
+    fn test_transform_preserves_v6_shape_data_when_version_claims_pre_v6() {
+        let mut env = json!({
+            "version": 3,
+            "metadata": {
+                "instance_id": "00000000-0000-0000-0000-000000000001",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": "11111111-1111-1111-1111-111111111111",
+                        "target": "22222222-2222-2222-2222-222222222222",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }] },
+                    "blocks":  { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        transform_to_v6_split_graph_value(&mut env).unwrap();
+        assert_eq!(env["version"], 6, "version bumped to V6");
+        assert_eq!(
+            env["data"]["graph"]["parent_child"]["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1,
+            "the existing V6-shape edge must survive — pre-fix this was 0 (data loss)"
+        );
+    }
 
     /// `transform_to_v6_split_graph_value` is `pub`. If a caller
     /// accidentally invokes it on an already-V6 envelope (with edges in
