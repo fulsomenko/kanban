@@ -674,6 +674,122 @@ macro_rules! card_graph_tests {
                     "rollback must restore the pre-batch state"
                 );
             }
+
+            // ─── Archive × edge interaction ───────────────────────
+            //
+            // Archiving a card cascades archive_node across the three
+            // sub-graphs (per DependencyGraph::archive_node), which
+            // marks every incident edge `archived_at = Some(...)`.
+            // Active list queries against the still-live endpoint must
+            // then return empty, but `contains_archived` must still
+            // see the edge — history is preserved, not destroyed.
+            //
+            // This is the load-bearing property behind soft-deletion:
+            // a user who archives a card must be able to restore it
+            // later and recover the relationships, while live queries
+            // never surface "dead" edges.
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_archive_blocker_hides_blocks_edge_from_live_queries() {
+                use kanban_domain::Severity;
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (blocker, blocked, _) = seed_three_cards(&ctx.backend());
+
+                ctx.block(blocker, blocked, Severity::High).unwrap();
+                assert_eq!(
+                    ctx.list_blockers_of(blocked).unwrap(),
+                    vec![blocker],
+                    "pre-archive: blocker is visible as a blocker of blocked"
+                );
+
+                // Archive the blocker via the data store directly to
+                // avoid the service-layer's strict require_card_exists
+                // guard on the now-archived id.
+                {
+                    let mut graph = ctx.backend().get_graph().unwrap();
+                    graph.archive_node(blocker);
+                    ctx.backend().set_graph(graph).unwrap();
+                }
+
+                // From the still-live `blocked`, no active blocker
+                // remains: the cascade archived the edge.
+                assert!(
+                    ctx.list_blockers_of(blocked).unwrap().is_empty(),
+                    "post-archive: archived blocker must not appear in active list_blockers_of"
+                );
+
+                // The edge is preserved in history.
+                let graph = ctx.backend().get_graph().unwrap();
+                assert!(
+                    graph.contains_archived(blocker, blocked),
+                    "post-archive: history must still hold the blocks edge"
+                );
+                assert!(
+                    !graph.contains(blocker, blocked),
+                    "post-archive: active contains() must NOT see the archived edge"
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_archive_blocked_hides_blocks_edge_from_live_queries() {
+                use kanban_domain::Severity;
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (blocker, blocked, _) = seed_three_cards(&ctx.backend());
+
+                ctx.block(blocker, blocked, Severity::Medium).unwrap();
+                assert_eq!(ctx.list_blocked_by(blocker).unwrap(), vec![blocked]);
+
+                {
+                    let mut graph = ctx.backend().get_graph().unwrap();
+                    graph.archive_node(blocked);
+                    ctx.backend().set_graph(graph).unwrap();
+                }
+
+                assert!(
+                    ctx.list_blocked_by(blocker).unwrap().is_empty(),
+                    "post-archive: archived blocked must not appear in active list_blocked_by"
+                );
+                let graph = ctx.backend().get_graph().unwrap();
+                assert!(
+                    graph.contains_archived(blocker, blocked),
+                    "post-archive: history must still hold the blocks edge"
+                );
+            }
+
+            #[tokio::test(flavor = "multi_thread")]
+            async fn test_archive_endpoint_hides_relates_edge_from_live_queries() {
+                use kanban_domain::RelatesKind;
+                let (mut ctx, _dir) = $open_ctx.await;
+                let (a, b, _) = seed_three_cards(&ctx.backend());
+
+                ctx.relate(a, b, RelatesKind::Duplicates).unwrap();
+                assert_eq!(
+                    ctx.list_related_to(b).unwrap(),
+                    vec![a],
+                    "pre-archive: a is related to b"
+                );
+
+                // Archive a; the undirected edge must vanish from b's
+                // active view too.
+                {
+                    let mut graph = ctx.backend().get_graph().unwrap();
+                    graph.archive_node(a);
+                    ctx.backend().set_graph(graph).unwrap();
+                }
+
+                assert!(
+                    ctx.list_related_to(b).unwrap().is_empty(),
+                    "post-archive: archived endpoint must not appear in active list_related_to"
+                );
+                let graph = ctx.backend().get_graph().unwrap();
+                assert!(
+                    graph.contains_archived(a, b),
+                    "post-archive: history must still hold the relates edge"
+                );
+                // Symmetric: either-orientation lookup also sees the
+                // archived record.
+                assert!(graph.contains_archived(b, a));
+            }
         }
     };
 }
