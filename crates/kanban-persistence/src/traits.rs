@@ -142,6 +142,9 @@ pub enum FormatVersion {
 }
 
 impl FormatVersion {
+    /// The highest format version this binary can read or produce.
+    pub const MAX: Self = Self::V6;
+
     pub fn as_u32(self) -> u32 {
         match self {
             Self::V1 => 1,
@@ -198,4 +201,19 @@ pub trait ConflictResolver: Send + Sync {
         local_metadata: &PersistenceMetadata,
         external_metadata: &PersistenceMetadata,
     ) -> String;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_version_max_equals_v6() {
+        assert_eq!(FormatVersion::MAX, FormatVersion::V6);
+    }
+
+    #[test]
+    fn test_format_version_max_as_u32_matches_largest_variant() {
+        assert_eq!(FormatVersion::MAX.as_u32(), 6);
+    }
 }

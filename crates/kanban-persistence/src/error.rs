@@ -26,6 +26,12 @@ pub enum PersistenceError {
 
     #[error("unsupported operation: {0}")]
     Unsupported(String),
+
+    #[error(
+        "file format v{file_version} is newer than this binary's max v{binary_max}; \
+         please upgrade kanban"
+    )]
+    UnsupportedFutureVersion { file_version: u32, binary_max: u32 },
 }
 
 pub type PersistenceResult<T> = Result<T, PersistenceError>;
@@ -51,6 +57,49 @@ impl From<PersistenceError> for kanban_domain::KanbanError {
                 kanban_domain::KanbanError::ConflictDetected { path, source }
             }
             PersistenceError::Unsupported(s) => kanban_domain::KanbanError::Internal(s),
+            PersistenceError::UnsupportedFutureVersion {
+                file_version,
+                binary_max,
+            } => kanban_domain::KanbanError::UnsupportedFutureVersion {
+                file_version,
+                binary_max,
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kanban_domain::KanbanError;
+
+    #[test]
+    fn test_unsupported_future_version_display_mentions_both_versions() {
+        let err = PersistenceError::UnsupportedFutureVersion {
+            file_version: 99,
+            binary_max: 6,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("99"), "msg: {msg}");
+        assert!(msg.contains('6'), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_persistence_unsupported_future_version_maps_to_kanban_error() {
+        let pe = PersistenceError::UnsupportedFutureVersion {
+            file_version: 99,
+            binary_max: 6,
+        };
+        let ke: KanbanError = pe.into();
+        assert!(
+            matches!(
+                ke,
+                KanbanError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion variant"
+        );
     }
 }
