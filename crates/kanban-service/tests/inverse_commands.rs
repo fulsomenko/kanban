@@ -7,10 +7,9 @@ use kanban_domain::commands::{
     ActivateSprint, AddBlocks, AddRelates, AddSpawns, ApplyBoardSettings, ApplyCardMetadata,
     ArchiveCards, AssignCardsToSprint, BoardCommand, CancelSprint, CardCommand, ColumnCommand,
     Command, CompactColumnPositions, CompleteSprint, CreateBoard, CreateColumn,
-    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard,
-    RemoveBlocks, RemoveSpawns, SetBoardTaskListView, SetBoardTaskSort, SprintCommand,
-    UnassignCardFromSprint,
-    UpdateBoard, UpdateCard, UpdateColumn, UpdateSprint,
+    CreateSubcardCommand, DeleteColumn, DependencyCommand, MoveCard, RemoveBlocks, RemoveSpawns,
+    SetBoardTaskListView, SetBoardTaskSort, SprintCommand, UnassignCardFromSprint, UpdateBoard,
+    UpdateCard, UpdateColumn, UpdateSprint,
 };
 use kanban_domain::{
     BoardUpdate, CardPriority, CardUpdate, ColumnUpdate, FieldUpdate, InMemoryStore,

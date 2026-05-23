@@ -80,9 +80,7 @@ fn add_by_kind(
     match kind {
         CardEdgeType::Spawns => ctx.spawn_child(a, b),
         CardEdgeType::Blocks => ctx.block(a, b, kanban_domain::Severity::default()),
-        CardEdgeType::RelatesTo => {
-            ctx.relate(a, b, kanban_domain::RelatesKind::default())
-        }
+        CardEdgeType::RelatesTo => ctx.relate(a, b, kanban_domain::RelatesKind::default()),
     }
 }
 fn remove_by_kind(
@@ -693,9 +691,7 @@ card_graph_tests!(sqlite, open_sqlite_ctx());
 // shape, different store factory — so JSON and SQLite both have to
 // honour the all-or-nothing on-disk contract.
 
-async fn open_ctx_at_path(
-    backend: Arc<dyn KanbanBackend>,
-) -> KanbanContext {
+async fn open_ctx_at_path(backend: Arc<dyn KanbanBackend>) -> KanbanContext {
     KanbanContext::open(backend, AppConfig::default())
         .await
         .unwrap()
@@ -748,7 +744,11 @@ async fn test_spawn_children_batch_failure_preserves_on_disk_state_json_reopen()
          got c2 children = {c2_children:?}"
     );
     let parent_children = reopen.list_children_of(parent_id).unwrap();
-    assert_eq!(parent_children, vec![c1], "pre-batch parent->c1 must survive");
+    assert_eq!(
+        parent_children,
+        vec![c1],
+        "pre-batch parent->c1 must survive"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -791,5 +791,9 @@ async fn test_spawn_children_batch_failure_preserves_on_disk_state_sqlite_reopen
          got c2 children = {c2_children:?}"
     );
     let parent_children = reopen.list_children_of(parent_id).unwrap();
-    assert_eq!(parent_children, vec![c1], "pre-batch parent->c1 must survive");
+    assert_eq!(
+        parent_children,
+        vec![c1],
+        "pre-batch parent->c1 must survive"
+    );
 }

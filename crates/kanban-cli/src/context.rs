@@ -285,12 +285,7 @@ impl GraphOperations for CliContext {
     fn list_blockers_of(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_blockers_of(blocked)
     }
-    fn relate(
-        &mut self,
-        a: Uuid,
-        b: Uuid,
-        kind: kanban_domain::RelatesKind,
-    ) -> KanbanResult<()> {
+    fn relate(&mut self, a: Uuid, b: Uuid, kind: kanban_domain::RelatesKind) -> KanbanResult<()> {
         self.inner.relate(a, b, kind)
     }
     fn unrelate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {

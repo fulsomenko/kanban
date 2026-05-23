@@ -412,12 +412,7 @@ impl GraphOperations for TuiContext {
     fn list_blockers_of(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_blockers_of(blocked)
     }
-    fn relate(
-        &mut self,
-        a: Uuid,
-        b: Uuid,
-        kind: kanban_domain::RelatesKind,
-    ) -> KanbanResult<()> {
+    fn relate(&mut self, a: Uuid, b: Uuid, kind: kanban_domain::RelatesKind) -> KanbanResult<()> {
         let r = self.inner.relate(a, b, kind);
         self.with_flush(r)
     }
