@@ -1,12 +1,15 @@
 -- SQLite schema for kanban persistence
--- Version: 2
+-- Version: 2 (KAN-522: writer-stamp columns added; schema_version begins
+-- to be authoritative — see SqliteStore::migrate for the ALTER fallbacks)
 
 -- Metadata table for tracking persistence state and conflict detection
 CREATE TABLE IF NOT EXISTS metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton row
     instance_id TEXT NOT NULL,
     saved_at TEXT NOT NULL,
-    schema_version INTEGER NOT NULL DEFAULT 1
+    schema_version INTEGER NOT NULL DEFAULT 2,
+    writer_version TEXT,
+    writer_commit TEXT
 );
 
 -- Boards table

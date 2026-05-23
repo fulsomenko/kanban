@@ -16,6 +16,10 @@ use uuid::Uuid;
 
 const SCHEMA: &str = include_str!("schema.sql");
 
+/// The highest schema_version this binary understands. Used both to
+/// stamp fresh databases and to refuse files written by a future binary.
+pub const SUPPORTED_SCHEMA_VERSION: u32 = 2;
+
 /// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
@@ -295,10 +299,11 @@ impl SqliteStore {
                 let id = Uuid::new_v4();
                 let now = Utc::now().to_rfc3339();
                 sqlx::query(
-                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, ?)",
                 )
                 .bind(id.to_string())
                 .bind(&now)
+                .bind(SUPPORTED_SCHEMA_VERSION)
                 .execute(pool)
                 .await
                 .map_err(db_err)?;
@@ -390,6 +395,31 @@ impl SqliteStore {
         }
 
         Self::drop_legacy_card_edges_if_present(pool).await?;
+
+        // KAN-522: ALTER in writer-stamp columns on pre-v2 metadata tables.
+        for col in ["writer_version", "writer_commit"] {
+            let has_col: bool = sqlx::query_scalar(&format!(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+            ))
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
+            if !has_col {
+                sqlx::raw_sql(&format!("ALTER TABLE metadata ADD COLUMN {col} TEXT"))
+                    .execute(pool)
+                    .await
+                    .map_err(db_err)?;
+            }
+        }
+        // Once the ALTERs above have caught the schema up, normalise
+        // schema_version. Doing it unconditionally is idempotent and
+        // also self-heals any DBs where the field drifted.
+        sqlx::query("UPDATE metadata SET schema_version = ? WHERE id = 1 AND schema_version < ?")
+            .bind(SUPPORTED_SCHEMA_VERSION)
+            .bind(SUPPORTED_SCHEMA_VERSION)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
 
         Ok(())
     }
@@ -2037,6 +2067,97 @@ mod tests {
             assert!(
                 store.get_card(card_id).unwrap().is_none(),
                 "get_card should return None for permanently deleted card"
+            );
+        });
+    }
+
+    #[test]
+    fn test_fresh_db_records_schema_version_2() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("fresh.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let version: u32 = sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+            assert_eq!(version, SUPPORTED_SCHEMA_VERSION);
+        });
+    }
+
+    #[test]
+    fn test_fresh_db_has_writer_version_and_writer_commit_columns() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("fresh.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            for col in ["writer_version", "writer_commit"] {
+                let exists: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+                ))
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+                assert!(exists, "metadata.{col} column must exist on fresh DB");
+            }
+        });
+    }
+
+    #[test]
+    fn test_open_alters_in_writer_columns_on_legacy_v1_db() {
+        // Simulate a pre-KAN-522 SQLite file: metadata table without the
+        // writer_* columns and schema_version = 1. SqliteStore::open must
+        // ALTER in the new columns and bump schema_version to 2.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2024-01-01T00:00:00Z', 1);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            for col in ["writer_version", "writer_commit"] {
+                let exists: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+                ))
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+                assert!(exists, "metadata.{col} must be ALTERed in on legacy open");
+            }
+
+            let bumped: u32 =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                bumped, SUPPORTED_SCHEMA_VERSION,
+                "schema_version must be bumped to current on legacy open"
             );
         });
     }
