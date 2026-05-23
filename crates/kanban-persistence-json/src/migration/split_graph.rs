@@ -406,7 +406,51 @@ mod tests {
         assert!(format!("{err:?}").to_lowercase().contains("edge_type"));
     }
 
-    // NEW_TESTS_PLACEHOLDER
+    /// If a corrupt V<6 file has a non-object entry in `cards.edges` (a
+    /// null, a primitive, or an array), the migration should produce a
+    /// clear "not an object" diagnostic that names what was found. The
+    /// pre-fix code would call `.as_str()` on the non-object's missing
+    /// `edge_type` field, returning `None`, and would emit a "missing or
+    /// non-string edge_type" error — confusing because the real problem
+    /// is that the entry is not an object at all.
+    #[test]
+    fn test_split_graph_non_object_edge_entry_returns_clear_error() {
+        let mut env = make_v3_envelope(json!({
+            "cards": { "edges": [ null ] }
+        }));
+        let err = transform_to_v6_split_graph_value(&mut env).unwrap_err();
+        let msg = format!("{err:?}").to_lowercase();
+        assert!(
+            msg.contains("not an object") || msg.contains("expected object"),
+            "non-object edge entry must produce a clear diagnostic; got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_split_graph_string_edge_entry_returns_clear_error() {
+        let mut env = make_v3_envelope(json!({
+            "cards": { "edges": [ "garbage" ] }
+        }));
+        let err = transform_to_v6_split_graph_value(&mut env).unwrap_err();
+        let msg = format!("{err:?}").to_lowercase();
+        assert!(
+            msg.contains("not an object") || msg.contains("expected object"),
+            "string edge entry must produce a clear diagnostic; got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_split_graph_number_edge_entry_returns_clear_error() {
+        let mut env = make_v3_envelope(json!({
+            "cards": { "edges": [ 42 ] }
+        }));
+        let err = transform_to_v6_split_graph_value(&mut env).unwrap_err();
+        let msg = format!("{err:?}").to_lowercase();
+        assert!(
+            msg.contains("not an object") || msg.contains("expected object"),
+            "numeric edge entry must produce a clear diagnostic; got: {err:?}"
+        );
+    }
 
     /// `transform_to_v6_split_graph_value` is `pub`. If a caller
     /// accidentally invokes it on an already-V6 envelope (with edges in
