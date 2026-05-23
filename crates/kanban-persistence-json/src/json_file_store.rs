@@ -177,7 +177,13 @@ impl JsonFileStore {
         let envelope: JsonEnvelope = serde_json::from_slice(bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        if envelope.version < 2 || envelope.version > 6 {
+        if envelope.version > FormatVersion::MAX.as_u32() {
+            return Err(PersistenceError::UnsupportedFutureVersion {
+                file_version: envelope.version,
+                binary_max: FormatVersion::MAX.as_u32(),
+            });
+        }
+        if envelope.version < 2 {
             return Err(PersistenceError::Serialization(format!(
                 "Unsupported format version: {}",
                 envelope.version
@@ -337,7 +343,7 @@ impl PersistenceStore for JsonFileStore {
         let value: serde_json::Value = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        let current_version = Migrator::detect_version_from_value(&value);
+        let current_version = Migrator::detect_version_from_value(&value)?;
 
         let final_bytes = if current_version < FormatVersion::V6 {
             tracing::info!(
@@ -468,6 +474,87 @@ mod tests {
         let guard = store.lock_metadata();
         assert!(guard.is_ok());
         assert!(guard.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_load_rejects_future_format_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+        let v99 = json!({
+            "version": 99,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2026-05-23T00:00:00Z"
+            },
+            "data": {}
+        });
+        tokio::fs::write(&file_path, v99.to_string()).await.unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let err = store.load().await.expect_err("v99 must refuse to load");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_load_sync_rejects_future_format_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+        let v99 = json!({
+            "version": 99,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2026-05-23T00:00:00Z"
+            },
+            "data": {}
+        });
+        std::fs::write(&file_path, v99.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let err = store.load_sync().expect_err("v99 must refuse to load (sync)");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_envelope_rejects_future_version_with_typed_error() {
+        let envelope_bytes = serde_json::to_vec(&json!({
+            "version": 7,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2026-05-23T00:00:00Z"
+            },
+            "data": {}
+        }))
+        .unwrap();
+        let err = JsonFileStore::parse_envelope(&envelope_bytes)
+            .expect_err("v7 envelope must be refused");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 7,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
     }
 
     /// Files with stale `commands`/`undo_cursor`/`baseline_data`/
