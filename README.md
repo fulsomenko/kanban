@@ -20,7 +20,7 @@
 - **Zero latency** — pure keyboard flow — hjkl, never reach for the mouse
 - **Your data is a file on your disk** — private, offline, always yours
 - **Git-native** — generate branch names and `git checkout` commands from any card
-- **LLM-native** — full MCP server (46 tools) works with Claude Code, Cursor, and any MCP client
+- **LLM-native** — full MCP server (44 tools) works with Claude Code, Cursor, and any MCP client
 - **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
 
 ---
@@ -173,7 +173,7 @@ VS Code is known not to work in the current implementation.
 ### Interfaces
 - **TUI** — full keyboard-driven terminal UI
 - **CLI** — scriptable; all operations, JSON output, pagination
-- **MCP server** — 46 tools for LLM integration
+- **MCP server** — 44 tools for LLM integration
 
 ---
 

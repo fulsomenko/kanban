@@ -1,6 +1,6 @@
 # kanban-mcp
 
-Model Context Protocol (MCP) server for kanban project management. Provides 46 tools covering boards, columns, cards, card relations (parent/child), sprints, bulk operations, import/export, and undo/redo.
+Model Context Protocol (MCP) server for kanban project management. Provides 44 tools covering boards, columns, cards, card relations (parent/child), sprints, bulk operations, import/export, and undo/redo.
 
 ## Architecture
 
