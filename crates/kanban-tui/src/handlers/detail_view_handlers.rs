@@ -1244,3 +1244,150 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::app::CardFocus;
+    use crate::App;
+    use kanban_domain::{
+        CreateCardOptions, GraphOperations, KanbanOperations, Snapshot,
+    };
+
+    fn seed_chain(app: &mut App, titles: &[&str]) -> Vec<uuid::Uuid> {
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "TODO".into(), None)
+            .unwrap();
+        let mut ids = Vec::new();
+        for t in titles {
+            let card = app
+                .ctx
+                .create_card(
+                    board.id,
+                    column.id,
+                    (*t).into(),
+                    CreateCardOptions::default(),
+                )
+                .unwrap();
+            ids.push(card.id);
+        }
+        for w in ids.windows(2) {
+            app.ctx.attach_child(w[0], w[1]).unwrap();
+        }
+        let snap = Snapshot {
+            boards: app.ctx.data_store().list_boards().unwrap(),
+            columns: app.ctx.data_store().list_all_columns().unwrap(),
+            cards: app.ctx.data_store().list_all_cards().unwrap(),
+            archived_cards: app.ctx.data_store().list_archived_cards().unwrap(),
+            sprints: app.ctx.data_store().list_all_sprints().unwrap(),
+            graph: app.ctx.data_store().get_graph().unwrap(),
+        };
+        app.model.load_from_snapshot(snap);
+        ids
+    }
+
+    #[test]
+    fn test_navigate_to_selected_parent_updates_active_card_id_so_detail_view_reloads() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["Parent", "Child"]);
+        let parent_id = ids[0];
+        let child_id = ids[1];
+        let child_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == child_id)
+            .unwrap();
+
+        app.selection.active_card_index = Some(child_idx);
+        app.selection.active_card_id = Some(child_id);
+        app.focus.card_focus = CardFocus::Parents;
+        app.relationship.parents_list.update_item_count(1);
+        app.relationship.parents_list.selection.set(Some(0));
+
+        app.navigate_to_selected_parent(child_idx);
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(parent_id),
+            "active_card_id must be updated to the parent so the detail view rerenders against the parent card"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            parent_id,
+            "get_card_for_detail_view() must return the parent after Enter on a parent entry"
+        );
+    }
+
+    #[test]
+    fn test_navigate_to_selected_child_updates_active_card_id_so_detail_view_reloads() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["Parent", "Child"]);
+        let parent_id = ids[0];
+        let child_id = ids[1];
+        let parent_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == parent_id)
+            .unwrap();
+
+        app.selection.active_card_index = Some(parent_idx);
+        app.selection.active_card_id = Some(parent_id);
+        app.focus.card_focus = CardFocus::Children;
+        app.relationship.children_list.update_item_count(1);
+        app.relationship.children_list.selection.set(Some(0));
+
+        app.navigate_to_selected_child(parent_idx);
+
+        assert_eq!(app.selection.active_card_id, Some(child_id));
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            child_id
+        );
+    }
+
+    #[test]
+    fn test_backspace_return_from_detail_history_updates_active_card_id() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["A", "B", "C"]);
+        let b_id = ids[1];
+        let c_id = ids[2];
+        let b_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == b_id)
+            .unwrap();
+        let c_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == c_id)
+            .unwrap();
+
+        app.selection.active_card_index = Some(c_idx);
+        app.selection.active_card_id = Some(c_id);
+        app.selection.card_navigation_history.push(b_idx);
+        app.focus.card_focus = CardFocus::Parents;
+
+        app.return_to_previous_card_from_detail_history();
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(b_id),
+            "Backspace return must update active_card_id along with the index"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            b_id
+        );
+    }
+}
