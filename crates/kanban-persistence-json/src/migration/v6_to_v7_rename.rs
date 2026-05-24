@@ -171,6 +171,42 @@ mod tests {
     }
 
     #[test]
+    fn test_transform_errors_when_graph_has_both_parent_child_and_spawns() {
+        // A V6 file should never carry both bucket keys at once, but a
+        // hand-edited or otherwise corrupt file could. Silently picking
+        // a winner (e.g. keeping `spawns`, discarding `parent_child`)
+        // would lose edges. Refuse loudly so the user can investigate.
+        let mut env = json!({
+            "version": 6,
+            "data": {
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": "11111111-1111-1111-1111-111111111111",
+                        "target": "22222222-2222-2222-2222-222222222222",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "spawns": { "edges": [{
+                        "source": "33333333-3333-3333-3333-333333333333",
+                        "target": "44444444-4444-4444-4444-444444444444",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        let err = transform_v6_to_v7_value(&mut env)
+            .expect_err("must refuse a graph carrying both parent_child and spawns");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("parent_child") && msg.contains("spawns"),
+            "diagnostic should name both colliding keys; got: {msg}"
+        );
+    }
+
+    #[test]
     fn test_transform_bumps_version_when_graph_already_has_spawns_key() {
         // Defensive: if the bucket somehow already exists at V6 (e.g. a
         // hand-edited file), bump the version anyway so the envelope is

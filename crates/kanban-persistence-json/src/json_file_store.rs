@@ -661,6 +661,62 @@ mod tests {
         assert_eq!(edges[0]["target"], child);
     }
 
+    /// Sync analogue of `test_load_v6_file_with_parent_child_migrates_to_v7_spawns`.
+    /// Both entry points (`load` and `load_sync`) must apply the V6 -> V7
+    /// rename with the same observable result, otherwise non-async callers
+    /// silently keep loading the legacy bucket.
+    #[test]
+    fn test_load_sync_v6_file_with_parent_child_migrates_to_v7_spawns() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v6_sync.json");
+        let parent = "550e8400-e29b-41d4-a716-446655440021";
+        let child = "550e8400-e29b-41d4-a716-446655440022";
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440020",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": parent,
+                        "target": child,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        std::fs::write(&file_path, v6.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after = std::fs::read_to_string(&file_path).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&after).unwrap();
+        assert_eq!(v["version"], 7, "load_sync must migrate V6 to V7 on disk");
+        let graph = v["data"]["graph"].as_object().expect("graph object");
+        assert!(
+            graph.contains_key("spawns"),
+            "V7 graph bucket key must be `spawns`; got {:?}",
+            graph.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            !graph.contains_key("parent_child"),
+            "legacy `parent_child` key must be gone after V7 migration"
+        );
+        let edges = graph["spawns"]["edges"]
+            .as_array()
+            .expect("spawns edges array");
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0]["source"], parent);
+        assert_eq!(edges[0]["target"], child);
+    }
+
     /// Files with stale `commands`/`undo_cursor`/`baseline_data`/
     /// `command_schema_version` fields (written by pre-KAN-405 builds) must
     /// be actively scrubbed from disk on load — not just ignored in memory.
