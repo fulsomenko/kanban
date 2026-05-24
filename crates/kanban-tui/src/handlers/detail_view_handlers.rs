@@ -339,20 +339,7 @@ impl App {
                     && self.focus.card_focus != CardFocus::Metadata
                     && self.focus.card_focus != CardFocus::Description =>
             {
-                // Allow backspace for back navigation in parents/children, but not in text editing sections
-                if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
-                    self.selection.active_card_index = Some(previous_idx);
-                    self.focus.card_focus = CardFocus::Title;
-                    // Update item counts for the card we're returning to
-                    let parents = self.get_current_card_parents();
-                    let children = self.get_current_card_children();
-                    self.relationship
-                        .parents_list
-                        .update_item_count(parents.len());
-                    self.relationship
-                        .children_list
-                        .update_item_count(children.len());
-                }
+                self.return_to_previous_card_from_detail_history();
             }
             _ => {}
         }
@@ -1108,7 +1095,22 @@ impl App {
         Vec::new()
     }
 
-    fn navigate_to_selected_parent(&mut self, current_card_idx: usize) {
+    pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
+        if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
+            self.selection.active_card_index = Some(previous_idx);
+            self.focus.card_focus = CardFocus::Title;
+            let parents = self.get_current_card_parents();
+            let children = self.get_current_card_children();
+            self.relationship
+                .parents_list
+                .update_item_count(parents.len());
+            self.relationship
+                .children_list
+                .update_item_count(children.len());
+        }
+    }
+
+    pub(crate) fn navigate_to_selected_parent(&mut self, current_card_idx: usize) {
         let parents = self.get_current_card_parents();
         if let Some(selected_idx) = self.relationship.parents_list.selection.get() {
             if let Some(&parent_id) = parents.get(selected_idx) {
@@ -1155,7 +1157,7 @@ impl App {
         }
     }
 
-    fn navigate_to_selected_child(&mut self, current_card_idx: usize) {
+    pub(crate) fn navigate_to_selected_child(&mut self, current_card_idx: usize) {
         let children = self.get_current_card_children();
         if let Some(selected_idx) = self.relationship.children_list.selection.get() {
             if let Some(&child_id) = children.get(selected_idx) {
