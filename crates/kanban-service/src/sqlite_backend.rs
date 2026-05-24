@@ -16,13 +16,22 @@ pub struct SqliteBackend {
     /// In-session command log. The on-disk `command_log` table exists
     /// in the schema but is not yet wired through this backend.
     mem: InMemoryStore,
+    /// Most-recent metadata observed from the underlying DB. Populated on
+    /// `open()` and refreshed inside `flush()` after the writer-stamp UPDATE.
+    /// Mirrors `JsonDataStore::last_metadata` so `persistence_metadata()` —
+    /// called once per TUI render via the F12 diagnostics panel — is a
+    /// RwLock read instead of a SELECT round-trip.
+    last_metadata: std::sync::RwLock<Option<PersistenceMetadata>>,
 }
 
 impl SqliteBackend {
     pub async fn open(locator: &str) -> KanbanResult<Self> {
+        let db = SqliteStore::open(locator).await?;
+        let initial = db.read_metadata_sync()?;
         Ok(Self {
-            db: SqliteStore::open(locator).await?,
+            db,
             mem: InMemoryStore::new(),
+            last_metadata: std::sync::RwLock::new(initial),
         })
     }
 }
@@ -197,7 +206,14 @@ impl crate::backend::KanbanBackend for SqliteBackend {
         // land in the main DB, so the writer attribution should land
         // alongside it.
         self.db.stamp_writer().await?;
-        self.db.checkpoint().await
+        self.db.checkpoint().await?;
+        // Refresh the cached metadata so subsequent persistence_metadata()
+        // calls reflect what was just stamped without re-issuing a SELECT.
+        let fresh = self.db.read_metadata_sync()?;
+        if let Ok(mut guard) = self.last_metadata.write() {
+            *guard = fresh;
+        }
+        Ok(())
     }
 
     fn instance_id(&self) -> Uuid {
@@ -205,6 +221,6 @@ impl crate::backend::KanbanBackend for SqliteBackend {
     }
 
     fn persistence_metadata(&self) -> Option<PersistenceMetadata> {
-        self.db.read_metadata_sync().ok().flatten()
+        self.last_metadata.read().ok().and_then(|g| g.clone())
     }
 }
