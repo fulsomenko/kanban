@@ -578,7 +578,7 @@ mod tests {
         assert!(metadata.writer_commit.is_none());
     }
 
-/// Files with stale `commands`/`undo_cursor`/`baseline_data`/
+    /// Files with stale `commands`/`undo_cursor`/`baseline_data`/
     /// `command_schema_version` fields (written by pre-KAN-405 builds) must
     /// be actively scrubbed from disk on load — not just ignored in memory.
     /// Serde would silently drop them on the next save, but that "lazy" cleanup
