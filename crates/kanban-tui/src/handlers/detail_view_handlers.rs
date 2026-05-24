@@ -1123,8 +1123,7 @@ impl App {
                         .card_navigation_history
                         .push(current_card_idx);
                     // Navigate to parent
-                    self.selection.active_card_index = Some(parent_idx);
-                    self.selection.active_card_id = Some(parent_id);
+                    self.selection.set_active_card(parent_idx, parent_id);
                     self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
@@ -1145,8 +1144,7 @@ impl App {
                 self.selection
                     .card_navigation_history
                     .push(current_card_idx);
-                self.selection.active_card_index = Some(parent_idx);
-                self.selection.active_card_id = Some(parents[0]);
+                self.selection.set_active_card(parent_idx, parents[0]);
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
@@ -1171,8 +1169,7 @@ impl App {
                         .card_navigation_history
                         .push(current_card_idx);
                     // Navigate to child
-                    self.selection.active_card_index = Some(child_idx);
-                    self.selection.active_card_id = Some(child_id);
+                    self.selection.set_active_card(child_idx, child_id);
                     self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
@@ -1193,8 +1190,7 @@ impl App {
                 self.selection
                     .card_navigation_history
                     .push(current_card_idx);
-                self.selection.active_card_index = Some(child_idx);
-                self.selection.active_card_id = Some(children[0]);
+                self.selection.set_active_card(child_idx, children[0]);
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
@@ -1255,9 +1251,7 @@ impl App {
 mod tests {
     use crate::app::CardFocus;
     use crate::App;
-    use kanban_domain::{
-        CreateCardOptions, GraphOperations, KanbanOperations, Snapshot,
-    };
+    use kanban_domain::{CreateCardOptions, GraphOperations, KanbanOperations, Snapshot};
 
     fn seed_chain(app: &mut App, titles: &[&str]) -> Vec<uuid::Uuid> {
         let board = app.ctx.create_board("Board".into(), None).unwrap();
@@ -1364,18 +1358,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["A", "B", "C"]);
         let b_id = ids[1];
         let c_id = ids[2];
-        let b_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == b_id)
-            .unwrap();
-        let c_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == c_id)
-            .unwrap();
+        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
+        let c_idx = app.model.cards().iter().position(|c| c.id == c_id).unwrap();
 
         app.selection.active_card_index = Some(c_idx);
         app.selection.active_card_id = Some(c_id);
