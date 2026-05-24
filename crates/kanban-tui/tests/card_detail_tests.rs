@@ -1,7 +1,8 @@
 use kanban_domain::{Board, Card, Column, Snapshot};
+use kanban_tui::app::ActiveCard;
 
 /// Verify that `get_card_for_detail_view` resolves to the card whose UUID is
-/// stored in `active_card_id`, regardless of iteration order.
+/// held in `active_card`, regardless of iteration order.
 #[test]
 fn test_active_card_detail_shows_selected_card() {
     let mut app = kanban_tui::App::test_default();
@@ -18,23 +19,23 @@ fn test_active_card_detail_shows_selected_card() {
         ..Default::default()
     });
 
-    // Select the second card by ID.
-    app.selection.active_card_id = Some(card_b_id);
+    // Select the second card by id (and matching index 1).
+    app.selection.active_card = Some(ActiveCard::new(1, card_b_id));
 
     let detail_card = app
         .get_card_for_detail_view()
-        .expect("should return a card when active_card_id is set");
+        .expect("should return a card when active_card is set");
 
     assert_eq!(
         detail_card.id, card_b_id,
-        "detail view must show the card whose UUID matches active_card_id"
+        "detail view must show the card whose UUID matches active_card.id()"
     );
 }
 
-/// When `active_card_id` is None, `get_card_for_detail_view` returns None.
+/// When `active_card` is None, `get_card_for_detail_view` returns None.
 #[test]
 fn test_active_card_detail_returns_none_when_no_card_selected() {
     let app = kanban_tui::App::test_default();
-    assert!(app.selection.active_card_id.is_none());
+    assert!(app.selection.active_card.is_none());
     assert!(app.get_card_for_detail_view().is_none());
 }

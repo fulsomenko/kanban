@@ -1,5 +1,6 @@
 use crate::app::{
-    App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
+    ActiveCard, App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode,
+    SprintTaskPanel,
 };
 use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
@@ -23,7 +24,7 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.selection.active_card_index = None;
+                self.selection.active_card = None;
                 self.focus.card_focus = CardFocus::Title;
                 self.relationship.parents_list.selection.clear();
                 self.relationship.children_list.selection.clear();
@@ -227,8 +228,8 @@ impl App {
                     should_restart = true;
                 }
                 CardFocus::Metadata => {
-                    if let Some(card_idx) = self.selection.active_card_index {
-                        if let Some(card) = self.model.cards().get(card_idx) {
+                    if let Some(active) = self.selection.active_card {
+                        if let Some(card) = self.model.cards().get(active.index()) {
                             let card_id = card.id;
                             let dto = CardMetadataDto::from_entity(card);
                             let json = serde_json::to_string_pretty(&dto)
@@ -285,7 +286,7 @@ impl App {
             KeyCode::Char('d') => {
                 self.handle_archive_card();
                 self.pop_mode();
-                self.selection.active_card_index = None;
+                self.selection.active_card = None;
                 self.focus.card_focus = CardFocus::Title;
             }
             KeyCode::Char('a') => {
@@ -323,13 +324,13 @@ impl App {
             }
             KeyCode::Enter => match self.focus.card_focus {
                 CardFocus::Parents => {
-                    if let Some(current_idx) = self.selection.active_card_index {
-                        self.navigate_to_selected_parent(current_idx);
+                    if let Some(active) = self.selection.active_card {
+                        self.navigate_to_selected_parent(active.index());
                     }
                 }
                 CardFocus::Children => {
-                    if let Some(current_idx) = self.selection.active_card_index {
-                        self.navigate_to_selected_child(current_idx);
+                    if let Some(active) = self.selection.active_card {
+                        self.navigate_to_selected_child(active.index());
                     }
                 }
                 _ => {}
@@ -739,7 +740,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.set_active_card(card_idx, card_id);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -757,7 +759,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.set_active_card(card_idx, card_id);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -801,7 +804,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.dialog_input.priority_selection.set(Some(priority_idx));
                                 self.open_dialog(DialogMode::SetCardPriority);
@@ -811,7 +815,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -836,7 +841,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -972,8 +978,8 @@ impl App {
     }
 
     pub(crate) fn handle_manage_parents(&mut self) {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1025,8 +1031,8 @@ impl App {
     }
 
     pub(crate) fn handle_manage_children(&mut self) {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1078,8 +1084,8 @@ impl App {
     }
 
     pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 return self.model.graph().parents(card.id);
             }
         }
@@ -1087,8 +1093,8 @@ impl App {
     }
 
     pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 return self.model.graph().children(card.id);
             }
         }
@@ -1097,11 +1103,11 @@ impl App {
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
         if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
-            if let Some(previous_id) = self.model.cards().get(previous_idx).map(|c| c.id) {
-                self.selection.set_active_card(previous_idx, previous_id);
-            } else {
-                self.selection.clear_active_card();
-            }
+            self.selection.active_card = self
+                .model
+                .cards()
+                .get(previous_idx)
+                .map(|c| ActiveCard::new(previous_idx, c.id));
             self.focus.card_focus = CardFocus::Title;
             let parents = self.get_current_card_parents();
             let children = self.get_current_card_children();
@@ -1125,7 +1131,7 @@ impl App {
                         .card_navigation_history
                         .push(current_card_idx);
                     // Navigate to parent
-                    self.selection.set_active_card(parent_idx, parent_id);
+                    self.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
                     self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
@@ -1146,7 +1152,7 @@ impl App {
                 self.selection
                     .card_navigation_history
                     .push(current_card_idx);
-                self.selection.set_active_card(parent_idx, parents[0]);
+                self.selection.active_card = Some(ActiveCard::new(parent_idx, parents[0]));
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
@@ -1171,7 +1177,7 @@ impl App {
                         .card_navigation_history
                         .push(current_card_idx);
                     // Navigate to child
-                    self.selection.set_active_card(child_idx, child_id);
+                    self.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
                     self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
@@ -1192,7 +1198,7 @@ impl App {
                 self.selection
                     .card_navigation_history
                     .push(current_card_idx);
-                self.selection.set_active_card(child_idx, children[0]);
+                self.selection.active_card = Some(ActiveCard::new(child_idx, children[0]));
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
@@ -1252,7 +1258,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use crate::app::sprint_view::SprintTaskPanel;
-    use crate::app::CardFocus;
+    use crate::app::{ActiveCard, CardFocus};
     use crate::App;
     use crossterm::event::KeyCode;
     use kanban_domain::{CreateCardOptions, GraphOperations, KanbanOperations, Snapshot};
@@ -1337,8 +1343,7 @@ mod tests {
             .position(|c| c.id == child_id)
             .unwrap();
 
-        app.selection.active_card_index = Some(child_idx);
-        app.selection.active_card_id = Some(child_id);
+        app.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
         app.focus.card_focus = CardFocus::Parents;
         app.relationship.parents_list.update_item_count(1);
         app.relationship.parents_list.selection.set(Some(0));
@@ -1346,9 +1351,9 @@ mod tests {
         app.navigate_to_selected_parent(child_idx);
 
         assert_eq!(
-            app.selection.active_card_id,
+            app.selection.active_card.map(|a| a.id()),
             Some(parent_id),
-            "active_card_id must be updated to the parent so the detail view rerenders against the parent card"
+            "active_card.id() must be updated to the parent so the detail view rerenders against the parent card"
         );
         assert_eq!(
             app.get_card_for_detail_view()
@@ -1372,15 +1377,14 @@ mod tests {
             .position(|c| c.id == parent_id)
             .unwrap();
 
-        app.selection.active_card_index = Some(parent_idx);
-        app.selection.active_card_id = Some(parent_id);
+        app.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
         app.focus.card_focus = CardFocus::Children;
         app.relationship.children_list.update_item_count(1);
         app.relationship.children_list.selection.set(Some(0));
 
         app.navigate_to_selected_child(parent_idx);
 
-        assert_eq!(app.selection.active_card_id, Some(child_id));
+        assert_eq!(app.selection.active_card.map(|a| a.id()), Some(child_id));
         assert_eq!(
             app.get_card_for_detail_view()
                 .expect("detail must resolve")
@@ -1398,17 +1402,16 @@ mod tests {
         let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
         let c_idx = app.model.cards().iter().position(|c| c.id == c_id).unwrap();
 
-        app.selection.active_card_index = Some(c_idx);
-        app.selection.active_card_id = Some(c_id);
+        app.selection.active_card = Some(ActiveCard::new(c_idx, c_id));
         app.selection.card_navigation_history.push(b_idx);
         app.focus.card_focus = CardFocus::Parents;
 
         app.return_to_previous_card_from_detail_history();
 
         assert_eq!(
-            app.selection.active_card_id,
+            app.selection.active_card.map(|a| a.id()),
             Some(b_id),
-            "Backspace return must update active_card_id along with the index"
+            "Backspace return must update active_card to the previous card"
         );
         assert_eq!(
             app.get_card_for_detail_view()
@@ -1426,9 +1429,9 @@ mod tests {
         app.handle_sprint_detail_key(KeyCode::Enter);
 
         assert_eq!(
-            app.selection.active_card_id,
+            app.selection.active_card.map(|a| a.id()),
             Some(card_id),
-            "Enter on a sprint-detail card row must set active_card_id so the detail view can resolve the card"
+            "Enter on a sprint-detail card row must set active_card so the detail view can resolve the card"
         );
         assert_eq!(
             app.get_card_for_detail_view()
@@ -1446,9 +1449,9 @@ mod tests {
         app.handle_sprint_detail_key(KeyCode::Char('e'));
 
         assert_eq!(
-            app.selection.active_card_id,
+            app.selection.active_card.map(|a| a.id()),
             Some(card_id),
-            "'e' on a sprint-detail card row must set active_card_id so the detail view can resolve the card"
+            "'e' on a sprint-detail card row must set active_card so the detail view can resolve the card"
         );
         assert_eq!(
             app.get_card_for_detail_view()
@@ -1466,19 +1469,14 @@ mod tests {
         let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
         let stale_idx = app.model.cards().len() + 99;
 
-        app.selection.active_card_index = Some(b_idx);
-        app.selection.active_card_id = Some(b_id);
+        app.selection.active_card = Some(ActiveCard::new(b_idx, b_id));
         app.selection.card_navigation_history.push(stale_idx);
 
         app.return_to_previous_card_from_detail_history();
 
-        assert_eq!(
-            app.selection.active_card_id, None,
-            "when previous_idx no longer resolves, active_card_id must be cleared"
-        );
-        assert_eq!(
-            app.selection.active_card_index, None,
-            "when previous_idx no longer resolves, active_card_index must be cleared too — the two fields cannot drift apart"
+        assert!(
+            app.selection.active_card.is_none(),
+            "when previous_idx no longer resolves, active_card must be cleared — the wrapper enforces that index and id move together"
         );
         assert!(
             app.get_card_for_detail_view().is_none(),
