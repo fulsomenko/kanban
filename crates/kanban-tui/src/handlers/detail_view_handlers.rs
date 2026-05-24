@@ -739,7 +739,7 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.set_active_card(card_idx, card_id);
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -757,7 +757,7 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.set_active_card(card_idx, card_id);
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -1097,9 +1097,11 @@ impl App {
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
         if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
-            let previous_id = self.model.cards().get(previous_idx).map(|c| c.id);
-            self.selection.active_card_index = Some(previous_idx);
-            self.selection.active_card_id = previous_id;
+            if let Some(previous_id) = self.model.cards().get(previous_idx).map(|c| c.id) {
+                self.selection.set_active_card(previous_idx, previous_id);
+            } else {
+                self.selection.clear_active_card();
+            }
             self.focus.card_focus = CardFocus::Title;
             let parents = self.get_current_card_parents();
             let children = self.get_current_card_children();

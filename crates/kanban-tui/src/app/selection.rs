@@ -17,11 +17,13 @@ pub struct SelectionHub {
 }
 
 impl SelectionHub {
-    /// The detail view resolves its card off `active_card_id` (since KAN-364)
-    /// while many handlers still address cards by index. Use this when both
-    /// are known so the two stay consistent.
     pub fn set_active_card(&mut self, idx: usize, id: uuid::Uuid) {
         self.active_card_index = Some(idx);
         self.active_card_id = Some(id);
+    }
+
+    pub fn clear_active_card(&mut self) {
+        self.active_card_index = None;
+        self.active_card_id = None;
     }
 }
