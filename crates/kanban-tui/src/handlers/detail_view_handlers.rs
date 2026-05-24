@@ -1097,7 +1097,9 @@ impl App {
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
         if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
+            let previous_id = self.model.cards().get(previous_idx).map(|c| c.id);
             self.selection.active_card_index = Some(previous_idx);
+            self.selection.active_card_id = previous_id;
             self.focus.card_focus = CardFocus::Title;
             let parents = self.get_current_card_parents();
             let children = self.get_current_card_children();
@@ -1122,6 +1124,7 @@ impl App {
                         .push(current_card_idx);
                     // Navigate to parent
                     self.selection.active_card_index = Some(parent_idx);
+                    self.selection.active_card_id = Some(parent_id);
                     self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
@@ -1143,6 +1146,7 @@ impl App {
                     .card_navigation_history
                     .push(current_card_idx);
                 self.selection.active_card_index = Some(parent_idx);
+                self.selection.active_card_id = Some(parents[0]);
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
@@ -1168,6 +1172,7 @@ impl App {
                         .push(current_card_idx);
                     // Navigate to child
                     self.selection.active_card_index = Some(child_idx);
+                    self.selection.active_card_id = Some(child_id);
                     self.focus.card_focus = CardFocus::Title;
                     // Update item counts for new card
                     let new_parents = self.get_current_card_parents();
@@ -1189,6 +1194,7 @@ impl App {
                     .card_navigation_history
                     .push(current_card_idx);
                 self.selection.active_card_index = Some(child_idx);
+                self.selection.active_card_id = Some(children[0]);
                 self.focus.card_focus = CardFocus::Title;
                 // Update item counts for new card
                 let new_parents = self.get_current_card_parents();
