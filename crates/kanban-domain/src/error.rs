@@ -225,6 +225,12 @@ pub enum KanbanError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error(
+        "file format v{file_version} is newer than this binary's max v{binary_max}; \
+         please upgrade kanban"
+    )]
+    UnsupportedFutureVersion { file_version: u32, binary_max: u32 },
 }
 
 /// Return `noun` (when count is 1) or `noun + "s"` (otherwise).
@@ -349,6 +355,10 @@ impl KanbanError {
         )
     }
 
+    pub fn is_unsupported_future_version(&self) -> bool {
+        matches!(self, KanbanError::UnsupportedFutureVersion { .. })
+    }
+
     pub fn serialization(msg: impl Into<String>) -> Self {
         Self::Serialization(msg.into())
     }
@@ -436,6 +446,32 @@ mod tests {
         let id = Uuid::new_v4();
         let err = KanbanError::Domain(DomainError::wip_limit_exceeded(id, 3));
         assert!(err.is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_unsupported_future_version_display_mentions_both_versions() {
+        let err = KanbanError::UnsupportedFutureVersion {
+            file_version: 99,
+            binary_max: 6,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("99"), "msg should mention file version: {msg}");
+        assert!(msg.contains('6'), "msg should mention binary max: {msg}");
+    }
+
+    #[test]
+    fn test_is_unsupported_future_version_returns_true() {
+        let err = KanbanError::UnsupportedFutureVersion {
+            file_version: 99,
+            binary_max: 6,
+        };
+        assert!(err.is_unsupported_future_version());
+    }
+
+    #[test]
+    fn test_is_unsupported_future_version_returns_false_for_other_error() {
+        let err = KanbanError::not_found("card", Uuid::new_v4());
+        assert!(!err.is_unsupported_future_version());
     }
 
     #[test]

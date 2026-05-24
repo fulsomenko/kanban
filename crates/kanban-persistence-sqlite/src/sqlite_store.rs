@@ -16,6 +16,15 @@ use uuid::Uuid;
 
 const SCHEMA: &str = include_str!("schema.sql");
 
+/// The highest schema_version this binary understands. Used both to
+/// stamp fresh databases and to refuse files written by a future binary.
+pub const SUPPORTED_SCHEMA_VERSION: u32 = 2;
+
+/// (instance_id, saved_at, writer_version, writer_commit, schema_version).
+/// Tuple shape returned by the metadata-singleton SELECT — extracted to a
+/// type alias to keep clippy's type-complexity lint happy.
+type MetadataRow = (String, String, Option<String>, Option<String>, u32);
+
 /// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
     pool: Pool<Sqlite>,
@@ -260,6 +269,39 @@ impl SqliteStore {
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
 
+        // KAN-522: refuse a future-version DB BEFORE any schema-modifying
+        // step runs. Otherwise the legacy-table drops, the SCHEMA's
+        // CREATE TABLE IF NOT EXISTS for tables the file lacks, and
+        // migrate()'s ALTERs would all mutate a file we're about to refuse.
+        //
+        // Why two round-trips rather than one correlated subquery: SQLite
+        // parses the inner SELECT eagerly at prepare time and errors with
+        // "no such table: metadata" on a fresh DB, even when an outer
+        // `WHERE EXISTS` would short-circuit it at runtime. So we split:
+        // first probe `sqlite_master`, then read `schema_version` only if
+        // the table is there. ~µs overhead, executes once per `open()`.
+        let metadata_table_exists: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='metadata'",
+        )
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| KanbanError::Database(e.to_string()))?;
+        if metadata_table_exists {
+            let pre_migrate_version: Option<u32> =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_optional(&pool)
+                    .await
+                    .map_err(|e| KanbanError::Database(e.to_string()))?;
+            if let Some(v) = pre_migrate_version {
+                if v > SUPPORTED_SCHEMA_VERSION {
+                    return Err(KanbanError::UnsupportedFutureVersion {
+                        file_version: v,
+                        binary_max: SUPPORTED_SCHEMA_VERSION,
+                    });
+                }
+            }
+        }
+
         // Drop the legacy command_log table (pre-KAN-405 schema with
         // columns `idx` / `cmd_json`) before SCHEMA runs, so the new
         // command_log schema (`batch_index` / `commands_json` / `created_at`)
@@ -295,10 +337,11 @@ impl SqliteStore {
                 let id = Uuid::new_v4();
                 let now = Utc::now().to_rfc3339();
                 sqlx::query(
-                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, ?)",
                 )
                 .bind(id.to_string())
                 .bind(&now)
+                .bind(SUPPORTED_SCHEMA_VERSION)
                 .execute(pool)
                 .await
                 .map_err(db_err)?;
@@ -391,6 +434,31 @@ impl SqliteStore {
 
         Self::drop_legacy_card_edges_if_present(pool).await?;
 
+        // KAN-522: ALTER in writer-stamp columns on pre-v2 metadata tables.
+        for col in ["writer_version", "writer_commit"] {
+            let has_col: bool = sqlx::query_scalar(&format!(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+            ))
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
+            if !has_col {
+                sqlx::raw_sql(&format!("ALTER TABLE metadata ADD COLUMN {col} TEXT"))
+                    .execute(pool)
+                    .await
+                    .map_err(db_err)?;
+            }
+        }
+        // Once the ALTERs above have caught the schema up, normalise
+        // schema_version. Doing it unconditionally is idempotent and
+        // also self-heals any DBs where the field drifted.
+        sqlx::query("UPDATE metadata SET schema_version = ? WHERE id = 1 AND schema_version < ?")
+            .bind(SUPPORTED_SCHEMA_VERSION)
+            .bind(SUPPORTED_SCHEMA_VERSION)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
+
         Ok(())
     }
 
@@ -428,6 +496,57 @@ impl SqliteStore {
         &self.pool
     }
 
+    /// Read the metadata singleton row from the DB. Cheap (single row, indexed by primary key).
+    /// Returns `Ok(None)` if the row is absent — only possible on a brand-new DB
+    /// before `load_or_create_instance_id` has run, which the public API doesn't expose.
+    pub fn read_metadata_sync(&self) -> KanbanResult<Option<PersistenceMetadata>> {
+        run(async {
+            let row: Option<MetadataRow> = sqlx::query_as(
+                "SELECT instance_id, saved_at, writer_version, writer_commit, schema_version \
+                 FROM metadata WHERE id = 1",
+            )
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_err)?;
+            let Some(row) = row else {
+                return Ok(None);
+            };
+            let instance_id = p_uuid(&row.0)?;
+            let saved_at = p_dt(&row.1)?;
+            Ok(Some(PersistenceMetadata {
+                instance_id,
+                saved_at,
+                writer_version: row.2,
+                writer_commit: row.3,
+                format_version: Some(row.4),
+            }))
+        })
+    }
+
+    /// Record the current binary as the most-recent writer of this DB by
+    /// stamping `saved_at`, `writer_version`, and `writer_commit` into the
+    /// metadata singleton row. Returns the timestamp it wrote so callers can
+    /// echo it back into a `PersistenceMetadata` without re-reading the row.
+    ///
+    /// Separated from [`checkpoint`] so each function does one thing — see
+    /// the post-PR-288 review for the SRP rationale.
+    pub async fn stamp_writer(&self) -> KanbanResult<DateTime<Utc>> {
+        let now = Utc::now();
+        sqlx::query(
+            "UPDATE metadata SET saved_at = ?, writer_version = ?, writer_commit = ? WHERE id = 1",
+        )
+        .bind(now.to_rfc3339())
+        .bind(kanban_core::KANBAN_VERSION)
+        .bind(kanban_core::KANBAN_COMMIT)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| KanbanError::Database(e.to_string()))?;
+        Ok(now)
+    }
+
+    /// Truncate the WAL. Pure I/O step; does not touch the writer-stamp
+    /// columns. Callers that want a durable save with attribution should
+    /// invoke [`stamp_writer`] alongside this.
     pub async fn checkpoint(&self) -> KanbanResult<()> {
         sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&self.pool)
@@ -1704,10 +1823,28 @@ impl PersistenceStore for SqliteStore {
         self.apply_snapshot_async(domain_snapshot)
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
+
+        let saved_at = self
+            .stamp_writer()
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
         self.checkpoint()
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
-        Ok(PersistenceMetadata::new(self.instance_id))
+
+        // Values are all knowable inline — stamp_writer just wrote them and
+        // returned the timestamp, the writer/commit are compile-time consts.
+        // format_version is SUPPORTED because migrate() on open() normalised
+        // schema_version to SUPPORTED and nothing in the save path touches
+        // it. The read paths (load, read_metadata_sync) re-read from the row
+        // to honour the "DB is the source of truth" contract.
+        Ok(PersistenceMetadata {
+            instance_id: self.instance_id,
+            saved_at,
+            writer_version: Some(kanban_core::KANBAN_VERSION.to_string()),
+            writer_commit: Some(kanban_core::KANBAN_COMMIT.to_string()),
+            format_version: Some(SUPPORTED_SCHEMA_VERSION),
+        })
     }
 
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
@@ -1717,7 +1854,24 @@ impl PersistenceStore for SqliteStore {
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
         let data = serde_json::to_vec(&domain_snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let meta = PersistenceMetadata::new(self.instance_id);
+
+        let row: (String, Option<String>, Option<String>, u32) = sqlx::query_as(
+            "SELECT saved_at, writer_version, writer_commit, schema_version \
+             FROM metadata WHERE id = 1",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        let saved_at = DateTime::parse_from_rfc3339(&row.0)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?
+            .with_timezone(&Utc);
+        let meta = PersistenceMetadata {
+            instance_id: self.instance_id,
+            saved_at,
+            writer_version: row.1,
+            writer_commit: row.2,
+            format_version: Some(row.3),
+        };
         Ok((
             StoreSnapshot {
                 data,
@@ -2037,6 +2191,408 @@ mod tests {
             assert!(
                 store.get_card(card_id).unwrap().is_none(),
                 "get_card should return None for permanently deleted card"
+            );
+        });
+    }
+
+    #[test]
+    fn test_read_metadata_sync_reflects_actual_schema_version_from_db_row() {
+        // Contract: PersistenceMetadata.format_version is the format the DB
+        // is currently at, not whatever the binary's SUPPORTED happens to be.
+        // After open(), the two coincide (migrate normalises). We manually
+        // UPDATE schema_version below to a value that differs from SUPPORTED
+        // and confirm the read reflects the DB, not the const.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("drift.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            sqlx::query("UPDATE metadata SET schema_version = 1 WHERE id = 1")
+                .execute(&store.pool)
+                .await
+                .unwrap();
+
+            let meta = store
+                .read_metadata_sync()
+                .unwrap()
+                .expect("metadata row should exist");
+            assert_eq!(
+                meta.format_version,
+                Some(1),
+                "format_version must reflect the DB row (1), not the binary's SUPPORTED ({SUPPORTED_SCHEMA_VERSION})"
+            );
+        });
+    }
+
+    #[test]
+    fn test_load_reports_actual_schema_version_in_metadata() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("load_drift.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            // Seed the row so load() has something to read.
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            PersistenceStore::save(
+                &store,
+                StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(store.instance_id()),
+                },
+            )
+            .await
+            .unwrap();
+            sqlx::query("UPDATE metadata SET schema_version = 1 WHERE id = 1")
+                .execute(&store.pool)
+                .await
+                .unwrap();
+
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert_eq!(
+                meta.format_version,
+                Some(1),
+                "load() must report the DB's actual schema_version, not the const"
+            );
+        });
+    }
+
+    #[test]
+    fn test_stamp_writer_updates_metadata_row_and_returns_timestamp() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stamped.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            // Wipe what migrate-on-open already wrote so the assertion is clean.
+            sqlx::query(
+                "UPDATE metadata SET writer_version = NULL, writer_commit = NULL WHERE id = 1",
+            )
+            .execute(&store.pool)
+            .await
+            .unwrap();
+
+            let before = Utc::now();
+            let stamped_at = store.stamp_writer().await.unwrap();
+            let after = Utc::now();
+
+            assert!(
+                stamped_at >= before && stamped_at <= after,
+                "returned timestamp must be in [before, after]: {stamped_at:?}"
+            );
+
+            let (saved_at_str, wv, wc): (String, Option<String>, Option<String>) = sqlx::query_as(
+                "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+            )
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+            assert_eq!(wv.as_deref(), Some(kanban_core::KANBAN_VERSION));
+            assert_eq!(wc.as_deref(), Some(kanban_core::KANBAN_COMMIT));
+            assert_eq!(saved_at_str, stamped_at.to_rfc3339());
+        });
+    }
+
+    #[test]
+    fn test_checkpoint_alone_does_not_stamp_writer_fields() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("ckpt_only.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            sqlx::query(
+                "UPDATE metadata SET writer_version = NULL, writer_commit = NULL WHERE id = 1",
+            )
+            .execute(&store.pool)
+            .await
+            .unwrap();
+
+            store.checkpoint().await.unwrap();
+
+            let (wv, wc): (Option<String>, Option<String>) =
+                sqlx::query_as("SELECT writer_version, writer_commit FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert!(
+                wv.is_none() && wc.is_none(),
+                "checkpoint() must be WAL-only post-split; got wv={wv:?} wc={wc:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn test_fresh_db_records_schema_version_2() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("fresh.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let version: u32 =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(version, SUPPORTED_SCHEMA_VERSION);
+        });
+    }
+
+    #[test]
+    fn test_fresh_db_has_writer_version_and_writer_commit_columns() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("fresh.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            for col in ["writer_version", "writer_commit"] {
+                let exists: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+                ))
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+                assert!(exists, "metadata.{col} column must exist on fresh DB");
+            }
+        });
+    }
+
+    #[test]
+    fn test_save_stamps_writer_version_and_commit_into_metadata_row() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stamped.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            let store_snap = StoreSnapshot {
+                data,
+                metadata: PersistenceMetadata::new(store.instance_id()),
+            };
+            let returned = PersistenceStore::save(&store, store_snap).await.unwrap();
+
+            assert_eq!(
+                returned.writer_version.as_deref(),
+                Some(kanban_core::KANBAN_VERSION),
+            );
+            assert_eq!(
+                returned.writer_commit.as_deref(),
+                Some(kanban_core::KANBAN_COMMIT),
+            );
+
+            let row: (Option<String>, Option<String>) =
+                sqlx::query_as("SELECT writer_version, writer_commit FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(row.0.as_deref(), Some(kanban_core::KANBAN_VERSION));
+            assert_eq!(row.1.as_deref(), Some(kanban_core::KANBAN_COMMIT));
+        });
+    }
+
+    #[test]
+    fn test_load_returns_writer_stamp_from_metadata_row() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("loaded.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            PersistenceStore::save(
+                &store,
+                StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(store.instance_id()),
+                },
+            )
+            .await
+            .unwrap();
+
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert_eq!(
+                meta.writer_version.as_deref(),
+                Some(kanban_core::KANBAN_VERSION),
+            );
+            assert_eq!(
+                meta.writer_commit.as_deref(),
+                Some(kanban_core::KANBAN_COMMIT),
+            );
+        });
+    }
+
+    #[test]
+    fn test_load_legacy_db_without_stamp_returns_none_writer_fields() {
+        // Pre-KAN-522 DB: metadata row exists, schema_version was bumped to
+        // current by migrate(), but writer_version/writer_commit are still
+        // NULL because no save has happened since the ALTER.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy_load.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2024-01-01T00:00:00Z', 1);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let store = SqliteStore::open(&path).await.unwrap();
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert!(meta.writer_version.is_none());
+            assert!(meta.writer_commit.is_none());
+        });
+    }
+
+    #[test]
+    fn test_open_rejects_future_schema_version() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("future.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 2,
+                    writer_version TEXT,
+                    writer_commit TEXT
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2030-01-01T00:00:00Z', 99);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let err = SqliteStore::open(&path)
+                .await
+                .err()
+                .expect("schema_version 99 must be refused");
+            assert!(
+                matches!(
+                    err,
+                    KanbanError::UnsupportedFutureVersion {
+                        file_version: 99,
+                        binary_max: SUPPORTED_SCHEMA_VERSION
+                    }
+                ),
+                "expected UnsupportedFutureVersion, got: {err:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn test_open_alters_in_writer_columns_on_legacy_v1_db() {
+        // Simulate a pre-KAN-522 SQLite file: metadata table without the
+        // writer_* columns and schema_version = 1. SqliteStore::open must
+        // ALTER in the new columns and bump schema_version to 2.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2024-01-01T00:00:00Z', 1);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            for col in ["writer_version", "writer_commit"] {
+                let exists: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+                ))
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+                assert!(exists, "metadata.{col} must be ALTERed in on legacy open");
+            }
+
+            let bumped: u32 =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                bumped, SUPPORTED_SCHEMA_VERSION,
+                "schema_version must be bumped to current on legacy open"
             );
         });
     }

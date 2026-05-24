@@ -91,6 +91,14 @@ impl KanbanContext {
         Arc::clone(&self.backend)
     }
 
+    /// Metadata for the underlying persistence store: format version, writer
+    /// kanban version, writer commit, last save time. Returns `None` for
+    /// in-memory backends or before the underlying file has been loaded.
+    /// Surfaced by the TUI F12 diagnostics panel.
+    pub fn persistence_metadata(&self) -> Option<kanban_persistence::PersistenceMetadata> {
+        self.backend.persistence_metadata()
+    }
+
     /// Replace the active backend, discarding all undo/redo history.
     pub fn replace_backend(&mut self, backend: Arc<dyn KanbanBackend>) {
         tracing::info!("Replacing backend; undo/redo history discarded");

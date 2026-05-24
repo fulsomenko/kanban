@@ -8,31 +8,41 @@ pub struct Migrator;
 
 impl Migrator {
     /// Detect the format version from an already-parsed JSON value.
-    /// Pure: no I/O, no errors.
-    pub fn detect_version_from_value(value: &Value) -> FormatVersion {
+    /// Pure: no I/O. Returns `UnsupportedFutureVersion` for versions newer
+    /// than this binary's max — silently coercing them would risk dropping
+    /// fields the old reader does not understand.
+    pub fn detect_version_from_value(value: &Value) -> PersistenceResult<FormatVersion> {
         // V2+ files have a "version" field at root level
         if let Some(version) = value.get("version").and_then(|v| v.as_u64()) {
-            return FormatVersion::from_u32(version as u32).unwrap_or(FormatVersion::V2);
+            // Saturate-on-overflow rather than truncate: a `version` field
+            // that exceeds u32::MAX is still a "future version" the binary
+            // doesn't understand, not the wrapped-around small number a
+            // naive `as u32` would yield.
+            let v: u32 = u32::try_from(version).unwrap_or(u32::MAX);
+            return FormatVersion::from_u32(v).ok_or(PersistenceError::UnsupportedFutureVersion {
+                file_version: v,
+                binary_max: FormatVersion::MAX.as_u32(),
+            });
         }
         // V1 files have "boards" at root level but no version field
         if value.get("boards").is_some() {
-            return FormatVersion::V1;
+            return Ok(FormatVersion::V1);
         }
-        // Unknown format, assume V2
-        FormatVersion::V2
+        // Unknown shape with no version field, treat as V2
+        Ok(FormatVersion::V2)
     }
 
     /// Detect the version of a persisted file
     pub async fn detect_version(path: &Path) -> PersistenceResult<FormatVersion> {
         if !path.exists() {
-            return Ok(FormatVersion::V6); // Default to V6 for new files
+            return Ok(FormatVersion::MAX); // Default to current for new files
         }
 
         let content = tokio::fs::read_to_string(path).await?;
         let value: Value = serde_json::from_str(&content)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        Ok(Self::detect_version_from_value(&value))
+        Self::detect_version_from_value(&value)
     }
 
     /// Migrate a file from one version to another, stepping through intermediate versions
@@ -388,6 +398,73 @@ mod tests {
         assert!(
             !path.with_extension("v1.backup").exists(),
             "V5 -> V6 must not trigger the v1→v2 step that creates .v1.backup"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_version_from_value_rejects_future_version() {
+        let v99 = json!({
+            "version": 99,
+            "metadata": {},
+            "data": {}
+        });
+        let err = Migrator::detect_version_from_value(&v99).expect_err("v99 must be refused");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_detect_version_from_value_rejects_u32_overflow_that_truncates_to_valid_version() {
+        // 2^32 + 6 truncates to 6 under a naive `as u32` cast — which would
+        // be silently accepted as V6. The guard must refuse it as a future
+        // version instead.
+        let truncates_to_v6 = json!({
+            "version": (1u64 << 32) + 6,
+            "metadata": {},
+            "data": {}
+        });
+        let err = Migrator::detect_version_from_value(&truncates_to_v6)
+            .expect_err("version > u32::MAX must be refused, not truncated to V6");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion { binary_max: 6, .. }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_detect_version_async_rejects_future_version() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v99.json");
+        let v99 = json!({
+            "version": 99,
+            "metadata": {},
+            "data": {}
+        });
+        tokio::fs::write(&path, v99.to_string()).await.unwrap();
+
+        let err = Migrator::detect_version(&path)
+            .await
+            .expect_err("v99 must be refused");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
         );
     }
 

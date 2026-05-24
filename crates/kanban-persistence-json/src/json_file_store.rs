@@ -58,10 +58,7 @@ impl JsonEnvelope {
     pub fn new(data: serde_json::Value) -> Self {
         Self {
             version: 2,
-            metadata: PersistenceMetadata {
-                instance_id: Uuid::new_v4(),
-                saved_at: chrono::Utc::now(),
-            },
+            metadata: PersistenceMetadata::new(Uuid::new_v4()),
             data,
         }
     }
@@ -171,20 +168,12 @@ impl JsonFileStore {
             .map_err(|e| PersistenceError::Serialization(format!("Metadata mutex poisoned: {e}")))
     }
 
-    /// Parse file bytes into a [`JsonEnvelope`], validating version fields.
-    /// Pure: no `&self`, no side effects.
+    /// Parse file bytes into a [`JsonEnvelope`]. Version validation is the
+    /// caller's responsibility — `Migrator::detect_version_from_value` is
+    /// called before this in both load paths and refuses future / malformed
+    /// versions. No defence-in-depth duplication here.
     fn parse_envelope(bytes: &[u8]) -> PersistenceResult<JsonEnvelope> {
-        let envelope: JsonEnvelope = serde_json::from_slice(bytes)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        if envelope.version < 2 || envelope.version > 6 {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported format version: {}",
-                envelope.version
-            )));
-        }
-
-        Ok(envelope)
+        serde_json::from_slice(bytes).map_err(|e| PersistenceError::Serialization(e.to_string()))
     }
 
     fn serialize_envelope(envelope: &JsonEnvelope) -> PersistenceResult<Vec<u8>> {
@@ -243,9 +232,11 @@ impl PersistenceStore for JsonFileStore {
             }
         }
 
-        // Update metadata with current instance and time
+        // Update metadata with current instance, time, and writer identity
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
+        snapshot.metadata.writer_version = Some(kanban_core::KANBAN_VERSION.to_string());
+        snapshot.metadata.writer_commit = Some(kanban_core::KANBAN_COMMIT.to_string());
 
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -308,11 +299,12 @@ impl PersistenceStore for JsonFileStore {
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let mut metadata = envelope.metadata;
+        metadata.format_version = Some(envelope.version);
         let snapshot = StoreSnapshot {
             data,
-            metadata: envelope.metadata.clone(),
+            metadata: metadata.clone(),
         };
-        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -337,7 +329,7 @@ impl PersistenceStore for JsonFileStore {
         let value: serde_json::Value = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        let current_version = Migrator::detect_version_from_value(&value);
+        let current_version = Migrator::detect_version_from_value(&value)?;
 
         let final_bytes = if current_version < FormatVersion::V6 {
             tracing::info!(
@@ -367,11 +359,12 @@ impl PersistenceStore for JsonFileStore {
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let mut metadata = envelope.metadata;
+        metadata.format_version = Some(envelope.version);
         let snapshot = StoreSnapshot {
             data,
-            metadata: envelope.metadata.clone(),
+            metadata: metadata.clone(),
         };
-        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -468,6 +461,121 @@ mod tests {
         let guard = store.lock_metadata();
         assert!(guard.is_ok());
         assert!(guard.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_load_rejects_future_format_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+        let v99 = json!({
+            "version": 99,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2026-05-23T00:00:00Z"
+            },
+            "data": {}
+        });
+        tokio::fs::write(&file_path, v99.to_string()).await.unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let err = store.load().await.expect_err("v99 must refuse to load");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_load_sync_rejects_future_format_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+        let v99 = json!({
+            "version": 99,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2026-05-23T00:00:00Z"
+            },
+            "data": {}
+        });
+        std::fs::write(&file_path, v99.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let err = store
+            .load_sync()
+            .expect_err("v99 must refuse to load (sync)");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 6
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_save_stamps_writer_version_and_commit() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("stamped.json");
+        let store = JsonFileStore::new(&file_path);
+
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&json!({ "boards": [], "columns": [] })).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+        store.save(snapshot).await.unwrap();
+
+        let bytes = tokio::fs::read(&file_path).await.unwrap();
+        let envelope: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            envelope["metadata"]["writer_version"]
+                .as_str()
+                .map(str::to_string),
+            Some(kanban_core::KANBAN_VERSION.to_string()),
+        );
+        assert_eq!(
+            envelope["metadata"]["writer_commit"]
+                .as_str()
+                .map(str::to_string),
+            Some(kanban_core::KANBAN_COMMIT.to_string()),
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_legacy_file_without_writer_stamp_succeeds() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("legacy_no_stamp.json");
+        let legacy = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        tokio::fs::write(&file_path, legacy.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (_, metadata) = store.load().await.unwrap();
+        assert!(metadata.writer_version.is_none());
+        assert!(metadata.writer_commit.is_none());
     }
 
     /// Files with stale `commands`/`undo_cursor`/`baseline_data`/

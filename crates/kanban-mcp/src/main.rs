@@ -3,13 +3,13 @@ compile_error!("kanban-mcp binary requires at least one backend feature: `json` 
 
 use anyhow::Result;
 use clap::Parser;
-use kanban_core::VERSION;
+use kanban_core::CLI_VERSION_DISPLAY;
 use kanban_mcp::McpServer;
 
 #[derive(Parser)]
 #[command(
     name = "kanban-mcp",
-    version = VERSION,
+    version = CLI_VERSION_DISPLAY,
     about = "Model Context Protocol server for the kanban project management tool"
 )]
 struct Args {

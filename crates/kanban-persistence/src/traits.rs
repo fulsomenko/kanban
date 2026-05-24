@@ -12,6 +12,20 @@ pub struct PersistenceMetadata {
     pub instance_id: Uuid,
     /// When this data was saved
     pub saved_at: DateTime<Utc>,
+    /// Semver of the kanban that wrote this file. `None` on legacy files
+    /// written before the stamp was introduced.
+    #[serde(default)]
+    pub writer_version: Option<String>,
+    /// Git commit of the kanban that wrote this file. `None` on legacy files
+    /// or builds without a git checkout (`"unknown"` is also possible).
+    #[serde(default)]
+    pub writer_commit: Option<String>,
+    /// Format version of the loaded file as the backend understands it
+    /// (JSON envelope version, SQLite schema_version). `None` when not
+    /// populated by the backend. Display-only — backends still own version
+    /// negotiation.
+    #[serde(default, skip_serializing)]
+    pub format_version: Option<u32>,
 }
 
 impl PersistenceMetadata {
@@ -19,7 +33,22 @@ impl PersistenceMetadata {
         Self {
             instance_id,
             saved_at: Utc::now(),
+            writer_version: None,
+            writer_commit: None,
+            format_version: None,
         }
+    }
+
+    /// Stamp the writer identity onto the metadata. Backends call this on the
+    /// save path so the saved file remembers which kanban produced it.
+    pub fn with_writer_stamp(
+        mut self,
+        version: impl Into<String>,
+        commit: impl Into<String>,
+    ) -> Self {
+        self.writer_version = Some(version.into());
+        self.writer_commit = Some(commit.into());
+        self
     }
 }
 
@@ -142,6 +171,9 @@ pub enum FormatVersion {
 }
 
 impl FormatVersion {
+    /// The highest format version this binary can read or produce.
+    pub const MAX: Self = Self::V6;
+
     pub fn as_u32(self) -> u32 {
         match self {
             Self::V1 => 1,
@@ -198,4 +230,54 @@ pub trait ConflictResolver: Send + Sync {
         local_metadata: &PersistenceMetadata,
         external_metadata: &PersistenceMetadata,
     ) -> String;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_version_max_equals_v6() {
+        assert_eq!(FormatVersion::MAX, FormatVersion::V6);
+    }
+
+    #[test]
+    fn test_format_version_max_as_u32_matches_largest_variant() {
+        assert_eq!(FormatVersion::MAX.as_u32(), 6);
+    }
+
+    #[test]
+    fn test_default_metadata_has_no_writer_stamp() {
+        let md = PersistenceMetadata::new(Uuid::nil());
+        assert!(md.writer_version.is_none());
+        assert!(md.writer_commit.is_none());
+    }
+
+    #[test]
+    fn test_with_writer_stamp_populates_both_fields() {
+        let md = PersistenceMetadata::new(Uuid::nil()).with_writer_stamp("0.6.0", "abc1234");
+        assert_eq!(md.writer_version.as_deref(), Some("0.6.0"));
+        assert_eq!(md.writer_commit.as_deref(), Some("abc1234"));
+    }
+
+    #[test]
+    fn test_metadata_serde_round_trips_with_writer_stamp() {
+        let md = PersistenceMetadata::new(Uuid::nil()).with_writer_stamp("0.6.0", "abc1234");
+        let json = serde_json::to_string(&md).unwrap();
+        let parsed: PersistenceMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.writer_version.as_deref(), Some("0.6.0"));
+        assert_eq!(parsed.writer_commit.as_deref(), Some("abc1234"));
+    }
+
+    #[test]
+    fn test_metadata_deserialize_legacy_envelope_missing_stamp_fields() {
+        // Old files lack writer_version / writer_commit. They must still parse.
+        let legacy = serde_json::json!({
+            "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+            "saved_at": "2024-01-01T00:00:00Z"
+        });
+        let parsed: PersistenceMetadata = serde_json::from_value(legacy).unwrap();
+        assert!(parsed.writer_version.is_none());
+        assert!(parsed.writer_commit.is_none());
+    }
 }

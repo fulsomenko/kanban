@@ -1,11 +1,11 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use kanban_core::VERSION;
+use kanban_core::CLI_VERSION_DISPLAY;
 
 #[derive(Parser)]
 #[command(name = "kanban")]
 #[command(about = "A terminal-based kanban board", long_about = None)]
-#[command(version = VERSION, arg_required_else_help = false)]
+#[command(version = CLI_VERSION_DISPLAY, arg_required_else_help = false)]
 pub struct Cli {
     /// Path to kanban data file (or set KANBAN_FILE env var)
     #[arg(value_name = "FILE", env = "KANBAN_FILE")]
