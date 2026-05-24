@@ -70,8 +70,7 @@ impl JsonDataStore {
         let loaded = self.file_store.load_sync().map_err(KanbanError::from)?;
 
         if let Some((ss, meta)) = loaded {
-            let snapshot = snapshot_from_json_bytes(&ss.data)
-                .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
+            let snapshot = snapshot_from_json_bytes(&ss.data).map_err(KanbanError::from)?;
             store.apply_snapshot(snapshot)?;
             let mut guard = self.last_metadata.write().map_err(|_| {
                 KanbanError::Internal("json_backend: last_metadata RwLock poisoned".into())
@@ -124,8 +123,7 @@ impl JsonDataStore {
             store.snapshot()?
         };
 
-        let data = snapshot_to_json_bytes(&snapshot)
-            .map_err(|e| KanbanError::Internal(format!("json_backend: snapshot serialise: {e}")))?;
+        let data = snapshot_to_json_bytes(&snapshot).map_err(KanbanError::from)?;
         let metadata = PersistenceMetadata::new(self.file_store.instance_id());
 
         let returned = self
