@@ -11,7 +11,16 @@ than the binary supports, or a SQLite database whose `schema_version`
 exceeds the binary's, now returns a typed error rather than silently
 coercing the file to a lower format (which previously dropped fields the
 old reader did not understand). The error message tells you the file's
-version, the binary's maximum, and asks you to upgrade.
+version, the binary's maximum, and asks you to upgrade. Refused files are
+left untouched on disk — no schema bump, no column ALTER, nothing rewritten
+before the refusal fires.
+
+**MCP error category.** Pointing the `kanban-mcp` server at a future-format
+file now surfaces as `INVALID_PARAMS` to the MCP client (was
+`INTERNAL_ERROR`). That category change tells the LLM the input is
+unusable, not that the server is broken — so the client can suggest
+pointing at a different file or upgrading kanban instead of treating it
+as a server bug.
 
 **Writer stamp on save.** Every save now records which kanban produced the
 file: a semver version string and the build's git commit. Old files that
@@ -22,7 +31,7 @@ time the file is rewritten.
 F12 has been renamed to **Diagnostics** and now shows:
 
 - File path
-- Format version
+- Format version (read live from the file, not assumed from the binary)
 - Writer (the kanban that last wrote this file)
 - Binary (the kanban you're running right now)
 - Last saved timestamp
