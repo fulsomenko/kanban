@@ -1249,9 +1249,23 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use crate::app::sprint_view::SprintTaskPanel;
     use crate::app::CardFocus;
     use crate::App;
+    use crossterm::event::KeyCode;
     use kanban_domain::{CreateCardOptions, GraphOperations, KanbanOperations, Snapshot};
+
+    fn reload_snapshot(app: &mut App) {
+        let snap = Snapshot {
+            boards: app.ctx.data_store().list_boards().unwrap(),
+            columns: app.ctx.data_store().list_all_columns().unwrap(),
+            cards: app.ctx.data_store().list_all_cards().unwrap(),
+            archived_cards: app.ctx.data_store().list_archived_cards().unwrap(),
+            sprints: app.ctx.data_store().list_all_sprints().unwrap(),
+            graph: app.ctx.data_store().get_graph().unwrap(),
+        };
+        app.model.load_from_snapshot(snap);
+    }
 
     fn seed_chain(app: &mut App, titles: &[&str]) -> Vec<uuid::Uuid> {
         let board = app.ctx.create_board("Board".into(), None).unwrap();
@@ -1275,16 +1289,37 @@ mod tests {
         for w in ids.windows(2) {
             app.ctx.attach_child(w[0], w[1]).unwrap();
         }
-        let snap = Snapshot {
-            boards: app.ctx.data_store().list_boards().unwrap(),
-            columns: app.ctx.data_store().list_all_columns().unwrap(),
-            cards: app.ctx.data_store().list_all_cards().unwrap(),
-            archived_cards: app.ctx.data_store().list_archived_cards().unwrap(),
-            sprints: app.ctx.data_store().list_all_sprints().unwrap(),
-            graph: app.ctx.data_store().get_graph().unwrap(),
-        };
-        app.model.load_from_snapshot(snap);
+        reload_snapshot(app);
         ids
+    }
+
+    fn seed_sprint_with_card(app: &mut App, title: &str) -> uuid::Uuid {
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "TODO".into(), None)
+            .unwrap();
+        let sprint = app.ctx.create_sprint(board.id, None, None).unwrap();
+        let card = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                title.into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        app.ctx.assign_card_to_sprint(card.id, sprint.id).unwrap();
+        reload_snapshot(app);
+        app.populate_sprint_task_lists(sprint.id);
+        app.sprint_view.panel = SprintTaskPanel::Uncompleted;
+        app.sprint_view
+            .uncompleted_component
+            .update_cards(vec![card.id]);
+        app.sprint_view
+            .uncompleted_component
+            .set_selected_index(Some(0));
+        card.id
     }
 
     #[test]
@@ -1378,6 +1413,74 @@ mod tests {
                 .expect("detail must resolve")
                 .id,
             b_id
+        );
+    }
+
+    #[test]
+    fn test_sprint_detail_enter_on_card_sets_active_card_id_so_detail_view_resolves() {
+        let mut app = App::test_default();
+        let card_id = seed_sprint_with_card(&mut app, "task");
+
+        app.handle_sprint_detail_key(KeyCode::Enter);
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(card_id),
+            "Enter on a sprint-detail card row must set active_card_id so the detail view can resolve the card"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            card_id
+        );
+    }
+
+    #[test]
+    fn test_sprint_detail_e_on_card_sets_active_card_id_so_detail_view_resolves() {
+        let mut app = App::test_default();
+        let card_id = seed_sprint_with_card(&mut app, "task");
+
+        app.handle_sprint_detail_key(KeyCode::Char('e'));
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(card_id),
+            "'e' on a sprint-detail card row must set active_card_id so the detail view can resolve the card"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            card_id
+        );
+    }
+
+    #[test]
+    fn test_backspace_return_with_stale_previous_idx_clears_active_card_entirely() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["A", "B"]);
+        let b_id = ids[1];
+        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
+        let stale_idx = app.model.cards().len() + 99;
+
+        app.selection.active_card_index = Some(b_idx);
+        app.selection.active_card_id = Some(b_id);
+        app.selection.card_navigation_history.push(stale_idx);
+
+        app.return_to_previous_card_from_detail_history();
+
+        assert_eq!(
+            app.selection.active_card_id, None,
+            "when previous_idx no longer resolves, active_card_id must be cleared"
+        );
+        assert_eq!(
+            app.selection.active_card_index, None,
+            "when previous_idx no longer resolves, active_card_index must be cleared too — the two fields cannot drift apart"
+        );
+        assert!(
+            app.get_card_for_detail_view().is_none(),
+            "detail view must resolve to None when active_card was cleared by stale-index recovery"
         );
     }
 }
