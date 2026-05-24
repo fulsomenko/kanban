@@ -311,24 +311,6 @@ impl SqliteStore {
 
         Self::migrate(&pool).await?;
 
-        // Belt-and-braces: re-check after migrate so a malicious or hand-edited
-        // post-migrate row can't slip through. Practically unreachable because
-        // the pre-migrate guard above already caught it; kept as defence in
-        // depth and as the test boundary for `test_open_rejects_future_schema_version`.
-        let schema_version: Option<u32> =
-            sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
-                .fetch_optional(&pool)
-                .await
-                .map_err(|e| KanbanError::Database(e.to_string()))?;
-        if let Some(v) = schema_version {
-            if v > SUPPORTED_SCHEMA_VERSION {
-                return Err(KanbanError::UnsupportedFutureVersion {
-                    file_version: v,
-                    binary_max: SUPPORTED_SCHEMA_VERSION,
-                });
-            }
-        }
-
         let instance_id = Self::load_or_create_instance_id(&pool).await?;
 
         Ok(Self {

@@ -168,26 +168,12 @@ impl JsonFileStore {
             .map_err(|e| PersistenceError::Serialization(format!("Metadata mutex poisoned: {e}")))
     }
 
-    /// Parse file bytes into a [`JsonEnvelope`], validating version fields.
-    /// Pure: no `&self`, no side effects.
+    /// Parse file bytes into a [`JsonEnvelope`]. Version validation is the
+    /// caller's responsibility — `Migrator::detect_version_from_value` is
+    /// called before this in both load paths and refuses future / malformed
+    /// versions. No defence-in-depth duplication here.
     fn parse_envelope(bytes: &[u8]) -> PersistenceResult<JsonEnvelope> {
-        let envelope: JsonEnvelope = serde_json::from_slice(bytes)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        if envelope.version > FormatVersion::MAX.as_u32() {
-            return Err(PersistenceError::UnsupportedFutureVersion {
-                file_version: envelope.version,
-                binary_max: FormatVersion::MAX.as_u32(),
-            });
-        }
-        if envelope.version < 2 {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported format version: {}",
-                envelope.version
-            )));
-        }
-
-        Ok(envelope)
+        serde_json::from_slice(bytes).map_err(|e| PersistenceError::Serialization(e.to_string()))
     }
 
     fn serialize_envelope(envelope: &JsonEnvelope) -> PersistenceResult<Vec<u8>> {
@@ -592,32 +578,7 @@ mod tests {
         assert!(metadata.writer_commit.is_none());
     }
 
-    #[test]
-    fn test_parse_envelope_rejects_future_version_with_typed_error() {
-        let envelope_bytes = serde_json::to_vec(&json!({
-            "version": 7,
-            "metadata": {
-                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
-                "saved_at": "2026-05-23T00:00:00Z"
-            },
-            "data": {}
-        }))
-        .unwrap();
-        let err = JsonFileStore::parse_envelope(&envelope_bytes)
-            .expect_err("v7 envelope must be refused");
-        assert!(
-            matches!(
-                err,
-                PersistenceError::UnsupportedFutureVersion {
-                    file_version: 7,
-                    binary_max: 6
-                }
-            ),
-            "expected UnsupportedFutureVersion, got: {err:?}"
-        );
-    }
-
-    /// Files with stale `commands`/`undo_cursor`/`baseline_data`/
+/// Files with stale `commands`/`undo_cursor`/`baseline_data`/
     /// `command_schema_version` fields (written by pre-KAN-405 builds) must
     /// be actively scrubbed from disk on load — not just ignored in memory.
     /// Serde would silently drop them on the next save, but that "lazy" cleanup
