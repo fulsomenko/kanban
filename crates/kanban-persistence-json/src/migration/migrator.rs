@@ -484,6 +484,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_migrate_v6_to_v7_preserves_v6_backup_on_failure() {
+        // The orchestrator must hold onto the .v6.backup if the V6→V7
+        // step fails: otherwise a corrupt V6 file becomes unrecoverable
+        // after a failed upgrade. The both-keys ambiguity is the
+        // canonical failure mode — the transform refuses and the user
+        // needs the original file to investigate. Pinning this prevents
+        // a future orchestrator refactor from silently dropping the
+        // backup-preservation behaviour.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v6_ambiguous.json");
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": "11111111-1111-1111-1111-111111111111",
+                        "target": "22222222-2222-2222-2222-222222222222",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "spawns": { "edges": [{
+                        "source": "33333333-3333-3333-3333-333333333333",
+                        "target": "44444444-4444-4444-4444-444444444444",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        tokio::fs::write(&path, serde_json::to_string_pretty(&v6).unwrap())
+            .await
+            .unwrap();
+
+        let err = Migrator::migrate(FormatVersion::V6, FormatVersion::V7, &path)
+            .await
+            .expect_err("migration must refuse a V6 envelope carrying both bucket keys");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("parent_child") && msg.contains("spawns"),
+            "diagnostic should name both colliding keys; got: {msg}"
+        );
+
+        assert!(
+            path.with_extension("v6.backup").exists(),
+            ".v6.backup must be preserved when the V6→V7 step fails so the user can recover"
+        );
+    }
+
+    #[tokio::test]
     async fn test_detect_version_from_value_rejects_future_version() {
         let v99 = json!({
             "version": 99,
