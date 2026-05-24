@@ -17,4 +17,4 @@ is needed.
 The on-disk envelope version advances from 6 to 7. Older builds of the
 app will refuse to open V7 files (the existing future-version guard) to
 prevent silently dropping data they don't understand. SQLite storage is
-unaffected — it already used the `spawns_edges` name internally.
+unaffected, since it already used the `spawns_edges` name internally.
