@@ -273,8 +273,13 @@ impl SqliteStore {
         // step runs. Otherwise the legacy-table drops, the SCHEMA's
         // CREATE TABLE IF NOT EXISTS for tables the file lacks, and
         // migrate()'s ALTERs would all mutate a file we're about to refuse.
-        // Probe sqlite_master first so a fresh DB (no metadata table yet)
-        // proceeds normally without error.
+        //
+        // Why two round-trips rather than one correlated subquery: SQLite
+        // parses the inner SELECT eagerly at prepare time and errors with
+        // "no such table: metadata" on a fresh DB, even when an outer
+        // `WHERE EXISTS` would short-circuit it at runtime. So we split:
+        // first probe `sqlite_master`, then read `schema_version` only if
+        // the table is there. ~µs overhead, executes once per `open()`.
         let metadata_table_exists: bool = sqlx::query_scalar(
             "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='metadata'",
         )
