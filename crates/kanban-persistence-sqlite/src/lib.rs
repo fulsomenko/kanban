@@ -40,7 +40,7 @@ pub async fn write_test_metadata_with_schema_version(
             id INTEGER PRIMARY KEY CHECK (id = 1),
             instance_id TEXT NOT NULL,
             saved_at TEXT NOT NULL,
-            schema_version INTEGER NOT NULL DEFAULT 1,
+            schema_version INTEGER NOT NULL DEFAULT {SUPPORTED_SCHEMA_VERSION},
             writer_version TEXT,
             writer_commit TEXT
         );
