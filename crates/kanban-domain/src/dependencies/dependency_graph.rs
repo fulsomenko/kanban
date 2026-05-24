@@ -370,6 +370,28 @@ mod tests {
         assert_eq!(deserialized.len(), 0);
     }
 
+    #[test]
+    fn test_dependency_graph_serializes_spawns_bucket_key() {
+        // The on-disk JSON bucket name must match the domain
+        // vocabulary (SpawnsEdge, spawns_edges(), SQLite
+        // spawns_edges table). The historical Rust field name
+        // `parent_child` leaked into the wire format; this pins
+        // the rename to `spawns`.
+        let graph = DependencyGraph::new();
+        let json = serde_json::to_value(&graph).unwrap();
+        let obj = json.as_object().expect("graph serialises to a JSON object");
+        assert!(
+            obj.contains_key("spawns"),
+            "DependencyGraph must serialise the spawns bucket under key `spawns`; got keys {:?}",
+            obj.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            !obj.contains_key("parent_child"),
+            "legacy key `parent_child` must be gone from the wire format; got keys {:?}",
+            obj.keys().collect::<Vec<_>>()
+        );
+    }
+
     // --- Parent/child (Spawns) ---
 
     // --- from_validated_per_kind_edges context ---
