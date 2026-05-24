@@ -84,6 +84,19 @@ impl JsonEnvelope {
 
 // ─── Sync migration helpers ───────────────────────────────────────────────────
 
+/// Synchronous V*→V7 migration chain used by [`JsonFileStore::load_sync`].
+///
+/// Asymmetry vs the async `Migrator::migrate` orchestrator: this chain does
+/// **not** create a `.v{N}.backup` around the shape-changing steps
+/// (`split_graph_sync`, `v6_to_v7_rename_sync`). Only the V1→V2 step writes
+/// a backup (in `migrate_v1_to_v2_sync`); the later steps overwrite the
+/// file atomically without one. A mid-chain crash therefore leaves the
+/// file in whatever intermediate state the last successful step produced,
+/// and the user would need an external backup to roll back.
+///
+/// Closing this gap requires a shared backup helper that both the sync
+/// and async chains can call; it's deferred rather than open-coded here
+/// to avoid duplicating the orchestrator logic.
 fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
     if from == FormatVersion::V1 {
         migrate_v1_to_v2_sync(path)?;

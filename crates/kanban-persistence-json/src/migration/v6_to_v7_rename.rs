@@ -53,9 +53,14 @@ pub(crate) async fn migrate_v6_to_v7(path: &Path) -> PersistenceResult<()> {
 /// Pure transform on an already-parsed envelope.
 ///
 /// Idempotent: if the envelope already declares `version: 7` (or higher)
-/// it is returned unchanged. If `data.graph` already has a `spawns` key
-/// the version field is still bumped to 7 so the file exits in a
-/// self-consistent V7 state, but no bucket movement is attempted.
+/// it is returned unchanged. If `data.graph` carries only `spawns` the
+/// version field is still bumped to 7 so the file exits in a
+/// self-consistent V7 state, with no bucket movement attempted.
+///
+/// Refuses to migrate a graph that carries **both** `parent_child` and
+/// `spawns` keys: there is no safe winner to pick, and silently
+/// dropping one bucket would lose edges. A hand-edited or otherwise
+/// corrupt file is the only way this state can arise.
 pub(crate) fn transform_v6_to_v7_value(envelope: &mut Value) -> PersistenceResult<()> {
     if envelope
         .get("version")
@@ -72,7 +77,17 @@ pub(crate) fn transform_v6_to_v7_value(envelope: &mut Value) -> PersistenceResul
         .and_then(|g| g.as_object_mut());
 
     if let Some(graph) = graph {
-        if !graph.contains_key("spawns") {
+        let has_spawns = graph.contains_key("spawns");
+        let has_parent_child = graph.contains_key("parent_child");
+        if has_spawns && has_parent_child {
+            return Err(PersistenceError::Serialization(
+                "v6→v7 migration: graph carries both `parent_child` and \
+                 `spawns` keys; cannot determine the canonical bucket. \
+                 Resolve manually before reopening the file."
+                    .to_string(),
+            ));
+        }
+        if !has_spawns {
             if let Some(bucket) = graph.remove("parent_child") {
                 graph.insert("spawns".to_string(), bucket);
             }
