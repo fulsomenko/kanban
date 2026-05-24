@@ -329,16 +329,8 @@ impl App {
                 self.handle_manage_children();
             }
             KeyCode::Enter => match self.focus.card_focus {
-                CardFocus::Parents => {
-                    if let Some(active) = self.selection.active_card {
-                        self.navigate_to_selected_parent(active.index());
-                    }
-                }
-                CardFocus::Children => {
-                    if let Some(active) = self.selection.active_card {
-                        self.navigate_to_selected_child(active.index());
-                    }
-                }
+                CardFocus::Parents => self.navigate_to_selected_parent(),
+                CardFocus::Children => self.navigate_to_selected_child(),
                 _ => {}
             },
             KeyCode::Backspace | KeyCode::Char('h')
@@ -1144,15 +1136,18 @@ impl App {
         }
     }
 
-    pub(crate) fn navigate_to_selected_parent(&mut self, current_card_idx: usize) {
-        self.navigate_to_related_card(current_card_idx, RelationSide::Parents);
+    pub(crate) fn navigate_to_selected_parent(&mut self) {
+        self.navigate_to_related_card(RelationSide::Parents);
     }
 
-    pub(crate) fn navigate_to_selected_child(&mut self, current_card_idx: usize) {
-        self.navigate_to_related_card(current_card_idx, RelationSide::Children);
+    pub(crate) fn navigate_to_selected_child(&mut self) {
+        self.navigate_to_related_card(RelationSide::Children);
     }
 
-    fn navigate_to_related_card(&mut self, current_card_idx: usize, side: RelationSide) {
+    fn navigate_to_related_card(&mut self, side: RelationSide) {
+        let Some(current_card_idx) = self.selection.active_card.map(|a| a.index()) else {
+            return;
+        };
         let related = self.related_card_ids(side);
         let selected_id = self
             .list_selection(side)
@@ -1308,7 +1303,7 @@ mod tests {
         app.relationship.parents_list.update_item_count(1);
         app.relationship.parents_list.selection.set(Some(0));
 
-        app.navigate_to_selected_parent(child_idx);
+        app.navigate_to_selected_parent();
 
         assert_eq!(
             app.selection.active_card.map(|a| a.id()),
@@ -1342,7 +1337,7 @@ mod tests {
         app.relationship.children_list.update_item_count(1);
         app.relationship.children_list.selection.set(Some(0));
 
-        app.navigate_to_selected_child(parent_idx);
+        app.navigate_to_selected_child();
 
         assert_eq!(app.selection.active_card.map(|a| a.id()), Some(child_id));
         assert_eq!(
@@ -1439,7 +1434,7 @@ mod tests {
         app.relationship.parents_list.update_item_count(1);
         // Deliberately no parents_list.selection.set(...) — exercise the fallback path.
 
-        app.navigate_to_selected_parent(child_idx);
+        app.navigate_to_selected_parent();
 
         assert_eq!(
             app.selection.active_card.map(|a| a.id()),
@@ -1466,7 +1461,7 @@ mod tests {
         app.relationship.children_list.update_item_count(1);
         // Deliberately no children_list.selection.set(...).
 
-        app.navigate_to_selected_child(parent_idx);
+        app.navigate_to_selected_child();
 
         assert_eq!(
             app.selection.active_card.map(|a| a.id()),
