@@ -58,18 +58,19 @@ The atomic rename means a crash at any point leaves either the old file or the n
 ## Load Flow
 
 1. Detect the current on-disk format version via `Migrator::detect_version`
-2. If `< V6`, run the migration chain in order, each step writing back atomically:
+2. If `< V7`, run the migration chain in order, each step writing back atomically:
    - **V1 -> V2**: wrap the bare V1 `Snapshot` in an envelope, side-stepping through a `<path>.v1.backup` file that is removed once the new file is written
    - **V2 -> V3**: in-place transform via `transform_v2_to_v3_value`
    - **V3 -> V4** and **V4 -> V5**: version bump only, no shape change on disk (the reader simply accepts these versions and the chain hands them on)
    - **V5 -> V6 (split-graph)**: see below
-3. Read the bytes, parse as a `JsonEnvelope`, and validate `2 <= version <= 6`
+   - **V6 -> V7 (spawns-bucket rename)**: see below
+3. Read the bytes, parse as a `JsonEnvelope`, and validate `2 <= version <= 7`
 4. Detect any pre-KAN-405 legacy fields on the raw value and rewrite the file with a clean envelope if any are present (errors are logged but non-fatal; the in-memory load still succeeds)
 5. Extract `envelope.data` as the `StoreSnapshot`
 
-A `load_sync` variant performs the same chain through synchronous helpers (`migrate_v1_to_v2_sync`, `migrate_v2_to_v3_sync`, `split_graph_sync`) so non-async callers see the same migration semantics.
+A `load_sync` variant performs the same chain through synchronous helpers (`migrate_v1_to_v2_sync`, `migrate_v2_to_v3_sync`, `split_graph_sync`, `v6_to_v7_rename_sync`) so non-async callers see the same migration semantics.
 
-A clean V6 file with no legacy fields is read but not rewritten, so mtimes stay stable and version-controlled kanban files don't churn.
+A clean V7 file with no legacy fields is read but not rewritten, so mtimes stay stable and version-controlled kanban files don't churn.
 
 ### V6 split-graph migration
 
@@ -88,6 +89,22 @@ V6 splits the single `data.graph.cards.edges` list (used by V3, V4 and V5 on dis
 Each migrated edge has its `edge_type`, `direction`, and `weight` keys removed (the sub-graph encodes the kind, and the new per-kind edge structs no longer carry those fields). `source`, `target`, `created_at`, and `archived_at` are preserved. Migrated `Blocks` edges get `severity: "Medium"` and `RelatesTo` edges get `kind: "General"` as defaults. Unknown or missing `edge_type` values and non-object entries in the legacy edge list are rejected with a clear diagnostic.
 
 `transform_to_v6_split_graph_value` is idempotent: invoked on an already-V6 envelope it returns without touching `data.graph`, so re-running the migration cannot silently wipe a populated split graph.
+
+### V7 spawns-bucket rename
+
+V7 renames the spawns sub-graph key from `parent_child` to `spawns` so the wire format matches the `SpawnsEdge` struct, the `spawns_edges()` accessor on `DependencyGraph`, and the SQLite `spawns_edges` table:
+
+```json
+"data": {
+  "graph": {
+    "spawns":  { "edges": [...] },
+    "blocks":  { "edges": [...] },
+    "relates": { "edges": [...] }
+  }
+}
+```
+
+Pure key rename: edge contents are untouched. The transform writes a `<path>.v6.backup` before rewriting and removes it on success. `transform_v6_to_v7_value` is idempotent and tolerates a missing `data.graph` (only the version field is bumped).
 
 ---
 

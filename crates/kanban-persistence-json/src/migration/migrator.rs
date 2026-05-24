@@ -62,9 +62,12 @@ impl Migrator {
                 super::v2_to_v3::migrate_v2_to_v3(path).await
             }
             (FormatVersion::V2, FormatVersion::V3) => super::v2_to_v3::migrate_v2_to_v3(path).await,
-            (_, FormatVersion::V6) if from < FormatVersion::V6 => {
+            (_, FormatVersion::V7) if from < FormatVersion::V7 => {
                 // Bring the file forward through every legacy step it needs,
-                // then run the split-graph transform that produces V6.
+                // then run the split-graph transform (if applicable) and the
+                // v6→v7 spawns-bucket rename. Chained inside a single call so
+                // the intermediate V6 state never persists on disk: the file
+                // is either pre-V6, V7, or a `.v{N}.backup` on failure.
                 if from == FormatVersion::V1 {
                     Self::migrate_v1_to_v2(path).await?;
                 }
@@ -72,23 +75,26 @@ impl Migrator {
                     super::v2_to_v3::migrate_v2_to_v3(path).await?;
                 }
                 // V3, V4, and V5 all share the pre-split graph schema; the
-                // split-graph transform is the only step that distinguishes them.
+                // split-graph transform is the only step that distinguishes
+                // them. V6 files skip the split-graph step entirely and go
+                // straight to the v6→v7 rename.
                 //
-                // A `.v{N}.backup` is created before the split-graph step and
-                // removed on successful migration. V6 files cannot be opened by
-                // pre-V6 binaries, so this is the user's escape hatch if the
-                // upgrade has to be rolled back.
+                // A `.v{N}.backup` is created before the shape-changing step
+                // and removed on successful migration. V7 files cannot be
+                // opened by pre-V7 binaries, so this is the user's escape
+                // hatch if the upgrade has to be rolled back.
                 let backup_path = match from {
                     FormatVersion::V3 => Some(path.with_extension("v3.backup")),
                     FormatVersion::V4 => Some(path.with_extension("v4.backup")),
                     FormatVersion::V5 => Some(path.with_extension("v5.backup")),
+                    FormatVersion::V6 => Some(path.with_extension("v6.backup")),
                     _ => None,
                 };
                 if let Some(backup) = &backup_path {
                     tokio::fs::copy(path, backup).await?;
-                    tracing::info!("Created pre-V6 backup at {}", backup.display());
+                    tracing::info!("Created pre-V7 backup at {}", backup.display());
                 }
-                let result = super::split_graph::migrate_to_v6_split_graph(path).await;
+                let result = Self::run_split_and_rename_chain(from, path).await;
                 match (result, backup_path) {
                     (Ok(()), Some(backup)) => {
                         if let Err(e) = tokio::fs::remove_file(&backup).await {
@@ -98,14 +104,14 @@ impl Migrator {
                                 e
                             );
                         } else {
-                            tracing::info!("Migration to V6 verified, backup removed");
+                            tracing::info!("Migration to V7 verified, backup removed");
                         }
                         Ok(())
                     }
                     (Ok(()), None) => Ok(()),
                     (Err(e), Some(backup)) => {
                         tracing::error!(
-                            "Split-graph migration failed: {}. Backup preserved at {}",
+                            "Migration to V7 failed: {}. Backup preserved at {}",
                             e,
                             backup.display()
                         );
@@ -119,6 +125,20 @@ impl Migrator {
                 from, to
             ))),
         }
+    }
+
+    /// Run the V6 split-graph transform (only if the file is pre-V6) and
+    /// then the v6→v7 spawns-bucket rename. Both steps are no-ops when
+    /// they don't apply (split_graph short-circuits on V6, v6_to_v7 on V7),
+    /// so this is safe to call for any `from < V7`.
+    async fn run_split_and_rename_chain(
+        from: FormatVersion,
+        path: &Path,
+    ) -> PersistenceResult<()> {
+        if from < FormatVersion::V6 {
+            super::split_graph::migrate_to_v6_split_graph(path).await?;
+        }
+        super::v6_to_v7_rename::migrate_v6_to_v7(path).await
     }
 
     /// Migrate from V1 format to V2 format
@@ -291,11 +311,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_migrate_v6_to_v6_is_a_noop_byte_for_byte() {
+    async fn test_migrate_v7_to_v7_is_a_noop_byte_for_byte() {
         let dir = tempdir().unwrap();
-        let path = dir.path().join("v6.json");
-        let v6 = json!({
-            "version": 6,
+        let path = dir.path().join("v7.json");
+        let v7 = json!({
+            "version": 7,
             "metadata": {
                 "instance_id": "550e8400-e29b-41d4-a716-446655440000",
                 "saved_at": "2024-01-01T00:00:00Z"
@@ -303,32 +323,32 @@ mod tests {
             "data": {
                 "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
                 "graph": {
-                    "parent_child": { "edges": [] },
+                    "spawns": { "edges": [] },
                     "blocks": { "edges": [] },
                     "relates": { "edges": [] }
                 }
             }
         });
-        let original = serde_json::to_string_pretty(&v6).unwrap();
+        let original = serde_json::to_string_pretty(&v7).unwrap();
         tokio::fs::write(&path, &original).await.unwrap();
 
-        Migrator::migrate(FormatVersion::V6, FormatVersion::V6, &path)
+        Migrator::migrate(FormatVersion::V7, FormatVersion::V7, &path)
             .await
             .unwrap();
 
         let after = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(
             after, original,
-            "V6 -> V6 migration must be a byte-for-byte noop"
+            "V7 -> V7 migration must be a byte-for-byte noop"
         );
     }
 
     #[tokio::test]
-    async fn test_migrate_v4_to_v6_skips_legacy_steps() {
-        // A V4 file goes straight through split_graph: no v1→v2
-        // (no .v1.backup file should appear) and no v2→v3 (the
-        // pre-V3 'prefix_counters' shaping doesn't apply because
-        // V4 already shipped past that point).
+    async fn test_migrate_v4_to_v7_skips_legacy_steps() {
+        // A V4 file goes straight through split_graph then the v6→v7
+        // spawns-rename: no v1→v2 (no .v1.backup file should appear)
+        // and no v2→v3 (the pre-V3 'prefix_counters' shaping doesn't
+        // apply because V4 already shipped past that point).
         let dir = tempdir().unwrap();
         let path = dir.path().join("v4.json");
         let v4 = json!({
@@ -350,22 +370,26 @@ mod tests {
             .await
             .unwrap();
 
-        Migrator::migrate(FormatVersion::V4, FormatVersion::V6, &path)
+        Migrator::migrate(FormatVersion::V4, FormatVersion::V7, &path)
             .await
             .unwrap();
 
         let after: Value =
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
-        assert_eq!(after["version"], 6);
-        assert!(after["data"]["graph"]["parent_child"].is_object());
+        assert_eq!(after["version"], 7);
+        assert!(after["data"]["graph"]["spawns"].is_object());
+        assert!(
+            after["data"]["graph"].as_object().unwrap().get("parent_child").is_none(),
+            "post-v7 graph must not retain the legacy parent_child key"
+        );
         assert!(
             !path.with_extension("v1.backup").exists(),
-            "V4 -> V6 must not trigger the v1→v2 step that creates .v1.backup"
+            "V4 -> V7 must not trigger the v1→v2 step that creates .v1.backup"
         );
     }
 
     #[tokio::test]
-    async fn test_migrate_v5_to_v6_skips_legacy_steps() {
+    async fn test_migrate_v5_to_v7_skips_legacy_steps() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("v5.json");
         let v5 = json!({
@@ -387,17 +411,69 @@ mod tests {
             .await
             .unwrap();
 
-        Migrator::migrate(FormatVersion::V5, FormatVersion::V6, &path)
+        Migrator::migrate(FormatVersion::V5, FormatVersion::V7, &path)
             .await
             .unwrap();
 
         let after: Value =
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
-        assert_eq!(after["version"], 6);
+        assert_eq!(after["version"], 7);
+        assert!(after["data"]["graph"]["spawns"].is_object());
         assert!(after["data"]["graph"]["relates"].is_object());
         assert!(
             !path.with_extension("v1.backup").exists(),
-            "V5 -> V6 must not trigger the v1→v2 step that creates .v1.backup"
+            "V5 -> V7 must not trigger the v1→v2 step that creates .v1.backup"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_migrate_v6_to_v7_renames_parent_child_and_writes_backup() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v6.json");
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": "11111111-1111-1111-1111-111111111111",
+                        "target": "22222222-2222-2222-2222-222222222222",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        tokio::fs::write(&path, serde_json::to_string_pretty(&v6).unwrap())
+            .await
+            .unwrap();
+
+        Migrator::migrate(FormatVersion::V6, FormatVersion::V7, &path)
+            .await
+            .unwrap();
+
+        let after: Value =
+            serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+        assert!(after["data"]["graph"]["spawns"].is_object());
+        assert!(
+            after["data"]["graph"].as_object().unwrap().get("parent_child").is_none()
+        );
+        assert_eq!(
+            after["data"]["graph"]["spawns"]["edges"].as_array().unwrap().len(),
+            1,
+            "the original parent_child edge must survive"
+        );
+        // Backup must be removed after a successful migration.
+        assert!(
+            !path.with_extension("v6.backup").exists(),
+            "v6.backup should be removed after successful migration to V7"
         );
     }
 
@@ -414,7 +490,7 @@ mod tests {
                 err,
                 PersistenceError::UnsupportedFutureVersion {
                     file_version: 99,
-                    binary_max: 6
+                    binary_max: 7
                 }
             ),
             "expected UnsupportedFutureVersion, got: {err:?}"
@@ -423,20 +499,20 @@ mod tests {
 
     #[test]
     fn test_detect_version_from_value_rejects_u32_overflow_that_truncates_to_valid_version() {
-        // 2^32 + 6 truncates to 6 under a naive `as u32` cast — which would
-        // be silently accepted as V6. The guard must refuse it as a future
+        // 2^32 + 7 truncates to 7 under a naive `as u32` cast — which would
+        // be silently accepted as V7. The guard must refuse it as a future
         // version instead.
-        let truncates_to_v6 = json!({
-            "version": (1u64 << 32) + 6,
+        let truncates_to_v7 = json!({
+            "version": (1u64 << 32) + 7,
             "metadata": {},
             "data": {}
         });
-        let err = Migrator::detect_version_from_value(&truncates_to_v6)
-            .expect_err("version > u32::MAX must be refused, not truncated to V6");
+        let err = Migrator::detect_version_from_value(&truncates_to_v7)
+            .expect_err("version > u32::MAX must be refused, not truncated to V7");
         assert!(
             matches!(
                 err,
-                PersistenceError::UnsupportedFutureVersion { binary_max: 6, .. }
+                PersistenceError::UnsupportedFutureVersion { binary_max: 7, .. }
             ),
             "expected UnsupportedFutureVersion, got: {err:?}"
         );
@@ -461,7 +537,7 @@ mod tests {
                 err,
                 PersistenceError::UnsupportedFutureVersion {
                     file_version: 99,
-                    binary_max: 6
+                    binary_max: 7
                 }
             ),
             "expected UnsupportedFutureVersion, got: {err:?}"

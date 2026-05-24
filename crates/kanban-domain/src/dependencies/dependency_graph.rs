@@ -13,7 +13,7 @@ use crate::{CardId, KanbanResult};
 /// Three discrete sub-graphs, each with its own structural rules
 /// and its own concrete edge kind (carrying any per-kind metadata):
 ///
-/// - `parent_child: DagGraph<SpawnsEdge>` (no extra metadata today)
+/// - `spawns: DagGraph<SpawnsEdge>` (no extra metadata today)
 /// - `blocks: DagGraph<BlocksEdge>` (carries [`Severity`])
 /// - `relates: UndirectedGraph<RelatesEdge>` (carries [`RelatesKind`])
 ///
@@ -24,7 +24,7 @@ use crate::{CardId, KanbanResult};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DependencyGraph {
     #[serde(default)]
-    parent_child: DagGraph<SpawnsEdge>,
+    spawns: DagGraph<SpawnsEdge>,
     #[serde(default)]
     blocks: DagGraph<BlocksEdge>,
     #[serde(default)]
@@ -37,22 +37,22 @@ impl DependencyGraph {
     }
 
     /// Borrow each component graph as `&mut dyn Cascadable<NodeId = Uuid>`
-    /// for node-level cascade operations. Order is `parent_child`,
-    /// `blocks`, `relates`. A new component sub-graph only needs to
-    /// be added to this helper, not to every cascade method.
+    /// for node-level cascade operations. Order is `spawns`, `blocks`,
+    /// `relates`. A new component sub-graph only needs to be added to
+    /// this helper, not to every cascade method.
     ///
     /// The explicit `NodeId = Uuid` binding picks the kanban-domain
     /// identity; the underlying `Cascadable` trait is generic over
     /// `NodeId` so a heterogeneous-entity graph can pick its own
     /// without touching this method.
     fn cascadable_parts_mut(&mut self) -> [&mut dyn Cascadable<NodeId = Uuid>; 3] {
-        [&mut self.parent_child, &mut self.blocks, &mut self.relates]
+        [&mut self.spawns, &mut self.blocks, &mut self.relates]
     }
 
     /// Borrow each component graph as `&dyn EdgeSet<NodeId = Uuid>`
     /// for read-only edge-level queries.
     fn edge_sets(&self) -> [&dyn EdgeSet<NodeId = Uuid>; 3] {
-        [&self.parent_child, &self.blocks, &self.relates]
+        [&self.spawns, &self.blocks, &self.relates]
     }
 
     // --- Cross-cutting node cascades (Cascadable surface) ---
@@ -92,7 +92,7 @@ impl DependencyGraph {
     // --- Parent / child (Spawns) ---
 
     pub fn set_parent(&mut self, child: CardId, parent: CardId) -> KanbanResult<()> {
-        self.parent_child
+        self.spawns
             .add_edge_with_metadata(SpawnsEdge::new(parent, child))
             .map_err(dep_err)
     }
@@ -107,7 +107,7 @@ impl DependencyGraph {
         use kanban_core::Edge as _;
         let mut edge = SpawnsEdge::new(parent, child);
         edge.archive();
-        self.parent_child
+        self.spawns
             .add_edge_with_metadata(edge)
             .map_err(dep_err)
     }
@@ -117,29 +117,29 @@ impl DependencyGraph {
         // sub-graph picks the right matching semantics (directed for
         // DAG sub-graphs).
         use kanban_core::Graph as _;
-        self.parent_child
+        self.spawns
             .remove_edge(parent, child)
             .map_err(dep_err)
     }
 
     pub fn children(&self, parent: CardId) -> Vec<CardId> {
-        self.parent_child.outgoing(parent)
+        self.spawns.outgoing(parent)
     }
 
     pub fn parents(&self, child: CardId) -> Vec<CardId> {
-        self.parent_child.incoming(child)
+        self.spawns.incoming(child)
     }
 
     pub fn ancestors(&self, child: CardId) -> Vec<CardId> {
-        self.parent_child.ancestors(child)
+        self.spawns.ancestors(child)
     }
 
     pub fn descendants(&self, parent: CardId) -> Vec<CardId> {
-        self.parent_child.descendants(parent)
+        self.spawns.descendants(parent)
     }
 
     pub fn child_count(&self, parent: CardId) -> usize {
-        self.parent_child.outgoing(parent).len()
+        self.spawns.outgoing(parent).len()
     }
 
     // --- Blocks ---
@@ -265,7 +265,7 @@ impl DependencyGraph {
     /// callers either know which kind they want (per-kind accessor)
     /// or want them all (iterate all three).
     pub fn spawns_edges(&self) -> &[SpawnsEdge] {
-        self.parent_child.edges()
+        self.spawns.edges()
     }
     pub fn blocks_edges(&self) -> &[BlocksEdge] {
         self.blocks.edges()
@@ -295,7 +295,7 @@ impl DependencyGraph {
         for edge in spawns {
             let (s, t) = (edge.source(), edge.target());
             graph
-                .parent_child
+                .spawns
                 .add_edge_with_metadata(edge)
                 .map_err(|e| load_err_with_context(e, "spawns", s, t))?;
         }

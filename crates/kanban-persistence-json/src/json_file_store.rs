@@ -1,6 +1,8 @@
 use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
-use crate::migration::{transform_to_v6_split_graph_value, transform_v2_to_v3_value, Migrator};
+use crate::migration::{
+    transform_to_v6_split_graph_value, transform_v2_to_v3_value, transform_v6_to_v7_value, Migrator,
+};
 use kanban_persistence::{
     FormatVersion, PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
     StoreSnapshot,
@@ -82,14 +84,17 @@ impl JsonEnvelope {
 
 // ─── Sync migration helpers ───────────────────────────────────────────────────
 
-fn migrate_to_v6_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
+fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
     if from == FormatVersion::V1 {
         migrate_v1_to_v2_sync(path)?;
     }
     if from <= FormatVersion::V2 {
         migrate_v2_to_v3_sync(path)?;
     }
-    split_graph_sync(path)
+    if from < FormatVersion::V6 {
+        split_graph_sync(path)?;
+    }
+    v6_to_v7_rename_sync(path)
 }
 
 fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
@@ -132,6 +137,22 @@ fn split_graph_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
     let json_bytes = json_str.into_bytes();
     AtomicWriter::write_atomic_sync(path, &json_bytes)?;
     tracing::info!("Applied split-graph migration to {} (sync)", path.display());
+    Ok(json_bytes)
+}
+
+fn v6_to_v7_rename_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut envelope: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    transform_v6_to_v7_value(&mut envelope)?;
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
+    tracing::info!(
+        "Applied v6→v7 spawns-rename migration to {} (sync)",
+        path.display()
+    );
     Ok(json_bytes)
 }
 
@@ -241,7 +262,7 @@ impl PersistenceStore for JsonFileStore {
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let envelope = JsonEnvelope {
-            version: 6,
+            version: 7,
             metadata: snapshot.metadata.clone(),
             data: data_value,
         };
@@ -271,14 +292,14 @@ impl PersistenceStore for JsonFileStore {
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
         let current_version = Migrator::detect_version(&self.path).await?;
 
-        if current_version < FormatVersion::V6 {
+        if current_version < FormatVersion::V7 {
             tracing::info!(
-                "Detected {:?} format at {}. Migrating to V6...",
+                "Detected {:?} format at {}. Migrating to V7...",
                 current_version,
                 self.path.display()
             );
-            Migrator::migrate(current_version, FormatVersion::V6, &self.path).await?;
-            tracing::info!("Migration to V6 completed successfully");
+            Migrator::migrate(current_version, FormatVersion::V7, &self.path).await?;
+            tracing::info!("Migration to V7 completed successfully");
         }
 
         let file_bytes = tokio::fs::read(&self.path).await?;
@@ -331,13 +352,13 @@ impl PersistenceStore for JsonFileStore {
 
         let current_version = Migrator::detect_version_from_value(&value)?;
 
-        let final_bytes = if current_version < FormatVersion::V6 {
+        let final_bytes = if current_version < FormatVersion::V7 {
             tracing::info!(
-                "Detected {:?} format at {}. Migrating to V6 (sync)...",
+                "Detected {:?} format at {}. Migrating to V7 (sync)...",
                 current_version,
                 self.path.display()
             );
-            migrate_to_v6_sync(current_version, &self.path)?
+            migrate_to_v7_sync(current_version, &self.path)?
         } else {
             file_bytes
         };
@@ -484,7 +505,7 @@ mod tests {
                 err,
                 PersistenceError::UnsupportedFutureVersion {
                     file_version: 99,
-                    binary_max: 6
+                    binary_max: 7
                 }
             ),
             "expected UnsupportedFutureVersion, got: {err:?}"
@@ -514,7 +535,7 @@ mod tests {
                 err,
                 PersistenceError::UnsupportedFutureVersion {
                     file_version: 99,
-                    binary_max: 6
+                    binary_max: 7
                 }
             ),
             "expected UnsupportedFutureVersion, got: {err:?}"
@@ -747,11 +768,11 @@ mod tests {
         }
     }
 
-    /// Loading a clean V6 file (current format) that has no legacy fields
+    /// Loading a clean V7 file (current format) that has no legacy fields
     /// must not rewrite it. A spurious write would change the file's
     /// mtime, trip file-watcher notifications, and risk altering
     /// byte-for-byte content (which some users may track in version
-    /// control). Pre-V6 files are migrated on load and *are* rewritten,
+    /// control). Pre-V7 files are migrated on load and *are* rewritten,
     /// which is covered by the migration-specific tests.
     #[tokio::test]
     async fn test_load_is_a_noop_write_when_no_legacy_fields_present() {
@@ -759,7 +780,7 @@ mod tests {
         let file_path = dir.path().join("clean.json");
 
         let clean = json!({
-            "version": 6,
+            "version": 7,
             "metadata": {
                 "instance_id": "550e8400-e29b-41d4-a716-446655440000",
                 "saved_at": "2024-01-01T00:00:00Z"
@@ -767,7 +788,7 @@ mod tests {
             "data": {
                 "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
                 "graph": {
-                    "parent_child": { "edges": [] },
+                    "spawns": { "edges": [] },
                     "blocks": { "edges": [] },
                     "relates": { "edges": [] }
                 }
