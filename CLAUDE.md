@@ -141,8 +141,8 @@ cargo tarpaulin        # Code coverage
 
 - `JsonFileStore` - `PersistenceStore` impl with atomic writes (temp file + rename)
 - `JsonStoreFactory` - `matches_content` sniffs the first non-whitespace byte (`{` or `[`); no extension matching
-- Envelope: `{ version, metadata, data }`, current version V6; reader accepts V1..V6
-- Migration chain V1 → V2 → V3 → (V4/V5 are shape-stable bumps) → V6; legacy steps write `.v{N}.backup` on the way to V6
+- Envelope: `{ version, metadata, data }`, current version V7; reader accepts V1..V7
+- Migration chain V1 → V2 → V3 → (V4/V5 are shape-stable bumps) → V6 (split-graph) → V7 (spawns-bucket rename); legacy steps write `.v{N}.backup` on the way forward, including `.v6.backup` on the V6→V7 step
 - Debounced saving (500ms minimum interval)
 
 ### kanban-persistence-sqlite

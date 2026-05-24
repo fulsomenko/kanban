@@ -168,11 +168,16 @@ pub enum FormatVersion {
     /// (`graph.cards.edges`) into three sub-graphs keyed by edge kind
     /// (`graph.parent_child`, `graph.blocks`, `graph.relates`).
     V6,
+    /// V7 renames the spawns sub-graph bucket from `parent_child` to
+    /// `spawns` so the wire format matches the `SpawnsEdge` struct,
+    /// the `spawns_edges()` accessor, and the SQLite `spawns_edges`
+    /// table. Pure key rename — edge contents are unchanged.
+    V7,
 }
 
 impl FormatVersion {
     /// The highest format version this binary can read or produce.
-    pub const MAX: Self = Self::V6;
+    pub const MAX: Self = Self::V7;
 
     pub fn as_u32(self) -> u32 {
         match self {
@@ -182,6 +187,7 @@ impl FormatVersion {
             Self::V4 => 4,
             Self::V5 => 5,
             Self::V6 => 6,
+            Self::V7 => 7,
         }
     }
 
@@ -193,6 +199,7 @@ impl FormatVersion {
             4 => Some(Self::V4),
             5 => Some(Self::V5),
             6 => Some(Self::V6),
+            7 => Some(Self::V7),
             _ => None,
         }
     }
@@ -237,13 +244,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_format_version_max_equals_v6() {
-        assert_eq!(FormatVersion::MAX, FormatVersion::V6);
+    fn test_format_version_max_equals_v7() {
+        assert_eq!(FormatVersion::MAX, FormatVersion::V7);
     }
 
     #[test]
     fn test_format_version_max_as_u32_matches_largest_variant() {
-        assert_eq!(FormatVersion::MAX.as_u32(), 6);
+        assert_eq!(FormatVersion::MAX.as_u32(), 7);
     }
 
     #[test]
