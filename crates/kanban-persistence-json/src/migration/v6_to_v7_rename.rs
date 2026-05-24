@@ -43,7 +43,10 @@ pub(crate) async fn migrate_v6_to_v7(path: &Path) -> PersistenceResult<()> {
     let json_str = serde_json::to_string_pretty(&envelope)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     crate::atomic_writer::AtomicWriter::write_atomic(path, json_str.as_bytes()).await?;
-    tracing::info!("Applied v6→v7 spawns-rename migration to {}", path.display());
+    tracing::info!(
+        "Applied v6→v7 spawns-rename migration to {}",
+        path.display()
+    );
     Ok(())
 }
 
@@ -54,7 +57,12 @@ pub(crate) async fn migrate_v6_to_v7(path: &Path) -> PersistenceResult<()> {
 /// the version field is still bumped to 7 so the file exits in a
 /// self-consistent V7 state, but no bucket movement is attempted.
 pub(crate) fn transform_v6_to_v7_value(envelope: &mut Value) -> PersistenceResult<()> {
-    if envelope.get("version").and_then(|v| v.as_u64()).unwrap_or(0) >= 7 {
+    if envelope
+        .get("version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0)
+        >= 7
+    {
         return Ok(());
     }
 
@@ -180,7 +188,10 @@ mod tests {
         transform_v6_to_v7_value(&mut env).unwrap();
         assert_eq!(env["version"], 7);
         assert_eq!(
-            env["data"]["graph"]["spawns"]["edges"].as_array().unwrap().len(),
+            env["data"]["graph"]["spawns"]["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
             1
         );
     }
@@ -215,6 +226,10 @@ mod tests {
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
         assert_eq!(after["version"], 7);
         assert!(after["data"]["graph"]["spawns"].is_object());
-        assert!(after["data"]["graph"].as_object().unwrap().get("parent_child").is_none());
+        assert!(after["data"]["graph"]
+            .as_object()
+            .unwrap()
+            .get("parent_child")
+            .is_none());
     }
 }

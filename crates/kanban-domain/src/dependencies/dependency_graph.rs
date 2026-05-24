@@ -107,9 +107,7 @@ impl DependencyGraph {
         use kanban_core::Edge as _;
         let mut edge = SpawnsEdge::new(parent, child);
         edge.archive();
-        self.spawns
-            .add_edge_with_metadata(edge)
-            .map_err(dep_err)
+        self.spawns.add_edge_with_metadata(edge).map_err(dep_err)
     }
 
     pub fn remove_parent(&mut self, child: CardId, parent: CardId) -> KanbanResult<()> {
@@ -117,9 +115,7 @@ impl DependencyGraph {
         // sub-graph picks the right matching semantics (directed for
         // DAG sub-graphs).
         use kanban_core::Graph as _;
-        self.spawns
-            .remove_edge(parent, child)
-            .map_err(dep_err)
+        self.spawns.remove_edge(parent, child).map_err(dep_err)
     }
 
     pub fn children(&self, parent: CardId) -> Vec<CardId> {

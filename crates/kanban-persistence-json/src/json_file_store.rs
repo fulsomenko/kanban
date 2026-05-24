@@ -649,8 +649,14 @@ mod tests {
             !graph.contains_key("parent_child"),
             "legacy `parent_child` key must be gone after V7 migration"
         );
-        let edges = graph["spawns"]["edges"].as_array().expect("spawns edges array");
-        assert_eq!(edges.len(), 1, "the original parent_child edge must survive");
+        let edges = graph["spawns"]["edges"]
+            .as_array()
+            .expect("spawns edges array");
+        assert_eq!(
+            edges.len(),
+            1,
+            "the original parent_child edge must survive"
+        );
         assert_eq!(edges[0]["source"], parent);
         assert_eq!(edges[0]["target"], child);
     }

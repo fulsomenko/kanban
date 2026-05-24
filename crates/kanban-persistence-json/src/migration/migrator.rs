@@ -131,10 +131,7 @@ impl Migrator {
     /// then the v6→v7 spawns-bucket rename. Both steps are no-ops when
     /// they don't apply (split_graph short-circuits on V6, v6_to_v7 on V7),
     /// so this is safe to call for any `from < V7`.
-    async fn run_split_and_rename_chain(
-        from: FormatVersion,
-        path: &Path,
-    ) -> PersistenceResult<()> {
+    async fn run_split_and_rename_chain(from: FormatVersion, path: &Path) -> PersistenceResult<()> {
         if from < FormatVersion::V6 {
             super::split_graph::migrate_to_v6_split_graph(path).await?;
         }
@@ -379,7 +376,11 @@ mod tests {
         assert_eq!(after["version"], 7);
         assert!(after["data"]["graph"]["spawns"].is_object());
         assert!(
-            after["data"]["graph"].as_object().unwrap().get("parent_child").is_none(),
+            after["data"]["graph"]
+                .as_object()
+                .unwrap()
+                .get("parent_child")
+                .is_none(),
             "post-v7 graph must not retain the legacy parent_child key"
         );
         assert!(
@@ -462,11 +463,16 @@ mod tests {
             serde_json::from_str(&tokio::fs::read_to_string(&path).await.unwrap()).unwrap();
         assert_eq!(after["version"], 7);
         assert!(after["data"]["graph"]["spawns"].is_object());
-        assert!(
-            after["data"]["graph"].as_object().unwrap().get("parent_child").is_none()
-        );
+        assert!(after["data"]["graph"]
+            .as_object()
+            .unwrap()
+            .get("parent_child")
+            .is_none());
         assert_eq!(
-            after["data"]["graph"]["spawns"]["edges"].as_array().unwrap().len(),
+            after["data"]["graph"]["spawns"]["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
             1,
             "the original parent_child edge must survive"
         );
