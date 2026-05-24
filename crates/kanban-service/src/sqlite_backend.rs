@@ -4,8 +4,8 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::commands::Command;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
-    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanResult,
-    Snapshot, Sprint,
+    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanError,
+    KanbanResult, Snapshot, Sprint,
 };
 use kanban_persistence::{PersistenceMetadata, PersistenceStore};
 use kanban_persistence_sqlite::SqliteStore;
@@ -209,10 +209,13 @@ impl crate::backend::KanbanBackend for SqliteBackend {
         self.db.checkpoint().await?;
         // Refresh the cached metadata so subsequent persistence_metadata()
         // calls reflect what was just stamped without re-issuing a SELECT.
+        // Propagate poison errors rather than swallowing — symmetric with
+        // JsonDataStore::do_flush's handling of the same RwLock pattern.
         let fresh = self.db.read_metadata_sync()?;
-        if let Ok(mut guard) = self.last_metadata.write() {
-            *guard = fresh;
-        }
+        let mut guard = self.last_metadata.write().map_err(|_| {
+            KanbanError::Internal("sqlite_backend: last_metadata RwLock poisoned".into())
+        })?;
+        *guard = fresh;
         Ok(())
     }
 
