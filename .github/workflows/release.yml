@@ -295,3 +295,109 @@ jobs:
             kanban-v${{ needs.release.outputs.new }}-x86_64-pc-windows-msvc.zip
             SHA256SUMS
           fail_on_unmatched_files: true
+
+  publish-chocolatey:
+    name: Publish to Chocolatey
+    needs: [release, build-windows]
+    if: needs.release.outputs.has_changesets == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.new }}
+
+      - name: Wait for release asset to be fetchable
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $url = "https://github.com/fulsomenko/kanban/releases/download/v$env:VERSION/kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            try {
+              $r = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -ErrorAction Stop
+              if ($r.StatusCode -eq 200) {
+                Write-Output "Asset live at $url"
+                $ok = $true
+                break
+              }
+            } catch {
+              Write-Output ("Attempt {0}: not yet ({1})" -f ($i + 1), $_.Exception.Message)
+            }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ok) {
+            Write-Error "Release asset never became fetchable after 30 attempts (~150s)"
+            exit 1
+          }
+
+      - name: Compute Windows ZIP SHA256
+        id: sha
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $url = "https://github.com/fulsomenko/kanban/releases/download/v$env:VERSION/kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
+          $tmp = New-TemporaryFile
+          Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
+          $sha = (Get-FileHash -Algorithm SHA256 $tmp).Hash.ToLower()
+          Remove-Item $tmp
+          Write-Output "Computed SHA256: $sha"
+          "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Stage Chocolatey package with substitutions
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          $build = "build/chocolatey"
+          New-Item -ItemType Directory -Path "$build/tools" -Force | Out-Null
+          Copy-Item packaging/chocolatey/kanban.nuspec $build/kanban.nuspec
+          Copy-Item packaging/chocolatey/tools/* $build/tools/ -Recurse
+          Copy-Item LICENSE.md $build/tools/LICENSE.txt -Force
+
+          (Get-Content "$build/kanban.nuspec") `
+            -replace '\$version\$', $env:VERSION `
+            | Set-Content "$build/kanban.nuspec"
+
+          (Get-Content "$build/tools/chocolateyinstall.ps1") `
+            -replace '\$version\$',   $env:VERSION `
+            -replace '\$checksum64\$', $env:SHA `
+            | Set-Content "$build/tools/chocolateyinstall.ps1"
+
+      - name: choco pack
+        shell: pwsh
+        working-directory: build/chocolatey
+        run: choco pack
+
+      - name: Smoke install from local nupkg
+        shell: pwsh
+        working-directory: build/chocolatey
+        run: |
+          choco install kanban -s . -y --force --no-progress
+          kanban --version
+          kanban-mcp --version
+
+      - name: choco push
+        shell: pwsh
+        working-directory: build/chocolatey
+        env:
+          CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          choco push "kanban.$env:VERSION.nupkg" `
+            --api-key="$env:CHOCO_API_KEY" `
+            --source="https://push.chocolatey.org/"
+
+      - name: Note moderation expectations
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          Write-Output "==="
+          Write-Output "Pushed kanban v$env:VERSION to community.chocolatey.org."
+          Write-Output "First-time moderation typically takes 1-7 days."
+          Write-Output "Status:"
+          Write-Output "  https://community.chocolatey.org/packages/kanban/$env:VERSION"
+          Write-Output "==="
