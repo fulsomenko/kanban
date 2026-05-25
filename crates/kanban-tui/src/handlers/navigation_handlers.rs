@@ -488,8 +488,7 @@ impl App {
             Focus::Cards => {
                 if let Some(selected_card) = self.get_selected_card_in_context() {
                     let card_id = selected_card.id;
-                    self.selection.active_card_id =
-                        self.model.card(card_id).map(|c| c.id);
+                    self.activate_card(card_id);
                     // Initialize list components with item counts
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();

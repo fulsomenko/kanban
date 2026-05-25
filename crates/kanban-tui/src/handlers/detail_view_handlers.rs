@@ -731,8 +731,7 @@ impl App {
 
                     match action {
                         CardListAction::Select(card_id) => {
-                            if self.model.card(card_id).is_some() {
-                                self.selection.active_card_id = Some(card_id);
+                            if self.activate_card(card_id) {
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -747,8 +746,7 @@ impl App {
                             }
                         }
                         CardListAction::Edit(card_id) => {
-                            if self.model.card(card_id).is_some() {
-                                self.selection.active_card_id = Some(card_id);
+                            if self.activate_card(card_id) {
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -789,16 +787,14 @@ impl App {
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
-                            if self.model.card(card_id).is_some() {
-                                self.selection.active_card_id = Some(card_id);
+                            if self.activate_card(card_id) {
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.dialog_input.priority_selection.set(Some(priority_idx));
                                 self.open_dialog(DialogMode::SetCardPriority);
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
-                            if self.model.card(card_id).is_some() {
-                                self.selection.active_card_id = Some(card_id);
+                            if self.activate_card(card_id) {
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -820,8 +816,7 @@ impl App {
                             }
                         }
                         CardListAction::ReassignSprint(card_id) => {
-                            if self.model.card(card_id).is_some() {
-                                self.selection.active_card_id = Some(card_id);
+                            if self.activate_card(card_id) {
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -1133,9 +1128,8 @@ impl App {
         let candidates = selected_id.into_iter().chain(related.first().copied());
 
         for target_id in candidates {
-            if self.model.card(target_id).is_some() {
+            if self.activate_card(target_id) {
                 self.selection.card_navigation_history.push(current_card_id);
-                self.selection.active_card_id = Some(target_id);
                 self.focus.card_focus = CardFocus::Title;
                 self.refresh_relationship_counts();
                 return;

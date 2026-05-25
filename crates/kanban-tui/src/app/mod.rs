@@ -1465,6 +1465,20 @@ impl App {
             .and_then(|id| self.model.card(id).cloned())
     }
 
+    /// Sets `active_card_id` to `id` if a card with that id exists in the
+    /// model. Returns whether the activation took effect, so callers that
+    /// gate downstream work on the card existing can chain off the boolean.
+    /// On miss the previously-active card is left untouched; sites that
+    /// require clear-on-miss semantics must do so explicitly.
+    pub(crate) fn activate_card(&mut self, id: uuid::Uuid) -> bool {
+        if self.model.card(id).is_some() {
+            self.selection.active_card_id = Some(id);
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let cards = self.model.cards();
         let board_opt = self
