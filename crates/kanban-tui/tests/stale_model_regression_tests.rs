@@ -393,9 +393,7 @@ fn test_move_selected_cards_right_selects_first_moved_card() {
     app.input.set("First Mover".to_string());
     app.create_card();
     app.prepare_frame();
-    let first_mover_id = app
-        .get_selected_card_id()
-        .expect("First Mover is selected");
+    let first_mover_id = app.get_selected_card_id().expect("First Mover is selected");
     app.input.set("Second Mover".to_string());
     app.create_card();
     app.prepare_frame();
