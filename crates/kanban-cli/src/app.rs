@@ -112,12 +112,12 @@ where
 
 async fn create_empty_storage_file(
     store_manager: &StoreManager,
-    validated_file: Option<&str>,
+    file: &str,
     config: &AppConfig,
 ) -> anyhow::Result<()> {
     use kanban_domain::Snapshot;
     use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot};
-    let store = store_manager.make_store_with_config(validated_file, config)?;
+    let store = store_manager.make_store_with_config(Some(file), config)?;
     let data = snapshot_to_json_bytes(&Snapshot::new()).map_err(|e| anyhow::anyhow!("{e}"))?;
     let metadata = PersistenceMetadata::new(uuid::Uuid::new_v4());
     store
@@ -310,8 +310,7 @@ Provide the file path in one of these ways:
                 let has_explicit_file =
                     validated_file.is_some() || config.storage_location.is_some();
                 if has_explicit_file && !std::path::Path::new(&effective_file).exists() {
-                    create_empty_storage_file(&store_manager, validated_file.as_deref(), &config)
-                        .await?;
+                    create_empty_storage_file(&store_manager, &effective_file, &config).await?;
                 }
                 use std::io::IsTerminal;
                 if std::io::stdin().is_terminal() {
@@ -350,12 +349,8 @@ Provide the file path in one of these ways:
                     }
                     None => {
                         if !std::path::Path::new(&effective_file).exists() {
-                            create_empty_storage_file(
-                                &store_manager,
-                                validated_file.as_deref(),
-                                &config,
-                            )
-                            .await?;
+                            create_empty_storage_file(&store_manager, &effective_file, &config)
+                                .await?;
                         }
                         output::output_success(serde_json::json!({ "file": effective_file }));
                     }
