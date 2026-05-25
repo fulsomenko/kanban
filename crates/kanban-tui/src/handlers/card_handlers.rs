@@ -472,6 +472,7 @@ impl App {
                 }
             }
 
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
@@ -528,6 +529,7 @@ impl App {
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
         if let Some(card_id) = first_card_id {
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
