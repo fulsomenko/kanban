@@ -1,5 +1,6 @@
 use crate::app::{
-    App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
+    ActiveCard, App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode,
+    SprintTaskPanel,
 };
 use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
@@ -12,6 +13,12 @@ use std::io;
 // Viewport constants (must match ui.rs values)
 const RELATIONSHIP_VIEWPORT_RAW: usize = 5;
 
+#[derive(Clone, Copy)]
+pub(crate) enum RelationSide {
+    Parents,
+    Children,
+}
+
 impl App {
     pub fn handle_card_detail_key(
         &mut self,
@@ -23,7 +30,7 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.selection.active_card_index = None;
+                self.selection.active_card = None;
                 self.focus.card_focus = CardFocus::Title;
                 self.relationship.parents_list.selection.clear();
                 self.relationship.children_list.selection.clear();
@@ -227,8 +234,8 @@ impl App {
                     should_restart = true;
                 }
                 CardFocus::Metadata => {
-                    if let Some(card_idx) = self.selection.active_card_index {
-                        if let Some(card) = self.model.cards().get(card_idx) {
+                    if let Some(active) = self.selection.active_card {
+                        if let Some(card) = self.model.cards().get(active.index()) {
                             let card_id = card.id;
                             let dto = CardMetadataDto::from_entity(card);
                             let json = serde_json::to_string_pretty(&dto)
@@ -285,7 +292,7 @@ impl App {
             KeyCode::Char('d') => {
                 self.handle_archive_card();
                 self.pop_mode();
-                self.selection.active_card_index = None;
+                self.selection.active_card = None;
                 self.focus.card_focus = CardFocus::Title;
             }
             KeyCode::Char('a') => {
@@ -322,16 +329,8 @@ impl App {
                 self.handle_manage_children();
             }
             KeyCode::Enter => match self.focus.card_focus {
-                CardFocus::Parents => {
-                    if let Some(current_idx) = self.selection.active_card_index {
-                        self.navigate_to_selected_parent(current_idx);
-                    }
-                }
-                CardFocus::Children => {
-                    if let Some(current_idx) = self.selection.active_card_index {
-                        self.navigate_to_selected_child(current_idx);
-                    }
-                }
+                CardFocus::Parents => self.navigate_to_selected_parent(),
+                CardFocus::Children => self.navigate_to_selected_child(),
                 _ => {}
             },
             KeyCode::Backspace | KeyCode::Char('h')
@@ -339,20 +338,7 @@ impl App {
                     && self.focus.card_focus != CardFocus::Metadata
                     && self.focus.card_focus != CardFocus::Description =>
             {
-                // Allow backspace for back navigation in parents/children, but not in text editing sections
-                if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
-                    self.selection.active_card_index = Some(previous_idx);
-                    self.focus.card_focus = CardFocus::Title;
-                    // Update item counts for the card we're returning to
-                    let parents = self.get_current_card_parents();
-                    let children = self.get_current_card_children();
-                    self.relationship
-                        .parents_list
-                        .update_item_count(parents.len());
-                    self.relationship
-                        .children_list
-                        .update_item_count(children.len());
-                }
+                self.return_to_previous_card_from_detail_history();
             }
             _ => {}
         }
@@ -752,7 +738,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -770,7 +757,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -814,7 +802,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.dialog_input.priority_selection.set(Some(priority_idx));
                                 self.open_dialog(DialogMode::SetCardPriority);
@@ -824,7 +813,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -849,7 +839,8 @@ impl App {
                             if let Some(card_idx) =
                                 self.model.cards().iter().position(|c| c.id == card_id)
                             {
-                                self.selection.active_card_index = Some(card_idx);
+                                self.selection.active_card =
+                                    Some(ActiveCard::new(card_idx, card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -985,8 +976,8 @@ impl App {
     }
 
     pub(crate) fn handle_manage_parents(&mut self) {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1038,8 +1029,8 @@ impl App {
     }
 
     pub(crate) fn handle_manage_children(&mut self) {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1091,8 +1082,8 @@ impl App {
     }
 
     pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 return self.model.graph().parents(card.id);
             }
         }
@@ -1100,103 +1091,79 @@ impl App {
     }
 
     pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
-        if let Some(card_idx) = self.selection.active_card_index {
-            if let Some(card) = self.model.cards().get(card_idx) {
+        if let Some(active) = self.selection.active_card {
+            if let Some(card) = self.model.cards().get(active.index()) {
                 return self.model.graph().children(card.id);
             }
         }
         Vec::new()
     }
 
-    fn navigate_to_selected_parent(&mut self, current_card_idx: usize) {
+    fn refresh_relationship_counts(&mut self) {
         let parents = self.get_current_card_parents();
-        if let Some(selected_idx) = self.relationship.parents_list.selection.get() {
-            if let Some(&parent_id) = parents.get(selected_idx) {
-                if let Some(parent_idx) = self.model.cards().iter().position(|c| c.id == parent_id)
-                {
-                    // Push current card to history
-                    self.selection
-                        .card_navigation_history
-                        .push(current_card_idx);
-                    // Navigate to parent
-                    self.selection.active_card_index = Some(parent_idx);
-                    self.focus.card_focus = CardFocus::Title;
-                    // Update item counts for new card
-                    let new_parents = self.get_current_card_parents();
-                    let new_children = self.get_current_card_children();
-                    self.relationship
-                        .parents_list
-                        .update_item_count(new_parents.len());
-                    self.relationship
-                        .children_list
-                        .update_item_count(new_children.len());
-                    return;
-                }
-            }
-        }
-        // If no valid selection, navigate to first parent if available
-        if !parents.is_empty() {
-            if let Some(parent_idx) = self.model.cards().iter().position(|c| c.id == parents[0]) {
-                self.selection
-                    .card_navigation_history
-                    .push(current_card_idx);
-                self.selection.active_card_index = Some(parent_idx);
-                self.focus.card_focus = CardFocus::Title;
-                // Update item counts for new card
-                let new_parents = self.get_current_card_parents();
-                let new_children = self.get_current_card_children();
-                self.relationship
-                    .parents_list
-                    .update_item_count(new_parents.len());
-                self.relationship
-                    .children_list
-                    .update_item_count(new_children.len());
-            }
+        let children = self.get_current_card_children();
+        self.relationship
+            .parents_list
+            .update_item_count(parents.len());
+        self.relationship
+            .children_list
+            .update_item_count(children.len());
+    }
+
+    fn related_card_ids(&self, side: RelationSide) -> Vec<uuid::Uuid> {
+        match side {
+            RelationSide::Parents => self.get_current_card_parents(),
+            RelationSide::Children => self.get_current_card_children(),
         }
     }
 
-    fn navigate_to_selected_child(&mut self, current_card_idx: usize) {
-        let children = self.get_current_card_children();
-        if let Some(selected_idx) = self.relationship.children_list.selection.get() {
-            if let Some(&child_id) = children.get(selected_idx) {
-                if let Some(child_idx) = self.model.cards().iter().position(|c| c.id == child_id) {
-                    // Push current card to history
-                    self.selection
-                        .card_navigation_history
-                        .push(current_card_idx);
-                    // Navigate to child
-                    self.selection.active_card_index = Some(child_idx);
-                    self.focus.card_focus = CardFocus::Title;
-                    // Update item counts for new card
-                    let new_parents = self.get_current_card_parents();
-                    let new_children = self.get_current_card_children();
-                    self.relationship
-                        .parents_list
-                        .update_item_count(new_parents.len());
-                    self.relationship
-                        .children_list
-                        .update_item_count(new_children.len());
-                    return;
-                }
-            }
+    fn list_selection(&self, side: RelationSide) -> Option<usize> {
+        match side {
+            RelationSide::Parents => self.relationship.parents_list.selection.get(),
+            RelationSide::Children => self.relationship.children_list.selection.get(),
         }
-        // If no valid selection, navigate to first child if available
-        if !children.is_empty() {
-            if let Some(child_idx) = self.model.cards().iter().position(|c| c.id == children[0]) {
+    }
+
+    pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
+        if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
+            self.selection.active_card = self
+                .model
+                .cards()
+                .get(previous_idx)
+                .map(|c| ActiveCard::new(previous_idx, c.id));
+            self.focus.card_focus = CardFocus::Title;
+            self.refresh_relationship_counts();
+        }
+    }
+
+    pub(crate) fn navigate_to_selected_parent(&mut self) {
+        self.navigate_to_related_card(RelationSide::Parents);
+    }
+
+    pub(crate) fn navigate_to_selected_child(&mut self) {
+        self.navigate_to_related_card(RelationSide::Children);
+    }
+
+    fn navigate_to_related_card(&mut self, side: RelationSide) {
+        let Some(current_card_idx) = self.selection.active_card.map(|a| a.index()) else {
+            return;
+        };
+        let related = self.related_card_ids(side);
+        let selected_id = self
+            .list_selection(side)
+            .and_then(|i| related.get(i).copied());
+        // Prefer the list selection; fall back to the first related card.
+        let candidates = selected_id.into_iter().chain(related.first().copied());
+
+        for target_id in candidates {
+            if let Some(target_idx) = self.model.cards().iter().position(|c| c.id == target_id) {
                 self.selection
                     .card_navigation_history
                     .push(current_card_idx);
-                self.selection.active_card_index = Some(child_idx);
+                self.selection.active_card = Some(ActiveCard::new(target_idx, target_id));
                 self.focus.card_focus = CardFocus::Title;
-                // Update item counts for new card
-                let new_parents = self.get_current_card_parents();
-                let new_children = self.get_current_card_children();
-                self.relationship
-                    .parents_list
-                    .update_item_count(new_parents.len());
-                self.relationship
-                    .children_list
-                    .update_item_count(new_children.len());
+                self.refresh_relationship_counts();
+                return;
             }
         }
     }
@@ -1240,5 +1207,289 @@ impl App {
                 self.set_error(format!("Failed to toggle card completion: {}", e));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::sprint_view::SprintTaskPanel;
+    use crate::app::{ActiveCard, CardFocus};
+    use crate::App;
+    use crossterm::event::KeyCode;
+    use kanban_domain::{CreateCardOptions, GraphOperations, KanbanOperations, Snapshot};
+
+    fn reload_snapshot(app: &mut App) {
+        let snap = Snapshot {
+            boards: app.ctx.data_store().list_boards().unwrap(),
+            columns: app.ctx.data_store().list_all_columns().unwrap(),
+            cards: app.ctx.data_store().list_all_cards().unwrap(),
+            archived_cards: app.ctx.data_store().list_archived_cards().unwrap(),
+            sprints: app.ctx.data_store().list_all_sprints().unwrap(),
+            graph: app.ctx.data_store().get_graph().unwrap(),
+        };
+        app.model.load_from_snapshot(snap);
+    }
+
+    fn seed_chain(app: &mut App, titles: &[&str]) -> Vec<uuid::Uuid> {
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "TODO".into(), None)
+            .unwrap();
+        let mut ids = Vec::new();
+        for t in titles {
+            let card = app
+                .ctx
+                .create_card(
+                    board.id,
+                    column.id,
+                    (*t).into(),
+                    CreateCardOptions::default(),
+                )
+                .unwrap();
+            ids.push(card.id);
+        }
+        for w in ids.windows(2) {
+            app.ctx.attach_child(w[0], w[1]).unwrap();
+        }
+        reload_snapshot(app);
+        ids
+    }
+
+    fn seed_sprint_with_card(app: &mut App, title: &str) -> uuid::Uuid {
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "TODO".into(), None)
+            .unwrap();
+        let sprint = app.ctx.create_sprint(board.id, None, None).unwrap();
+        let card = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                title.into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        app.ctx.assign_card_to_sprint(card.id, sprint.id).unwrap();
+        reload_snapshot(app);
+        app.populate_sprint_task_lists(sprint.id);
+        app.sprint_view.panel = SprintTaskPanel::Uncompleted;
+        app.sprint_view
+            .uncompleted_component
+            .update_cards(vec![card.id]);
+        app.sprint_view
+            .uncompleted_component
+            .set_selected_index(Some(0));
+        card.id
+    }
+
+    #[test]
+    fn test_navigate_to_selected_parent_updates_active_card_id_so_detail_view_reloads() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["Parent", "Child"]);
+        let parent_id = ids[0];
+        let child_id = ids[1];
+        let child_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == child_id)
+            .unwrap();
+
+        app.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
+        app.focus.card_focus = CardFocus::Parents;
+        app.relationship.parents_list.update_item_count(1);
+        app.relationship.parents_list.selection.set(Some(0));
+
+        app.navigate_to_selected_parent();
+
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(parent_id),
+            "active_card.id() must be updated to the parent so the detail view rerenders against the parent card"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            parent_id,
+            "get_card_for_detail_view() must return the parent after Enter on a parent entry"
+        );
+    }
+
+    #[test]
+    fn test_navigate_to_selected_child_updates_active_card_id_so_detail_view_reloads() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["Parent", "Child"]);
+        let parent_id = ids[0];
+        let child_id = ids[1];
+        let parent_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == parent_id)
+            .unwrap();
+
+        app.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
+        app.focus.card_focus = CardFocus::Children;
+        app.relationship.children_list.update_item_count(1);
+        app.relationship.children_list.selection.set(Some(0));
+
+        app.navigate_to_selected_child();
+
+        assert_eq!(app.selection.active_card.map(|a| a.id()), Some(child_id));
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            child_id
+        );
+    }
+
+    #[test]
+    fn test_backspace_return_from_detail_history_updates_active_card_id() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["A", "B", "C"]);
+        let b_id = ids[1];
+        let c_id = ids[2];
+        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
+        let c_idx = app.model.cards().iter().position(|c| c.id == c_id).unwrap();
+
+        app.selection.active_card = Some(ActiveCard::new(c_idx, c_id));
+        app.selection.card_navigation_history.push(b_idx);
+        app.focus.card_focus = CardFocus::Parents;
+
+        app.return_to_previous_card_from_detail_history();
+
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(b_id),
+            "Backspace return must update active_card to the previous card"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            b_id
+        );
+    }
+
+    #[test]
+    fn test_sprint_detail_enter_on_card_sets_active_card_id_so_detail_view_resolves() {
+        let mut app = App::test_default();
+        let card_id = seed_sprint_with_card(&mut app, "task");
+
+        app.handle_sprint_detail_key(KeyCode::Enter);
+
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(card_id),
+            "Enter on a sprint-detail card row must set active_card so the detail view can resolve the card"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            card_id
+        );
+    }
+
+    #[test]
+    fn test_sprint_detail_e_on_card_sets_active_card_id_so_detail_view_resolves() {
+        let mut app = App::test_default();
+        let card_id = seed_sprint_with_card(&mut app, "task");
+
+        app.handle_sprint_detail_key(KeyCode::Char('e'));
+
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(card_id),
+            "'e' on a sprint-detail card row must set active_card so the detail view can resolve the card"
+        );
+        assert_eq!(
+            app.get_card_for_detail_view()
+                .expect("detail must resolve")
+                .id,
+            card_id
+        );
+    }
+
+    #[test]
+    fn test_navigate_to_selected_parent_falls_back_to_first_parent_when_no_list_selection() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["Parent", "Child"]);
+        let parent_id = ids[0];
+        let child_id = ids[1];
+        let child_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == child_id)
+            .unwrap();
+
+        app.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
+        app.focus.card_focus = CardFocus::Parents;
+        app.relationship.parents_list.update_item_count(1);
+        // Deliberately no parents_list.selection.set(...) — exercise the fallback path.
+
+        app.navigate_to_selected_parent();
+
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(parent_id),
+            "with no list selection, Enter on Parents must fall back to navigating to the first parent"
+        );
+    }
+
+    #[test]
+    fn test_navigate_to_selected_child_falls_back_to_first_child_when_no_list_selection() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["Parent", "Child"]);
+        let parent_id = ids[0];
+        let child_id = ids[1];
+        let parent_idx = app
+            .model
+            .cards()
+            .iter()
+            .position(|c| c.id == parent_id)
+            .unwrap();
+
+        app.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
+        app.focus.card_focus = CardFocus::Children;
+        app.relationship.children_list.update_item_count(1);
+        // Deliberately no children_list.selection.set(...).
+
+        app.navigate_to_selected_child();
+
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(child_id),
+            "with no list selection, Enter on Children must fall back to navigating to the first child"
+        );
+    }
+
+    #[test]
+    fn test_backspace_return_with_stale_previous_idx_clears_active_card_entirely() {
+        let mut app = App::test_default();
+        let ids = seed_chain(&mut app, &["A", "B"]);
+        let b_id = ids[1];
+        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
+        let stale_idx = app.model.cards().len() + 99;
+
+        app.selection.active_card = Some(ActiveCard::new(b_idx, b_id));
+        app.selection.card_navigation_history.push(stale_idx);
+
+        app.return_to_previous_card_from_detail_history();
+
+        assert!(
+            app.selection.active_card.is_none(),
+            "when previous_idx no longer resolves, active_card must be cleared — the wrapper enforces that index and id move together"
+        );
+        assert!(
+            app.get_card_for_detail_view().is_none(),
+            "detail view must resolve to None when active_card was cleared by stale-index recovery"
+        );
     }
 }

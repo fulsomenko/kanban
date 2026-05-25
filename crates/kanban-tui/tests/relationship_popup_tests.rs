@@ -1,5 +1,6 @@
 mod helpers;
 
+use kanban_tui::app::ActiveCard;
 use kanban_tui::App;
 
 #[test]
@@ -93,7 +94,7 @@ fn test_manage_parents_popup_enter_creates_parent_edge() {
         .unwrap();
 
     // Wire the model so popup_handlers' `self.model.cards()` reflects
-    // the data store. `selection.active_card_index` points at child.
+    // the data store. `selection.active_card` points at child.
     let snapshot = Snapshot {
         boards: app.ctx.data_store().list_boards().unwrap(),
         columns: app.ctx.data_store().list_all_columns().unwrap(),
@@ -109,7 +110,7 @@ fn test_manage_parents_popup_enter_creates_parent_edge() {
         .iter()
         .position(|c| c.id == child.id)
         .expect("child must be in model");
-    app.selection.active_card_index = Some(card_idx);
+    app.selection.active_card = Some(ActiveCard::new(card_idx, child.id));
 
     // Enter ManageParents mode with the parent as the only candidate
     // and select it.
@@ -204,7 +205,7 @@ fn test_manage_parents_popup_cycle_surfaces_error_banner_to_user() {
         .iter()
         .position(|card| card.id == a.id)
         .expect("a must be in model");
-    app.selection.active_card_index = Some(card_idx);
+    app.selection.active_card = Some(ActiveCard::new(card_idx, a.id));
 
     app.push_mode(AppMode::Dialog(DialogMode::ManageParents));
     app.relationship.card_ids = vec![c.id];
