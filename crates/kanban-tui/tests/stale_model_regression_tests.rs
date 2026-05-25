@@ -338,6 +338,8 @@ fn test_move_card_right_selects_moved_card_in_kanban_view() {
     app.prepare_frame();
     app.selection.board.set(Some(0));
     app.selection.active_board_index = Some(0);
+    app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
+    app.prepare_frame();
     app.focus.active = Focus::Cards;
 
     // Create two cards in Todo so there is a "prior selection" in Doing's
@@ -384,6 +386,8 @@ fn test_move_selected_cards_right_selects_first_moved_card() {
     app.prepare_frame();
     app.selection.board.set(Some(0));
     app.selection.active_board_index = Some(0);
+    app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
+    app.prepare_frame();
     app.focus.active = Focus::Cards;
 
     // Create three cards in Todo.
