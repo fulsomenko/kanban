@@ -2,12 +2,14 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>kanban</id>
-    <version>$version$</version>
     <title>kanban</title>
-    <authors>Max Blomstervall</authors>
+    <version>$version$</version>
+    <authors>Max Emil Yoon Blomstervall</authors>
     <owners>fulsomenko</owners>
-    <projectUrl>https://github.com/fulsomenko/kanban</projectUrl>
     <licenseUrl>https://github.com/fulsomenko/kanban/blob/master/LICENSE.md</licenseUrl>
+    <projectUrl>https://github.com/fulsomenko/kanban</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/fulsomenko/kanban/master/assets/icon-bold-transparent-black.png</iconUrl>
+    <copyright>2025 Max Emil Yoon Blomstervall</copyright>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/fulsomenko/kanban</projectSourceUrl>
     <packageSourceUrl>https://github.com/fulsomenko/kanban/tree/master/packaging/chocolatey</packageSourceUrl>

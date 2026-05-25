@@ -4,7 +4,14 @@ This directory holds the source files for the `kanban` Chocolatey
 package. Pack and publish are automated in
 `.github/workflows/release.yml` — local Windows isn't required.
 
-The CI flow (publish-chocolatey job) does the equivalent of:
+The CI flow (publish-chocolatey job) does the equivalent of the
+following PowerShell. Both `$VERSION` and `$SHA` are real PowerShell
+variables; set them before running the rest:
+
+    # In PowerShell on a Windows machine:
+    $VERSION = '0.6.0'                                       # the version being packed
+    $SHA     = (Get-FileHash -Algorithm SHA256 `
+                  "kanban-v$VERSION-x86_64-pc-windows-msvc.zip").Hash.ToLower()
 
     # Substitute placeholders into a temp build directory.
     Copy-Item kanban.nuspec build/kanban.nuspec

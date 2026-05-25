@@ -8,8 +8,10 @@ time from the project's GitHub release page as a single ZIP archive:
 
 The SHA256 checksum of the downloaded archive is embedded in
 chocolateyinstall.ps1 via the `$checksum64` substitution variable,
-populated at pack time from the corresponding release artifact's
-SHA256SUMS line.
+populated at pack time by downloading the GitHub release ZIP and
+running SHA256 over it. The same value is also published in the
+`SHA256SUMS` file attached to the corresponding release; the two
+are independently computed from the same archive.
 
 To verify the binaries manually:
 
@@ -17,14 +19,19 @@ To verify the binaries manually:
        https://github.com/fulsomenko/kanban/releases/download/v<VERSION>/kanban-v<VERSION>-x86_64-pc-windows-msvc.zip
   2. Compute its SHA256:
        Get-FileHash -Algorithm SHA256 <file>.zip
-  3. Confirm it matches the `checksum64` value in
-     chocolateyinstall.ps1 of the published Chocolatey package
-     (visible at https://community.chocolatey.org/packages/kanban).
+  3. Compare the computed SHA256 against the checksum displayed on
+     the package's chocolatey.org page (under the "Files" tab):
+       https://community.chocolatey.org/packages/kanban
+     The page surfaces the embedded `checksum64` value from
+     chocolateyinstall.ps1.
   4. Unzip and confirm the archive contains `kanban.exe`,
      `kanban-mcp.exe`, `LICENSE.md`, and `README.md`.
 
 The source for the binaries is at:
   https://github.com/fulsomenko/kanban
 
-The build that produced the binaries is reproducible from the
-corresponding tagged commit using the project's release.yml workflow.
+The build is produced by the project's release.yml workflow against
+the tagged commit. The same source produces functionally equivalent
+binaries; bit-exact reproducibility is not currently a project goal
+(Compress-Archive is non-deterministic across runs and cargo embeds
+some build metadata).
