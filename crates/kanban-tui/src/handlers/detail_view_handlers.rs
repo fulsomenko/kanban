@@ -237,12 +237,11 @@ impl App {
                     if let Some(card) = self.active_card_for_metadata_edit() {
                         let card_id = card.id;
                         let dto = CardMetadataDto::from_entity(&card);
-                        let json = serde_json::to_string_pretty(&dto)
-                            .unwrap_or_else(|_| "{}".to_string());
+                        let json =
+                            serde_json::to_string_pretty(&dto).unwrap_or_else(|_| "{}".to_string());
                         let temp_file = std::env::temp_dir()
                             .join(format!("kanban-card-{}-metadata.json", card_id));
-                        match edit_in_external_editor(terminal, event_handler, temp_file, &json)
-                        {
+                        match edit_in_external_editor(terminal, event_handler, temp_file, &json) {
                             Ok(Some(new_content)) => {
                                 match serde_json::from_str::<CardMetadataDto>(&new_content) {
                                     Ok(new_dto) => {
@@ -734,8 +733,7 @@ impl App {
                     match action {
                         CardListAction::Select(card_id) => {
                             if self.model.card(card_id).is_some() {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_id));
+                                self.selection.active_card = Some(ActiveCard::new(card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -751,8 +749,7 @@ impl App {
                         }
                         CardListAction::Edit(card_id) => {
                             if self.model.card(card_id).is_some() {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_id));
+                                self.selection.active_card = Some(ActiveCard::new(card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -794,8 +791,7 @@ impl App {
                         }
                         CardListAction::TogglePriority(card_id) => {
                             if self.model.card(card_id).is_some() {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_id));
+                                self.selection.active_card = Some(ActiveCard::new(card_id));
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.dialog_input.priority_selection.set(Some(priority_idx));
                                 self.open_dialog(DialogMode::SetCardPriority);
@@ -803,8 +799,7 @@ impl App {
                         }
                         CardListAction::AssignSprint(card_id) => {
                             if self.model.card(card_id).is_some() {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_id));
+                                self.selection.active_card = Some(ActiveCard::new(card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -827,8 +822,7 @@ impl App {
                         }
                         CardListAction::ReassignSprint(card_id) => {
                             if self.model.card(card_id).is_some() {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_id));
+                                self.selection.active_card = Some(ActiveCard::new(card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -1114,10 +1108,8 @@ impl App {
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
         if let Some(previous_id) = self.selection.card_navigation_history.pop() {
-            self.selection.active_card = self
-                .model
-                .card(previous_id)
-                .map(|c| ActiveCard::new(c.id));
+            self.selection.active_card =
+                self.model.card(previous_id).map(|c| ActiveCard::new(c.id));
             self.focus.card_focus = CardFocus::Title;
             self.refresh_relationship_counts();
         }
@@ -1144,9 +1136,7 @@ impl App {
 
         for target_id in candidates {
             if self.model.card(target_id).is_some() {
-                self.selection
-                    .card_navigation_history
-                    .push(current_card_id);
+                self.selection.card_navigation_history.push(current_card_id);
                 self.selection.active_card = Some(ActiveCard::new(target_id));
                 self.focus.card_focus = CardFocus::Title;
                 self.refresh_relationship_counts();
@@ -1536,8 +1526,8 @@ mod tests {
     }
 
     #[test]
-    fn test_get_current_card_parents_after_reload_resort_returns_originally_selected_card_parents(
-    ) {
+    fn test_get_current_card_parents_after_reload_resort_returns_originally_selected_card_parents()
+    {
         let mut app = App::test_default();
         let fx = setup_reload_resort_fixture(&mut app);
 

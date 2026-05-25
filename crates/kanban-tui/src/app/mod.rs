@@ -3003,10 +3003,7 @@ mod tests {
                     },
                 )
                 .unwrap();
-            load_with_card_order(
-                &mut app,
-                &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id],
-            );
+            load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
             let idx = app.get_current_priority_selection_index();
 
@@ -3026,16 +3023,9 @@ mod tests {
 
             let sprint_a = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
             let sprint_p = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
-            app.ctx
-                .assign_card_to_sprint(fx.a_id, sprint_a.id)
-                .unwrap();
-            app.ctx
-                .assign_card_to_sprint(fx.p_id, sprint_p.id)
-                .unwrap();
-            load_with_card_order(
-                &mut app,
-                &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id],
-            );
+            app.ctx.assign_card_to_sprint(fx.a_id, sprint_a.id).unwrap();
+            app.ctx.assign_card_to_sprint(fx.p_id, sprint_p.id).unwrap();
+            load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
             let sprints = app.model.sprints().to_vec();
             let entries = build_entries(&sprints, fx.board_id, chrono::Utc::now());

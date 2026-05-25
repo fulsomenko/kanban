@@ -1,7 +1,5 @@
 pub mod app;
 pub mod card_list;
-#[cfg(test)]
-pub(crate) mod test_helpers;
 pub mod card_list_component;
 pub mod clipboard;
 pub mod components;
@@ -19,6 +17,8 @@ pub mod render_strategy;
 pub mod scroll_indicators;
 pub mod search;
 pub mod state;
+#[cfg(test)]
+pub(crate) mod test_helpers;
 pub mod theme;
 pub mod tui_context;
 pub mod ui;

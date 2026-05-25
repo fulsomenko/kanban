@@ -701,10 +701,7 @@ mod tests {
         let fx = setup_reload_resort_fixture(&mut app);
 
         let sprint = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
-        load_with_card_order(
-            &mut app,
-            &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id],
-        );
+        load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
         let sprints = app.model.sprints().to_vec();
         let entries = build_entries(&sprints, fx.board_id, chrono::Utc::now());
@@ -712,7 +709,9 @@ mod tests {
             .iter()
             .position(|e| sprint_id_of(e) == Some(sprint.id))
             .expect("created sprint must appear in entries");
-        app.dialog_input.sprint_assign_selection.set(Some(target_idx));
+        app.dialog_input
+            .sprint_assign_selection
+            .set(Some(target_idx));
 
         app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
 

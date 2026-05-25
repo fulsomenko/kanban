@@ -815,8 +815,7 @@ impl App {
             graph.children(card_id).into_iter().collect();
 
         // Store the active card so the popup knows which card we're managing
-        self.selection.active_card =
-            self.model.card(card_id).map(|_| ActiveCard::new(card_id));
+        self.selection.active_card = self.model.card(card_id).map(|_| ActiveCard::new(card_id));
 
         // Set up dialog state
         self.relationship.card_ids = eligible_cards;
