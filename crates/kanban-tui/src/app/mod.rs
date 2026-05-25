@@ -1457,7 +1457,6 @@ impl App {
         // Kanban (column) view: if the card moved to a different column the
         // active list no longer contains it.  Find the column that now holds
         // the card, switch the active column to it, then select.
-        use crate::view_strategy::UnifiedViewStrategy;
         let col_index = self
             .view
             .strategy
@@ -1466,14 +1465,7 @@ impl App {
             .enumerate()
             .find_map(|(i, list)| list.cards.iter().position(|&id| id == card_id).map(|_| i));
         if let Some(idx) = col_index {
-            if let Some(unified) = self
-                .view
-                .strategy
-                .as_any_mut()
-                .downcast_mut::<UnifiedViewStrategy>()
-            {
-                unified.try_set_active_column_index(idx);
-            }
+            self.view.strategy.try_navigate_to_column(idx);
             if let Some(task_list) = self.view.strategy.get_active_task_list_mut() {
                 task_list.select_card(card_id);
             }

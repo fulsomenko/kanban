@@ -23,6 +23,9 @@ pub trait ViewStrategy {
     fn refresh_task_lists(&mut self, ctx: &ViewRefreshContext);
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
     fn as_any(&self) -> &dyn std::any::Any;
+    fn try_navigate_to_column(&mut self, _index: usize) -> bool {
+        false
+    }
 }
 
 pub struct UnifiedViewStrategy {
@@ -120,5 +123,9 @@ impl ViewStrategy for UnifiedViewStrategy {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn try_navigate_to_column(&mut self, index: usize) -> bool {
+        self.try_set_active_column_index(index)
     }
 }
