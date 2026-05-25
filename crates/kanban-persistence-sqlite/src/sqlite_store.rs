@@ -2596,4 +2596,32 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn test_empty_sprint_log_status_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Card, Column, SprintLog};
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            let mut board = Board::new("B".to_string(), None);
+            let column = Column::new(board.id, "Col".to_string(), 0);
+            let mut card = Card::new(&mut board, column.id, "Task".to_string(), 0);
+            store.upsert_board(board).unwrap();
+            store.upsert_column(column).unwrap();
+
+            let log = SprintLog::new(uuid::Uuid::new_v4(), 1, None, "".to_string());
+            card.sprint_logs.push(log);
+
+            let result = store.upsert_card(card);
+            assert!(
+                result.is_err(),
+                "upsert_card must reject a SprintLog with empty status"
+            );
+        });
+    }
 }
