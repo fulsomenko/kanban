@@ -58,7 +58,7 @@ kanban relation children KAN-5                     # list direct children of KAN
 ```bash
 kanban init boards.json --board "My Project"  # create file + first board, exit
 kanban init --board "My Project"              # uses KANBAN_FILE or boards.json
-kanban init                                   # creates boards.json with "My Board"
+kanban init                                   # creates the file with no entities
 ```
 
 Every entity argument accepts either a UUID or a human-readable name (sprint

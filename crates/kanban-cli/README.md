@@ -134,13 +134,13 @@ kanban init [FILE] [--board <NAME>]
 Create a board file and an initial board, then exit without opening the TUI.
 
 - `FILE` — target file path (default: uses KANBAN_FILE env var, then config storage_location, then boards.json)
-- `--board` — name of the first board to create (default: "My Board")
+- `--board` — name of the first board to create. Omit to create an empty file.
 
 Examples:
 
 ```bash
-kanban init                    # creates boards.json with "My Board"
-kanban init boards.json        # creates boards.json with "My Board"
+kanban init                    # creates boards.json with no entities
+kanban init boards.json        # creates boards.json with no entities
 kanban init boards.json --board "Sprint 1"  # creates boards.json with "Sprint 1"
 KANBAN_FILE=work.json kanban init --board "Team Board"  # uses env var
 ```
