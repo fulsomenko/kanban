@@ -17,9 +17,11 @@ To verify the binaries manually:
        https://github.com/fulsomenko/kanban/releases/download/v<VERSION>/kanban-v<VERSION>-x86_64-pc-windows-msvc.zip
   2. Compute its SHA256:
        Get-FileHash -Algorithm SHA256 <file>.zip
-  3. Confirm it matches the `checksum64` value in
-     chocolateyinstall.ps1 of the published Chocolatey package
-     (visible at https://community.chocolatey.org/packages/kanban).
+  3. Compare the computed SHA256 against the checksum displayed on
+     the package's chocolatey.org page (under "Package files"):
+       https://community.chocolatey.org/packages/kanban
+     The page surfaces the embedded `checksum64` value from
+     chocolateyinstall.ps1.
   4. Unzip and confirm the archive contains `kanban.exe`,
      `kanban-mcp.exe`, `LICENSE.md`, and `README.md`.
 
