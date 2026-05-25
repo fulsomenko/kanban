@@ -110,6 +110,11 @@ where
     Ok((cli, cmd))
 }
 
+#[derive(serde::Serialize)]
+struct InitFileResult<'a> {
+    file: &'a str,
+}
+
 async fn create_empty_storage_file(
     store_manager: &StoreManager,
     file: &str,
@@ -352,7 +357,9 @@ Provide the file path in one of these ways:
                             create_empty_storage_file(&store_manager, &effective_file, &config)
                                 .await?;
                         }
-                        output::output_success(serde_json::json!({ "file": effective_file }));
+                        output::output_success(InitFileResult {
+                            file: &effective_file,
+                        });
                     }
                 }
             }
