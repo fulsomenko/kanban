@@ -1,0 +1,30 @@
+VERIFICATION
+
+This package wraps the official kanban Windows release binaries
+(`kanban.exe` and `kanban-mcp.exe`), which are downloaded at install
+time from the project's GitHub release page as a single ZIP archive:
+
+  https://github.com/fulsomenko/kanban/releases
+
+The SHA256 checksum of the downloaded archive is embedded in
+chocolateyinstall.ps1 via the `$checksum64` substitution variable,
+populated at pack time from the corresponding release artifact's
+SHA256SUMS line.
+
+To verify the binaries manually:
+
+  1. Download the release ZIP from:
+       https://github.com/fulsomenko/kanban/releases/download/v<VERSION>/kanban-v<VERSION>-x86_64-pc-windows-msvc.zip
+  2. Compute its SHA256:
+       Get-FileHash -Algorithm SHA256 <file>.zip
+  3. Confirm it matches the `checksum64` value in
+     chocolateyinstall.ps1 of the published Chocolatey package
+     (visible at https://community.chocolatey.org/packages/kanban).
+  4. Unzip and confirm the archive contains `kanban.exe`,
+     `kanban-mcp.exe`, `LICENSE.md`, and `README.md`.
+
+The source for the binaries is at:
+  https://github.com/fulsomenko/kanban
+
+The build that produced the binaries is reproducible from the
+corresponding tagged commit using the project's release.yml workflow.
