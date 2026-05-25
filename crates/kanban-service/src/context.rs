@@ -1291,6 +1291,7 @@ impl KanbanOperations for KanbanContext {
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
         use kanban_domain::commands::ImportEntities;
+        use std::collections::HashSet;
 
         let imported: Snapshot = serde_json::from_str(data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -1300,6 +1301,25 @@ impl KanbanOperations for KanbanContext {
             .first()
             .cloned()
             .ok_or_else(|| KanbanError::validation("No board in import data"))?;
+
+        let imported_column_ids: HashSet<Uuid> =
+            imported.columns.iter().map(|c| c.id).collect();
+        let existing_column_ids: HashSet<Uuid> = self
+            .backend
+            .list_all_columns()?
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        for card in &imported.cards {
+            if !imported_column_ids.contains(&card.column_id)
+                && !existing_column_ids.contains(&card.column_id)
+            {
+                return Err(KanbanError::validation(format!(
+                    "Card '{}' references column {} which does not exist in the import or the current store",
+                    card.title, card.column_id
+                )));
+            }
+        }
 
         let commands = vec![Command::Board(BoardCommand::Import(ImportEntities {
             boards: imported.boards,
