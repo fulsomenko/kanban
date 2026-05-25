@@ -18,6 +18,9 @@ jobs:
     permissions:
       contents: write
     if: github.event.pull_request.merged == true
+    outputs:
+      new: ${{ steps.release.outputs.new }}
+      has_changesets: ${{ steps.check.outputs.has_changesets }}
     steps:
       - uses: actions/checkout@v4
         with:
