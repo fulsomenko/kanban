@@ -229,3 +229,69 @@ jobs:
             exit 0
           fi
           git push origin develop
+
+  build-windows:
+    name: Build Windows release archive
+    needs: [release]
+    if: needs.release.outputs.has_changesets == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.new }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build kanban + kanban-mcp (release)
+        shell: pwsh
+        run: |
+          cargo build --release `
+            --package kanban-cli `
+            --package kanban-mcp `
+            --target x86_64-pc-windows-msvc
+
+      - name: Stage archive contents
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $stage = "stage/kanban-v$env:VERSION-x86_64-pc-windows-msvc"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/kanban.exe     $stage/
+          Copy-Item target/x86_64-pc-windows-msvc/release/kanban-mcp.exe $stage/
+          Copy-Item LICENSE.md $stage/
+          Copy-Item README.md  $stage/
+          & "$stage/kanban.exe" --version
+          & "$stage/kanban-mcp.exe" --version
+
+      - name: Compress archive
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $name = "kanban-v$env:VERSION-x86_64-pc-windows-msvc"
+          Compress-Archive -Path "stage/$name/*" -DestinationPath "$name.zip" -Force
+
+      - name: Write SHA256SUMS
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $name = "kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
+          $sha  = (Get-FileHash -Algorithm SHA256 $name).Hash.ToLower()
+          "$sha  $name" | Out-File -Encoding ascii -FilePath SHA256SUMS
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.release.outputs.new }}
+          files: |
+            kanban-v${{ needs.release.outputs.new }}-x86_64-pc-windows-msvc.zip
+            SHA256SUMS
+          fail_on_unmatched_files: true
