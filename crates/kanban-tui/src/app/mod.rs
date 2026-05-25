@@ -1447,8 +1447,36 @@ impl App {
     }
 
     pub fn select_card_by_id(&mut self, card_id: uuid::Uuid) {
+        // Try the active task list first (covers flat and grouped views, and
+        // kanban view when the card stays in the same column).
         if let Some(task_list) = self.view.strategy.get_active_task_list_mut() {
-            task_list.select_card(card_id);
+            if task_list.select_card(card_id) {
+                return;
+            }
+        }
+        // Kanban (column) view: if the card moved to a different column the
+        // active list no longer contains it.  Find the column that now holds
+        // the card, switch the active column to it, then select.
+        use crate::view_strategy::UnifiedViewStrategy;
+        let col_index = self
+            .view
+            .strategy
+            .get_all_task_lists()
+            .iter()
+            .enumerate()
+            .find_map(|(i, list)| list.cards.iter().position(|&id| id == card_id).map(|_| i));
+        if let Some(idx) = col_index {
+            if let Some(unified) = self
+                .view
+                .strategy
+                .as_any_mut()
+                .downcast_mut::<UnifiedViewStrategy>()
+            {
+                unified.try_set_active_column_index(idx);
+            }
+            if let Some(task_list) = self.view.strategy.get_active_task_list_mut() {
+                task_list.select_card(card_id);
+            }
         }
     }
 

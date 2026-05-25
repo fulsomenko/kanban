@@ -246,6 +246,9 @@ impl App {
                 return;
             }
 
+            // Refresh the view-layer task list so the card new column is
+            // reflected before we re-select it (same stale-model fix as KAN-403).
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
@@ -291,6 +294,9 @@ impl App {
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
         if let Some(card_id) = first_card_id {
+            // Refresh the view-layer task list so cards new columns are
+            // reflected before we re-select (same stale-model fix as KAN-403).
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
