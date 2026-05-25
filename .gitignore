@@ -20,6 +20,9 @@
 *~
 .direnv
 
+# Claude Code CLI (per-machine settings + scratch worktrees for agent runs)
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
