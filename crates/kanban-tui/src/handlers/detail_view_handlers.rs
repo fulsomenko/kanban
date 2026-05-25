@@ -1491,7 +1491,87 @@ mod tests {
         );
     }
 
-    use crate::test_helpers::setup_reload_resort_fixture;
+    use crate::test_helpers::{load_with_card_order, setup_reload_resort_fixture};
+
+    #[test]
+    fn test_return_to_previous_card_after_reload_resort_returns_to_originally_visited_card() {
+        let mut app = App::test_default();
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "Todo".into(), None)
+            .unwrap();
+        let a = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "A".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let p = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "P".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let b = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "B".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let c = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "C".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let d = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "D".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        app.ctx.attach_child(a.id, d.id).unwrap();
+
+        load_with_card_order(&mut app, &[a.id, p.id, b.id, c.id, d.id]);
+        app.selection.active_card = Some(ActiveCard::new(0, a.id));
+        app.selection.active_board_index = Some(0);
+
+        app.focus.card_focus = CardFocus::Children;
+        app.relationship.children_list.update_item_count(1);
+        app.relationship.children_list.selection.set(Some(0));
+        app.navigate_to_selected_child();
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(d.id),
+            "precondition: navigate_to_selected_child must have set active_card to D"
+        );
+
+        load_with_card_order(&mut app, &[p.id, b.id, a.id, c.id, d.id]);
+
+        app.return_to_previous_card_from_detail_history();
+
+        assert_eq!(
+            app.selection.active_card.map(|a| a.id()),
+            Some(a.id),
+            "backspace must return to A (originally visited, by id) — not whatever card now sits at A's old slot after the external reload re-ordered cards()"
+        );
+    }
 
     #[test]
     fn test_get_current_card_parents_after_reload_resort_returns_originally_selected_card_parents(
