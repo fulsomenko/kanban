@@ -100,7 +100,7 @@ pub fn setup_reload_resort_fixture(app: &mut App) -> ReloadResortFixture {
     app.ctx.attach_child(a.id, d.id).unwrap();
 
     load_with_card_order(app, &[p.id, a.id, b.id, c.id, d.id]);
-    app.selection.active_card = Some(ActiveCard::new(1, a.id));
+    app.selection.active_card = Some(ActiveCard::new(a.id));
     app.selection.active_board_index = Some(0);
 
     load_with_card_order(app, &[a.id, p.id, b.id, c.id, d.id]);

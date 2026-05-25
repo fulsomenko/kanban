@@ -733,11 +733,9 @@ impl App {
 
                     match action {
                         CardListAction::Select(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
+                            if self.model.card(card_id).is_some() {
                                 self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                                    Some(ActiveCard::new(card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -752,11 +750,9 @@ impl App {
                             }
                         }
                         CardListAction::Edit(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
+                            if self.model.card(card_id).is_some() {
                                 self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                                    Some(ActiveCard::new(card_id));
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -797,22 +793,18 @@ impl App {
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
+                            if self.model.card(card_id).is_some() {
                                 self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                                    Some(ActiveCard::new(card_id));
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.dialog_input.priority_selection.set(Some(priority_idx));
                                 self.open_dialog(DialogMode::SetCardPriority);
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
+                            if self.model.card(card_id).is_some() {
                                 self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                                    Some(ActiveCard::new(card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -834,11 +826,9 @@ impl App {
                             }
                         }
                         CardListAction::ReassignSprint(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
+                            if self.model.card(card_id).is_some() {
                                 self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                                    Some(ActiveCard::new(card_id));
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -1124,13 +1114,10 @@ impl App {
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
         if let Some(previous_id) = self.selection.card_navigation_history.pop() {
-            self.selection.active_card = self.model.card(previous_id).and_then(|c| {
-                self.model
-                    .cards()
-                    .iter()
-                    .position(|cc| cc.id == c.id)
-                    .map(|idx| ActiveCard::new(idx, c.id))
-            });
+            self.selection.active_card = self
+                .model
+                .card(previous_id)
+                .map(|c| ActiveCard::new(c.id));
             self.focus.card_focus = CardFocus::Title;
             self.refresh_relationship_counts();
         }
@@ -1156,11 +1143,11 @@ impl App {
         let candidates = selected_id.into_iter().chain(related.first().copied());
 
         for target_id in candidates {
-            if let Some(target_idx) = self.model.cards().iter().position(|c| c.id == target_id) {
+            if self.model.card(target_id).is_some() {
                 self.selection
                     .card_navigation_history
                     .push(current_card_id);
-                self.selection.active_card = Some(ActiveCard::new(target_idx, target_id));
+                self.selection.active_card = Some(ActiveCard::new(target_id));
                 self.focus.card_focus = CardFocus::Title;
                 self.refresh_relationship_counts();
                 return;
@@ -1291,14 +1278,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let child_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == child_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
+        app.selection.active_card = Some(ActiveCard::new(child_id));
         app.focus.card_focus = CardFocus::Parents;
         app.relationship.parents_list.update_item_count(1);
         app.relationship.parents_list.selection.set(Some(0));
@@ -1325,14 +1306,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let parent_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == parent_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
+        app.selection.active_card = Some(ActiveCard::new(parent_id));
         app.focus.card_focus = CardFocus::Children;
         app.relationship.children_list.update_item_count(1);
         app.relationship.children_list.selection.set(Some(0));
@@ -1354,9 +1329,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["A", "B", "C"]);
         let b_id = ids[1];
         let c_id = ids[2];
-        let c_idx = app.model.cards().iter().position(|c| c.id == c_id).unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(c_idx, c_id));
+        app.selection.active_card = Some(ActiveCard::new(c_id));
         app.selection.card_navigation_history.push(b_id);
         app.focus.card_focus = CardFocus::Parents;
 
@@ -1421,14 +1395,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let child_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == child_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
+        app.selection.active_card = Some(ActiveCard::new(child_id));
         app.focus.card_focus = CardFocus::Parents;
         app.relationship.parents_list.update_item_count(1);
         // Deliberately no parents_list.selection.set(...) — exercise the fallback path.
@@ -1448,14 +1416,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let parent_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == parent_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
+        app.selection.active_card = Some(ActiveCard::new(parent_id));
         app.focus.card_focus = CardFocus::Children;
         app.relationship.children_list.update_item_count(1);
         // Deliberately no children_list.selection.set(...).
@@ -1474,10 +1436,9 @@ mod tests {
         let mut app = App::test_default();
         let ids = seed_chain(&mut app, &["A", "B"]);
         let b_id = ids[1];
-        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
         let unknown_id = uuid::Uuid::new_v4();
 
-        app.selection.active_card = Some(ActiveCard::new(b_idx, b_id));
+        app.selection.active_card = Some(ActiveCard::new(b_id));
         app.selection.card_navigation_history.push(unknown_id);
 
         app.return_to_previous_card_from_detail_history();
@@ -1550,7 +1511,7 @@ mod tests {
         app.ctx.attach_child(a.id, d.id).unwrap();
 
         load_with_card_order(&mut app, &[a.id, p.id, b.id, c.id, d.id]);
-        app.selection.active_card = Some(ActiveCard::new(0, a.id));
+        app.selection.active_card = Some(ActiveCard::new(a.id));
         app.selection.active_board_index = Some(0);
 
         app.focus.card_focus = CardFocus::Children;

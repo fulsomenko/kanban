@@ -3,17 +3,12 @@ use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ActiveCard {
-    index: usize,
     id: uuid::Uuid,
 }
 
 impl ActiveCard {
-    pub fn new(index: usize, id: uuid::Uuid) -> Self {
-        Self { index, id }
-    }
-
-    pub fn index(&self) -> usize {
-        self.index
+    pub fn new(id: uuid::Uuid) -> Self {
+        Self { id }
     }
 
     pub fn id(&self) -> uuid::Uuid {

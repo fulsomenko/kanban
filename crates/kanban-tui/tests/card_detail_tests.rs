@@ -19,8 +19,8 @@ fn test_active_card_detail_shows_selected_card() {
         ..Default::default()
     });
 
-    // Select the second card by id (and matching index 1).
-    app.selection.active_card = Some(ActiveCard::new(1, card_b_id));
+    // Select the second card by id.
+    app.selection.active_card = Some(ActiveCard::new(card_b_id));
 
     let detail_card = app
         .get_card_for_detail_view()

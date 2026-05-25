@@ -104,13 +104,7 @@ fn test_manage_parents_popup_enter_creates_parent_edge() {
         graph: app.ctx.data_store().get_graph().unwrap(),
     };
     app.model.load_from_snapshot(snapshot);
-    let card_idx = app
-        .model
-        .cards()
-        .iter()
-        .position(|c| c.id == child.id)
-        .expect("child must be in model");
-    app.selection.active_card = Some(ActiveCard::new(card_idx, child.id));
+    app.selection.active_card = Some(ActiveCard::new(child.id));
 
     // Enter ManageParents mode with the parent as the only candidate
     // and select it.
@@ -199,13 +193,7 @@ fn test_manage_parents_popup_cycle_surfaces_error_banner_to_user() {
     app.model.load_from_snapshot(snapshot);
     // active card is `a`; the popup will offer `c` as a candidate parent
     // and choosing it would close the cycle c -> a -> b -> c.
-    let card_idx = app
-        .model
-        .cards()
-        .iter()
-        .position(|card| card.id == a.id)
-        .expect("a must be in model");
-    app.selection.active_card = Some(ActiveCard::new(card_idx, a.id));
+    app.selection.active_card = Some(ActiveCard::new(a.id));
 
     app.push_mode(AppMode::Dialog(DialogMode::ManageParents));
     app.relationship.card_ids = vec![c.id];
