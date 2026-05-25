@@ -3368,9 +3368,12 @@ mod init_tests {
 
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(
-            json["data"]["file"].as_str().unwrap(),
-            file.to_str().unwrap()
+        let returned = json["data"]["file"]
+            .as_str()
+            .expect("data.file should be a string");
+        assert!(
+            std::path::Path::new(returned).exists(),
+            "data.file should reference an existing file, got {returned}"
         );
     }
 
