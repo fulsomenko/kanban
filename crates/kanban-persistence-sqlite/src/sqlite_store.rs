@@ -83,6 +83,16 @@ fn fmt_dt(dt: &DateTime<Utc>) -> String {
     dt.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
 }
 
+fn required_str<'a>(value: &'a str, field: &str) -> KanbanResult<&'a str> {
+    if value.is_empty() {
+        Err(ser_err(format!(
+            "required field '{field}' must not be empty"
+        )))
+    } else {
+        Ok(value)
+    }
+}
+
 fn opt_dt(dt: &Option<DateTime<Utc>>) -> Option<String> {
     dt.as_ref().map(fmt_dt)
 }
@@ -679,7 +689,7 @@ impl SqliteStore {
                 updated_at=excluded.updated_at",
         )
         .bind(&id)
-        .bind(&board.name)
+        .bind(required_str(&board.name, "board.name")?)
         .bind(&board.description)
         .bind(&board.sprint_prefix)
         .bind(&board.card_prefix)
@@ -710,7 +720,7 @@ impl SqliteStore {
             )
             .bind(&id)
             .bind(i as i32)
-            .bind(name)
+            .bind(required_str(name, "board.sprint_names[*]")?)
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
@@ -775,7 +785,7 @@ impl SqliteStore {
         )
         .bind(&id)
         .bind(card.column_id.to_string())
-        .bind(&card.title)
+        .bind(required_str(&card.title, "card.title")?)
         .bind(&card.description)
         .bind(format!("{:?}", card.priority))
         .bind(format!("{:?}", card.status))
@@ -808,7 +818,7 @@ impl SqliteStore {
             .bind(&log.sprint_name)
             .bind(fmt_dt(&log.started_at))
             .bind(opt_dt(&log.ended_at))
-            .bind(&log.status)
+            .bind(required_str(&log.status, "sprint_log.status")?)
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
@@ -1258,7 +1268,7 @@ impl SqliteStore {
         )
         .bind(column.id.to_string())
         .bind(column.board_id.to_string())
-        .bind(&column.name)
+        .bind(required_str(&column.name, "column.name")?)
         .bind(column.position)
         .bind(column.wip_limit)
         .bind(fmt_dt(&column.created_at))
@@ -2593,6 +2603,97 @@ mod tests {
             assert_eq!(
                 bumped, SUPPORTED_SCHEMA_VERSION,
                 "schema_version must be bumped to current on legacy open"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_sprint_log_status_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Card, Column, SprintLog};
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            let mut board = Board::new("B".to_string(), None);
+            let column = Column::new(board.id, "Col".to_string(), 0);
+            let mut card = Card::new(&mut board, column.id, "Task".to_string(), 0);
+            store.upsert_board(board).unwrap();
+            store.upsert_column(column).unwrap();
+
+            let log = SprintLog::new(uuid::Uuid::new_v4(), 1, None, "".to_string());
+            card.sprint_logs.push(log);
+
+            let result = store.upsert_card(card);
+            assert!(
+                result.is_err(),
+                "upsert_card must reject a SprintLog with empty status"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_board_name_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::Board;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("".to_string(), None);
+            let result = store.upsert_board(board);
+            assert!(
+                result.is_err(),
+                "upsert_board must reject a Board with empty name"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_column_name_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Column};
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("B".to_string(), None);
+            let board_id = board.id;
+            store.upsert_board(board).unwrap();
+            let col = Column::new(board_id, "".to_string(), 0);
+            let result = store.upsert_column(col);
+            assert!(
+                result.is_err(),
+                "upsert_column must reject a Column with empty name"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_card_title_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Card, Column};
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let mut board = Board::new("B".to_string(), None);
+            let col = Column::new(board.id, "Col".to_string(), 0);
+            let col_id = col.id;
+            // Card::new borrows &mut board -- call it before upsert_board moves board
+            let card = Card::new(&mut board, col_id, "".to_string(), 0);
+            store.upsert_board(board).unwrap();
+            store.upsert_column(col).unwrap();
+            let result = store.upsert_card(card);
+            assert!(
+                result.is_err(),
+                "upsert_card must reject a Card with empty title"
             );
         });
     }
