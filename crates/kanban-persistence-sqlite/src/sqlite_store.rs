@@ -2634,4 +2634,58 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn test_empty_board_name_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::Board;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("".to_string(), None);
+            let result = store.upsert_board(board);
+            assert!(result.is_err(), "upsert_board must reject a Board with empty name");
+        });
+    }
+
+    #[test]
+    fn test_empty_column_name_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Column};
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("B".to_string(), None);
+            let board_id = board.id;
+            store.upsert_board(board).unwrap();
+            let col = Column::new(board_id, "".to_string(), 0);
+            let result = store.upsert_column(col);
+            assert!(result.is_err(), "upsert_column must reject a Column with empty name");
+        });
+    }
+
+    #[test]
+    fn test_empty_card_title_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Card, Column};
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let mut board = Board::new("B".to_string(), None);
+            let col = Column::new(board.id, "Col".to_string(), 0);
+            let col_id = col.id;
+            // Card::new borrows &mut board -- call it before upsert_board moves board
+            let card = Card::new(&mut board, col_id, "".to_string(), 0);
+            store.upsert_board(board).unwrap();
+            store.upsert_column(col).unwrap();
+            let result = store.upsert_card(card);
+            assert!(result.is_err(), "upsert_card must reject a Card with empty title");
+        });
+    }
 }
