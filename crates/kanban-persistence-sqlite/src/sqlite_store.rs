@@ -2646,7 +2646,10 @@ mod tests {
             let store = SqliteStore::open(&path).await.unwrap();
             let board = Board::new("".to_string(), None);
             let result = store.upsert_board(board);
-            assert!(result.is_err(), "upsert_board must reject a Board with empty name");
+            assert!(
+                result.is_err(),
+                "upsert_board must reject a Board with empty name"
+            );
         });
     }
 
@@ -2664,7 +2667,10 @@ mod tests {
             store.upsert_board(board).unwrap();
             let col = Column::new(board_id, "".to_string(), 0);
             let result = store.upsert_column(col);
-            assert!(result.is_err(), "upsert_column must reject a Column with empty name");
+            assert!(
+                result.is_err(),
+                "upsert_column must reject a Column with empty name"
+            );
         });
     }
 
@@ -2685,7 +2691,10 @@ mod tests {
             store.upsert_board(board).unwrap();
             store.upsert_column(col).unwrap();
             let result = store.upsert_card(card);
-            assert!(result.is_err(), "upsert_card must reject a Card with empty title");
+            assert!(
+                result.is_err(),
+                "upsert_card must reject a Card with empty title"
+            );
         });
     }
 }
