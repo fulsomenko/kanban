@@ -3342,6 +3342,39 @@ mod init_tests {
     }
 
     #[test]
+    fn test_init_is_idempotent_against_existing_file() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("boards.json");
+
+        kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success();
+        let first = std::fs::read(&file).expect("file should exist after first init");
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let second = std::fs::read(&file).expect("file should still exist after second init");
+        assert_eq!(
+            first, second,
+            "second `kanban init` must not rewrite an existing file"
+        );
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(
+            json["data"]["file"].as_str().unwrap(),
+            file.to_str().unwrap()
+        );
+    }
+
+    #[test]
     fn test_init_creates_file_with_named_board() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("boards.json");
