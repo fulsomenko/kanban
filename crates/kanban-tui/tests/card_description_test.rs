@@ -1,5 +1,4 @@
 use kanban_domain::{CreateCardOptions, KanbanOperations};
-use kanban_tui::app::ActiveCard;
 use kanban_tui::components::build_description_lines;
 use kanban_tui::App;
 
@@ -33,7 +32,7 @@ fn test_card_description_appears_in_detail_view() {
 
     // Setup app state to show the card detail view
     app.selection.active_board_index = Some(0);
-    app.selection.active_card = Some(ActiveCard::new(card.id));
+    app.selection.active_card_id = Some(card.id);
 
     // Verify the card has the description
     app.prepare_frame();
@@ -184,7 +183,7 @@ fn test_card_with_empty_string_description_displays_placeholder() {
 
     // Setup app state
     app.selection.active_board_index = Some(0);
-    app.selection.active_card = Some(ActiveCard::new(card.id));
+    app.selection.active_card_id = Some(card.id);
 
     // Verify the card has an empty string description (not None)
     app.prepare_frame();

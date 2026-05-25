@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::app::{ActiveCard, App};
+use crate::app::App;
 use kanban_domain::{CreateCardOptions, GraphOperations, KanbanOperations, Snapshot};
 
 pub fn load_with_card_order(app: &mut App, order: &[uuid::Uuid]) {
@@ -99,7 +99,7 @@ pub fn setup_reload_resort_fixture(app: &mut App) -> ReloadResortFixture {
     app.ctx.attach_child(a.id, d.id).unwrap();
 
     load_with_card_order(app, &[p.id, a.id, b.id, c.id, d.id]);
-    app.selection.active_card = Some(ActiveCard::new(a.id));
+    app.selection.active_card_id = Some(a.id);
     app.selection.active_board_index = Some(0);
 
     load_with_card_order(app, &[a.id, p.id, b.id, c.id, d.id]);

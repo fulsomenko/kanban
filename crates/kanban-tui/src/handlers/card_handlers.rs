@@ -1,4 +1,4 @@
-use crate::app::{ActiveCard, App, AppMode, CardField, DialogMode, Focus};
+use crate::app::{App, AppMode, CardField, DialogMode, Focus};
 use crate::card_list::CardListId;
 use crate::events::EventHandler;
 use kanban_domain::commands::{
@@ -109,8 +109,8 @@ impl App {
                     if has_assignable {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
                             let card_id = selected_card.id;
-                            self.selection.active_card =
-                                self.model.card(card_id).map(|_| ActiveCard::new(card_id));
+                            self.selection.active_card_id =
+                                self.model.card(card_id).map(|c| c.id);
                         }
                         let selection_idx = self.get_current_sprint_selection_index();
                         self.dialog_input
@@ -213,8 +213,8 @@ impl App {
         if self.focus.active == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
                 let card_id = selected_card.id;
-                self.selection.active_card =
-                    self.model.card(card_id).map(|_| ActiveCard::new(card_id));
+                self.selection.active_card_id =
+                    self.model.card(card_id).map(|c| c.id);
 
                 if let Err(e) =
                     self.edit_card_field(terminal, event_handler, CardField::Description)
@@ -815,7 +815,7 @@ impl App {
             graph.children(card_id).into_iter().collect();
 
         // Store the active card so the popup knows which card we're managing
-        self.selection.active_card = self.model.card(card_id).map(|_| ActiveCard::new(card_id));
+        self.selection.active_card_id = self.model.card(card_id).map(|c| c.id);
 
         // Set up dialog state
         self.relationship.card_ids = eligible_cards;

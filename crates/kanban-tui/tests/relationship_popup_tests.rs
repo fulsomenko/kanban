@@ -1,6 +1,5 @@
 mod helpers;
 
-use kanban_tui::app::ActiveCard;
 use kanban_tui::App;
 
 #[test]
@@ -104,7 +103,7 @@ fn test_manage_parents_popup_enter_creates_parent_edge() {
         graph: app.ctx.data_store().get_graph().unwrap(),
     };
     app.model.load_from_snapshot(snapshot);
-    app.selection.active_card = Some(ActiveCard::new(child.id));
+    app.selection.active_card_id = Some(child.id);
 
     // Enter ManageParents mode with the parent as the only candidate
     // and select it.
@@ -193,7 +192,7 @@ fn test_manage_parents_popup_cycle_surfaces_error_banner_to_user() {
     app.model.load_from_snapshot(snapshot);
     // active card is `a`; the popup will offer `c` as a candidate parent
     // and choosing it would close the cycle c -> a -> b -> c.
-    app.selection.active_card = Some(ActiveCard::new(a.id));
+    app.selection.active_card_id = Some(a.id);
 
     app.push_mode(AppMode::Dialog(DialogMode::ManageParents));
     app.relationship.card_ids = vec![c.id];

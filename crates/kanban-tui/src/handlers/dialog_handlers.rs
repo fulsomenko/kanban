@@ -136,8 +136,8 @@ impl App {
 
                 let card_id = self
                     .selection
-                    .active_card
-                    .and_then(|active| self.model.card(active.id()))
+                    .active_card_id
+                    .and_then(|id| self.model.card(id))
                     .map(|c| c.id)
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
 

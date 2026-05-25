@@ -1,4 +1,4 @@
-use crate::app::{ActiveCard, App, AppMode, Focus};
+use crate::app::{App, AppMode, Focus};
 use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::TaskListView;
 
@@ -488,8 +488,8 @@ impl App {
             Focus::Cards => {
                 if let Some(selected_card) = self.get_selected_card_in_context() {
                     let card_id = selected_card.id;
-                    self.selection.active_card =
-                        self.model.card(card_id).map(|_| ActiveCard::new(card_id));
+                    self.selection.active_card_id =
+                        self.model.card(card_id).map(|c| c.id);
                     // Initialize list components with item counts
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();

@@ -11,7 +11,7 @@ pub mod animation;
 pub use animation::{AnimationState, CardAnimation};
 
 pub mod selection;
-pub use selection::{ActiveCard, SelectionHub};
+pub use selection::SelectionHub;
 
 pub mod filter;
 pub use filter::FilterState;
@@ -1461,8 +1461,8 @@ impl App {
 
     pub fn get_card_for_detail_view(&self) -> Option<Card> {
         self.selection
-            .active_card
-            .and_then(|ac| self.model.card(ac.id()).cloned())
+            .active_card_id
+            .and_then(|id| self.model.card(id).cloned())
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
@@ -1786,8 +1786,8 @@ impl App {
         event_handler: &EventHandler,
         field: CardField,
     ) -> io::Result<()> {
-        if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.card(active.id()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     CardField::Title => {
@@ -2293,11 +2293,11 @@ impl App {
     where
         F: Fn(&Card, &Board, &[Sprint], &str) -> String,
     {
-        if let Some(active) = self.selection.active_card {
+        if let Some(active_id) = self.selection.active_card_id {
             if let Some(board_idx) = self.selection.active_board_index {
                 let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
-                    if let Some(card) = self.model.card(active.id()) {
+                    if let Some(card) = self.model.card(active_id) {
                         let sprints = self.model.sprints();
                         let output = get_output(
                             card,
@@ -2329,8 +2329,8 @@ impl App {
     }
 
     pub fn get_current_priority_selection_index(&self) -> usize {
-        if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.card(active.id()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
                     CardPriority::Low => 0,
@@ -2346,8 +2346,8 @@ impl App {
     pub fn get_current_sprint_selection_index(&self) -> usize {
         use crate::components::sprint_assign_list::{build_entries, sprint_id_of};
 
-        if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.card(active.id()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.selection.active_board_index {
                         let boards = self.model.boards();
