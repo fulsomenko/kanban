@@ -69,7 +69,9 @@ async fn test_delete_column_with_cards_returns_error() -> KanbanResult<()> {
         "delete_column must return an error when the column contains cards"
     );
 
-    let column_still_there = ctx.get_column(col_id)?;
+    let column_still_there = ctx
+        .get_column(col_id)
+        .expect("get_column should not error after failed delete");
     assert!(
         column_still_there.is_some(),
         "the column must still exist after the failed delete"
