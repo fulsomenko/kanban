@@ -75,8 +75,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         }
 
         if has_save_error {
-            let msg = app.save_error.clone().unwrap_or_default();
-            render_save_error_bar(&msg, frame, chunks[1]);
+            let msg = app.save_error.as_deref().unwrap_or("");
+            render_save_error_bar(msg, frame, chunks[1]);
         }
 
         crate::components::render_footer(app, frame, footer_chunk);
