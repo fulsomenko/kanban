@@ -1,4 +1,3 @@
-#![cfg(test)]
 #![allow(dead_code)]
 
 use crate::app::{ActiveCard, App};
