@@ -108,7 +108,7 @@ impl App {
                     });
                     if has_assignable {
                         if let Some(selected_card) = self.get_selected_card_in_context() {
-                            self.activate_card(selected_card.id);
+                            self.set_active_card_or_clear(selected_card.id);
                         }
                         let selection_idx = self.get_current_sprint_selection_index();
                         self.dialog_input
@@ -210,7 +210,7 @@ impl App {
         let mut should_restart = false;
         if self.focus.active == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
-                self.activate_card(selected_card.id);
+                self.set_active_card_or_clear(selected_card.id);
 
                 if let Err(e) =
                     self.edit_card_field(terminal, event_handler, CardField::Description)
@@ -811,7 +811,7 @@ impl App {
             graph.children(card_id).into_iter().collect();
 
         // Store the active card so the popup knows which card we're managing
-        self.activate_card(card_id);
+        self.set_active_card_or_clear(card_id);
 
         // Set up dialog state
         self.relationship.card_ids = eligible_cards;

@@ -1102,7 +1102,11 @@ impl App {
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
         if let Some(previous_id) = self.selection.card_navigation_history.pop() {
-            self.selection.active_card_id = self.model.card(previous_id).map(|c| c.id);
+            // Clear-on-miss is required here: an externally archived previous
+            // card must clear the active selection so Backspace doesn't strand
+            // the user on a stale card. Pinned by
+            // test_backspace_return_with_unknown_previous_id_clears_active_card_entirely.
+            self.set_active_card_or_clear(previous_id);
             self.focus.card_focus = CardFocus::Title;
             self.refresh_relationship_counts();
         }
