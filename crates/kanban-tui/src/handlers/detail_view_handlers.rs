@@ -234,7 +234,7 @@ impl App {
                     should_restart = true;
                 }
                 CardFocus::Metadata => {
-                    if let Some(card) = self.active_card_for_metadata_edit() {
+                    if let Some(card) = self.get_card_for_detail_view() {
                         let card_id = card.id;
                         let dto = CardMetadataDto::from_entity(&card);
                         let json =
@@ -1590,17 +1590,17 @@ mod tests {
     }
 
     #[test]
-    fn test_active_card_for_metadata_edit_after_reload_resort_returns_originally_selected_card() {
+    fn test_get_card_for_detail_view_after_reload_resort_returns_originally_selected_card() {
         let mut app = App::test_default();
         let fx = setup_reload_resort_fixture(&mut app);
 
         let card = app
-            .active_card_for_metadata_edit()
-            .expect("helper must return Some when active card is set");
+            .get_card_for_detail_view()
+            .expect("detail view must resolve when active card is set");
 
         assert_eq!(
             card.id, fx.a_id,
-            "metadata-edit helper must return the originally selected card (A) by id, not the card now at A's stale index"
+            "get_card_for_detail_view must return the originally selected card (A) by id, not the card now at A's stale index"
         );
     }
 }
