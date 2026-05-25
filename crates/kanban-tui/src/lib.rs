@@ -1,5 +1,7 @@
 pub mod app;
 pub mod card_list;
+#[cfg(test)]
+pub(crate) mod test_helpers;
 pub mod card_list_component;
 pub mod clipboard;
 pub mod components;
