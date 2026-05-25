@@ -1123,12 +1123,14 @@ impl App {
     }
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
-        if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
-            self.selection.active_card = self
-                .model
-                .cards()
-                .get(previous_idx)
-                .map(|c| ActiveCard::new(previous_idx, c.id));
+        if let Some(previous_id) = self.selection.card_navigation_history.pop() {
+            self.selection.active_card = self.model.card(previous_id).and_then(|c| {
+                self.model
+                    .cards()
+                    .iter()
+                    .position(|cc| cc.id == c.id)
+                    .map(|idx| ActiveCard::new(idx, c.id))
+            });
             self.focus.card_focus = CardFocus::Title;
             self.refresh_relationship_counts();
         }
@@ -1143,7 +1145,7 @@ impl App {
     }
 
     fn navigate_to_related_card(&mut self, side: RelationSide) {
-        let Some(current_card_idx) = self.selection.active_card.map(|a| a.index()) else {
+        let Some(current_card_id) = self.selection.active_card.map(|a| a.id()) else {
             return;
         };
         let related = self.related_card_ids(side);
@@ -1157,7 +1159,7 @@ impl App {
             if let Some(target_idx) = self.model.cards().iter().position(|c| c.id == target_id) {
                 self.selection
                     .card_navigation_history
-                    .push(current_card_idx);
+                    .push(current_card_id);
                 self.selection.active_card = Some(ActiveCard::new(target_idx, target_id));
                 self.focus.card_focus = CardFocus::Title;
                 self.refresh_relationship_counts();
@@ -1352,11 +1354,10 @@ mod tests {
         let ids = seed_chain(&mut app, &["A", "B", "C"]);
         let b_id = ids[1];
         let c_id = ids[2];
-        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
         let c_idx = app.model.cards().iter().position(|c| c.id == c_id).unwrap();
 
         app.selection.active_card = Some(ActiveCard::new(c_idx, c_id));
-        app.selection.card_navigation_history.push(b_idx);
+        app.selection.card_navigation_history.push(b_id);
         app.focus.card_focus = CardFocus::Parents;
 
         app.return_to_previous_card_from_detail_history();
@@ -1469,25 +1470,25 @@ mod tests {
     }
 
     #[test]
-    fn test_backspace_return_with_stale_previous_idx_clears_active_card_entirely() {
+    fn test_backspace_return_with_unknown_previous_id_clears_active_card_entirely() {
         let mut app = App::test_default();
         let ids = seed_chain(&mut app, &["A", "B"]);
         let b_id = ids[1];
         let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
-        let stale_idx = app.model.cards().len() + 99;
+        let unknown_id = uuid::Uuid::new_v4();
 
         app.selection.active_card = Some(ActiveCard::new(b_idx, b_id));
-        app.selection.card_navigation_history.push(stale_idx);
+        app.selection.card_navigation_history.push(unknown_id);
 
         app.return_to_previous_card_from_detail_history();
 
         assert!(
             app.selection.active_card.is_none(),
-            "when previous_idx no longer resolves, active_card must be cleared — the wrapper enforces that index and id move together"
+            "when previous_id no longer resolves to a card in the model, active_card must be cleared"
         );
         assert!(
             app.get_card_for_detail_view().is_none(),
-            "detail view must resolve to None when active_card was cleared by stale-index recovery"
+            "detail view must resolve to None when active_card was cleared by an unknown-id recovery"
         );
     }
 
