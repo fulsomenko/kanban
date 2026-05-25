@@ -85,7 +85,9 @@ fn fmt_dt(dt: &DateTime<Utc>) -> String {
 
 fn required_str<'a>(value: &'a str, field: &str) -> KanbanResult<&'a str> {
     if value.is_empty() {
-        Err(ser_err(format!("required field '{field}' must not be empty")))
+        Err(ser_err(format!(
+            "required field '{field}' must not be empty"
+        )))
     } else {
         Ok(value)
     }
@@ -687,7 +689,7 @@ impl SqliteStore {
                 updated_at=excluded.updated_at",
         )
         .bind(&id)
-        .bind(&board.name)
+        .bind(required_str(&board.name, "board.name")?)
         .bind(&board.description)
         .bind(&board.sprint_prefix)
         .bind(&board.card_prefix)
@@ -718,7 +720,7 @@ impl SqliteStore {
             )
             .bind(&id)
             .bind(i as i32)
-            .bind(name)
+            .bind(required_str(name, "board.sprint_names[*]")?)
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
@@ -783,7 +785,7 @@ impl SqliteStore {
         )
         .bind(&id)
         .bind(card.column_id.to_string())
-        .bind(&card.title)
+        .bind(required_str(&card.title, "card.title")?)
         .bind(&card.description)
         .bind(format!("{:?}", card.priority))
         .bind(format!("{:?}", card.status))
@@ -1266,7 +1268,7 @@ impl SqliteStore {
         )
         .bind(column.id.to_string())
         .bind(column.board_id.to_string())
-        .bind(&column.name)
+        .bind(required_str(&column.name, "column.name")?)
         .bind(column.position)
         .bind(column.wip_limit)
         .bind(fmt_dt(&column.created_at))
