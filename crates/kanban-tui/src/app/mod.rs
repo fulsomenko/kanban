@@ -95,6 +95,7 @@ pub struct App {
     pub view: ViewState,
     pub model: model::Model,
     pub relationship: RelationshipState,
+    pub save_error: Option<String>,
     pub pending_key: Option<char>,
     pub has_data_file: bool,
     pub cli_file_provided: bool,
@@ -317,6 +318,7 @@ impl App {
             view: ViewState::default(),
             model: model::Model::default(),
             relationship: RelationshipState::default(),
+            save_error: None,
             pending_key: None,
             has_data_file: has_explicit_file,
             cli_file_provided: save_file.is_some(),
@@ -385,6 +387,8 @@ impl App {
         let backend = self.ctx.backend();
         let file_watcher = self.persistence.file_watcher.clone();
         let save_completion_tx = self.ctx.save_coordinator.save_completion_tx().cloned();
+        let (save_error_tx, save_error_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        self.persistence.save_error_rx = Some(save_error_rx);
 
         tracing::info!("Spawning save worker");
         let handle = tokio::spawn(async move {
@@ -433,6 +437,7 @@ impl App {
                     }
                     Err(e) => {
                         tracing::error!("Save worker flush failed: {}", e);
+                        let _ = save_error_tx.send(e.to_string());
                         false
                     }
                 };
@@ -665,6 +670,14 @@ impl App {
 
     pub fn clear_banner(&mut self) {
         self.ui_state.banner = None;
+    }
+
+    pub fn set_save_error(&mut self, message: String) {
+        self.save_error = Some(message);
+    }
+
+    pub fn clear_save_error(&mut self) {
+        self.save_error = None;
     }
 
     fn keycode_matches_binding_key(
@@ -2179,11 +2192,23 @@ impl App {
                         // Save operation completed - update dirty flag
                         tracing::debug!("Save completion signal received");
                         self.ctx.save_coordinator.save_completed();
+                        self.clear_save_error();
                         // Reset force quit flag and dirty flag if all saves are now complete
                         if !self.ctx.save_coordinator.has_pending_saves() {
                             self.ctx.mark_clean();
                             self.quit_with_pending = false;
                         }
+                    }
+                    Some(error_msg) = async {
+                        if let Some(ref mut rx) = &mut self.persistence.save_error_rx {
+                            rx.recv().await
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        tracing::warn!("Save error received from worker: {}", error_msg);
+                        self.set_save_error(error_msg);
+                        self.needs_redraw = true;
                     }
                     Some(_change_event) = async {
                         if let Some(ref mut rx) = &mut self.persistence.file_change_rx {
@@ -2481,6 +2506,7 @@ impl App {
             view: ViewState::default(),
             model: model::Model::default(),
             relationship: RelationshipState::default(),
+            save_error: None,
             pending_key: None,
             has_data_file: true,
             cli_file_provided: false,
@@ -2583,6 +2609,7 @@ mod tests {
             view: ViewState::default(),
             model: model::Model::default(),
             relationship: RelationshipState::default(),
+            save_error: None,
             pending_key: None,
             has_data_file: true,
             cli_file_provided: false,
