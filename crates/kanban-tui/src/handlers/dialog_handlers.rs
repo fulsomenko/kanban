@@ -457,3 +457,33 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test_helpers::setup_reload_resort_fixture;
+    use crate::App;
+    use crossterm::event::KeyCode;
+
+    #[test]
+    fn test_handle_set_card_points_dialog_after_reload_resort_updates_originally_selected_card_points(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.input.set("3".to_string());
+        app.handle_set_card_points_dialog(KeyCode::Enter);
+
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        let a_card = cards.iter().find(|c| c.id == fx.a_id).expect("A exists");
+        let p_card = cards.iter().find(|c| c.id == fx.p_id).expect("P exists");
+        assert_eq!(
+            a_card.points,
+            Some(3),
+            "points dialog must set points on A (the active card by id), not on the wrong card at A's stale index"
+        );
+        assert_eq!(
+            p_card.points, None,
+            "points dialog must leave P's points unchanged when A is active"
+        );
+    }
+}

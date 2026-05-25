@@ -659,3 +659,99 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test_helpers::{load_with_card_order, setup_reload_resort_fixture};
+    use crate::App;
+    use crossterm::event::KeyCode;
+    use kanban_domain::{CardPriority, KanbanOperations};
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_handle_set_card_priority_popup_after_reload_resort_updates_originally_selected_card_priority(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.dialog_input.priority_selection.set(Some(3));
+        app.handle_set_card_priority_popup(KeyCode::Enter);
+
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        let a_card = cards.iter().find(|c| c.id == fx.a_id).expect("A exists");
+        let p_card = cards.iter().find(|c| c.id == fx.p_id).expect("P exists");
+        assert_eq!(
+            a_card.priority,
+            CardPriority::Critical,
+            "priority popup must update A (the active card by id), not the wrong card at A's stale index"
+        );
+        assert_ne!(
+            p_card.priority,
+            CardPriority::Critical,
+            "priority popup must leave P unchanged when A is active"
+        );
+    }
+
+    #[test]
+    fn test_handle_assign_card_to_sprint_popup_after_reload_resort_acts_on_originally_selected_card(
+    ) {
+        use crate::components::sprint_assign_list::{build_entries, sprint_id_of};
+
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let sprint = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
+        load_with_card_order(
+            &mut app,
+            &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id],
+        );
+
+        let sprints = app.model.sprints().to_vec();
+        let entries = build_entries(&sprints, fx.board_id, chrono::Utc::now());
+        let target_idx = entries
+            .iter()
+            .position(|e| sprint_id_of(e) == Some(sprint.id))
+            .expect("created sprint must appear in entries");
+        app.dialog_input.sprint_assign_selection.set(Some(target_idx));
+
+        app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
+
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        let a_card = cards.iter().find(|c| c.id == fx.a_id).expect("A exists");
+        let p_card = cards.iter().find(|c| c.id == fx.p_id).expect("P exists");
+        assert_eq!(
+            a_card.sprint_id,
+            Some(sprint.id),
+            "sprint-assign popup must assign A (the active card by id), not the wrong card at A's stale index"
+        );
+        assert_eq!(
+            p_card.sprint_id, None,
+            "sprint-assign popup must leave P unassigned when A is active"
+        );
+    }
+
+    #[test]
+    fn test_handle_manage_parents_popup_toggle_after_reload_resort_attaches_to_originally_selected_card(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.relationship.card_ids = vec![fx.p_id, fx.b_id, fx.c_id];
+        app.relationship.selected = HashSet::from_iter(vec![fx.p_id]);
+        app.relationship.selection.set(Some(1));
+
+        app.handle_manage_parents_popup(KeyCode::Enter);
+
+        let graph = app.ctx.data_store().get_graph().unwrap();
+        let a_parents: HashSet<_> = graph.parents(fx.a_id).into_iter().collect();
+        let p_parents: HashSet<_> = graph.parents(fx.p_id).into_iter().collect();
+        assert!(
+            a_parents.contains(&fx.b_id),
+            "manage_parents toggle must attach B as a parent of A (the active card by id), not as a parent of the wrong card at A's stale index"
+        );
+        assert!(
+            !p_parents.contains(&fx.b_id),
+            "manage_parents toggle must not attach B as a parent of P when A is the active card"
+        );
+    }
+}
