@@ -563,11 +563,7 @@ impl App {
             let column_count = self.view.strategy.get_all_task_lists().len();
 
             if index < column_count {
-                self.view
-                    .strategy
-                    .as_any_mut()
-                    .downcast_mut::<UnifiedViewStrategy>()
-                    .map(|unified| unified.try_set_active_column_index(index));
+                self.view.strategy.try_navigate_to_column(index);
 
                 if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     if list.is_empty() {

@@ -356,3 +356,113 @@ fn test_delete_column_adjusts_selection() {
         "selection should adjust to last remaining column"
     );
 }
+
+#[test]
+fn test_toggle_card_completion_retains_selection() {
+    // Stale-model regression: `toggle_card_completion` must call `prepare_frame()`
+    // before `select_card_by_id` so the view task list reflects the post-toggle
+    // card layout.  In the kanban (column) view the card moves to a different
+    // column list, so without the refresh the selection silently drops.
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let _todo = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), Some(0))
+        .unwrap();
+    let _done = app
+        .ctx
+        .create_column(board.id, "Done".to_string(), Some(1))
+        .unwrap();
+    app.prepare_frame();
+    app.selection.board.set(Some(0));
+    app.selection.active_board_index = Some(0);
+
+    // Switch to the kanban (column) view so each column has its own CardList.
+    // This is the view where stale-model causes select_card_by_id to silently fail.
+    app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
+    app.prepare_frame();
+
+    app.focus.active = Focus::Cards;
+    app.input.set("Task".to_string());
+    app.create_card();
+    app.prepare_frame();
+
+    let card_id = app
+        .get_selected_card_id()
+        .expect("card should be selected after creation");
+
+    // Toggle completion -- service will auto-move the card to the Done column.
+    // Without prepare_frame() inside toggle_card_completion (before select_card_by_id)
+    // the next prepare_frame() call (simulating the next render frame) will move the
+    // card to the Done column list while the selector still points to the Todo column,
+    // silently dropping the selection.
+    app.handle_toggle_card_completion();
+    // Simulate the next render frame -- this is where the stale-model bug manifests.
+    app.prepare_frame();
+
+    let selected_after = app.get_selected_card_id();
+    assert_eq!(
+        selected_after,
+        Some(card_id),
+        "selection must remain on the toggled card even after it moves to the Done column"
+    );
+}
+
+#[test]
+fn test_toggle_multi_card_completion_retains_selection() {
+    // Same stale-model regression for the multi-select toggle path in kanban view.
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let _todo = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), Some(0))
+        .unwrap();
+    let _done = app
+        .ctx
+        .create_column(board.id, "Done".to_string(), Some(1))
+        .unwrap();
+    app.prepare_frame();
+    app.selection.board.set(Some(0));
+    app.selection.active_board_index = Some(0);
+
+    app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
+    app.prepare_frame();
+
+    app.focus.active = Focus::Cards;
+    app.input.set("Alpha".to_string());
+    app.create_card();
+    app.prepare_frame();
+    let alpha_id = app
+        .get_selected_card_id()
+        .expect("alpha should be selected after creation");
+
+    app.input.set("Beta".to_string());
+    app.create_card();
+    app.prepare_frame();
+    let beta_id = app
+        .get_selected_card_id()
+        .expect("beta should be selected after creation");
+
+    // Enter multi-select mode and select both cards.
+    app.multi_select.selection_mode_active = true;
+    app.multi_select.selected_cards.insert(alpha_id);
+    app.multi_select.selected_cards.insert(beta_id);
+
+    // Toggle completion for both -- both cards move to the Done column.
+    app.handle_toggle_card_completion();
+    // Simulate the next render frame -- this is where the stale-model bug manifests.
+    app.prepare_frame();
+
+    // After the toggle the first selected card (alpha or beta) must still be
+    // reachable via get_selected_card_id; losing the selection is the bug.
+    let selected_after = app.get_selected_card_id();
+    assert!(
+        selected_after.is_some(),
+        "a card must remain selected after multi-select toggle completion"
+    );
+    assert!(
+        selected_after == Some(alpha_id) || selected_after == Some(beta_id),
+        "selection must be one of the toggled cards, got {:?}",
+        selected_after
+    );
+}
