@@ -1302,8 +1302,7 @@ impl KanbanOperations for KanbanContext {
             .cloned()
             .ok_or_else(|| KanbanError::validation("No board in import data"))?;
 
-        let imported_column_ids: HashSet<Uuid> =
-            imported.columns.iter().map(|c| c.id).collect();
+        let imported_column_ids: HashSet<Uuid> = imported.columns.iter().map(|c| c.id).collect();
         let existing_column_ids: HashSet<Uuid> = self
             .backend
             .list_all_columns()?

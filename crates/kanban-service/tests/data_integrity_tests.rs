@@ -94,7 +94,11 @@ async fn test_delete_sprint_unassigns_cards() -> KanbanResult<()> {
     ctx.assign_card_to_sprint(card_b.id, sprint_id)?;
 
     let assigned = ctx.backend().list_cards_by_sprint(sprint_id)?;
-    assert_eq!(assigned.len(), 2, "both cards must be assigned before delete");
+    assert_eq!(
+        assigned.len(),
+        2,
+        "both cards must be assigned before delete"
+    );
 
     ctx.delete_sprint(sprint_id)?;
 
@@ -123,10 +127,7 @@ async fn test_update_nonexistent_card_returns_not_found() -> KanbanResult<()> {
         "updating a non-existent card must return an error"
     );
     let err = result.unwrap_err();
-    assert!(
-        err.is_not_found(),
-        "error must be NotFound, got: {err:?}"
-    );
+    assert!(err.is_not_found(), "error must be NotFound, got: {err:?}");
     Ok(())
 }
 
@@ -141,12 +142,8 @@ async fn test_import_with_invalid_column_reference_fails() -> KanbanResult<()> {
     let nonexistent_column_id = Uuid::new_v4();
 
     let mut orphan_board = board.clone();
-    let orphan_card = kanban_domain::Card::new(
-        &mut orphan_board,
-        nonexistent_column_id,
-        "Orphan".into(),
-        0,
-    );
+    let orphan_card =
+        kanban_domain::Card::new(&mut orphan_board, nonexistent_column_id, "Orphan".into(), 0);
 
     let snapshot = kanban_domain::Snapshot {
         boards: vec![board],
