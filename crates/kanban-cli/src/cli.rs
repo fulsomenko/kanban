@@ -40,7 +40,7 @@ pub enum Commands {
     Migrate(MigrateArgs),
     /// Initialize a new board file with an optional first board
     Init {
-        /// Name of the first board to create
+        /// Name of the first board to create. If omitted, the file is created with no entities.
         #[arg(long)]
         board: Option<String>,
     },

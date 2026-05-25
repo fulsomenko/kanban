@@ -110,6 +110,23 @@ where
     Ok((cli, cmd))
 }
 
+async fn create_empty_storage_file(
+    store_manager: &StoreManager,
+    validated_file: Option<&str>,
+    config: &AppConfig,
+) -> anyhow::Result<()> {
+    use kanban_domain::Snapshot;
+    use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot};
+    let store = store_manager.make_store_with_config(validated_file, config)?;
+    let data = snapshot_to_json_bytes(&Snapshot::new()).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let metadata = PersistenceMetadata::new(uuid::Uuid::new_v4());
+    store
+        .save(StoreSnapshot { data, metadata })
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(())
+}
+
 async fn dispatch_subcommand(ctx: &mut CliContext, cmd: Commands) -> anyhow::Result<()> {
     match cmd {
         Commands::Board(board_cmd) => {
@@ -293,19 +310,8 @@ Provide the file path in one of these ways:
                 let has_explicit_file =
                     validated_file.is_some() || config.storage_location.is_some();
                 if has_explicit_file && !std::path::Path::new(&effective_file).exists() {
-                    use kanban_domain::Snapshot;
-                    use kanban_persistence::{
-                        snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot,
-                    };
-                    let store =
-                        store_manager.make_store_with_config(validated_file.as_deref(), &config)?;
-                    let data = snapshot_to_json_bytes(&Snapshot::new())
-                        .map_err(|e| anyhow::anyhow!("{e}"))?;
-                    let metadata = PersistenceMetadata::new(uuid::Uuid::new_v4());
-                    store
-                        .save(StoreSnapshot { data, metadata })
-                        .await
-                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                    create_empty_storage_file(&store_manager, validated_file.as_deref(), &config)
+                        .await?;
                 }
                 use std::io::IsTerminal;
                 if std::io::stdin().is_terminal() {
@@ -334,11 +340,26 @@ Provide the file path in one of these ways:
             }
             Some(Commands::Init { board }) => {
                 init_tracing_cli();
-                let board_name = board.unwrap_or_else(|| "My Board".to_string());
-                let mut ctx = CliContext::load(&store_manager, &effective_file, config).await?;
-                let created = ctx.create_board(board_name, None)?;
-                ctx.save().await?;
-                output::output_success(&created);
+                match board {
+                    Some(name) => {
+                        let mut ctx =
+                            CliContext::load(&store_manager, &effective_file, config).await?;
+                        let created = ctx.create_board(name, None)?;
+                        ctx.save().await?;
+                        output::output_success(&created);
+                    }
+                    None => {
+                        if !std::path::Path::new(&effective_file).exists() {
+                            create_empty_storage_file(
+                                &store_manager,
+                                validated_file.as_deref(),
+                                &config,
+                            )
+                            .await?;
+                        }
+                        output::output_success(serde_json::json!({ "file": effective_file }));
+                    }
+                }
             }
             Some(cmd) => {
                 init_tracing_cli();
