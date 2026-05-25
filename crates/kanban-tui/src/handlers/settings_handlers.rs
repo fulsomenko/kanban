@@ -277,7 +277,7 @@ impl App {
         } else {
             Some(0)
         });
-        self.selection.active_card = None;
+        self.selection.active_card_id = None;
         self.selection.card_navigation_history.clear();
 
         self.persistence.save_file = Some(new_storage_location.clone());

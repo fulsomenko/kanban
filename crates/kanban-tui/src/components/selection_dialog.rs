@@ -336,12 +336,11 @@ impl SelectionDialog for SprintAssignDialog {
                 let sprints = app.model.sprints();
                 let entries = build_entries(sprints, board.id, chrono::Utc::now());
 
-                let cards = app.model.cards();
-                let current_sprint_id = if let Some(active) = app.selection.active_card {
-                    cards.get(active.index()).and_then(|c| c.sprint_id)
-                } else {
-                    None
-                };
+                let current_sprint_id = app
+                    .selection
+                    .active_card_id
+                    .and_then(|id| app.model.card(id))
+                    .and_then(|c| c.sprint_id);
 
                 for (idx, entry) in entries.iter().enumerate() {
                     let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);

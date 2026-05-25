@@ -8,7 +8,6 @@ use kanban_domain::{
 use kanban_tui::components::{build_entries, sprint_id_of};
 use kanban_tui::{
     app::mode::{AppMode, DialogMode},
-    app::ActiveCard,
     components::{SelectionDialog, SprintAssignDialog},
     App,
 };
@@ -64,7 +63,7 @@ fn setup_app_with_sprints() -> DialogFixture {
     app.ctx.complete_sprint(to_complete.id).unwrap();
 
     app.selection.active_board_index = Some(0);
-    app.selection.active_card = Some(ActiveCard::new(0, card.id));
+    app.selection.active_card_id = Some(card.id);
     app.prepare_frame();
 
     DialogFixture {
@@ -414,7 +413,7 @@ fn test_dialog_scrolls_to_keep_selected_sprint_visible_when_list_overflows() {
         app.ctx.create_sprint(board.id, None, None).unwrap();
     }
     app.selection.active_board_index = Some(0);
-    app.selection.active_card = Some(ActiveCard::new(0, card.id));
+    app.selection.active_card_id = Some(card.id);
     app.prepare_frame();
 
     open_assign_dialog(&mut app);
@@ -486,7 +485,7 @@ fn test_sticky_header_appears_at_top_when_scrolled_past_active_planned_header() 
         app.ctx.create_sprint(board.id, None, None).unwrap();
     }
     app.selection.active_board_index = Some(0);
-    app.selection.active_card = Some(ActiveCard::new(0, card.id));
+    app.selection.active_card_id = Some(card.id);
     app.prepare_frame();
 
     open_assign_dialog(&mut app);
@@ -550,7 +549,7 @@ fn test_sticky_header_switches_to_completed_ended_when_selecting_in_lower_sectio
         app.ctx.complete_sprint(s.id).unwrap();
     }
     app.selection.active_board_index = Some(0);
-    app.selection.active_card = Some(ActiveCard::new(0, card.id));
+    app.selection.active_card_id = Some(card.id);
     app.prepare_frame();
 
     open_assign_dialog(&mut app);

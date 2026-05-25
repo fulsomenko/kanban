@@ -1,6 +1,5 @@
 use crate::app::{
-    ActiveCard, App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode,
-    SprintTaskPanel,
+    App, AppMode, BoardField, BoardFocus, CardField, CardFocus, DialogMode, SprintTaskPanel,
 };
 use crate::editor::edit_in_external_editor;
 use crate::events::EventHandler;
@@ -30,7 +29,7 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.selection.active_card = None;
+                self.selection.active_card_id = None;
                 self.focus.card_focus = CardFocus::Title;
                 self.relationship.parents_list.selection.clear();
                 self.relationship.children_list.selection.clear();
@@ -234,52 +233,49 @@ impl App {
                     should_restart = true;
                 }
                 CardFocus::Metadata => {
-                    if let Some(active) = self.selection.active_card {
-                        if let Some(card) = self.model.cards().get(active.index()) {
-                            let card_id = card.id;
-                            let dto = CardMetadataDto::from_entity(card);
-                            let json = serde_json::to_string_pretty(&dto)
-                                .unwrap_or_else(|_| "{}".to_string());
-                            let temp_file = std::env::temp_dir()
-                                .join(format!("kanban-card-{}-metadata.json", card_id));
-                            match edit_in_external_editor(terminal, event_handler, temp_file, &json)
-                            {
-                                Ok(Some(new_content)) => {
-                                    match serde_json::from_str::<CardMetadataDto>(&new_content) {
-                                        Ok(new_dto) => {
-                                            let cmd = kanban_domain::commands::Command::Card(
-                                                kanban_domain::commands::CardCommand::ApplyMetadata(
-                                                    kanban_domain::commands::ApplyCardMetadata {
-                                                        card_id,
-                                                        dto: new_dto,
-                                                    },
-                                                ),
-                                            );
-                                            if let Err(e) = self.ctx.execute_command(cmd) {
-                                                tracing::error!("Failed to apply metadata: {}", e);
-                                                self.set_error(format!(
-                                                    "Failed to apply metadata: {}",
-                                                    e
-                                                ));
-                                            }
-                                        }
-                                        Err(e) => {
-                                            tracing::error!("Failed to parse metadata JSON: {}", e);
+                    if let Some(card) = self.get_card_for_detail_view() {
+                        let card_id = card.id;
+                        let dto = CardMetadataDto::from_entity(&card);
+                        let json =
+                            serde_json::to_string_pretty(&dto).unwrap_or_else(|_| "{}".to_string());
+                        let temp_file = std::env::temp_dir()
+                            .join(format!("kanban-card-{}-metadata.json", card_id));
+                        match edit_in_external_editor(terminal, event_handler, temp_file, &json) {
+                            Ok(Some(new_content)) => {
+                                match serde_json::from_str::<CardMetadataDto>(&new_content) {
+                                    Ok(new_dto) => {
+                                        let cmd = kanban_domain::commands::Command::Card(
+                                            kanban_domain::commands::CardCommand::ApplyMetadata(
+                                                kanban_domain::commands::ApplyCardMetadata {
+                                                    card_id,
+                                                    dto: new_dto,
+                                                },
+                                            ),
+                                        );
+                                        if let Err(e) = self.ctx.execute_command(cmd) {
+                                            tracing::error!("Failed to apply metadata: {}", e);
                                             self.set_error(format!(
-                                                "Failed to parse metadata JSON: {}",
+                                                "Failed to apply metadata: {}",
                                                 e
                                             ));
                                         }
                                     }
-                                }
-                                Ok(None) => {}
-                                Err(e) => {
-                                    tracing::error!("Failed to edit metadata: {}", e);
-                                    self.set_error(format!("Failed to edit metadata: {}", e));
+                                    Err(e) => {
+                                        tracing::error!("Failed to parse metadata JSON: {}", e);
+                                        self.set_error(format!(
+                                            "Failed to parse metadata JSON: {}",
+                                            e
+                                        ));
+                                    }
                                 }
                             }
-                            should_restart = true;
+                            Ok(None) => {}
+                            Err(e) => {
+                                tracing::error!("Failed to edit metadata: {}", e);
+                                self.set_error(format!("Failed to edit metadata: {}", e));
+                            }
                         }
+                        should_restart = true;
                     }
                 }
                 CardFocus::Parents => {
@@ -292,7 +288,7 @@ impl App {
             KeyCode::Char('d') => {
                 self.handle_archive_card();
                 self.pop_mode();
-                self.selection.active_card = None;
+                self.selection.active_card_id = None;
                 self.focus.card_focus = CardFocus::Title;
             }
             KeyCode::Char('a') => {
@@ -735,11 +731,7 @@ impl App {
 
                     match action {
                         CardListAction::Select(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                            if self.activate_card(card_id) {
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -754,11 +746,7 @@ impl App {
                             }
                         }
                         CardListAction::Edit(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                            if self.activate_card(card_id) {
                                 // Initialize list components with item counts
                                 let parents = self.get_current_card_parents();
                                 let children = self.get_current_card_children();
@@ -799,22 +787,14 @@ impl App {
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                            if self.activate_card(card_id) {
                                 let priority_idx = self.get_current_priority_selection_index();
                                 self.dialog_input.priority_selection.set(Some(priority_idx));
                                 self.open_dialog(DialogMode::SetCardPriority);
                             }
                         }
                         CardListAction::AssignSprint(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                            if self.activate_card(card_id) {
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -836,11 +816,7 @@ impl App {
                             }
                         }
                         CardListAction::ReassignSprint(card_id) => {
-                            if let Some(card_idx) =
-                                self.model.cards().iter().position(|c| c.id == card_id)
-                            {
-                                self.selection.active_card =
-                                    Some(ActiveCard::new(card_idx, card_id));
+                            if self.activate_card(card_id) {
                                 if let Some(board_idx) = self.selection.active_board_index {
                                     if let Some(board) = self.model.boards().get(board_idx) {
                                         let sprint_count = self
@@ -976,8 +952,8 @@ impl App {
     }
 
     pub(crate) fn handle_manage_parents(&mut self) {
-        if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1029,8 +1005,8 @@ impl App {
     }
 
     pub(crate) fn handle_manage_children(&mut self) {
-        if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1082,8 +1058,8 @@ impl App {
     }
 
     pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
-        if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 return self.model.graph().parents(card.id);
             }
         }
@@ -1091,8 +1067,8 @@ impl App {
     }
 
     pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
-        if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 return self.model.graph().children(card.id);
             }
         }
@@ -1125,12 +1101,12 @@ impl App {
     }
 
     pub(crate) fn return_to_previous_card_from_detail_history(&mut self) {
-        if let Some(previous_idx) = self.selection.card_navigation_history.pop() {
-            self.selection.active_card = self
-                .model
-                .cards()
-                .get(previous_idx)
-                .map(|c| ActiveCard::new(previous_idx, c.id));
+        if let Some(previous_id) = self.selection.card_navigation_history.pop() {
+            // Clear-on-miss is required here: an externally archived previous
+            // card must clear the active selection so Backspace doesn't strand
+            // the user on a stale card. Pinned by
+            // test_backspace_return_with_unknown_previous_id_clears_active_card_entirely.
+            self.set_active_card_or_clear(previous_id);
             self.focus.card_focus = CardFocus::Title;
             self.refresh_relationship_counts();
         }
@@ -1145,7 +1121,7 @@ impl App {
     }
 
     fn navigate_to_related_card(&mut self, side: RelationSide) {
-        let Some(current_card_idx) = self.selection.active_card.map(|a| a.index()) else {
+        let Some(current_card_id) = self.selection.active_card_id else {
             return;
         };
         let related = self.related_card_ids(side);
@@ -1156,11 +1132,8 @@ impl App {
         let candidates = selected_id.into_iter().chain(related.first().copied());
 
         for target_id in candidates {
-            if let Some(target_idx) = self.model.cards().iter().position(|c| c.id == target_id) {
-                self.selection
-                    .card_navigation_history
-                    .push(current_card_idx);
-                self.selection.active_card = Some(ActiveCard::new(target_idx, target_id));
+            if self.activate_card(target_id) {
+                self.selection.card_navigation_history.push(current_card_id);
                 self.focus.card_focus = CardFocus::Title;
                 self.refresh_relationship_counts();
                 return;
@@ -1213,7 +1186,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use crate::app::sprint_view::SprintTaskPanel;
-    use crate::app::{ActiveCard, CardFocus};
+    use crate::app::CardFocus;
     use crate::App;
     use crossterm::event::KeyCode;
     use kanban_domain::{CreateCardOptions, GraphOperations, KanbanOperations, Snapshot};
@@ -1291,14 +1264,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let child_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == child_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
+        app.selection.active_card_id = Some(child_id);
         app.focus.card_focus = CardFocus::Parents;
         app.relationship.parents_list.update_item_count(1);
         app.relationship.parents_list.selection.set(Some(0));
@@ -1306,7 +1273,7 @@ mod tests {
         app.navigate_to_selected_parent();
 
         assert_eq!(
-            app.selection.active_card.map(|a| a.id()),
+            app.selection.active_card_id,
             Some(parent_id),
             "active_card.id() must be updated to the parent so the detail view rerenders against the parent card"
         );
@@ -1325,21 +1292,15 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let parent_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == parent_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
+        app.selection.active_card_id = Some(parent_id);
         app.focus.card_focus = CardFocus::Children;
         app.relationship.children_list.update_item_count(1);
         app.relationship.children_list.selection.set(Some(0));
 
         app.navigate_to_selected_child();
 
-        assert_eq!(app.selection.active_card.map(|a| a.id()), Some(child_id));
+        assert_eq!(app.selection.active_card_id, Some(child_id));
         assert_eq!(
             app.get_card_for_detail_view()
                 .expect("detail must resolve")
@@ -1354,17 +1315,15 @@ mod tests {
         let ids = seed_chain(&mut app, &["A", "B", "C"]);
         let b_id = ids[1];
         let c_id = ids[2];
-        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
-        let c_idx = app.model.cards().iter().position(|c| c.id == c_id).unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(c_idx, c_id));
-        app.selection.card_navigation_history.push(b_idx);
+        app.selection.active_card_id = Some(c_id);
+        app.selection.card_navigation_history.push(b_id);
         app.focus.card_focus = CardFocus::Parents;
 
         app.return_to_previous_card_from_detail_history();
 
         assert_eq!(
-            app.selection.active_card.map(|a| a.id()),
+            app.selection.active_card_id,
             Some(b_id),
             "Backspace return must update active_card to the previous card"
         );
@@ -1384,7 +1343,7 @@ mod tests {
         app.handle_sprint_detail_key(KeyCode::Enter);
 
         assert_eq!(
-            app.selection.active_card.map(|a| a.id()),
+            app.selection.active_card_id,
             Some(card_id),
             "Enter on a sprint-detail card row must set active_card so the detail view can resolve the card"
         );
@@ -1404,7 +1363,7 @@ mod tests {
         app.handle_sprint_detail_key(KeyCode::Char('e'));
 
         assert_eq!(
-            app.selection.active_card.map(|a| a.id()),
+            app.selection.active_card_id,
             Some(card_id),
             "'e' on a sprint-detail card row must set active_card so the detail view can resolve the card"
         );
@@ -1422,14 +1381,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let child_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == child_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(child_idx, child_id));
+        app.selection.active_card_id = Some(child_id);
         app.focus.card_focus = CardFocus::Parents;
         app.relationship.parents_list.update_item_count(1);
         // Deliberately no parents_list.selection.set(...) — exercise the fallback path.
@@ -1437,7 +1390,7 @@ mod tests {
         app.navigate_to_selected_parent();
 
         assert_eq!(
-            app.selection.active_card.map(|a| a.id()),
+            app.selection.active_card_id,
             Some(parent_id),
             "with no list selection, Enter on Parents must fall back to navigating to the first parent"
         );
@@ -1449,14 +1402,8 @@ mod tests {
         let ids = seed_chain(&mut app, &["Parent", "Child"]);
         let parent_id = ids[0];
         let child_id = ids[1];
-        let parent_idx = app
-            .model
-            .cards()
-            .iter()
-            .position(|c| c.id == parent_id)
-            .unwrap();
 
-        app.selection.active_card = Some(ActiveCard::new(parent_idx, parent_id));
+        app.selection.active_card_id = Some(parent_id);
         app.focus.card_focus = CardFocus::Children;
         app.relationship.children_list.update_item_count(1);
         // Deliberately no children_list.selection.set(...).
@@ -1464,32 +1411,192 @@ mod tests {
         app.navigate_to_selected_child();
 
         assert_eq!(
-            app.selection.active_card.map(|a| a.id()),
+            app.selection.active_card_id,
             Some(child_id),
             "with no list selection, Enter on Children must fall back to navigating to the first child"
         );
     }
 
     #[test]
-    fn test_backspace_return_with_stale_previous_idx_clears_active_card_entirely() {
+    fn test_backspace_return_with_unknown_previous_id_clears_active_card_entirely() {
         let mut app = App::test_default();
         let ids = seed_chain(&mut app, &["A", "B"]);
         let b_id = ids[1];
-        let b_idx = app.model.cards().iter().position(|c| c.id == b_id).unwrap();
-        let stale_idx = app.model.cards().len() + 99;
+        let unknown_id = uuid::Uuid::new_v4();
 
-        app.selection.active_card = Some(ActiveCard::new(b_idx, b_id));
-        app.selection.card_navigation_history.push(stale_idx);
+        app.selection.active_card_id = Some(b_id);
+        app.selection.card_navigation_history.push(unknown_id);
 
         app.return_to_previous_card_from_detail_history();
 
         assert!(
-            app.selection.active_card.is_none(),
-            "when previous_idx no longer resolves, active_card must be cleared — the wrapper enforces that index and id move together"
+            app.selection.active_card_id.is_none(),
+            "when previous_id no longer resolves to a card in the model, active_card must be cleared"
         );
         assert!(
             app.get_card_for_detail_view().is_none(),
-            "detail view must resolve to None when active_card was cleared by stale-index recovery"
+            "detail view must resolve to None when active_card was cleared by an unknown-id recovery"
+        );
+    }
+
+    use crate::test_helpers::{load_with_card_order, setup_reload_resort_fixture};
+
+    #[test]
+    fn test_return_to_previous_card_after_reload_resort_returns_to_originally_visited_card() {
+        let mut app = App::test_default();
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "Todo".into(), None)
+            .unwrap();
+        let a = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "A".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let p = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "P".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let b = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "B".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let c = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "C".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let d = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "D".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        app.ctx.attach_child(a.id, d.id).unwrap();
+
+        load_with_card_order(&mut app, &[a.id, p.id, b.id, c.id, d.id]);
+        app.selection.active_card_id = Some(a.id);
+        app.selection.active_board_index = Some(0);
+
+        app.focus.card_focus = CardFocus::Children;
+        app.relationship.children_list.update_item_count(1);
+        app.relationship.children_list.selection.set(Some(0));
+        app.navigate_to_selected_child();
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(d.id),
+            "precondition: navigate_to_selected_child must have set active_card to D"
+        );
+
+        load_with_card_order(&mut app, &[p.id, b.id, a.id, c.id, d.id]);
+
+        app.return_to_previous_card_from_detail_history();
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(a.id),
+            "backspace must return to A (originally visited, by id) — not whatever card now sits at A's old slot after the external reload re-ordered cards()"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_parents_after_reload_resort_returns_originally_selected_card_parents()
+    {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let parents = app.get_current_card_parents();
+
+        assert_eq!(
+            parents,
+            vec![fx.p_id],
+            "after reload-resort, parents of the active card (A) must be returned by id; resolving by stale index would return parents of the wrong card"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_children_after_reload_resort_returns_originally_selected_card_children(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let children = app.get_current_card_children();
+
+        assert_eq!(
+            children,
+            vec![fx.d_id],
+            "after reload-resort, children of the active card (A) must be returned by id; resolving by stale index would return children of the wrong card"
+        );
+    }
+
+    #[test]
+    fn test_handle_manage_parents_after_reload_resort_uses_originally_selected_card() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.handle_manage_parents();
+
+        assert!(
+            app.relationship.selected.contains(&fx.p_id),
+            "manage_parents must mark P as a current parent of A — selection must be built from the active card's id, not from a stale index that resolves to a different card"
+        );
+        assert!(
+            app.relationship.card_ids.contains(&fx.p_id),
+            "manage_parents eligibility must include P as a candidate parent of A — built for A by id, not for the wrong card at A's stale index"
+        );
+    }
+
+    #[test]
+    fn test_handle_manage_children_after_reload_resort_uses_originally_selected_card() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.handle_manage_children();
+
+        assert!(
+            app.relationship.selected.contains(&fx.d_id),
+            "manage_children must mark D as a current child of A — selection must be built from the active card's id, not from a stale index that resolves to a different card"
+        );
+        assert!(
+            !app.relationship.card_ids.contains(&fx.p_id),
+            "manage_children eligibility must exclude P as A's ancestor — built for A by id, not for the wrong card at A's stale index"
+        );
+    }
+
+    #[test]
+    fn test_get_card_for_detail_view_after_reload_resort_returns_originally_selected_card() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let card = app
+            .get_card_for_detail_view()
+            .expect("detail view must resolve when active card is set");
+
+        assert_eq!(
+            card.id, fx.a_id,
+            "get_card_for_detail_view must return the originally selected card (A) by id, not the card now at A's stale index"
         );
     }
 }

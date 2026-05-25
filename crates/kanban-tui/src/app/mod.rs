@@ -11,7 +11,7 @@ pub mod animation;
 pub use animation::{AnimationState, CardAnimation};
 
 pub mod selection;
-pub use selection::{ActiveCard, SelectionHub};
+pub use selection::SelectionHub;
 
 pub mod filter;
 pub use filter::FilterState;
@@ -1461,8 +1461,31 @@ impl App {
 
     pub fn get_card_for_detail_view(&self) -> Option<Card> {
         self.selection
-            .active_card
-            .and_then(|ac| self.model.card(ac.id()).cloned())
+            .active_card_id
+            .and_then(|id| self.model.card(id).cloned())
+    }
+
+    /// Sets `active_card_id` to `id` if a card with that id exists in the
+    /// model. Returns whether the activation took effect, so callers that
+    /// gate downstream work on the card existing can chain off the boolean.
+    /// On miss the previously-active card is left untouched; sites that
+    /// require clear-on-miss semantics must use [`Self::set_active_card_or_clear`].
+    pub(crate) fn activate_card(&mut self, id: uuid::Uuid) -> bool {
+        if self.model.card(id).is_some() {
+            self.selection.active_card_id = Some(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Sets `active_card_id` to `id` if the card resolves in the model,
+    /// otherwise clears it. Use at sites where `id` was obtained from a
+    /// surface that may still reference an archived card (the file-watcher
+    /// reload race), so downstream code that gates on
+    /// `active_card_id.is_some()` does not act on a stale previous card.
+    pub(crate) fn set_active_card_or_clear(&mut self, id: uuid::Uuid) {
+        self.selection.active_card_id = self.model.card(id).map(|c| c.id);
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
@@ -1786,9 +1809,8 @@ impl App {
         event_handler: &EventHandler,
         field: CardField,
     ) -> io::Result<()> {
-        if let Some(active) = self.selection.active_card {
-            let cards = self.model.cards();
-            if let Some(card) = cards.get(active.index()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     CardField::Title => {
@@ -2294,12 +2316,11 @@ impl App {
     where
         F: Fn(&Card, &Board, &[Sprint], &str) -> String,
     {
-        if let Some(active) = self.selection.active_card {
+        if let Some(active_id) = self.selection.active_card_id {
             if let Some(board_idx) = self.selection.active_board_index {
                 let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
-                    let cards = self.model.cards();
-                    if let Some(card) = cards.get(active.index()) {
+                    if let Some(card) = self.model.card(active_id) {
                         let sprints = self.model.sprints();
                         let output = get_output(
                             card,
@@ -2331,9 +2352,8 @@ impl App {
     }
 
     pub fn get_current_priority_selection_index(&self) -> usize {
-        if let Some(active) = self.selection.active_card {
-            let cards = self.model.cards();
-            if let Some(card) = cards.get(active.index()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
                     CardPriority::Low => 0,
@@ -2349,9 +2369,8 @@ impl App {
     pub fn get_current_sprint_selection_index(&self) -> usize {
         use crate::components::sprint_assign_list::{build_entries, sprint_id_of};
 
-        if let Some(active) = self.selection.active_card {
-            let cards = self.model.cards();
-            if let Some(card) = cards.get(active.index()) {
+        if let Some(active_id) = self.selection.active_card_id {
+            if let Some(card) = self.model.card(active_id) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.selection.active_board_index {
                         let boards = self.model.boards();
@@ -2969,6 +2988,155 @@ mod tests {
                 "swap_known_extension({:?}, {:?})",
                 input,
                 ext
+            );
+        }
+    }
+
+    mod active_card_index_regression {
+        use crate::test_helpers::{load_with_card_order, setup_reload_resort_fixture};
+        use crate::App;
+        use kanban_domain::{CardPriority, CardUpdate, KanbanOperations};
+
+        #[test]
+        fn test_get_current_priority_selection_index_after_reload_resort_returns_originally_selected_card_priority(
+        ) {
+            let mut app = App::test_default();
+            let fx = setup_reload_resort_fixture(&mut app);
+
+            app.ctx
+                .update_card(
+                    fx.a_id,
+                    CardUpdate {
+                        priority: Some(CardPriority::Critical),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            app.ctx
+                .update_card(
+                    fx.p_id,
+                    CardUpdate {
+                        priority: Some(CardPriority::Low),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
+
+            let idx = app.get_current_priority_selection_index();
+
+            assert_eq!(
+                idx, 3,
+                "must return Critical's index (3) — A's priority — not Low's index (0) which is P's priority at A's stale index"
+            );
+        }
+
+        #[test]
+        fn test_get_current_sprint_selection_index_after_reload_resort_returns_originally_selected_card_sprint(
+        ) {
+            use crate::components::sprint_assign_list::{build_entries, sprint_id_of};
+
+            let mut app = App::test_default();
+            let fx = setup_reload_resort_fixture(&mut app);
+
+            let sprint_a = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
+            let sprint_p = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
+            app.ctx.assign_card_to_sprint(fx.a_id, sprint_a.id).unwrap();
+            app.ctx.assign_card_to_sprint(fx.p_id, sprint_p.id).unwrap();
+            load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
+
+            let sprints = app.model.sprints().to_vec();
+            let entries = build_entries(&sprints, fx.board_id, chrono::Utc::now());
+            let expected_idx = entries
+                .iter()
+                .position(|e| sprint_id_of(e) == Some(sprint_a.id))
+                .expect("sprint_a appears in entries");
+
+            let idx = app.get_current_sprint_selection_index();
+
+            assert_eq!(
+                idx, expected_idx,
+                "must return A's sprint index, not P's sprint index at A's stale slot"
+            );
+        }
+    }
+
+    mod active_card_helpers {
+        use crate::App;
+        use kanban_domain::{CreateCardOptions, KanbanOperations, Snapshot};
+
+        fn app_with_card() -> (App, uuid::Uuid) {
+            let mut app = App::test_default();
+            let board = app.ctx.create_board("B".into(), None).unwrap();
+            let column = app
+                .ctx
+                .create_column(board.id, "Todo".into(), None)
+                .unwrap();
+            let card = app
+                .ctx
+                .create_card(
+                    board.id,
+                    column.id,
+                    "C".into(),
+                    CreateCardOptions::default(),
+                )
+                .unwrap();
+            let snap = Snapshot {
+                boards: app.ctx.data_store().list_boards().unwrap(),
+                columns: app.ctx.data_store().list_all_columns().unwrap(),
+                cards: app.ctx.data_store().list_all_cards().unwrap(),
+                archived_cards: app.ctx.data_store().list_archived_cards().unwrap(),
+                sprints: app.ctx.data_store().list_all_sprints().unwrap(),
+                graph: app.ctx.data_store().get_graph().unwrap(),
+            };
+            app.model.load_from_snapshot(snap);
+            (app, card.id)
+        }
+
+        #[test]
+        fn test_activate_card_with_known_id_sets_active_card_id_and_returns_true() {
+            let (mut app, card_id) = app_with_card();
+
+            let succeeded = app.activate_card(card_id);
+
+            assert!(succeeded, "must report success when the card exists");
+            assert_eq!(app.selection.active_card_id, Some(card_id));
+        }
+
+        #[test]
+        fn test_activate_card_with_unknown_id_preserves_active_card_id_and_returns_false() {
+            let (mut app, card_id) = app_with_card();
+            app.selection.active_card_id = Some(card_id);
+
+            let succeeded = app.activate_card(uuid::Uuid::new_v4());
+
+            assert!(!succeeded, "must report failure when the card is absent");
+            assert_eq!(
+                app.selection.active_card_id,
+                Some(card_id),
+                "activate_card must not touch active_card_id on miss — sites that need clear-on-miss must use set_active_card_or_clear"
+            );
+        }
+
+        #[test]
+        fn test_set_active_card_or_clear_with_known_id_sets_active_card_id() {
+            let (mut app, card_id) = app_with_card();
+
+            app.set_active_card_or_clear(card_id);
+
+            assert_eq!(app.selection.active_card_id, Some(card_id));
+        }
+
+        #[test]
+        fn test_set_active_card_or_clear_with_unknown_id_clears_active_card_id() {
+            let (mut app, card_id) = app_with_card();
+            app.selection.active_card_id = Some(card_id);
+
+            app.set_active_card_or_clear(uuid::Uuid::new_v4());
+
+            assert_eq!(
+                app.selection.active_card_id, None,
+                "set_active_card_or_clear must clear the previous active card when the new id is absent — prevents downstream handlers from acting on a stale active card"
             );
         }
     }

@@ -1,5 +1,4 @@
 use kanban_domain::{Board, Card, Column, Snapshot};
-use kanban_tui::app::ActiveCard;
 
 /// Verify that `get_card_for_detail_view` resolves to the card whose UUID is
 /// held in `active_card`, regardless of iteration order.
@@ -19,8 +18,8 @@ fn test_active_card_detail_shows_selected_card() {
         ..Default::default()
     });
 
-    // Select the second card by id (and matching index 1).
-    app.selection.active_card = Some(ActiveCard::new(1, card_b_id));
+    // Select the second card by id.
+    app.selection.active_card_id = Some(card_b_id);
 
     let detail_card = app
         .get_card_for_detail_view()
@@ -36,6 +35,6 @@ fn test_active_card_detail_shows_selected_card() {
 #[test]
 fn test_active_card_detail_returns_none_when_no_card_selected() {
     let app = kanban_tui::App::test_default();
-    assert!(app.selection.active_card.is_none());
+    assert!(app.selection.active_card_id.is_none());
     assert!(app.get_card_for_detail_view().is_none());
 }

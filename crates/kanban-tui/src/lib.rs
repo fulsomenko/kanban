@@ -17,6 +17,8 @@ pub mod render_strategy;
 pub mod scroll_indicators;
 pub mod search;
 pub mod state;
+#[cfg(test)]
+pub(crate) mod test_helpers;
 pub mod theme;
 pub mod tui_context;
 pub mod ui;
