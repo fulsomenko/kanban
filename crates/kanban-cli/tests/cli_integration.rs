@@ -3310,7 +3310,7 @@ mod init_tests {
     use super::*;
 
     #[test]
-    fn test_init_creates_file_with_default_board() {
+    fn test_init_creates_empty_file_when_no_board_flag() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("boards.json");
 
@@ -3325,7 +3325,56 @@ mod init_tests {
         assert!(file.exists());
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["name"], "My Board");
+        assert_eq!(
+            json["data"]["file"].as_str().unwrap(),
+            file.to_str().unwrap()
+        );
+
+        let list = kanban()
+            .args([file.to_str().unwrap(), "board", "list"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let listed = parse_json_output(&String::from_utf8_lossy(&list));
+        assert_eq!(listed["data"]["total"].as_u64().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_init_is_idempotent_against_existing_file() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("boards.json");
+
+        kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success();
+        let first = std::fs::read(&file).expect("file should exist after first init");
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let second = std::fs::read(&file).expect("file should still exist after second init");
+        assert_eq!(
+            first, second,
+            "second `kanban init` must not rewrite an existing file"
+        );
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        let returned = json["data"]["file"]
+            .as_str()
+            .expect("data.file should be a string");
+        assert!(
+            std::path::Path::new(returned).exists(),
+            "data.file should reference an existing file, got {returned}"
+        );
     }
 
     #[test]
