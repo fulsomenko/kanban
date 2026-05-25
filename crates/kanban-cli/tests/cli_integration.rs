@@ -3310,7 +3310,7 @@ mod init_tests {
     use super::*;
 
     #[test]
-    fn test_init_creates_file_with_default_board() {
+    fn test_init_creates_empty_file_when_no_board_flag() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("boards.json");
 
@@ -3325,7 +3325,20 @@ mod init_tests {
         assert!(file.exists());
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
-        assert_eq!(json["data"]["name"], "My Board");
+        assert_eq!(
+            json["data"]["file"].as_str().unwrap(),
+            file.to_str().unwrap()
+        );
+
+        let list = kanban()
+            .args([file.to_str().unwrap(), "board", "list"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let listed = parse_json_output(&String::from_utf8_lossy(&list));
+        assert_eq!(listed["data"]["total"].as_u64().unwrap(), 0);
     }
 
     #[test]
