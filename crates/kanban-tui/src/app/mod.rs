@@ -1467,7 +1467,7 @@ impl App {
 
     pub(crate) fn active_card_for_metadata_edit(&self) -> Option<Card> {
         let active = self.selection.active_card?;
-        self.model.cards().get(active.index()).cloned()
+        self.model.card(active.id()).cloned()
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {

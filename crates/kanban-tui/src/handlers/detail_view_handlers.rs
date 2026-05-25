@@ -975,7 +975,7 @@ impl App {
 
     pub(crate) fn handle_manage_parents(&mut self) {
         if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+            if let Some(card) = self.model.card(active.id()) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1028,7 +1028,7 @@ impl App {
 
     pub(crate) fn handle_manage_children(&mut self) {
         if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+            if let Some(card) = self.model.card(active.id()) {
                 let card_id = card.id;
                 let card_column_id = card.column_id;
 
@@ -1081,7 +1081,7 @@ impl App {
 
     pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
         if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+            if let Some(card) = self.model.card(active.id()) {
                 return self.model.graph().parents(card.id);
             }
         }
@@ -1090,7 +1090,7 @@ impl App {
 
     pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
         if let Some(active) = self.selection.active_card {
-            if let Some(card) = self.model.cards().get(active.index()) {
+            if let Some(card) = self.model.card(active.id()) {
                 return self.model.graph().children(card.id);
             }
         }
