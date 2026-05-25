@@ -83,6 +83,14 @@ fn fmt_dt(dt: &DateTime<Utc>) -> String {
     dt.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
 }
 
+fn required_str<'a>(value: &'a str, field: &str) -> KanbanResult<&'a str> {
+    if value.is_empty() {
+        Err(ser_err(format!("required field '{field}' must not be empty")))
+    } else {
+        Ok(value)
+    }
+}
+
 fn opt_dt(dt: &Option<DateTime<Utc>>) -> Option<String> {
     dt.as_ref().map(fmt_dt)
 }
@@ -808,7 +816,7 @@ impl SqliteStore {
             .bind(&log.sprint_name)
             .bind(fmt_dt(&log.started_at))
             .bind(opt_dt(&log.ended_at))
-            .bind(&log.status)
+            .bind(required_str(&log.status, "sprint_log.status")?)
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
