@@ -1490,4 +1490,186 @@ mod tests {
             "detail view must resolve to None when active_card was cleared by stale-index recovery"
         );
     }
+
+    fn load_with_card_order(app: &mut App, order: &[uuid::Uuid]) {
+        let all = app.ctx.data_store().list_all_cards().unwrap();
+        let ordered: Vec<_> = order
+            .iter()
+            .map(|id| {
+                all.iter()
+                    .find(|c| c.id == *id)
+                    .cloned()
+                    .expect("card id present in store")
+            })
+            .collect();
+        let snap = Snapshot {
+            boards: app.ctx.data_store().list_boards().unwrap(),
+            columns: app.ctx.data_store().list_all_columns().unwrap(),
+            cards: ordered,
+            archived_cards: app.ctx.data_store().list_archived_cards().unwrap(),
+            sprints: app.ctx.data_store().list_all_sprints().unwrap(),
+            graph: app.ctx.data_store().get_graph().unwrap(),
+        };
+        app.model.load_from_snapshot(snap);
+    }
+
+    struct ReloadResortFixture {
+        a_id: uuid::Uuid,
+        p_id: uuid::Uuid,
+        d_id: uuid::Uuid,
+    }
+
+    /// Simulates the KAN-534 scenario: an external write triggers a TUI
+    /// reload that reorders `model.cards()`, leaving `ActiveCard.index`
+    /// pointing at a different card than `ActiveCard.id`.
+    ///
+    /// Seeds five cards in the same column with edges P -> A -> D, sets the
+    /// active card to A at index 1, then re-loads the model with cards in a
+    /// different order so index 1 now resolves to P (not A). Any production
+    /// site that still resolves the active card by index will silently
+    /// operate on P; sites that resolve by id will still operate on A.
+    fn setup_reload_resort_fixture(app: &mut App) -> ReloadResortFixture {
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "Todo".into(), None)
+            .unwrap();
+        let p = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "P".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let a = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "A".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let b = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "B".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let c = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "C".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let d = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "D".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        app.ctx.attach_child(p.id, a.id).unwrap();
+        app.ctx.attach_child(a.id, d.id).unwrap();
+
+        load_with_card_order(app, &[p.id, a.id, b.id, c.id, d.id]);
+        app.selection.active_card = Some(ActiveCard::new(1, a.id));
+
+        load_with_card_order(app, &[a.id, p.id, b.id, c.id, d.id]);
+
+        ReloadResortFixture {
+            a_id: a.id,
+            p_id: p.id,
+            d_id: d.id,
+        }
+    }
+
+    #[test]
+    fn test_get_current_card_parents_after_reload_resort_returns_originally_selected_card_parents(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let parents = app.get_current_card_parents();
+
+        assert_eq!(
+            parents,
+            vec![fx.p_id],
+            "after reload-resort, parents of the active card (A) must be returned by id; resolving by stale index would return parents of the wrong card"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_children_after_reload_resort_returns_originally_selected_card_children(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let children = app.get_current_card_children();
+
+        assert_eq!(
+            children,
+            vec![fx.d_id],
+            "after reload-resort, children of the active card (A) must be returned by id; resolving by stale index would return children of the wrong card"
+        );
+    }
+
+    #[test]
+    fn test_handle_manage_parents_after_reload_resort_uses_originally_selected_card() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.handle_manage_parents();
+
+        assert!(
+            app.relationship.selected.contains(&fx.p_id),
+            "manage_parents must mark P as a current parent of A — selection must be built from the active card's id, not from a stale index that resolves to a different card"
+        );
+        assert!(
+            app.relationship.card_ids.contains(&fx.p_id),
+            "manage_parents eligibility must include P as a candidate parent of A — built for A by id, not for the wrong card at A's stale index"
+        );
+    }
+
+    #[test]
+    fn test_handle_manage_children_after_reload_resort_uses_originally_selected_card() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.handle_manage_children();
+
+        assert!(
+            app.relationship.selected.contains(&fx.d_id),
+            "manage_children must mark D as a current child of A — selection must be built from the active card's id, not from a stale index that resolves to a different card"
+        );
+        assert!(
+            !app.relationship.card_ids.contains(&fx.p_id),
+            "manage_children eligibility must exclude P as A's ancestor — built for A by id, not for the wrong card at A's stale index"
+        );
+    }
+
+    #[test]
+    fn test_active_card_for_metadata_edit_after_reload_resort_returns_originally_selected_card() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let card = app
+            .active_card_for_metadata_edit()
+            .expect("helper must return Some when active card is set");
+
+        assert_eq!(
+            card.id, fx.a_id,
+            "metadata-edit helper must return the originally selected card (A) by id, not the card now at A's stale index"
+        );
+    }
 }
