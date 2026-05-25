@@ -318,6 +318,112 @@ fn test_complete_sprint_with_other_planning_sprint_shows_carry_over() {
 }
 
 #[test]
+fn test_move_card_right_selects_moved_card_in_kanban_view() {
+    // KAN-437 regression: after h/l move, selector must follow the moved card
+    // into the target column, not stay on a prior card there.
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let _todo = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), Some(0))
+        .unwrap();
+    let _doing = app
+        .ctx
+        .create_column(board.id, "Doing".to_string(), Some(1))
+        .unwrap();
+    let _done = app
+        .ctx
+        .create_column(board.id, "Done".to_string(), Some(2))
+        .unwrap();
+    app.prepare_frame();
+    app.selection.board.set(Some(0));
+    app.selection.active_board_index = Some(0);
+    app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
+    app.prepare_frame();
+    app.focus.active = Focus::Cards;
+
+    // Create two cards in Todo so there is a "prior selection" in Doing's
+    // task list that could clobber the moved card's selection.
+    app.input.set("Anchor".to_string());
+    app.create_card();
+    app.prepare_frame();
+    app.input.set("Mover".to_string());
+    app.create_card();
+    app.prepare_frame();
+    let mover_id = app.get_selected_card_id().expect("Mover is selected");
+
+    // Move "Mover" right: Todo -> Doing.
+    app.handle_move_card_right();
+    app.prepare_frame();
+
+    let selected = app
+        .get_selected_card_id()
+        .expect("a card is selected after move");
+    assert_eq!(
+        selected, mover_id,
+        "selector must follow the moved card into the target column"
+    );
+}
+
+#[test]
+fn test_move_selected_cards_right_selects_first_moved_card() {
+    // KAN-437 regression: after multi-select h/l move, selector must follow
+    // the first moved card into the target column.
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let _todo = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), Some(0))
+        .unwrap();
+    let _doing = app
+        .ctx
+        .create_column(board.id, "Doing".to_string(), Some(1))
+        .unwrap();
+    let _done = app
+        .ctx
+        .create_column(board.id, "Done".to_string(), Some(2))
+        .unwrap();
+    app.prepare_frame();
+    app.selection.board.set(Some(0));
+    app.selection.active_board_index = Some(0);
+    app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
+    app.prepare_frame();
+    app.focus.active = Focus::Cards;
+
+    // Create three cards in Todo.
+    app.input.set("Anchor".to_string());
+    app.create_card();
+    app.prepare_frame();
+    app.input.set("First Mover".to_string());
+    app.create_card();
+    app.prepare_frame();
+    let first_mover_id = app.get_selected_card_id().expect("First Mover is selected");
+    app.input.set("Second Mover".to_string());
+    app.create_card();
+    app.prepare_frame();
+    let second_mover_id = app
+        .get_selected_card_id()
+        .expect("Second Mover is selected");
+
+    // Enter multi-select mode and select both movers.
+    app.multi_select.selection_mode_active = true;
+    app.multi_select.selected_cards.insert(first_mover_id);
+    app.multi_select.selected_cards.insert(second_mover_id);
+
+    // Move selected cards right: Todo -> Doing.
+    app.handle_move_card_right();
+    app.prepare_frame();
+
+    let selected = app
+        .get_selected_card_id()
+        .expect("a card is selected after multi-move");
+    assert!(
+        selected == first_mover_id || selected == second_mover_id,
+        "selector must follow one of the moved cards into the target column, got neither"
+    );
+}
+
+#[test]
 fn test_delete_column_adjusts_selection() {
     let mut app = App::test_default();
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();

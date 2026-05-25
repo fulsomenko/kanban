@@ -446,6 +446,14 @@ impl App {
                 return;
             }
 
+            match direction {
+                kanban_domain::card_lifecycle::MoveDirection::Right => {
+                    self.view.strategy.navigate_right(false);
+                }
+                kanban_domain::card_lifecycle::MoveDirection::Left => {
+                    self.view.strategy.navigate_left(false);
+                }
+            }
             if self.is_kanban_view() {
                 if let Some(current_col_idx) = self.dialog_input.column_selection.get() {
                     match direction {
@@ -475,6 +483,7 @@ impl App {
                 }
             }
 
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
@@ -530,7 +539,16 @@ impl App {
         tracing::info!("Moved {} cards", moved_count);
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
+        match direction {
+            kanban_domain::card_lifecycle::MoveDirection::Right => {
+                self.view.strategy.navigate_right(false);
+            }
+            kanban_domain::card_lifecycle::MoveDirection::Left => {
+                self.view.strategy.navigate_left(false);
+            }
+        }
         if let Some(card_id) = first_card_id {
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
