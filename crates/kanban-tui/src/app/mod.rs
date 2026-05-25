@@ -1465,6 +1465,11 @@ impl App {
             .and_then(|ac| self.model.card(ac.id()).cloned())
     }
 
+    pub(crate) fn active_card_for_metadata_edit(&self) -> Option<Card> {
+        let active = self.selection.active_card?;
+        self.model.cards().get(active.index()).cloned()
+    }
+
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
         let cards = self.model.cards();
         let board_opt = self
