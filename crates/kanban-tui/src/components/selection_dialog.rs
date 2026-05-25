@@ -336,9 +336,8 @@ impl SelectionDialog for SprintAssignDialog {
                 let sprints = app.model.sprints();
                 let entries = build_entries(sprints, board.id, chrono::Utc::now());
 
-                let cards = app.model.cards();
                 let current_sprint_id = if let Some(active) = app.selection.active_card {
-                    cards.get(active.index()).and_then(|c| c.sprint_id)
+                    app.model.card(active.id()).and_then(|c| c.sprint_id)
                 } else {
                     None
                 };

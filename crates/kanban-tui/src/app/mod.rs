@@ -1792,8 +1792,7 @@ impl App {
         field: CardField,
     ) -> io::Result<()> {
         if let Some(active) = self.selection.active_card {
-            let cards = self.model.cards();
-            if let Some(card) = cards.get(active.index()) {
+            if let Some(card) = self.model.card(active.id()) {
                 let temp_dir = std::env::temp_dir();
                 let (temp_file, current_content) = match field {
                     CardField::Title => {
@@ -2303,8 +2302,7 @@ impl App {
             if let Some(board_idx) = self.selection.active_board_index {
                 let boards = self.model.boards();
                 if let Some(board) = boards.get(board_idx) {
-                    let cards = self.model.cards();
-                    if let Some(card) = cards.get(active.index()) {
+                    if let Some(card) = self.model.card(active.id()) {
                         let sprints = self.model.sprints();
                         let output = get_output(
                             card,
@@ -2337,8 +2335,7 @@ impl App {
 
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(active) = self.selection.active_card {
-            let cards = self.model.cards();
-            if let Some(card) = cards.get(active.index()) {
+            if let Some(card) = self.model.card(active.id()) {
                 use kanban_domain::CardPriority;
                 return match card.priority {
                     CardPriority::Low => 0,
@@ -2355,8 +2352,7 @@ impl App {
         use crate::components::sprint_assign_list::{build_entries, sprint_id_of};
 
         if let Some(active) = self.selection.active_card {
-            let cards = self.model.cards();
-            if let Some(card) = cards.get(active.index()) {
+            if let Some(card) = self.model.card(active.id()) {
                 if let Some(card_sprint_id) = card.sprint_id {
                     if let Some(board_idx) = self.selection.active_board_index {
                         let boards = self.model.boards();

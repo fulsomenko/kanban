@@ -52,7 +52,7 @@ impl App {
             KeyCode::Enter => {
                 if let Some(priority_idx) = self.dialog_input.priority_selection.get() {
                     if let Some(active) = self.selection.active_card {
-                        if let Some(card) = self.model.cards().get(active.index()) {
+                        if let Some(card) = self.model.card(active.id()) {
                             use kanban_domain::{CardPriority, CardUpdate};
                             let priority = match priority_idx {
                                 0 => CardPriority::Low,
@@ -255,7 +255,7 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
                     if let Some(active) = self.selection.active_card {
-                        let card_id = match self.model.cards().get(active.index()) {
+                        let card_id = match self.model.card(active.id()) {
                             Some(card) => card.id,
                             None => return,
                         };
@@ -591,7 +591,7 @@ impl App {
                 if let Some(idx) = self.relationship.selection.get() {
                     if let Some(selected_card_id) = filtered_cards.get(idx).copied() {
                         if let Some(active) = self.selection.active_card {
-                            if let Some(current_card) = self.model.cards().get(active.index()) {
+                            if let Some(current_card) = self.model.card(active.id()) {
                                 let current_card_id = current_card.id;
 
                                 let (child_id, parent_id) = if is_parent_mode {
