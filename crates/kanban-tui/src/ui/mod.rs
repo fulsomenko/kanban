@@ -1,6 +1,9 @@
 use crate::app::{App, AppMode, DialogMode};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -22,28 +25,61 @@ fn render_banner(app: &App, frame: &mut Frame, area: Rect) {
     }
 }
 
+fn render_save_error_bar(msg: &str, frame: &mut Frame, area: Rect) {
+    let text = Line::from(vec![Span::styled(
+        format!(" \u{26a0} Save error: {msg} "),
+        Style::default()
+            .fg(Color::White)
+            .bg(Color::Red)
+            .add_modifier(Modifier::BOLD),
+    )]);
+    frame.render_widget(Paragraph::new(text), area);
+}
+
 pub fn render(app: &mut App, frame: &mut Frame) {
     // Check if we're in Help mode and render underlying view
     let is_help_mode = matches!(app.mode, AppMode::Help(_));
 
     if !is_help_mode {
+        let has_save_error = app.save_error.is_some();
+        let constraints = if has_save_error {
+            vec![
+                Constraint::Min(0),
+                Constraint::Length(1),
+                Constraint::Length(3),
+            ]
+        } else {
+            vec![Constraint::Min(0), Constraint::Length(3)]
+        };
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(0), Constraint::Length(3)])
+            .constraints(constraints)
             .split(frame.area());
+
+        let (main_chunk, footer_chunk) = if has_save_error {
+            (chunks[0], chunks[2])
+        } else {
+            (chunks[0], chunks[1])
+        };
 
         // Phase 1: Render base view (from stack if in dialog mode)
         let base_mode = app.get_base_mode();
         match base_mode {
-            AppMode::CardDetail => card_detail::render_card_detail_view(app, frame, chunks[0]),
-            AppMode::BoardDetail => board_detail::render_board_detail_view(app, frame, chunks[0]),
+            AppMode::CardDetail => card_detail::render_card_detail_view(app, frame, main_chunk),
+            AppMode::BoardDetail => board_detail::render_board_detail_view(app, frame, main_chunk),
             AppMode::SprintDetail => {
-                sprint_detail::render_sprint_detail_view(app, frame, chunks[0])
+                sprint_detail::render_sprint_detail_view(app, frame, main_chunk)
             }
-            AppMode::Settings => render_settings_view(app, frame, chunks[0]),
-            _ => main_view::render_main(app, frame, chunks[0]),
+            AppMode::Settings => render_settings_view(app, frame, main_chunk),
+            _ => main_view::render_main(app, frame, main_chunk),
         }
-        crate::components::render_footer(app, frame, chunks[1]);
+
+        if has_save_error {
+            let msg = app.save_error.clone().unwrap_or_default();
+            render_save_error_bar(&msg, frame, chunks[1]);
+        }
+
+        crate::components::render_footer(app, frame, footer_chunk);
 
         // Phase 2: Render dialog overlay if active
         if let AppMode::Dialog(ref dialog) = app.mode {

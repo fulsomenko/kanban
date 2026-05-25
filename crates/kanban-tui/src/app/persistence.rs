@@ -5,6 +5,7 @@ pub struct PersistenceState {
     pub file_watcher: Option<kanban_persistence::FileWatcher>,
     pub save_worker_handle: Option<tokio::task::JoinHandle<()>>,
     pub save_completion_rx: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
+    pub save_error_rx: Option<tokio::sync::mpsc::UnboundedReceiver<String>>,
 }
 
 impl PersistenceState {
@@ -18,6 +19,7 @@ impl PersistenceState {
             file_watcher: None,
             save_worker_handle: None,
             save_completion_rx,
+            save_error_rx: None,
         }
     }
 }
