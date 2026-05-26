@@ -105,14 +105,36 @@ impl<'a> SprintPickerView<'a> {
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect, selected: Option<usize>) {
+        // Coupled mode: cursor and `[x]` are on the same row.
+        self.render_with_cursor(frame, area, selected, selected);
+    }
+
+    /// Decoupled render: `checked` is the row that shows `[x]`; `cursor`
+    /// is the row that gets the keyboard highlight (and drives scroll +
+    /// sticky-header). Callers that want the coupled "cursor IS the
+    /// selected row" behaviour pass the same value for both — that is
+    /// what `render` does.
+    pub fn render_with_cursor(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        checked: Option<usize>,
+        cursor: Option<usize>,
+    ) {
         let items: Vec<ListItem<Option<Uuid>>> = self
             .entries
             .iter()
             .enumerate()
             .map(|(idx, entry)| {
-                let is_selected = selected == Some(idx);
-                let label =
-                    render_entry_line(entry, is_selected, self.current_sprint_id, self.board);
+                let is_checked = checked == Some(idx);
+                let is_focused = cursor == Some(idx);
+                let label = render_entry_line(
+                    entry,
+                    is_checked,
+                    is_focused,
+                    self.current_sprint_id,
+                    self.board,
+                );
                 ListItem {
                     value: sprint_id_of(entry),
                     label,
@@ -130,6 +152,6 @@ impl<'a> SprintPickerView<'a> {
             }
             None
         });
-        list.render(frame, area, selected);
+        list.render(frame, area, cursor);
     }
 }

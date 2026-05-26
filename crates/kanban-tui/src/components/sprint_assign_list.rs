@@ -116,7 +116,8 @@ pub fn sprint_id_of(entry: &SprintAssignEntry) -> Option<Uuid> {
 /// sprint (e.g. the multi-card variant).
 pub fn render_entry_line(
     entry: &SprintAssignEntry<'_>,
-    is_selected: bool,
+    is_checked: bool,
+    is_focused: bool,
     current_sprint_id: Option<Uuid>,
     board: &Board,
 ) -> Line<'static> {
@@ -129,9 +130,9 @@ pub fn render_entry_line(
         )),
         SprintAssignEntry::None => {
             let is_current = current_sprint_id.is_none();
-            let prefix = if is_selected { "[x] " } else { "[ ] " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else if is_current {
                 Style::default()
@@ -144,9 +145,9 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::ActiveOrPlanned(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "[x] " } else { "[ ] " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else if is_current {
                 Style::default()
@@ -162,14 +163,14 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "[x] " } else { "[ ] " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
             let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
                 Color::Green
             } else {
                 Color::Red
             };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else {
                 Style::default().fg(status_color)
@@ -483,25 +484,25 @@ mod tests {
     }
 
     #[test]
-    fn test_render_entry_line_marks_selected_with_filled_checkbox() {
+    fn test_render_entry_line_marks_checked_with_filled_checkbox() {
         let board = make_board_for_render();
         let entry = SprintAssignEntry::None;
-        let line = render_entry_line(&entry, /*is_selected=*/ true, None, &board);
+        let line = render_entry_line(&entry, /*is_checked=*/ true, false, None, &board);
         assert!(
             line_to_string(&line).starts_with("[x]"),
-            "selected row should start with [x], got: {:?}",
+            "checked row should start with [x], got: {:?}",
             line_to_string(&line)
         );
     }
 
     #[test]
-    fn test_render_entry_line_marks_unselected_with_empty_checkbox() {
+    fn test_render_entry_line_marks_unchecked_with_empty_checkbox() {
         let board = make_board_for_render();
         let entry = SprintAssignEntry::None;
-        let line = render_entry_line(&entry, /*is_selected=*/ false, None, &board);
+        let line = render_entry_line(&entry, /*is_checked=*/ false, false, None, &board);
         assert!(
             line_to_string(&line).starts_with("[ ]"),
-            "unselected row should start with [ ], got: {:?}",
+            "unchecked row should start with [ ], got: {:?}",
             line_to_string(&line)
         );
     }
@@ -512,22 +513,37 @@ mod tests {
         let sprint = make_sprint(1, board.id, SprintStatus::Planning, None);
         let entry = SprintAssignEntry::ActiveOrPlanned(&sprint);
 
-        let selected = render_entry_line(&entry, true, None, &board);
-        let unselected = render_entry_line(&entry, false, None, &board);
+        let checked = render_entry_line(&entry, true, false, None, &board);
+        let unchecked = render_entry_line(&entry, false, false, None, &board);
 
-        assert!(line_to_string(&selected).starts_with("[x]"));
-        assert!(line_to_string(&unselected).starts_with("[ ]"));
+        assert!(line_to_string(&checked).starts_with("[x]"));
+        assert!(line_to_string(&unchecked).starts_with("[ ]"));
     }
 
     #[test]
     fn test_render_entry_line_header_has_no_checkbox() {
         let board = make_board_for_render();
         let entry = SprintAssignEntry::Header(ACTIVE_PLANNED_HEADER);
-        let line = render_entry_line(&entry, false, None, &board);
+        let line = render_entry_line(&entry, false, false, None, &board);
         let text = line_to_string(&line);
         assert!(
             !text.contains("[x]") && !text.contains("[ ]"),
             "section headers should not render a checkbox, got: {text:?}"
         );
+    }
+
+    #[test]
+    fn test_render_entry_line_checked_and_focused_are_independent() {
+        let board = make_board_for_render();
+        let sprint = make_sprint(1, board.id, SprintStatus::Planning, None);
+        let entry = SprintAssignEntry::ActiveOrPlanned(&sprint);
+
+        // Checked but cursor is elsewhere: [x] without blue background.
+        let checked_only = render_entry_line(&entry, true, false, None, &board);
+        // Focused but not checked: [ ] with blue background.
+        let focused_only = render_entry_line(&entry, false, true, None, &board);
+
+        assert!(line_to_string(&checked_only).starts_with("[x]"));
+        assert!(line_to_string(&focused_only).starts_with("[ ]"));
     }
 }
