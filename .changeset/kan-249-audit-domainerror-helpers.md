@@ -2,14 +2,13 @@
 bump: minor
 ---
 
-Internal cleanup with no user-visible change. Six unused convenience
-constructors on `DomainError` (`board_not_found`, `card_not_found`,
+Removes six public convenience constructors from
+`kanban-domain::DomainError`: `board_not_found`, `card_not_found`,
 `column_not_found`, `sprint_not_found`, `archived_card_not_found`,
-`tag_not_found`) were removed. They had no remaining callers since the
-command layer standardised on `KanbanError::not_found(entity, id)`, so
-they were pure dead code and a stale duplicate API for producing the
-same error value. The still-used `DomainError::wip_limit_exceeded`
-helper is retained.
+and `tag_not_found`. End-user behaviour, error messages, error
+variants, and matching behaviour (`is_not_found`) are unchanged, but
+direct library consumers of the `kanban-domain` crate must switch to
+`KanbanError::not_found(entity, id)`, which has been the standard
+construction path in the rest of the workspace for some time.
 
-Error messages, error variants, and matching behaviour
-(`is_not_found`) are unchanged.
+The still-used `DomainError::wip_limit_exceeded` helper is retained.
