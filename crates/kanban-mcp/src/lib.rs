@@ -456,6 +456,12 @@ pub struct CreateCardRequest {
         description = "Due date in YYYY-MM-DD or RFC 3339 format (e.g. 2024-06-15 or 2024-06-15T10:30:00Z)"
     )]
     pub due_date: Option<String>,
+    #[schemars(
+        description = "UUID, name, or number of the sprint to assign the new card to (optional). \
+            If the board has exactly one Active (non-ended) sprint, prefer passing that \
+            sprint's id here so the card lands in the active sprint in a single call."
+    )]
+    pub sprint_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -955,16 +961,21 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let due_date = req.due_date.as_deref().map(parse_datetime).transpose()?;
-        let options = CreateCardOptions {
-            description: req.description,
-            priority,
-            points: req.points,
-            due_date,
-            ..Default::default()
-        };
         let card = locked_write(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;
             let column_id = ctx.mcp_resolve_column_in_board(&req.column, board_id)?;
+            let sprint_id = req
+                .sprint_id
+                .as_deref()
+                .map(|raw| ctx.mcp_resolve_sprint_in_board(raw, board_id))
+                .transpose()?;
+            let options = CreateCardOptions {
+                description: req.description,
+                priority,
+                points: req.points,
+                due_date,
+                sprint_id,
+            };
             ctx.create_card(board_id, column_id, req.title, options)
                 .map_err(kanban_err_to_mcp)
         })
