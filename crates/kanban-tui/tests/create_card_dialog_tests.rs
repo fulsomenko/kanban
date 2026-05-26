@@ -33,7 +33,7 @@ fn confirm_create_card_dialog(app: &mut App, title: &str) {
 }
 
 #[test]
-fn test_create_card_dialog_assigns_sole_active_sprint_on_open() {
+fn test_create_card_dialog_does_not_auto_assign_active_sprint_without_space() {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
     let sprint = app.ctx.create_sprint(bid, None, None).unwrap();
@@ -48,10 +48,39 @@ fn test_create_card_dialog_assigns_sole_active_sprint_on_open() {
         .find(|c| c.title == "Task")
         .expect("card created");
     assert_eq!(
-        created.sprint_id,
-        Some(sprint.id),
-        "card should be assigned to sole active sprint when dialog opens"
+        created.sprint_id, None,
+        "the sole active sprint is the cursor target on open, but the user \
+         must press Space to commit it; pressing Enter without Space leaves \
+         the card unassigned"
     );
+    // Sanity: the sprint exists, just wasn't selected.
+    let _ = sprint;
+}
+
+#[test]
+fn test_create_card_dialog_space_at_sole_active_sprint_assigns_it() {
+    let mut app = setup_app_with_board();
+    let bid = board_id(&app);
+    let sprint = app.ctx.create_sprint(bid, None, None).unwrap();
+    app.ctx.activate_sprint(sprint.id, Some(7)).unwrap();
+    app.prepare_frame();
+
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    for ch in "Task".chars() {
+        app.handle_create_card_dialog(KeyCode::Char(ch));
+    }
+    app.handle_create_card_dialog(KeyCode::Tab);
+    app.handle_create_card_dialog(KeyCode::Char(' '));
+    app.handle_create_card_dialog(KeyCode::Enter);
+    app.prepare_frame();
+
+    let cards = app.model.cards();
+    let created = cards
+        .iter()
+        .find(|c| c.title == "Task")
+        .expect("card created");
+    assert_eq!(created.sprint_id, Some(sprint.id));
 }
 
 #[test]
@@ -175,6 +204,7 @@ fn test_j_on_sprint_focus_navigates_picker_like_down() {
     }
     app.handle_create_card_dialog(KeyCode::Tab);
     app.handle_create_card_dialog(KeyCode::Char('j'));
+    app.handle_create_card_dialog(KeyCode::Char(' '));
     app.handle_create_card_dialog(KeyCode::Enter);
     app.prepare_frame();
 
@@ -199,7 +229,10 @@ fn test_j_on_title_focus_inserts_character_into_title() {
 }
 
 #[test]
-fn test_space_on_sprint_focus_clears_selection_to_none() {
+fn test_arrow_to_none_row_then_space_explicitly_leaves_card_unassigned() {
+    // From a sole-active board, walk the cursor up onto the (None) row
+    // and press Space. The card lands unassigned even though there was
+    // a candidate active sprint sitting under the initial cursor.
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
     let sprint = app.ctx.create_sprint(bid, None, None).unwrap();
@@ -208,11 +241,12 @@ fn test_space_on_sprint_focus_clears_selection_to_none() {
 
     app.focus.active = Focus::Cards;
     app.handle_create_card_key();
-    // Sole active sprint pre-selected.
-    for ch in "Unset".chars() {
+    for ch in "NoSprint".chars() {
         app.handle_create_card_dialog(KeyCode::Char(ch));
     }
     app.handle_create_card_dialog(KeyCode::Tab);
+    // Cursor starts on the active sprint; Up walks it to the (None) row.
+    app.handle_create_card_dialog(KeyCode::Up);
     app.handle_create_card_dialog(KeyCode::Char(' '));
     app.handle_create_card_dialog(KeyCode::Enter);
     app.prepare_frame();
@@ -220,12 +254,9 @@ fn test_space_on_sprint_focus_clears_selection_to_none() {
     let cards = app.model.cards();
     let created = cards
         .iter()
-        .find(|c| c.title == "Unset")
+        .find(|c| c.title == "NoSprint")
         .expect("card created");
-    assert_eq!(
-        created.sprint_id, None,
-        "Space on the picker should clear the assignment back to None"
-    );
+    assert_eq!(created.sprint_id, None);
 }
 
 #[test]
@@ -243,7 +274,7 @@ fn test_space_on_title_focus_inserts_space_into_title() {
 }
 
 #[test]
-fn test_arrow_down_after_tab_navigates_picker_and_enter_assigns_sprint() {
+fn test_arrow_down_then_space_assigns_navigated_sprint() {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
     let planning = app.ctx.create_sprint(bid, None, None).unwrap();
@@ -256,6 +287,7 @@ fn test_arrow_down_after_tab_navigates_picker_and_enter_assigns_sprint() {
     }
     app.handle_create_card_dialog(KeyCode::Tab);
     app.handle_create_card_dialog(KeyCode::Down);
+    app.handle_create_card_dialog(KeyCode::Char(' '));
     app.handle_create_card_dialog(KeyCode::Enter);
     app.prepare_frame();
 
