@@ -74,12 +74,12 @@ impl App {
             return;
         }
         if let Some(idx) = self.selection.active_board_index {
-            if let Some(board) = self.model.boards().get(idx).cloned() {
+            if let Some(board) = self.model.boards().get(idx) {
                 let now = chrono::Utc::now();
                 self.dialog_input.create_card_sprint_picker.handle_key(
                     key_code,
                     self.model.sprints(),
-                    &board,
+                    board,
                     now,
                 );
             }
