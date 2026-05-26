@@ -199,6 +199,50 @@ fn test_j_on_title_focus_inserts_character_into_title() {
 }
 
 #[test]
+fn test_space_on_sprint_focus_clears_selection_to_none() {
+    let mut app = setup_app_with_board();
+    let bid = board_id(&app);
+    let sprint = app.ctx.create_sprint(bid, None, None).unwrap();
+    app.ctx.activate_sprint(sprint.id, Some(7)).unwrap();
+    app.prepare_frame();
+
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    // Sole active sprint pre-selected.
+    for ch in "Unset".chars() {
+        app.handle_create_card_dialog(KeyCode::Char(ch));
+    }
+    app.handle_create_card_dialog(KeyCode::Tab);
+    app.handle_create_card_dialog(KeyCode::Char(' '));
+    app.handle_create_card_dialog(KeyCode::Enter);
+    app.prepare_frame();
+
+    let cards = app.model.cards();
+    let created = cards
+        .iter()
+        .find(|c| c.title == "Unset")
+        .expect("card created");
+    assert_eq!(
+        created.sprint_id, None,
+        "Space on the picker should clear the assignment back to None"
+    );
+}
+
+#[test]
+fn test_space_on_title_focus_inserts_space_into_title() {
+    let mut app = setup_app_with_board();
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    assert!(app.dialog_input.create_card_focus_is_title());
+
+    app.handle_create_card_dialog(KeyCode::Char('h'));
+    app.handle_create_card_dialog(KeyCode::Char(' '));
+    app.handle_create_card_dialog(KeyCode::Char('i'));
+
+    assert_eq!(app.input.as_str(), "h i");
+}
+
+#[test]
 fn test_arrow_down_after_tab_navigates_picker_and_enter_assigns_sprint() {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
