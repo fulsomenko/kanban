@@ -223,6 +223,7 @@ pub async fn test_full_populated_context_roundtrip(factory: &BackendFactory) -> 
                 priority: Some(CardPriority::Critical),
                 points: Some(13),
                 due_date: Some(chrono::Utc::now()),
+                ..Default::default()
             },
         )
         .unwrap();

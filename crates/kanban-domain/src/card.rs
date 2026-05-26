@@ -316,6 +316,8 @@ pub struct CreateCardOptions {
     pub priority: Option<CardPriority>,
     pub points: Option<u8>,
     pub due_date: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint_id: Option<Uuid>,
 }
 
 impl GraphNode for Card {

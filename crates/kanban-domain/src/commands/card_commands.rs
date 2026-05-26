@@ -254,6 +254,15 @@ impl CreateCard {
             card.update(updates);
         }
 
+        if let Some(sprint_id) = self.options.sprint_id {
+            let sprint = context.get_sprint(sprint_id)?;
+            let sprint_number = sprint.sprint_number;
+            let sprint_name = sprint.get_name(&board).map(|s| s.to_string());
+            let sprint_status = format!("{:?}", sprint.status);
+            card.assign_to_sprint(sprint_id, sprint_number, sprint_name, sprint_status);
+            card.updated_at = now;
+        }
+
         context.store.upsert_board(board)?;
         context.store.upsert_card(card)?;
         Ok(())
@@ -1083,6 +1092,101 @@ mod tests {
         let cards = tc.store.list_cards_by_column(column_id).unwrap();
         assert_eq!(cards[0].position, 0);
         assert_eq!(cards[1].position, 1);
+    }
+
+    #[test]
+    fn test_create_card_with_sprint_id_assigns_card_to_sprint() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, None);
+        let board_id = board.id;
+        let column_id = col.id;
+        let sprint_id = sprint.id;
+        // Bump card_counter so upsert_board doesn't reset it; mirrors real usage.
+        board.card_counter = 1;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                sprint_id: Some(sprint_id),
+                ..Default::default()
+            },
+            timestamp: Utc::now(),
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.sprint_id, Some(sprint_id));
+        assert_eq!(card.sprint_logs.len(), 1);
+        assert_eq!(card.sprint_logs[0].sprint_id, sprint_id);
+    }
+
+    #[test]
+    fn test_create_card_without_sprint_id_leaves_card_unassigned() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions::default(),
+            timestamp: Utc::now(),
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.sprint_id, None);
+        assert!(card.sprint_logs.is_empty());
+    }
+
+    #[test]
+    fn test_create_card_with_invalid_sprint_id_returns_not_found_error() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                sprint_id: Some(Uuid::new_v4()),
+                ..Default::default()
+            },
+            timestamp: Utc::now(),
+        };
+        let err = cmd.execute(&context).unwrap_err();
+        assert!(err.is_not_found(), "Expected not found, got: {:?}", err);
     }
 
     #[test]

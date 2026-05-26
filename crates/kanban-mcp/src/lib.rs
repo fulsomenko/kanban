@@ -960,6 +960,7 @@ impl KanbanMcpServer {
             priority,
             points: req.points,
             due_date,
+            ..Default::default()
         };
         let card = locked_write(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;

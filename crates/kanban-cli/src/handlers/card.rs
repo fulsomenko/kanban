@@ -306,6 +306,7 @@ fn build_create_options(args: &CardCreateArgs) -> Result<CreateCardOptions, Stri
         priority,
         points: args.points,
         due_date,
+        ..Default::default()
     })
 }
 
