@@ -73,7 +73,7 @@ pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
     }
 
     frame.render_widget(
-        Paragraph::new("Sprint (optional):").style(Style::default().fg(Color::Yellow)),
+        Paragraph::new("Sprint:").style(Style::default().fg(Color::Yellow)),
         chunks[2],
     );
 
