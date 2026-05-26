@@ -266,8 +266,15 @@ impl CreateCard {
             let sprint_name = sprint.get_name(&board).map(|s| s.to_string());
             let sprint_status = format!("{:?}", sprint.status);
             card.assign_to_sprint(sprint_id, sprint_number, sprint_name, sprint_status);
-            card.updated_at = now;
         }
+
+        // Card::update and Card::assign_to_sprint both bump updated_at to
+        // Utc::now() internally. Pin it back to the embedded timestamp so
+        // command replay and direct execute paths produce the same on-disk
+        // state — otherwise an undo + redo would shift updated_at to wall
+        // clock time and tests like create_card_uses_embedded_timestamp
+        // would fail whenever any options field is set.
+        card.updated_at = now;
 
         context.store.upsert_board(board)?;
         context.store.upsert_card(card)?;
@@ -1193,6 +1200,94 @@ mod tests {
         };
         let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_not_found(), "Expected not found, got: {:?}", err);
+    }
+
+    #[test]
+    fn test_create_card_with_options_only_uses_embedded_timestamp() {
+        use chrono::TimeZone;
+
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "T".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                description: Some("d".to_string()),
+                priority: Some(crate::CardPriority::High),
+                points: Some(3),
+                due_date: None,
+                sprint_id: None,
+            },
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.created_at, fixed_time);
+        assert_eq!(
+            card.updated_at, fixed_time,
+            "updated_at must match the embedded command timestamp even when \
+             CardUpdate options reset it inside Card::update"
+        );
+    }
+
+    #[test]
+    fn test_create_card_with_options_and_sprint_uses_embedded_timestamp() {
+        use chrono::TimeZone;
+
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, None);
+        let board_id = board.id;
+        let column_id = col.id;
+        let sprint_id = sprint.id;
+        board.card_counter = 1;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "T".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                description: Some("d".to_string()),
+                priority: Some(crate::CardPriority::High),
+                points: Some(3),
+                due_date: None,
+                sprint_id: Some(sprint_id),
+            },
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.created_at, fixed_time);
+        assert_eq!(
+            card.updated_at, fixed_time,
+            "updated_at must match the embedded command timestamp even when both \
+             CardUpdate options and sprint assignment run inside execute"
+        );
     }
 
     #[test]
