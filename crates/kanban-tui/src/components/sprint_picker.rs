@@ -253,13 +253,14 @@ mod tests {
 
     #[test]
     fn test_selection_survives_clock_advance_that_ends_the_selected_sprint() {
-        // Open time: sprint A is Active non-ended (end_date in the future).
-        // The "sole active" rule pre-selects it. Then time advances past
-        // A's end_date so A moves from the active-or-planned section into
-        // the completed-or-ended section in build_entries. An index-based
-        // store would now point at whatever entry occupies A's old slot
-        // (a header, or sprint B); the identity-based store still
-        // resolves to A.
+        // Open time: sprint A is Active non-ended. The "sole active" rule
+        // pre-selects A at row index `idx_open`. Confirm time: A has
+        // crossed its end_date and moves into the completed/ended
+        // section, shifting to a different row `idx_confirm`. An index-
+        // based store would still report row `idx_open`, which at
+        // confirm time points at a *different* entry (a section header,
+        // or sprint B). The identity-based store reports A regardless of
+        // the layout change.
         let board = make_board();
         let now_open = Utc::now();
         let now_confirm = now_open + Duration::days(30);
@@ -282,13 +283,32 @@ mod tests {
         let mut picker = SprintPicker::new();
         picker.reset_for_board(&sprints, &board, now_open);
         assert_eq!(picker.selected_sprint_id(), Some(sprint_a.id));
+        assert_eq!(picker.raw_selection(), Selection::Sprint(sprint_a.id));
 
-        // At now_confirm A has crossed its end_date — entries layout
-        // shifts, but the picker still reports A.
-        assert!(
-            sprint_a.is_ended(now_confirm),
-            "test precondition: sprint A is ended at now_confirm"
+        // Precondition: A's row index actually shifts between the two
+        // times — otherwise the test wouldn't be exercising the race.
+        let entries_open =
+            crate::components::sprint_assign_list::build_entries(&sprints, board.id, now_open);
+        let entries_confirm =
+            crate::components::sprint_assign_list::build_entries(&sprints, board.id, now_confirm);
+        let idx_open = entries_open
+            .iter()
+            .position(|e| sprint_id_of(e) == Some(sprint_a.id));
+        let idx_confirm = entries_confirm
+            .iter()
+            .position(|e| sprint_id_of(e) == Some(sprint_a.id));
+        assert!(idx_open.is_some());
+        assert!(idx_confirm.is_some());
+        assert_ne!(
+            idx_open, idx_confirm,
+            "precondition: A's row position must differ between open and confirm"
         );
+
+        // The picker's internal row resolution at confirm time tracks A
+        // by identity — it lands on A's *new* row, not on whatever entry
+        // sits at the old row. Same property as selected_sprint_id, but
+        // demonstrated via the navigation path that handle_key follows.
+        assert_eq!(picker.current_index(&entries_confirm), idx_confirm);
         assert_eq!(picker.selected_sprint_id(), Some(sprint_a.id));
     }
 
