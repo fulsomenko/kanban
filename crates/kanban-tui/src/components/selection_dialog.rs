@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::components::sprint_assign_list::build_entries;
-use crate::components::sprint_picker::SprintPicker;
+use crate::components::sprint_picker_view::SprintPickerView;
 use kanban_domain::SprintStatus;
 use ratatui::Frame;
 
@@ -340,7 +340,7 @@ impl SelectionDialog for SprintAssignDialog {
             .active_card_id
             .and_then(|id| app.model.card(id))
             .and_then(|c| c.sprint_id);
-        let picker = SprintPicker::for_card_assignment(
+        let picker = SprintPickerView::for_card_assignment(
             app.model.sprints(),
             board,
             current_sprint_id,

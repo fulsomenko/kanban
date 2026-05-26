@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
 use kanban_domain::{field_update::FieldUpdate, CreateCardOptions, KanbanOperations, SprintUpdate};
-use kanban_tui::components::{build_entries, sprint_id_of, SprintPicker};
+use kanban_tui::components::{build_entries, sprint_id_of, SprintPickerView};
 use kanban_tui::App;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -81,7 +81,7 @@ fn assign_card_sprint(app: &mut App, card_id: Uuid, sprint_id: Uuid) {
     app.prepare_frame();
 }
 
-fn render_picker_to_string(picker: &SprintPicker<'_>, selected: Option<usize>) -> String {
+fn render_picker_to_string(picker: &SprintPickerView<'_>, selected: Option<usize>) -> String {
     let backend = TestBackend::new(TEST_W, TEST_H);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
@@ -102,7 +102,7 @@ fn render_picker_to_string(picker: &SprintPicker<'_>, selected: Option<usize>) -
 }
 
 fn render_picker_with_colors(
-    picker: &SprintPicker<'_>,
+    picker: &SprintPickerView<'_>,
     selected: Option<usize>,
 ) -> Vec<(String, Option<Color>)> {
     let backend = TestBackend::new(TEST_W, TEST_H);
@@ -152,7 +152,7 @@ fn test_for_card_assignment_initial_selection_is_zero_when_card_has_no_sprint() 
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
     assert_eq!(
         picker.initial_selection(),
         Some(0),
@@ -178,7 +178,7 @@ fn test_for_card_assignment_initial_selection_is_index_of_current_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, Some(active), now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, Some(active), now);
     assert_eq!(picker.initial_selection(), Some(expected_idx));
 }
 
@@ -196,7 +196,7 @@ fn test_for_card_assignment_render_shows_current_suffix_for_card_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, Some(active), now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, Some(active), now);
     let out = render_picker_to_string(&picker, picker.initial_selection());
     assert!(
         out.contains("(current)"),
@@ -223,7 +223,7 @@ fn test_for_board_preselects_sole_active_non_ended_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_board(app.model.sprints(), &board, now);
+    let picker = SprintPickerView::for_board(app.model.sprints(), &board, now);
     assert_eq!(
         picker.initial_selection(),
         Some(expected_idx),
@@ -244,7 +244,7 @@ fn test_for_board_preselects_none_when_no_active_sprints() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_board(app.model.sprints(), &board, now);
+    let picker = SprintPickerView::for_board(app.model.sprints(), &board, now);
     assert_eq!(
         picker.initial_selection(),
         Some(0),
@@ -265,7 +265,7 @@ fn test_for_board_preselects_none_when_multiple_active_sprints() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_board(app.model.sprints(), &board, now);
+    let picker = SprintPickerView::for_board(app.model.sprints(), &board, now);
     assert_eq!(
         picker.initial_selection(),
         Some(0),
@@ -285,7 +285,7 @@ fn test_value_at_returns_none_uuid_for_none_row() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
     assert_eq!(
         picker.value_at(0),
         Some(None),
@@ -310,7 +310,7 @@ fn test_value_at_returns_sprint_id_for_sprint_row() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
     assert_eq!(picker.value_at(idx), Some(Some(active)));
 }
 
@@ -330,7 +330,7 @@ fn test_value_at_indices_match_build_entries_order() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
     assert_eq!(
         picker.len(),
         entries.len(),
@@ -364,7 +364,7 @@ fn test_render_emits_active_planned_header_with_yellow_color() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
     let grid = render_picker_with_colors(&picker, Some(0));
     let color = line_color(&grid, "Active / Planned");
     assert_eq!(
@@ -390,7 +390,7 @@ fn test_render_with_none_selection_leaves_all_rows_unselected() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
     let out = render_picker_to_string(&picker, None);
     assert!(
         !out.contains("> (None)"),
@@ -414,7 +414,7 @@ fn test_render_with_out_of_bounds_selected_does_not_panic() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
     let out_of_bounds = picker.len() + 100;
     // Test passes if this render call returns instead of panicking.
     let _ = render_picker_to_string(&picker, Some(out_of_bounds));
