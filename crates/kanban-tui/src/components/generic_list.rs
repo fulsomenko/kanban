@@ -46,12 +46,14 @@ impl ListComponent {
 
         if !was_at_top {
             let current_idx = self.selection.get().unwrap_or(0);
+            // Invariant: total > 0 (early return above) and predicate is
+            // always-true, so list_nav always returns Some.
             let new_idx = crate::components::list_nav::prev_selectable_index(
                 Some(current_idx),
                 self.page.total_items,
                 |_| true,
             )
-            .unwrap_or(current_idx);
+            .expect("list_nav returns Some when total > 0 with always-true predicate");
             self.selection.set(Some(new_idx));
 
             // Scroll up if selection moved before scroll window
@@ -72,12 +74,14 @@ impl ListComponent {
 
         if !was_at_bottom {
             let current_idx = self.selection.get().unwrap_or(0);
+            // Invariant: total > 0 (early return above) and predicate is
+            // always-true, so list_nav always returns Some.
             let new_idx = crate::components::list_nav::next_selectable_index(
                 Some(current_idx),
                 self.page.total_items,
                 |_| true,
             )
-            .unwrap_or(current_idx);
+            .expect("list_nav returns Some when total > 0 with always-true predicate");
             self.selection.set(Some(new_idx));
         }
 
