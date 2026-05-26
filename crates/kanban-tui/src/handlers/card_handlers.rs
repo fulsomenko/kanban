@@ -363,15 +363,9 @@ impl App {
 
                 let now = chrono::Utc::now();
                 let sprint_id = self
-                    .model
-                    .boards()
-                    .get(idx)
-                    .map(|board| {
-                        self.dialog_input
-                            .create_card_sprint_picker
-                            .selected_sprint_id(self.model.sprints(), board, now)
-                    })
-                    .unwrap_or(None);
+                    .dialog_input
+                    .create_card_sprint_picker
+                    .selected_sprint_id();
                 let card_id = uuid::Uuid::new_v4();
                 let mut commands: Vec<Command> =
                     vec![Command::Card(CardCommand::Create(CreateCard {
