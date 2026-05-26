@@ -1700,7 +1700,7 @@ mod card_tests {
             ])
             .assert()
             .failure()
-            .stderr(predicate::str::contains("active sprint"));
+            .stderr(predicate::str::contains("found none"));
     }
 
     #[test]
@@ -1728,7 +1728,7 @@ mod card_tests {
             ])
             .assert()
             .failure()
-            .stderr(predicate::str::contains("active sprint"));
+            .stderr(predicate::str::contains("found 2"));
     }
 
     #[test]
