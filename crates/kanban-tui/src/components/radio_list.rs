@@ -114,7 +114,7 @@ impl<'a, T> RadioList<'a, T> {
     }
 }
 
-pub(crate) fn scroll_offset_to_show(selected: usize, total: usize, height: usize) -> usize {
+pub fn scroll_offset_to_show(selected: usize, total: usize, height: usize) -> usize {
     if height == 0 || total <= height || selected < height {
         return 0;
     }

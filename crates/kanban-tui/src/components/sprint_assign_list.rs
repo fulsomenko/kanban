@@ -202,23 +202,6 @@ pub fn render_entry_line(
     }
 }
 
-/// Computes the vertical scroll offset (in rows) so that the entry at
-/// `selected` is visible inside a viewport of `height` rows over a list of
-/// `total` rows. Stateless: the offset is fully determined by these inputs.
-///
-/// Behavior:
-/// - When the list fits, no scroll.
-/// - When `selected` is in the first `height` rows, no scroll.
-/// - Otherwise, scroll just enough that `selected` is the last visible row,
-///   clamped so the bottom of the list aligns with the bottom of the viewport.
-pub fn scroll_offset_to_show(selected: usize, total: usize, height: usize) -> usize {
-    if height == 0 || total <= height || selected < height {
-        return 0;
-    }
-    let max_offset = total.saturating_sub(height);
-    (selected + 1).saturating_sub(height).min(max_offset)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -459,44 +442,6 @@ mod tests {
         let none = SprintAssignEntry::None;
         assert_eq!(sprint_id_of(&header), None);
         assert_eq!(sprint_id_of(&none), None);
-    }
-
-    #[test]
-    fn test_scroll_offset_is_zero_when_list_fits_in_viewport() {
-        assert_eq!(scroll_offset_to_show(0, 3, 5), 0);
-        assert_eq!(scroll_offset_to_show(2, 3, 5), 0);
-        assert_eq!(scroll_offset_to_show(5, 6, 6), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_is_zero_when_selected_is_in_first_viewport() {
-        // selected at any of the first `height` indices keeps offset at 0
-        assert_eq!(scroll_offset_to_show(0, 20, 5), 0);
-        assert_eq!(scroll_offset_to_show(4, 20, 5), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_keeps_selected_visible_when_below_viewport() {
-        // height=5, selected=5 → must scroll by 1 so selected is last visible
-        assert_eq!(scroll_offset_to_show(5, 20, 5), 1);
-        // height=5, selected=10 → scroll by 6
-        assert_eq!(scroll_offset_to_show(10, 20, 5), 6);
-    }
-
-    #[test]
-    fn test_scroll_offset_clamps_at_last_full_viewport() {
-        // total=20, height=5 → max meaningful offset is 15 (showing rows 15-19)
-        assert_eq!(scroll_offset_to_show(19, 20, 5), 15);
-    }
-
-    #[test]
-    fn test_scroll_offset_handles_zero_height() {
-        assert_eq!(scroll_offset_to_show(5, 20, 0), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_handles_empty_list() {
-        assert_eq!(scroll_offset_to_show(0, 0, 5), 0);
     }
 
     #[test]

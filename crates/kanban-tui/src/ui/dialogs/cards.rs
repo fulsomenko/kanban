@@ -54,8 +54,9 @@ pub(crate) fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 }
 
 pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
+    use crate::components::radio_list::scroll_offset_to_show;
     use crate::components::sprint_assign_list::{
-        build_entries, render_entry_line, scroll_offset_to_show, section_header_for,
+        build_entries, render_entry_line, section_header_for,
     };
     use ratatui::style::Modifier;
     use ratatui::text::{Line, Span};

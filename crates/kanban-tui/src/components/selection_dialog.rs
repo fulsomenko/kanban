@@ -1,6 +1,7 @@
 use crate::app::App;
+use crate::components::radio_list::scroll_offset_to_show;
 use crate::components::sprint_assign_list::{
-    build_entries, render_entry_line, scroll_offset_to_show, section_header_for, SprintAssignEntry,
+    build_entries, render_entry_line, section_header_for, SprintAssignEntry,
 };
 use kanban_domain::SprintStatus;
 use ratatui::Frame;
