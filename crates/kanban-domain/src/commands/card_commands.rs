@@ -1321,10 +1321,9 @@ mod tests {
             timestamp: Utc::now(),
         };
         let err = cmd.execute(&context).unwrap_err();
-        let msg = format!("{}", err);
         assert!(
-            msg.to_lowercase().contains("board"),
-            "cross-board sprint should error with a message mentioning the board mismatch, got: {msg}"
+            err.is_validation(),
+            "expected validation variant, got: {err:?}"
         );
     }
 
