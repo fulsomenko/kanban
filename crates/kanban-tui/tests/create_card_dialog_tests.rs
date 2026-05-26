@@ -90,11 +90,78 @@ fn test_create_card_dialog_leaves_card_unassigned_when_multiple_active_sprints()
 }
 
 #[test]
-fn test_create_card_dialog_arrow_down_selects_planning_sprint_then_confirm_assigns_it() {
+fn test_tab_toggles_focus_between_title_and_sprint_picker() {
+    let mut app = setup_app_with_board();
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+
+    assert!(app.dialog_input.create_card_focus_is_title());
+    app.handle_create_card_dialog(KeyCode::Tab);
+    assert!(!app.dialog_input.create_card_focus_is_title());
+    app.handle_create_card_dialog(KeyCode::Tab);
+    assert!(app.dialog_input.create_card_focus_is_title());
+}
+
+#[test]
+fn test_esc_on_title_focus_moves_focus_to_sprint_picker_without_closing() {
+    let mut app = setup_app_with_board();
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    assert!(app.dialog_input.create_card_focus_is_title());
+
+    app.handle_create_card_dialog(KeyCode::Esc);
+
+    assert!(matches!(
+        app.mode,
+        AppMode::Dialog(DialogMode::CreateCard)
+    ));
+    assert!(!app.dialog_input.create_card_focus_is_title());
+}
+
+#[test]
+fn test_esc_on_sprint_focus_closes_the_dialog() {
+    let mut app = setup_app_with_board();
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    app.handle_create_card_dialog(KeyCode::Tab);
+    assert!(!app.dialog_input.create_card_focus_is_title());
+
+    app.handle_create_card_dialog(KeyCode::Esc);
+
+    assert!(
+        !matches!(app.mode, AppMode::Dialog(DialogMode::CreateCard)),
+        "Esc while sprint-focused should close the dialog"
+    );
+}
+
+#[test]
+fn test_down_on_title_focus_moves_focus_to_sprint_picker() {
+    let mut app = setup_app_with_board();
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    assert!(app.dialog_input.create_card_focus_is_title());
+
+    app.handle_create_card_dialog(KeyCode::Down);
+
+    assert!(!app.dialog_input.create_card_focus_is_title());
+}
+
+#[test]
+fn test_typing_on_sprint_focus_does_not_modify_title_input() {
+    let mut app = setup_app_with_board();
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    app.handle_create_card_dialog(KeyCode::Tab);
+    assert!(!app.dialog_input.create_card_focus_is_title());
+
+    app.handle_create_card_dialog(KeyCode::Char('x'));
+    assert_eq!(app.input.as_str(), "");
+}
+
+#[test]
+fn test_arrow_down_after_tab_navigates_picker_and_enter_assigns_sprint() {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
-    // No active sprint -> dialog opens with "None" highlighted. Down should
-    // walk past any header to reach an assignable planning sprint.
     let planning = app.ctx.create_sprint(bid, None, None).unwrap();
     app.prepare_frame();
 
@@ -103,6 +170,7 @@ fn test_create_card_dialog_arrow_down_selects_planning_sprint_then_confirm_assig
     for ch in "Picked".chars() {
         app.handle_create_card_dialog(KeyCode::Char(ch));
     }
+    app.handle_create_card_dialog(KeyCode::Tab);
     app.handle_create_card_dialog(KeyCode::Down);
     app.handle_create_card_dialog(KeyCode::Enter);
     app.prepare_frame();
