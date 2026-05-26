@@ -30,33 +30,69 @@ impl App {
     }
 
     pub fn handle_create_card_dialog(&mut self, key_code: KeyCode) {
+        // Enter always submits and Tab always toggles focus, regardless of
+        // which sub-field currently has focus.
+        match key_code {
+            KeyCode::Enter => {
+                self.create_card();
+                self.pop_mode();
+                self.input.clear();
+                self.dialog_input.create_card_sprint_picker.clear();
+                self.dialog_input.reset_create_card_focus();
+                return;
+            }
+            KeyCode::Tab => {
+                self.dialog_input.toggle_create_card_focus();
+                return;
+            }
+            _ => {}
+        }
+
+        if self.dialog_input.create_card_focus_is_title() {
+            // Title focus: Down/Esc drop focus into the sprint picker so the
+            // visual cursor moves out of the text input; all other keys edit
+            // the title.
+            match key_code {
+                KeyCode::Down | KeyCode::Esc => {
+                    self.dialog_input.toggle_create_card_focus();
+                }
+                _ => match handle_dialog_input(&mut self.input, key_code, false) {
+                    DialogAction::Cancel => {
+                        // Esc was already special-cased; this branch only
+                        // fires when handle_dialog_input emits Cancel for
+                        // some other key (currently none, but kept for
+                        // forward-compatibility).
+                        self.pop_mode();
+                        self.input.clear();
+                        self.dialog_input.create_card_sprint_picker.clear();
+                        self.dialog_input.reset_create_card_focus();
+                    }
+                    DialogAction::None | DialogAction::Confirm => {}
+                },
+            }
+            return;
+        }
+
+        // Sprint focus: Esc closes the dialog, Up/Down navigate the picker,
+        // everything else is ignored so a stray keystroke does not modify
+        // the title behind the user's back.
+        if matches!(key_code, KeyCode::Esc) {
+            self.pop_mode();
+            self.input.clear();
+            self.dialog_input.create_card_sprint_picker.clear();
+            self.dialog_input.reset_create_card_focus();
+            return;
+        }
         if let Some(idx) = self.selection.active_board_index {
             if let Some(board) = self.model.boards().get(idx).cloned() {
                 let now = chrono::Utc::now();
-                let consumed = self.dialog_input.create_card_sprint_picker.handle_key(
+                self.dialog_input.create_card_sprint_picker.handle_key(
                     key_code,
                     self.model.sprints(),
                     &board,
                     now,
                 );
-                if consumed {
-                    return;
-                }
             }
-        }
-        match handle_dialog_input(&mut self.input, key_code, false) {
-            DialogAction::Confirm => {
-                self.create_card();
-                self.pop_mode();
-                self.input.clear();
-                self.dialog_input.create_card_sprint_picker.clear();
-            }
-            DialogAction::Cancel => {
-                self.pop_mode();
-                self.input.clear();
-                self.dialog_input.create_card_sprint_picker.clear();
-            }
-            DialogAction::None => {}
         }
     }
 

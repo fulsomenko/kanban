@@ -50,16 +50,35 @@ pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
         Paragraph::new("Task Title:").style(Style::default().fg(Color::Yellow));
     frame.render_widget(label_widget, chunks[0]);
 
+    let title_focused = app.dialog_input.create_card_focus_is_title();
     let input = Paragraph::new(app.input.as_str())
         .style(crate::theme::normal_text())
-        .block(Block::default().borders(Borders::ALL));
+        .block(Block::default().borders(Borders::ALL).border_style(
+            if title_focused {
+                crate::theme::focused_border()
+            } else {
+                Style::default()
+            },
+        ));
     frame.render_widget(input, chunks[1]);
-    let cursor_x = chunks[1].x + app.input.cursor_byte_offset() as u16 + 1;
-    let cursor_y = chunks[1].y + 1;
-    frame.set_cursor_position((cursor_x, cursor_y));
+    if title_focused {
+        let cursor_x = chunks[1].x + app.input.cursor_byte_offset() as u16 + 1;
+        let cursor_y = chunks[1].y + 1;
+        frame.set_cursor_position((cursor_x, cursor_y));
+    }
 
+    let sprint_label_color = if title_focused {
+        Color::Yellow
+    } else {
+        Color::LightYellow
+    };
     frame.render_widget(
-        Paragraph::new("Sprint (optional):").style(Style::default().fg(Color::Yellow)),
+        Paragraph::new(if title_focused {
+            "Sprint (optional):"
+        } else {
+            "Sprint (optional):  [focused — Tab/Enter to confirm]"
+        })
+        .style(Style::default().fg(sprint_label_color)),
         chunks[2],
     );
 
