@@ -373,3 +373,49 @@ fn test_render_emits_active_planned_header_with_yellow_color() {
         "Active / Planned header must render in yellow"
     );
 }
+
+#[test]
+fn test_render_with_none_selection_leaves_all_rows_unselected() {
+    // Contract: selected=None means "no row highlighted". The (None) unassign
+    // row must not gain the '> ' selected prefix just because index 0 happens
+    // to coincide with the unwrap_or default. The primitive must stay neutral
+    // for the None case so consumers control highlighting explicitly.
+    let (mut app, board_id, _col) = make_app_with_board();
+    add_active_sprint(&mut app, board_id);
+    let now = Utc::now();
+    let board = app
+        .model
+        .boards()
+        .iter()
+        .find(|b| b.id == board_id)
+        .cloned()
+        .unwrap();
+    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let out = render_picker_to_string(&picker, None);
+    assert!(
+        !out.contains("> (None)"),
+        "with selected=None, no row should carry the '> ' selected prefix:\n{}",
+        out
+    );
+}
+
+#[test]
+fn test_render_with_out_of_bounds_selected_does_not_panic() {
+    // Defensive: stale or otherwise out-of-bounds `selected` must not panic
+    // the render path. The sticky-header lookup loop iterates indices
+    // beyond items.len() when selected is far past the end; it must clamp.
+    let (mut app, board_id, _col) = make_app_with_board();
+    add_active_sprint(&mut app, board_id);
+    let now = Utc::now();
+    let board = app
+        .model
+        .boards()
+        .iter()
+        .find(|b| b.id == board_id)
+        .cloned()
+        .unwrap();
+    let picker = SprintPicker::for_card_assignment(app.model.sprints(), &board, None, now);
+    let out_of_bounds = picker.len() + 100;
+    // Test passes if this render call returns instead of panicking.
+    let _ = render_picker_to_string(&picker, Some(out_of_bounds));
+}
