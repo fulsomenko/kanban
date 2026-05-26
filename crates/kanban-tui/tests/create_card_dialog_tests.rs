@@ -159,6 +159,40 @@ fn test_typing_on_sprint_focus_does_not_modify_title_input() {
 }
 
 #[test]
+fn test_j_on_sprint_focus_navigates_picker_like_down() {
+    let mut app = setup_app_with_board();
+    let bid = board_id(&app);
+    let planning = app.ctx.create_sprint(bid, None, None).unwrap();
+    app.prepare_frame();
+
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    for ch in "Vim".chars() {
+        app.handle_create_card_dialog(KeyCode::Char(ch));
+    }
+    app.handle_create_card_dialog(KeyCode::Tab);
+    app.handle_create_card_dialog(KeyCode::Char('j'));
+    app.handle_create_card_dialog(KeyCode::Enter);
+    app.prepare_frame();
+
+    let cards = app.model.cards();
+    let created = cards.iter().find(|c| c.title == "Vim").expect("card created");
+    assert_eq!(created.sprint_id, Some(planning.id));
+}
+
+#[test]
+fn test_j_on_title_focus_inserts_character_into_title() {
+    let mut app = setup_app_with_board();
+    app.focus.active = Focus::Cards;
+    app.handle_create_card_key();
+    assert!(app.dialog_input.create_card_focus_is_title());
+
+    app.handle_create_card_dialog(KeyCode::Char('j'));
+
+    assert_eq!(app.input.as_str(), "j");
+}
+
+#[test]
 fn test_arrow_down_after_tab_navigates_picker_and_enter_assigns_sprint() {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
