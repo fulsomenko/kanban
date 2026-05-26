@@ -256,6 +256,12 @@ impl CreateCard {
 
         if let Some(sprint_id) = self.options.sprint_id {
             let sprint = context.get_sprint(sprint_id)?;
+            if sprint.board_id != self.board_id {
+                return Err(KanbanError::validation(format!(
+                    "sprint {} belongs to board {} but card is being created on board {}",
+                    sprint_id, sprint.board_id, self.board_id
+                )));
+            }
             let sprint_number = sprint.sprint_number;
             let sprint_name = sprint.get_name(&board).map(|s| s.to_string());
             let sprint_status = format!("{:?}", sprint.status);
@@ -1187,6 +1193,44 @@ mod tests {
         };
         let err = cmd.execute(&context).unwrap_err();
         assert!(err.is_not_found(), "Expected not found, got: {:?}", err);
+    }
+
+    #[test]
+    fn test_create_card_with_sprint_from_different_board_returns_validation_error() {
+        let tc = TestContext::new();
+        let board_a = crate::Board::new("A".to_string(), Some("AAA".to_string()));
+        let board_b = crate::Board::new("B".to_string(), Some("BBB".to_string()));
+        let col_a = crate::Column::new(board_a.id, "Col".to_string(), 0);
+        // Sprint belongs to board B.
+        let sprint_b = crate::Sprint::new(board_b.id, 1, None, None);
+        let board_a_id = board_a.id;
+        let column_id = col_a.id;
+        let sprint_b_id = sprint_b.id;
+        tc.store.upsert_board(board_a).unwrap();
+        tc.store.upsert_board(board_b).unwrap();
+        tc.store.upsert_column(col_a).unwrap();
+        tc.store.upsert_sprint(sprint_b).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
+            board_id: board_a_id,
+            column_id,
+            title: "X".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                sprint_id: Some(sprint_b_id),
+                ..Default::default()
+            },
+            timestamp: Utc::now(),
+        };
+        let err = cmd.execute(&context).unwrap_err();
+        let msg = format!("{}", err);
+        assert!(
+            msg.to_lowercase().contains("board"),
+            "cross-board sprint should error with a message mentioning the board mismatch, got: {msg}"
+        );
     }
 
     #[test]
