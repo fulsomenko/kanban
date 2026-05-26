@@ -61,8 +61,9 @@ impl SprintPicker {
     }
 
     /// Try to consume a navigation key. Returns true when the key moved the
-    /// selection (Up/Down/j/k); false when the key should fall through to
-    /// other handlers (typing into a text input, etc.).
+    /// selection (Up/Down/j/k) or cleared it (Space); false when the key
+    /// should fall through to other handlers (typing into a text input,
+    /// etc.).
     pub fn handle_key(
         &mut self,
         key_code: KeyCode,
@@ -70,6 +71,10 @@ impl SprintPicker {
         board: &Board,
         now: DateTime<Utc>,
     ) -> bool {
+        if matches!(key_code, KeyCode::Char(' ')) {
+            self.selection = Selection::NoSprint;
+            return true;
+        }
         let entries = build_entries(sprints, board.id, now);
         let cur = self.current_index(&entries);
         let next_idx = match key_code {
@@ -235,6 +240,23 @@ mod tests {
             "Down should move selection when more entries exist"
         );
         assert!(matches!(after, Selection::Sprint(_)));
+    }
+
+    #[test]
+    fn test_handle_key_space_clears_selection_to_nosprint() {
+        let now = Utc::now();
+        let board = make_board();
+        let sprint = active_sprint(board.id, 1, now);
+        let sprints = vec![sprint.clone()];
+
+        let mut picker = SprintPicker::new();
+        picker.reset_for_board(&sprints, &board, now);
+        assert_eq!(picker.raw_selection(), Selection::Sprint(sprint.id));
+
+        let consumed = picker.handle_key(KeyCode::Char(' '), &sprints, &board, now);
+        assert!(consumed, "Space should be consumed by the picker");
+        assert_eq!(picker.raw_selection(), Selection::NoSprint);
+        assert_eq!(picker.selected_sprint_id(), None);
     }
 
     #[test]
