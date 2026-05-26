@@ -77,40 +77,21 @@ impl<'a, T> RadioList<'a, T> {
     }
 
     pub fn next_selectable(&self, cur: Option<usize>) -> Option<usize> {
-        let start = cur.map(|i| i + 1).unwrap_or(0);
-        self.items
-            .iter()
-            .enumerate()
-            .skip(start)
-            .find(|(_, e)| e.selectable)
-            .map(|(i, _)| i)
-            .or_else(|| self.cur_if_selectable(cur))
-            .or_else(|| self.last_selectable())
+        crate::components::list_nav::next_selectable_index(cur, self.items.len(), |i| {
+            self.items[i].selectable
+        })
     }
 
     pub fn prev_selectable(&self, cur: Option<usize>) -> Option<usize> {
-        let end = cur.unwrap_or(self.items.len());
-        self.items
-            .iter()
-            .enumerate()
-            .take(end)
-            .rev()
-            .find(|(_, e)| e.selectable)
-            .map(|(i, _)| i)
-            .or_else(|| self.cur_if_selectable(cur))
-            .or_else(|| self.first_selectable())
+        crate::components::list_nav::prev_selectable_index(cur, self.items.len(), |i| {
+            self.items[i].selectable
+        })
     }
 
     pub fn first_selectable(&self) -> Option<usize> {
-        self.items.iter().position(|e| e.selectable)
-    }
-
-    fn last_selectable(&self) -> Option<usize> {
-        self.items.iter().rposition(|e| e.selectable)
-    }
-
-    fn cur_if_selectable(&self, cur: Option<usize>) -> Option<usize> {
-        cur.filter(|&c| self.items.get(c).map(|i| i.selectable).unwrap_or(false))
+        crate::components::list_nav::first_selectable_index(self.items.len(), |i| {
+            self.items[i].selectable
+        })
     }
 }
 
