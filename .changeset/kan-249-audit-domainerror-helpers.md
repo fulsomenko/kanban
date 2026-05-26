@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 Internal cleanup with no user-visible change. Six unused convenience
