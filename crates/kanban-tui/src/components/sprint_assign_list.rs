@@ -17,12 +17,17 @@ pub enum SprintAssignEntry<'a> {
     Ended(&'a Sprint),
 }
 
+impl SprintAssignEntry<'_> {
+    /// True for rows the user can land on with arrow keys (i.e. not a
+    /// section header). The single source of truth for this predicate so
+    /// adding a new non-selectable variant only requires updating one place.
+    pub fn is_selectable(&self) -> bool {
+        !matches!(self, SprintAssignEntry::Header(_))
+    }
+}
+
 pub const ACTIVE_PLANNED_HEADER: &str = "Active / Planned";
 pub const COMPLETED_ENDED_HEADER: &str = "Completed / Ended";
-
-fn is_selectable(entry: &SprintAssignEntry) -> bool {
-    !matches!(entry, SprintAssignEntry::Header(_))
-}
 
 /// Build the entry list for the dialog. Headers are emitted only when their
 /// section is non-empty. The `(None)` entry is always at index 0.
@@ -62,7 +67,7 @@ pub fn build_entries<'a>(
 /// entries exist.
 pub fn next_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
     crate::components::list_nav::next_selectable_index(cur, entries.len(), |i| {
-        is_selectable(&entries[i])
+        entries[i].is_selectable()
     })
 }
 
@@ -71,7 +76,7 @@ pub fn next_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Opt
 /// entries exist.
 pub fn prev_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
     crate::components::list_nav::prev_selectable_index(cur, entries.len(), |i| {
-        is_selectable(&entries[i])
+        entries[i].is_selectable()
     })
 }
 

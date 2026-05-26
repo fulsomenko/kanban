@@ -95,12 +95,10 @@ impl<'a> SprintPicker<'a> {
                 let is_selected = selected == Some(idx);
                 let label =
                     render_entry_line(entry, is_selected, self.current_sprint_id, self.board);
-                let value = sprint_id_of(entry);
-                let selectable = !matches!(entry, SprintAssignEntry::Header(_));
                 ListItem {
-                    value,
+                    value: sprint_id_of(entry),
                     label,
-                    selectable,
+                    selectable: entry.is_selectable(),
                 }
             })
             .collect();
