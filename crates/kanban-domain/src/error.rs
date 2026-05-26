@@ -167,36 +167,6 @@ impl DomainError {
         )
     }
 
-    pub fn board_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "board",
-            id,
-        }
-    }
-    pub fn card_not_found(id: Uuid) -> Self {
-        Self::NotFound { entity: "card", id }
-    }
-    pub fn column_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "column",
-            id,
-        }
-    }
-    pub fn sprint_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "sprint",
-            id,
-        }
-    }
-    pub fn archived_card_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "archived card",
-            id,
-        }
-    }
-    pub fn tag_not_found(id: Uuid) -> Self {
-        Self::NotFound { entity: "tag", id }
-    }
     pub fn wip_limit_exceeded(column_id: Uuid, limit: u32) -> Self {
         Self::WipLimitExceeded { column_id, limit }
     }
