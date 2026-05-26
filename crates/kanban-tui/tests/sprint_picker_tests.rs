@@ -317,6 +317,62 @@ fn test_value_at_returns_sprint_id_for_sprint_row() {
 }
 
 #[test]
+fn test_index_of_sprint_returns_row_index_for_known_sprint() {
+    let (mut app, board_id, _col) = make_app_with_board();
+    let active = add_active_sprint(&mut app, board_id);
+    let _planning = add_planning_sprint(&mut app, board_id);
+    let now = Utc::now();
+    let board = app
+        .model
+        .boards()
+        .iter()
+        .find(|b| b.id == board_id)
+        .cloned()
+        .unwrap();
+    let entries = build_entries(app.model.sprints(), board_id, now);
+    let expected = entries.iter().position(|e| sprint_id_of(e) == Some(active));
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
+    assert_eq!(picker.index_of_sprint(Some(active)), expected);
+}
+
+#[test]
+fn test_index_of_sprint_returns_none_entry_index_when_no_sprint_selected() {
+    let (mut app, board_id, _col) = make_app_with_board();
+    add_active_sprint(&mut app, board_id);
+    let now = Utc::now();
+    let board = app
+        .model
+        .boards()
+        .iter()
+        .find(|b| b.id == board_id)
+        .cloned()
+        .unwrap();
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
+    assert_eq!(
+        picker.index_of_sprint(None),
+        Some(0),
+        "the (None) entry is always at index 0"
+    );
+}
+
+#[test]
+fn test_index_of_sprint_returns_none_when_sprint_is_not_in_list() {
+    let (mut app, board_id, _col) = make_app_with_board();
+    add_active_sprint(&mut app, board_id);
+    let now = Utc::now();
+    let board = app
+        .model
+        .boards()
+        .iter()
+        .find(|b| b.id == board_id)
+        .cloned()
+        .unwrap();
+    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, None, now);
+    let unknown = uuid::Uuid::new_v4();
+    assert_eq!(picker.index_of_sprint(Some(unknown)), None);
+}
+
+#[test]
 fn test_value_at_indices_match_build_entries_order() {
     let (mut app, board_id, _col) = make_app_with_board();
     add_active_sprint(&mut app, board_id);

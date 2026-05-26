@@ -68,6 +68,24 @@ impl<'a> SprintPickerView<'a> {
         self.initial
     }
 
+    /// Find the row index of a sprint id (or the "(None)" entry if `id`
+    /// is `None`). Returns `None` only when a sprint id is supplied that
+    /// does not appear in the current entries — e.g. it was deleted
+    /// between frames. Avoids a redundant `build_entries` call for
+    /// callers that already have a `SprintPickerView` constructed.
+    pub fn index_of_sprint(&self, id: Option<Uuid>) -> Option<usize> {
+        match id {
+            None => self
+                .entries
+                .iter()
+                .position(|e| matches!(e, SprintAssignEntry::None)),
+            Some(target) => self
+                .entries
+                .iter()
+                .position(|e| sprint_id_of(e) == Some(target)),
+        }
+    }
+
     pub fn value_at(&self, idx: usize) -> Option<Option<Uuid>> {
         match self.entries.get(idx)? {
             SprintAssignEntry::Header(_) => None,
