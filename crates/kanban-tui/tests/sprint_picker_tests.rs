@@ -24,12 +24,15 @@ fn make_app_with_board() -> (App, Uuid, Uuid) {
 }
 
 fn add_planning_sprint(app: &mut App, board_id: Uuid) -> Uuid {
-    app.ctx.create_sprint(board_id, None, None).unwrap().id
+    let id = app.ctx.create_sprint(board_id, None, None).unwrap().id;
+    app.prepare_frame();
+    id
 }
 
 fn add_active_sprint(app: &mut App, board_id: Uuid) -> Uuid {
     let sprint = app.ctx.create_sprint(board_id, None, None).unwrap();
     app.ctx.activate_sprint(sprint.id, Some(7)).unwrap();
+    app.prepare_frame();
     sprint.id
 }
 
@@ -46,6 +49,7 @@ fn add_ended_sprint(app: &mut App, board_id: Uuid) -> Uuid {
             },
         )
         .unwrap();
+    app.prepare_frame();
     sprint.id
 }
 
@@ -53,11 +57,13 @@ fn add_completed_sprint(app: &mut App, board_id: Uuid) -> Uuid {
     let sprint = app.ctx.create_sprint(board_id, None, None).unwrap();
     app.ctx.activate_sprint(sprint.id, Some(7)).unwrap();
     app.ctx.complete_sprint(sprint.id).unwrap();
+    app.prepare_frame();
     sprint.id
 }
 
 fn add_card(app: &mut App, board_id: Uuid, column_id: Uuid) -> Uuid {
-    app.ctx
+    let id = app
+        .ctx
         .create_card(
             board_id,
             column_id,
@@ -65,11 +71,14 @@ fn add_card(app: &mut App, board_id: Uuid, column_id: Uuid) -> Uuid {
             CreateCardOptions::default(),
         )
         .unwrap()
-        .id
+        .id;
+    app.prepare_frame();
+    id
 }
 
 fn assign_card_sprint(app: &mut App, card_id: Uuid, sprint_id: Uuid) {
     app.ctx.assign_card_to_sprint(card_id, sprint_id).unwrap();
+    app.prepare_frame();
 }
 
 fn render_picker_to_string(picker: &SprintPicker<'_>, selected: Option<usize>) -> String {

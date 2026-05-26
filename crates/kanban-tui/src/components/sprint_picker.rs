@@ -1,14 +1,14 @@
 use crate::components::radio_list::{ListItem, RadioList};
-use crate::components::sprint_assign_list::SprintAssignEntry;
+use crate::components::sprint_assign_list::{
+    build_entries, render_entry_line, sprint_id_of, SprintAssignEntry,
+};
 use chrono::{DateTime, Utc};
-use kanban_domain::{Board, Sprint};
+use kanban_domain::{Board, Sprint, SprintStatus};
 use ratatui::{layout::Rect, Frame};
 use uuid::Uuid;
 
-#[allow(dead_code)]
 pub struct SprintPicker<'a> {
     entries: Vec<SprintAssignEntry<'a>>,
-    items: Vec<ListItem<Option<Uuid>>>,
     board: &'a Board,
     current_sprint_id: Option<Uuid>,
     initial: Option<usize>,
@@ -16,39 +16,109 @@ pub struct SprintPicker<'a> {
 
 impl<'a> SprintPicker<'a> {
     pub fn for_card_assignment(
-        _sprints: &'a [Sprint],
-        _board: &'a Board,
-        _current_sprint_id: Option<Uuid>,
-        _now: DateTime<Utc>,
+        sprints: &'a [Sprint],
+        board: &'a Board,
+        current_sprint_id: Option<Uuid>,
+        now: DateTime<Utc>,
     ) -> Self {
-        todo!()
+        let entries = build_entries(sprints, board.id, now);
+        let initial = match current_sprint_id {
+            Some(id) => entries
+                .iter()
+                .position(|e| sprint_id_of(e) == Some(id))
+                .or(Some(0)),
+            None => Some(0),
+        };
+        Self {
+            entries,
+            board,
+            current_sprint_id,
+            initial,
+        }
     }
 
-    pub fn for_board(_sprints: &'a [Sprint], _board: &'a Board, _now: DateTime<Utc>) -> Self {
-        todo!()
+    pub fn for_board(sprints: &'a [Sprint], board: &'a Board, now: DateTime<Utc>) -> Self {
+        let entries = build_entries(sprints, board.id, now);
+        let active_non_ended: Vec<usize> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, entry)| match entry {
+                SprintAssignEntry::ActiveOrPlanned(s)
+                    if s.status == SprintStatus::Active && !s.is_ended(now) =>
+                {
+                    Some(idx)
+                }
+                _ => None,
+            })
+            .collect();
+        let initial = if active_non_ended.len() == 1 {
+            Some(active_non_ended[0])
+        } else {
+            Some(0)
+        };
+        Self {
+            entries,
+            board,
+            current_sprint_id: None,
+            initial,
+        }
     }
 
     pub fn initial_selection(&self) -> Option<usize> {
-        todo!()
+        self.initial
     }
 
-    pub fn value_at(&self, _idx: usize) -> Option<Option<Uuid>> {
-        todo!()
+    pub fn value_at(&self, idx: usize) -> Option<Option<Uuid>> {
+        match self.entries.get(idx)? {
+            SprintAssignEntry::Header(_) => None,
+            SprintAssignEntry::None => Some(None),
+            SprintAssignEntry::ActiveOrPlanned(s)
+            | SprintAssignEntry::Completed(s)
+            | SprintAssignEntry::Ended(s) => Some(Some(s.id)),
+        }
     }
 
     pub fn len(&self) -> usize {
-        todo!()
+        self.entries.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.entries.is_empty()
     }
 
-    pub fn render(&self, _frame: &mut Frame, _area: Rect, _selected: Option<usize>) {
-        todo!()
+    pub fn render(&self, frame: &mut Frame, area: Rect, selected: Option<usize>) {
+        let sel = selected.unwrap_or(0);
+        let items: Vec<ListItem<Option<Uuid>>> = self
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(idx, entry)| {
+                let label =
+                    render_entry_line(entry, idx == sel, self.current_sprint_id, self.board);
+                let value = match entry {
+                    SprintAssignEntry::None => None,
+                    SprintAssignEntry::ActiveOrPlanned(s)
+                    | SprintAssignEntry::Completed(s)
+                    | SprintAssignEntry::Ended(s) => Some(s.id),
+                    SprintAssignEntry::Header(_) => None,
+                };
+                let selectable = !matches!(entry, SprintAssignEntry::Header(_));
+                ListItem {
+                    value,
+                    label,
+                    selectable,
+                }
+            })
+            .collect();
+
+        let list = RadioList::new(&items).with_sticky_header(|items, sel_idx| {
+            for i in (0..sel_idx).rev() {
+                if !items[i].selectable {
+                    return Some((i, items[i].label.clone()));
+                }
+            }
+            None
+        });
+        list.render(frame, area, selected);
     }
 }
-
-// Suppress unused-import warnings for the stub phase; the impl uses these.
-#[allow(dead_code)]
-fn _silence_unused(_: RadioList<'static, Option<Uuid>>) {}
