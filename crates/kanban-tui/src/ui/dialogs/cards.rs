@@ -8,12 +8,67 @@ use ratatui::{
 };
 
 pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(
+    use crate::components::centered_rect;
+
+    let Some(board_idx) = app.selection.active_board_index else {
+        render_input_popup(
+            frame,
+            "Create New Task",
+            "Task Title:",
+            app.input.as_str(),
+            app.input.cursor_byte_offset(),
+        );
+        return;
+    };
+    let Some(board) = app.model.boards().get(board_idx) else {
+        return;
+    };
+
+    let area = centered_rect(60, 60, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Create New Task")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let label_widget =
+        Paragraph::new("Task Title:").style(Style::default().fg(Color::Yellow));
+    frame.render_widget(label_widget, chunks[0]);
+
+    let input = Paragraph::new(app.input.as_str())
+        .style(crate::theme::normal_text())
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(input, chunks[1]);
+    let cursor_x = chunks[1].x + app.input.cursor_byte_offset() as u16 + 1;
+    let cursor_y = chunks[1].y + 1;
+    frame.set_cursor_position((cursor_x, cursor_y));
+
+    frame.render_widget(
+        Paragraph::new("Sprint (optional):").style(Style::default().fg(Color::Yellow)),
+        chunks[2],
+    );
+
+    app.dialog_input.create_card_sprint_picker.render(
         frame,
-        "Create New Task",
-        "Task Title:",
-        app.input.as_str(),
-        app.input.cursor_byte_offset(),
+        chunks[3],
+        app.model.sprints(),
+        board,
+        chrono::Utc::now(),
     );
 }
 
@@ -54,7 +109,7 @@ pub(crate) fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 }
 
 pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
-    use crate::components::sprint_picker::SprintPicker;
+    use crate::components::sprint_picker_view::SprintPickerView;
 
     let area = centered_rect(60, 50, frame.area());
     frame.render_widget(Clear, area);
@@ -87,8 +142,12 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     let Some(board) = app.model.boards().get(board_idx) else {
         return;
     };
-    let picker =
-        SprintPicker::for_card_assignment(app.model.sprints(), board, None, chrono::Utc::now());
+    let picker = SprintPickerView::for_card_assignment(
+        app.model.sprints(),
+        board,
+        None,
+        chrono::Utc::now(),
+    );
     picker.render(
         frame,
         chunks[1],

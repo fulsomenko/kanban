@@ -1,3 +1,4 @@
+use crate::components::sprint_picker::SprintPicker;
 use kanban_core::SelectionState;
 use std::cell::Cell;
 use uuid::Uuid;
@@ -13,4 +14,5 @@ pub struct DialogInputState {
     pub task_list_view_selection: SelectionState,
     pub carry_over_sprint_selection: SelectionState,
     pub carry_over_source_sprint_id: Option<Uuid>,
+    pub create_card_sprint_picker: SprintPicker,
 }

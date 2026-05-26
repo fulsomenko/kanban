@@ -30,15 +30,31 @@ impl App {
     }
 
     pub fn handle_create_card_dialog(&mut self, key_code: KeyCode) {
+        if let Some(idx) = self.selection.active_board_index {
+            if let Some(board) = self.model.boards().get(idx).cloned() {
+                let now = chrono::Utc::now();
+                let consumed = self.dialog_input.create_card_sprint_picker.handle_key(
+                    key_code,
+                    self.model.sprints(),
+                    &board,
+                    now,
+                );
+                if consumed {
+                    return;
+                }
+            }
+        }
         match handle_dialog_input(&mut self.input, key_code, false) {
             DialogAction::Confirm => {
                 self.create_card();
                 self.pop_mode();
                 self.input.clear();
+                self.dialog_input.create_card_sprint_picker.clear();
             }
             DialogAction::Cancel => {
                 self.pop_mode();
                 self.input.clear();
+                self.dialog_input.create_card_sprint_picker.clear();
             }
             DialogAction::None => {}
         }

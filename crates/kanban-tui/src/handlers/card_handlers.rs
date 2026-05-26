@@ -11,6 +11,15 @@ use std::io;
 impl App {
     pub fn handle_create_card_key(&mut self) {
         if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
+            if let Some(idx) = self.selection.active_board_index {
+                if let Some(board) = self.model.boards().get(idx) {
+                    self.dialog_input.create_card_sprint_picker.reset_for_board(
+                        self.model.sprints(),
+                        board,
+                        chrono::Utc::now(),
+                    );
+                }
+            }
             self.open_dialog(DialogMode::CreateCard);
             self.input.clear();
         }
@@ -352,6 +361,17 @@ impl App {
                     })
                     .unwrap_or(false);
 
+                let now = chrono::Utc::now();
+                let sprint_id = self
+                    .model
+                    .boards()
+                    .get(idx)
+                    .map(|board| {
+                        self.dialog_input
+                            .create_card_sprint_picker
+                            .selected_sprint_id(self.model.sprints(), board, now)
+                    })
+                    .unwrap_or(None);
                 let card_id = uuid::Uuid::new_v4();
                 let mut commands: Vec<Command> =
                     vec![Command::Card(CardCommand::Create(CreateCard {
@@ -361,8 +381,11 @@ impl App {
                         column_id: column.id,
                         title: self.input.as_str().to_string(),
                         position,
-                        options: kanban_domain::CreateCardOptions::default(),
-                        timestamp: chrono::Utc::now(),
+                        options: kanban_domain::CreateCardOptions {
+                            sprint_id,
+                            ..Default::default()
+                        },
+                        timestamp: now,
                     }))];
 
                 if mark_as_complete {
