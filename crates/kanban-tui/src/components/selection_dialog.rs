@@ -1,8 +1,6 @@
 use crate::app::App;
-use crate::components::radio_list::scroll_offset_to_show;
-use crate::components::sprint_assign_list::{
-    build_entries, render_entry_line, section_header_for, SprintAssignEntry,
-};
+use crate::components::sprint_assign_list::build_entries;
+use crate::components::sprint_picker::SprintPicker;
 use kanban_domain::SprintStatus;
 use ratatui::Frame;
 
@@ -326,86 +324,32 @@ impl SelectionDialog for SprintAssignDialog {
             .constraints([Constraint::Length(1), Constraint::Min(0)])
             .split(inner);
 
-        let label = Paragraph::new("Select sprint:").style(Style::default().fg(Color::Yellow));
-        frame.render_widget(label, chunks[0]);
+        frame.render_widget(
+            Paragraph::new("Select sprint:").style(Style::default().fg(Color::Yellow)),
+            chunks[0],
+        );
 
-        let mut lines = vec![];
-
-        if let Some(board_idx) = app.selection.active_board_index {
-            let boards = app.model.boards();
-            if let Some(board) = boards.get(board_idx) {
-                let sprints = app.model.sprints();
-                let entries = build_entries(sprints, board.id, chrono::Utc::now());
-
-                let current_sprint_id = app
-                    .selection
-                    .active_card_id
-                    .and_then(|id| app.model.card(id))
-                    .and_then(|c| c.sprint_id);
-
-                for (idx, entry) in entries.iter().enumerate() {
-                    let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
-                    lines.push(render_entry_line(
-                        entry,
-                        is_selected,
-                        current_sprint_id,
-                        board,
-                    ));
-                }
-            }
-        }
-
-        let selected = app.dialog_input.sprint_assign_selection.get().unwrap_or(0);
-        let entries_for_header = if let Some(board_idx) = app.selection.active_board_index {
-            app.model
-                .boards()
-                .get(board_idx)
-                .map(|b| build_entries(app.model.sprints(), b.id, chrono::Utc::now()))
-                .unwrap_or_default()
-        } else {
-            Vec::new()
+        let Some(board_idx) = app.selection.active_board_index else {
+            return;
         };
-        let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
-        let list = Paragraph::new(lines).scroll((scroll as u16, 0));
-        frame.render_widget(list, chunks[1]);
-        render_sticky_section_header(frame, chunks[1], &entries_for_header, selected, scroll);
+        let Some(board) = app.model.boards().get(board_idx) else {
+            return;
+        };
+        let current_sprint_id = app
+            .selection
+            .active_card_id
+            .and_then(|id| app.model.card(id))
+            .and_then(|c| c.sprint_id);
+        let picker = SprintPicker::for_card_assignment(
+            app.model.sprints(),
+            board,
+            current_sprint_id,
+            chrono::Utc::now(),
+        );
+        picker.render(
+            frame,
+            chunks[1],
+            app.dialog_input.sprint_assign_selection.get(),
+        );
     }
-}
-
-fn render_sticky_section_header(
-    frame: &mut Frame,
-    list_area: ratatui::layout::Rect,
-    entries: &[SprintAssignEntry<'_>],
-    selected: usize,
-    scroll: usize,
-) {
-    use ratatui::{
-        layout::Rect,
-        style::{Color, Modifier, Style},
-        text::{Line, Span},
-        widgets::Paragraph,
-    };
-
-    if list_area.height == 0 {
-        return;
-    }
-    let Some((header_idx, label)) = section_header_for(entries, selected) else {
-        return;
-    };
-    if header_idx >= scroll {
-        return;
-    }
-    let overlay = Paragraph::new(Line::from(Span::styled(
-        label.to_string(),
-        Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
-    )));
-    let top_row = Rect {
-        x: list_area.x,
-        y: list_area.y,
-        width: list_area.width,
-        height: 1,
-    };
-    frame.render_widget(overlay, top_row);
 }
