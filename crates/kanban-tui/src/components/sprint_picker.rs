@@ -87,21 +87,15 @@ impl<'a> SprintPicker<'a> {
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect, selected: Option<usize>) {
-        let sel = selected.unwrap_or(0);
         let items: Vec<ListItem<Option<Uuid>>> = self
             .entries
             .iter()
             .enumerate()
             .map(|(idx, entry)| {
+                let is_selected = selected == Some(idx);
                 let label =
-                    render_entry_line(entry, idx == sel, self.current_sprint_id, self.board);
-                let value = match entry {
-                    SprintAssignEntry::None => None,
-                    SprintAssignEntry::ActiveOrPlanned(s)
-                    | SprintAssignEntry::Completed(s)
-                    | SprintAssignEntry::Ended(s) => Some(s.id),
-                    SprintAssignEntry::Header(_) => None,
-                };
+                    render_entry_line(entry, is_selected, self.current_sprint_id, self.board);
+                let value = sprint_id_of(entry);
                 let selectable = !matches!(entry, SprintAssignEntry::Header(_));
                 ListItem {
                     value,
@@ -112,7 +106,8 @@ impl<'a> SprintPicker<'a> {
             .collect();
 
         let list = RadioList::new(&items).with_sticky_header(|items, sel_idx| {
-            for i in (0..sel_idx).rev() {
+            let upper = sel_idx.min(items.len());
+            for i in (0..upper).rev() {
                 if !items[i].selectable {
                     return Some((i, items[i].label.clone()));
                 }
