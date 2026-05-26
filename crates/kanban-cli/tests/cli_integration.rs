@@ -1562,7 +1562,13 @@ mod card_tests {
 
     fn create_sprint(file: &std::path::Path, board_id: &str) -> String {
         let output = kanban()
-            .args([file.to_str().unwrap(), "sprint", "create", "--board", board_id])
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "create",
+                "--board",
+                board_id,
+            ])
             .assert()
             .success()
             .get_output()

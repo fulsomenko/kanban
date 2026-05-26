@@ -141,7 +141,10 @@ mod tests {
         let mut picker = SprintPicker::new();
         picker.reset_for_board(&sprints, &board, now);
 
-        assert_eq!(picker.selected_sprint_id(&sprints, &board, now), Some(sprint.id));
+        assert_eq!(
+            picker.selected_sprint_id(&sprints, &board, now),
+            Some(sprint.id)
+        );
     }
 
     #[test]
@@ -192,7 +195,10 @@ mod tests {
         let after = picker.selection_index();
 
         assert!(consumed, "Down should be consumed by the picker");
-        assert_ne!(before, after, "Down should move selection when more entries exist");
+        assert_ne!(
+            before, after,
+            "Down should move selection when more entries exist"
+        );
     }
 
     #[test]

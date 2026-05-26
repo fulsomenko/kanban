@@ -178,7 +178,8 @@ fn test_for_card_assignment_initial_selection_is_index_of_current_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, Some(active), now);
+    let picker =
+        SprintPickerView::for_card_assignment(app.model.sprints(), &board, Some(active), now);
     assert_eq!(picker.initial_selection(), Some(expected_idx));
 }
 
@@ -196,7 +197,8 @@ fn test_for_card_assignment_render_shows_current_suffix_for_card_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPickerView::for_card_assignment(app.model.sprints(), &board, Some(active), now);
+    let picker =
+        SprintPickerView::for_card_assignment(app.model.sprints(), &board, Some(active), now);
     let out = render_picker_to_string(&picker, picker.initial_selection());
     assert!(
         out.contains("(current)"),

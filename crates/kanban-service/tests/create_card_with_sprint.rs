@@ -41,7 +41,12 @@ async fn create_card_without_sprint_id_leaves_card_unassigned() {
     let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
 
     let card = ctx
-        .create_card(board.id, col.id, "Card".into(), CreateCardOptions::default())
+        .create_card(
+            board.id,
+            col.id,
+            "Card".into(),
+            CreateCardOptions::default(),
+        )
         .unwrap();
 
     assert_eq!(card.sprint_id, None);

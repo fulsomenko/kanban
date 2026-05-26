@@ -56,13 +56,15 @@ pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
 
     let input = Paragraph::new(app.input.as_str())
         .style(crate::theme::normal_text())
-        .block(Block::default().borders(Borders::ALL).border_style(
-            if title_focused {
-                crate::theme::focused_border()
-            } else {
-                unfocused_border
-            },
-        ));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(if title_focused {
+                    crate::theme::focused_border()
+                } else {
+                    unfocused_border
+                }),
+        );
     frame.render_widget(input, chunks[1]);
     if title_focused {
         let cursor_x = chunks[1].x + app.input.cursor_byte_offset() as u16 + 1;
@@ -75,13 +77,13 @@ pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
         chunks[2],
     );
 
-    let picker_block = Block::default().borders(Borders::ALL).border_style(
-        if title_focused {
+    let picker_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(if title_focused {
             unfocused_border
         } else {
             crate::theme::focused_border()
-        },
-    );
+        });
     let picker_inner = picker_block.inner(chunks[3]);
     frame.render_widget(picker_block, chunks[3]);
     app.dialog_input.create_card_sprint_picker.render(
@@ -163,12 +165,8 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     let Some(board) = app.model.boards().get(board_idx) else {
         return;
     };
-    let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints(),
-        board,
-        None,
-        chrono::Utc::now(),
-    );
+    let picker =
+        SprintPickerView::for_card_assignment(app.model.sprints(), board, None, chrono::Utc::now());
     picker.render(
         frame,
         chunks[1],

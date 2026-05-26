@@ -796,7 +796,7 @@ async fn tool_move_card_resolves_names_through_locked_session() {
             priority: None,
             points: None,
             due_date: None,
-        sprint_id: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -974,7 +974,7 @@ async fn tool_assign_card_to_sprint_resolves_by_name_then_mutates() {
             priority: None,
             points: None,
             due_date: None,
-        sprint_id: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -1033,7 +1033,7 @@ async fn setup_server_with_two_cards() -> (KanbanMcpServer, TempDir, String, Str
             priority: None,
             points: None,
             due_date: None,
-        sprint_id: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -1046,7 +1046,7 @@ async fn setup_server_with_two_cards() -> (KanbanMcpServer, TempDir, String, Str
             priority: None,
             points: None,
             due_date: None,
-        sprint_id: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();

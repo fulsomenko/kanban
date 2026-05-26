@@ -24,10 +24,7 @@ fn board_id(app: &App) -> uuid::Uuid {
 fn confirm_create_card_dialog(app: &mut App, title: &str) {
     app.focus.active = Focus::Cards;
     app.handle_create_card_key();
-    assert!(matches!(
-        app.mode,
-        AppMode::Dialog(DialogMode::CreateCard)
-    ));
+    assert!(matches!(app.mode, AppMode::Dialog(DialogMode::CreateCard)));
     for ch in title.chars() {
         app.handle_create_card_dialog(KeyCode::Char(ch));
     }
@@ -46,7 +43,10 @@ fn test_create_card_dialog_assigns_sole_active_sprint_on_open() {
     confirm_create_card_dialog(&mut app, "Task");
 
     let cards = app.model.cards();
-    let created = cards.iter().find(|c| c.title == "Task").expect("card created");
+    let created = cards
+        .iter()
+        .find(|c| c.title == "Task")
+        .expect("card created");
     assert_eq!(
         created.sprint_id,
         Some(sprint.id),
@@ -65,7 +65,10 @@ fn test_create_card_dialog_leaves_card_unassigned_when_no_active_sprint() {
     confirm_create_card_dialog(&mut app, "Plain");
 
     let cards = app.model.cards();
-    let created = cards.iter().find(|c| c.title == "Plain").expect("card created");
+    let created = cards
+        .iter()
+        .find(|c| c.title == "Plain")
+        .expect("card created");
     assert_eq!(created.sprint_id, None);
 }
 
@@ -82,7 +85,10 @@ fn test_create_card_dialog_leaves_card_unassigned_when_multiple_active_sprints()
     confirm_create_card_dialog(&mut app, "Ambig");
 
     let cards = app.model.cards();
-    let created = cards.iter().find(|c| c.title == "Ambig").expect("card created");
+    let created = cards
+        .iter()
+        .find(|c| c.title == "Ambig")
+        .expect("card created");
     assert_eq!(
         created.sprint_id, None,
         "with multiple active sprints, no pre-selection so card stays unassigned"
@@ -111,10 +117,7 @@ fn test_esc_on_title_focus_moves_focus_to_sprint_picker_without_closing() {
 
     app.handle_create_card_dialog(KeyCode::Esc);
 
-    assert!(matches!(
-        app.mode,
-        AppMode::Dialog(DialogMode::CreateCard)
-    ));
+    assert!(matches!(app.mode, AppMode::Dialog(DialogMode::CreateCard)));
     assert!(!app.dialog_input.create_card_focus_is_title());
 }
 
@@ -176,7 +179,10 @@ fn test_j_on_sprint_focus_navigates_picker_like_down() {
     app.prepare_frame();
 
     let cards = app.model.cards();
-    let created = cards.iter().find(|c| c.title == "Vim").expect("card created");
+    let created = cards
+        .iter()
+        .find(|c| c.title == "Vim")
+        .expect("card created");
     assert_eq!(created.sprint_id, Some(planning.id));
 }
 
@@ -210,6 +216,9 @@ fn test_arrow_down_after_tab_navigates_picker_and_enter_assigns_sprint() {
     app.prepare_frame();
 
     let cards = app.model.cards();
-    let created = cards.iter().find(|c| c.title == "Picked").expect("card created");
+    let created = cards
+        .iter()
+        .find(|c| c.title == "Picked")
+        .expect("card created");
     assert_eq!(created.sprint_id, Some(planning.id));
 }
