@@ -13,7 +13,7 @@ use uuid::Uuid;
 /// changes to the underlying sprint list between frames (clock crossing
 /// a sprint's `end_date`, a background reload, an undo elsewhere, ...).
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Selection {
+pub(crate) enum Selection {
     /// Picker has not been initialised yet (default before `reset_for_board`).
     #[default]
     Unset,
@@ -103,8 +103,12 @@ impl SprintPicker {
         now: DateTime<Utc>,
     ) {
         let view = SprintPickerView::for_card_assignment(sprints, board, None, now);
-        let entries = build_entries(sprints, board.id, now);
-        view.render(frame, area, self.current_index(&entries));
+        let row = match self.selection {
+            Selection::Unset => None,
+            Selection::NoSprint => view.index_of_sprint(None),
+            Selection::Sprint(id) => view.index_of_sprint(Some(id)),
+        };
+        view.render(frame, area, row);
     }
 
     /// Map the stored identity back to the row index in the current entry
