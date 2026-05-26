@@ -46,18 +46,21 @@ pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
         ])
         .split(inner);
 
-    let label_widget =
-        Paragraph::new("Task Title:").style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label_widget, chunks[0]);
-
     let title_focused = app.dialog_input.create_card_focus_is_title();
+    let unfocused_border = Style::default().fg(Color::DarkGray);
+
+    frame.render_widget(
+        Paragraph::new("Task Title:").style(Style::default().fg(Color::Yellow)),
+        chunks[0],
+    );
+
     let input = Paragraph::new(app.input.as_str())
         .style(crate::theme::normal_text())
         .block(Block::default().borders(Borders::ALL).border_style(
             if title_focused {
                 crate::theme::focused_border()
             } else {
-                Style::default()
+                unfocused_border
             },
         ));
     frame.render_widget(input, chunks[1]);
@@ -67,24 +70,23 @@ pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
         frame.set_cursor_position((cursor_x, cursor_y));
     }
 
-    let sprint_label_color = if title_focused {
-        Color::Yellow
-    } else {
-        Color::LightYellow
-    };
     frame.render_widget(
-        Paragraph::new(if title_focused {
-            "Sprint (optional):"
-        } else {
-            "Sprint (optional):  [focused — Tab/Enter to confirm]"
-        })
-        .style(Style::default().fg(sprint_label_color)),
+        Paragraph::new("Sprint (optional):").style(Style::default().fg(Color::Yellow)),
         chunks[2],
     );
 
+    let picker_block = Block::default().borders(Borders::ALL).border_style(
+        if title_focused {
+            unfocused_border
+        } else {
+            crate::theme::focused_border()
+        },
+    );
+    let picker_inner = picker_block.inner(chunks[3]);
+    frame.render_widget(picker_block, chunks[3]);
     app.dialog_input.create_card_sprint_picker.render(
         frame,
-        chunks[3],
+        picker_inner,
         app.model.sprints(),
         board,
         chrono::Utc::now(),

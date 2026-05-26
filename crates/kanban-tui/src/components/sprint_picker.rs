@@ -54,13 +54,13 @@ impl SprintPicker {
         let entries = build_entries(sprints, board.id, now);
         let cur = self.selection.get();
         match key_code {
-            KeyCode::Down => {
+            KeyCode::Down | KeyCode::Char('j') => {
                 if let Some(next) = next_selectable(&entries, cur) {
                     self.selection.set(Some(next));
                 }
                 true
             }
-            KeyCode::Up => {
+            KeyCode::Up | KeyCode::Char('k') => {
                 if let Some(prev) = prev_selectable(&entries, cur) {
                     self.selection.set(Some(prev));
                 }
