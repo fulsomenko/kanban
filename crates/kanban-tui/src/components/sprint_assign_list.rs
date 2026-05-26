@@ -129,7 +129,7 @@ pub fn render_entry_line(
         )),
         SprintAssignEntry::None => {
             let is_current = current_sprint_id.is_none();
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_selected { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
             let style = if is_selected {
                 Style::default().fg(Color::White).bg(Color::Blue)
@@ -144,7 +144,7 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::ActiveOrPlanned(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_selected { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
             let style = if is_selected {
                 Style::default().fg(Color::White).bg(Color::Blue)
@@ -162,7 +162,7 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_selected { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
             let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
                 Color::Green
