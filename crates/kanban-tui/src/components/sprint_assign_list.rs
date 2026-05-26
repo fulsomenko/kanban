@@ -17,12 +17,17 @@ pub enum SprintAssignEntry<'a> {
     Ended(&'a Sprint),
 }
 
+impl SprintAssignEntry<'_> {
+    /// True for rows the user can land on with arrow keys (i.e. not a
+    /// section header). The single source of truth for this predicate so
+    /// adding a new non-selectable variant only requires updating one place.
+    pub fn is_selectable(&self) -> bool {
+        !matches!(self, SprintAssignEntry::Header(_))
+    }
+}
+
 pub const ACTIVE_PLANNED_HEADER: &str = "Active / Planned";
 pub const COMPLETED_ENDED_HEADER: &str = "Completed / Ended";
-
-fn is_selectable(entry: &SprintAssignEntry) -> bool {
-    !matches!(entry, SprintAssignEntry::Header(_))
-}
 
 /// Build the entry list for the dialog. Headers are emitted only when their
 /// section is non-empty. The `(None)` entry is always at index 0.
@@ -57,47 +62,22 @@ pub fn build_entries<'a>(
     entries
 }
 
-fn first_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
-    entries.iter().position(|e| is_selectable(e))
-}
-
-fn last_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
-    entries.iter().rposition(|e| is_selectable(e))
-}
-
-fn cur_if_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
-    cur.filter(|&c| entries.get(c).map(is_selectable).unwrap_or(false))
-}
-
 /// Move selection to the next selectable entry, skipping headers.
 /// Clamps at the last selectable entry. Returns `None` if no selectable
 /// entries exist.
 pub fn next_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
-    let start = cur.map(|i| i + 1).unwrap_or(0);
-    entries
-        .iter()
-        .enumerate()
-        .skip(start)
-        .find(|(_, e)| is_selectable(e))
-        .map(|(i, _)| i)
-        .or_else(|| cur_if_selectable(entries, cur))
-        .or_else(|| last_selectable(entries))
+    crate::components::list_nav::next_selectable_index(cur, entries.len(), |i| {
+        entries[i].is_selectable()
+    })
 }
 
 /// Move selection to the previous selectable entry, skipping headers.
 /// Clamps at the first selectable entry. Returns `None` if no selectable
 /// entries exist.
 pub fn prev_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
-    let end = cur.unwrap_or(entries.len());
-    entries
-        .iter()
-        .enumerate()
-        .take(end)
-        .rev()
-        .find(|(_, e)| is_selectable(e))
-        .map(|(i, _)| i)
-        .or_else(|| cur_if_selectable(entries, cur))
-        .or_else(|| first_selectable(entries))
+    crate::components::list_nav::prev_selectable_index(cur, entries.len(), |i| {
+        entries[i].is_selectable()
+    })
 }
 
 /// Returns the `(header_index, label)` of the section header that
@@ -200,23 +180,6 @@ pub fn render_entry_line(
             ))
         }
     }
-}
-
-/// Computes the vertical scroll offset (in rows) so that the entry at
-/// `selected` is visible inside a viewport of `height` rows over a list of
-/// `total` rows. Stateless: the offset is fully determined by these inputs.
-///
-/// Behavior:
-/// - When the list fits, no scroll.
-/// - When `selected` is in the first `height` rows, no scroll.
-/// - Otherwise, scroll just enough that `selected` is the last visible row,
-///   clamped so the bottom of the list aligns with the bottom of the viewport.
-pub fn scroll_offset_to_show(selected: usize, total: usize, height: usize) -> usize {
-    if height == 0 || total <= height || selected < height {
-        return 0;
-    }
-    let max_offset = total.saturating_sub(height);
-    (selected + 1).saturating_sub(height).min(max_offset)
 }
 
 #[cfg(test)]
@@ -459,44 +422,6 @@ mod tests {
         let none = SprintAssignEntry::None;
         assert_eq!(sprint_id_of(&header), None);
         assert_eq!(sprint_id_of(&none), None);
-    }
-
-    #[test]
-    fn test_scroll_offset_is_zero_when_list_fits_in_viewport() {
-        assert_eq!(scroll_offset_to_show(0, 3, 5), 0);
-        assert_eq!(scroll_offset_to_show(2, 3, 5), 0);
-        assert_eq!(scroll_offset_to_show(5, 6, 6), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_is_zero_when_selected_is_in_first_viewport() {
-        // selected at any of the first `height` indices keeps offset at 0
-        assert_eq!(scroll_offset_to_show(0, 20, 5), 0);
-        assert_eq!(scroll_offset_to_show(4, 20, 5), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_keeps_selected_visible_when_below_viewport() {
-        // height=5, selected=5 → must scroll by 1 so selected is last visible
-        assert_eq!(scroll_offset_to_show(5, 20, 5), 1);
-        // height=5, selected=10 → scroll by 6
-        assert_eq!(scroll_offset_to_show(10, 20, 5), 6);
-    }
-
-    #[test]
-    fn test_scroll_offset_clamps_at_last_full_viewport() {
-        // total=20, height=5 → max meaningful offset is 15 (showing rows 15-19)
-        assert_eq!(scroll_offset_to_show(19, 20, 5), 15);
-    }
-
-    #[test]
-    fn test_scroll_offset_handles_zero_height() {
-        assert_eq!(scroll_offset_to_show(5, 20, 0), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_handles_empty_list() {
-        assert_eq!(scroll_offset_to_show(0, 0, 5), 0);
     }
 
     #[test]
