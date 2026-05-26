@@ -46,7 +46,12 @@ impl ListComponent {
 
         if !was_at_top {
             let current_idx = self.selection.get().unwrap_or(0);
-            let new_idx = self.page.navigate_up(current_idx);
+            let new_idx = crate::components::list_nav::prev_selectable_index(
+                Some(current_idx),
+                self.page.total_items,
+                |_| true,
+            )
+            .unwrap_or(current_idx);
             self.selection.set(Some(new_idx));
 
             // Scroll up if selection moved before scroll window
@@ -67,7 +72,12 @@ impl ListComponent {
 
         if !was_at_bottom {
             let current_idx = self.selection.get().unwrap_or(0);
-            let new_idx = self.page.navigate_down(current_idx);
+            let new_idx = crate::components::list_nav::next_selectable_index(
+                Some(current_idx),
+                self.page.total_items,
+                |_| true,
+            )
+            .unwrap_or(current_idx);
             self.selection.set(Some(new_idx));
         }
 
