@@ -16,6 +16,7 @@ pub mod relationship_section;
 pub mod selection_dialog;
 pub mod selection_list;
 pub mod sprint_assign_list;
+pub mod sprint_picker;
 
 pub use banner::*;
 pub use card_detail_sections::*;
@@ -35,3 +36,4 @@ pub use relationship_section::*;
 pub use selection_dialog::*;
 pub use selection_list::*;
 pub use sprint_assign_list::*;
+pub use sprint_picker::*;
