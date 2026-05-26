@@ -1,4 +1,4 @@
-use ratatui::{layout::Rect, text::Line, Frame};
+use ratatui::{layout::Rect, text::Line, widgets::Paragraph, Frame};
 
 pub struct ListItem<T> {
     pub value: T,
@@ -27,43 +27,99 @@ impl<T> ListItem<T> {
 type StickyHeaderFn<'a, T> =
     Box<dyn Fn(&[ListItem<T>], usize) -> Option<(usize, Line<'static>)> + 'a>;
 
-#[allow(dead_code)]
 pub struct RadioList<'a, T> {
     items: &'a [ListItem<T>],
     sticky_header_for: Option<StickyHeaderFn<'a, T>>,
 }
 
 impl<'a, T> RadioList<'a, T> {
-    pub fn new(_items: &'a [ListItem<T>]) -> Self {
-        todo!()
+    pub fn new(items: &'a [ListItem<T>]) -> Self {
+        Self {
+            items,
+            sticky_header_for: None,
+        }
     }
 
-    pub fn with_sticky_header<F>(self, _f: F) -> Self
+    pub fn with_sticky_header<F>(mut self, f: F) -> Self
     where
         F: Fn(&[ListItem<T>], usize) -> Option<(usize, Line<'static>)> + 'a,
     {
-        todo!()
+        self.sticky_header_for = Some(Box::new(f));
+        self
     }
 
-    pub fn render(&self, _frame: &mut Frame, _area: Rect, _selected: Option<usize>) {
-        todo!()
+    pub fn render(&self, frame: &mut Frame, area: Rect, selected: Option<usize>) {
+        let lines: Vec<Line<'static>> = self.items.iter().map(|i| i.label.clone()).collect();
+        let total = lines.len();
+        let height = area.height as usize;
+        let sel = selected.unwrap_or(0);
+        let scroll = scroll_offset_to_show(sel, total, height);
+        let list = Paragraph::new(lines).scroll((scroll as u16, 0));
+        frame.render_widget(list, area);
+
+        if let Some(f) = &self.sticky_header_for {
+            if area.height == 0 {
+                return;
+            }
+            if let Some((header_idx, label)) = f(self.items, sel) {
+                if header_idx < scroll {
+                    let overlay = Paragraph::new(label);
+                    let top_row = Rect {
+                        x: area.x,
+                        y: area.y,
+                        width: area.width,
+                        height: 1,
+                    };
+                    frame.render_widget(overlay, top_row);
+                }
+            }
+        }
     }
 
-    pub fn next_selectable(&self, _cur: Option<usize>) -> Option<usize> {
-        todo!()
+    pub fn next_selectable(&self, cur: Option<usize>) -> Option<usize> {
+        let start = cur.map(|i| i + 1).unwrap_or(0);
+        self.items
+            .iter()
+            .enumerate()
+            .skip(start)
+            .find(|(_, e)| e.selectable)
+            .map(|(i, _)| i)
+            .or_else(|| self.cur_if_selectable(cur))
+            .or_else(|| self.last_selectable())
     }
 
-    pub fn prev_selectable(&self, _cur: Option<usize>) -> Option<usize> {
-        todo!()
+    pub fn prev_selectable(&self, cur: Option<usize>) -> Option<usize> {
+        let end = cur.unwrap_or(self.items.len());
+        self.items
+            .iter()
+            .enumerate()
+            .take(end)
+            .rev()
+            .find(|(_, e)| e.selectable)
+            .map(|(i, _)| i)
+            .or_else(|| self.cur_if_selectable(cur))
+            .or_else(|| self.first_selectable())
     }
 
     pub fn first_selectable(&self) -> Option<usize> {
-        todo!()
+        self.items.iter().position(|e| e.selectable)
+    }
+
+    fn last_selectable(&self) -> Option<usize> {
+        self.items.iter().rposition(|e| e.selectable)
+    }
+
+    fn cur_if_selectable(&self, cur: Option<usize>) -> Option<usize> {
+        cur.filter(|&c| self.items.get(c).map(|i| i.selectable).unwrap_or(false))
     }
 }
 
-pub fn scroll_offset_to_show(_selected: usize, _total: usize, _height: usize) -> usize {
-    todo!()
+pub(crate) fn scroll_offset_to_show(selected: usize, total: usize, height: usize) -> usize {
+    if height == 0 || total <= height || selected < height {
+        return 0;
+    }
+    let max_offset = total.saturating_sub(height);
+    (selected + 1).saturating_sub(height).min(max_offset)
 }
 
 #[cfg(test)]
@@ -182,7 +238,8 @@ mod tests {
     }
 
     #[test]
-    fn test_radio_list_with_sticky_header_overlay_renders_label_when_selection_scrolls_past_header() {
+    fn test_radio_list_with_sticky_header_overlay_renders_label_when_selection_scrolls_past_header()
+    {
         let mut items = vec![item("0", "row0")];
         items.push(header_item("STICKY"));
         for i in 1..=10 {
