@@ -56,19 +56,9 @@ impl App {
                 KeyCode::Down | KeyCode::Esc => {
                     self.dialog_input.toggle_create_card_focus();
                 }
-                _ => match handle_dialog_input(&mut self.input, key_code, false) {
-                    DialogAction::Cancel => {
-                        // Esc was already special-cased; this branch only
-                        // fires when handle_dialog_input emits Cancel for
-                        // some other key (currently none, but kept for
-                        // forward-compatibility).
-                        self.pop_mode();
-                        self.input.clear();
-                        self.dialog_input.create_card_sprint_picker.clear();
-                        self.dialog_input.reset_create_card_focus();
-                    }
-                    DialogAction::None | DialogAction::Confirm => {}
-                },
+                _ => {
+                    handle_dialog_input(&mut self.input, key_code, false);
+                }
             }
             return;
         }

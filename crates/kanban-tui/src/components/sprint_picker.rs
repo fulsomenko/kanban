@@ -83,7 +83,9 @@ impl SprintPicker {
         let entry = entries.get(idx)?;
         match entry {
             SprintAssignEntry::None | SprintAssignEntry::Header(_) => None,
-            _ => sprint_id_of(entry),
+            SprintAssignEntry::ActiveOrPlanned(_)
+            | SprintAssignEntry::Completed(_)
+            | SprintAssignEntry::Ended(_) => sprint_id_of(entry),
         }
     }
 
