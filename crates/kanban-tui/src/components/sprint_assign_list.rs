@@ -473,4 +473,61 @@ mod tests {
             Some((3, COMPLETED_ENDED_HEADER))
         );
     }
+
+    fn line_to_string(line: &Line<'_>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    fn make_board_for_render() -> Board {
+        Board::new("B".to_string(), Some("TST".to_string()))
+    }
+
+    #[test]
+    fn test_render_entry_line_marks_selected_with_filled_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::None;
+        let line = render_entry_line(&entry, /*is_selected=*/ true, None, &board);
+        assert!(
+            line_to_string(&line).starts_with("[x]"),
+            "selected row should start with [x], got: {:?}",
+            line_to_string(&line)
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_marks_unselected_with_empty_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::None;
+        let line = render_entry_line(&entry, /*is_selected=*/ false, None, &board);
+        assert!(
+            line_to_string(&line).starts_with("[ ]"),
+            "unselected row should start with [ ], got: {:?}",
+            line_to_string(&line)
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_checkbox_applies_to_sprint_rows() {
+        let board = make_board_for_render();
+        let sprint = make_sprint(1, board.id, SprintStatus::Planning, None);
+        let entry = SprintAssignEntry::ActiveOrPlanned(&sprint);
+
+        let selected = render_entry_line(&entry, true, None, &board);
+        let unselected = render_entry_line(&entry, false, None, &board);
+
+        assert!(line_to_string(&selected).starts_with("[x]"));
+        assert!(line_to_string(&unselected).starts_with("[ ]"));
+    }
+
+    #[test]
+    fn test_render_entry_line_header_has_no_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::Header(ACTIVE_PLANNED_HEADER);
+        let line = render_entry_line(&entry, false, None, &board);
+        let text = line_to_string(&line);
+        assert!(
+            !text.contains("[x]") && !text.contains("[ ]"),
+            "section headers should not render a checkbox, got: {text:?}"
+        );
+    }
 }
