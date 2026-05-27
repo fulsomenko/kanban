@@ -245,13 +245,14 @@ impl Card {
         sprint_number: u32,
         sprint_name: Option<String>,
         sprint_status: String,
+        now: DateTime<Utc>,
     ) {
         // Only create a sprint log entry if the sprint assignment actually changes
         if self.sprint_id != Some(sprint_id) {
             self.sprint_id = Some(sprint_id);
             let sprint_log = SprintLog::new(sprint_id, sprint_number, sprint_name, sprint_status);
             self.sprint_logs.push(sprint_log);
-            self.updated_at = Utc::now();
+            self.updated_at = now;
         }
     }
 
@@ -269,7 +270,7 @@ impl Card {
     }
 
     /// Update card with partial changes
-    pub fn update(&mut self, updates: CardUpdate) {
+    pub fn update(&mut self, updates: CardUpdate, now: DateTime<Utc>) {
         if let Some(title) = updates.title {
             self.title = title;
         }
@@ -289,7 +290,7 @@ impl Card {
         updates.due_date.apply_to(&mut self.due_date);
         updates.points.apply_to(&mut self.points);
         updates.sprint_id.apply_to(&mut self.sprint_id);
-        self.updated_at = Utc::now();
+        self.updated_at = now;
     }
 }
 
@@ -534,6 +535,7 @@ mod tests {
             1,
             Some("Sprint 1".to_string()),
             "Active".to_string(),
+            Utc::now(),
         );
 
         assert_eq!(card.get_sprint_history().len(), 1);
@@ -557,6 +559,7 @@ mod tests {
             1,
             Some("Sprint 1".to_string()),
             "Active".to_string(),
+            Utc::now(),
         );
 
         card.end_current_sprint_log();
@@ -579,6 +582,7 @@ mod tests {
             1,
             Some("Sprint 1".to_string()),
             "Active".to_string(),
+            Utc::now(),
         );
         assert_eq!(card.sprint_id, Some(sprint_id_1));
         assert_eq!(card.get_sprint_history().len(), 1);
@@ -589,6 +593,7 @@ mod tests {
             2,
             Some("Sprint 2".to_string()),
             "Active".to_string(),
+            Utc::now(),
         );
 
         assert_eq!(card.sprint_id, Some(sprint_id_2));
@@ -612,6 +617,7 @@ mod tests {
             1,
             Some("Sprint 1".to_string()),
             "Active".to_string(),
+            Utc::now(),
         );
         assert_eq!(card.sprint_id, Some(sprint_id));
         assert_eq!(card.get_sprint_history().len(), 1);
@@ -621,6 +627,7 @@ mod tests {
             1,
             Some("Sprint 1".to_string()),
             "Active".to_string(),
+            Utc::now(),
         );
 
         assert_eq!(card.sprint_id, Some(sprint_id));
@@ -628,5 +635,47 @@ mod tests {
         let log = &card.get_sprint_history()[0];
         assert_eq!(log.sprint_id, sprint_id);
         assert!(log.ended_at.is_none());
+    }
+
+    #[test]
+    fn test_assign_to_sprint_records_caller_provided_timestamp() {
+        use chrono::TimeZone;
+
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let fixed_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let sprint_id = uuid::Uuid::new_v4();
+
+        card.assign_to_sprint(
+            sprint_id,
+            1,
+            Some("Sprint 1".to_string()),
+            "Active".to_string(),
+            fixed_time,
+        );
+
+        assert_eq!(card.updated_at, fixed_time);
+    }
+
+    #[test]
+    fn test_update_records_caller_provided_timestamp() {
+        use chrono::TimeZone;
+
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("Test Board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "Test Card".to_string(), 0);
+        let fixed_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+
+        card.update(
+            CardUpdate {
+                title: Some("Renamed".to_string()),
+                ..Default::default()
+            },
+            fixed_time,
+        );
+
+        assert_eq!(card.title, "Renamed");
+        assert_eq!(card.updated_at, fixed_time);
     }
 }

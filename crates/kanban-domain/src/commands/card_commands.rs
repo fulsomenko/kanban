@@ -120,7 +120,7 @@ pub struct UpdateCard {
 impl UpdateCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let mut card = context.get_card(self.card_id)?;
-        card.update(self.updates.clone());
+        card.update(self.updates.clone(), Utc::now());
         context.store.upsert_card(card)?;
         Ok(())
     }
@@ -251,7 +251,7 @@ impl CreateCard {
                     .unwrap_or(crate::FieldUpdate::NoChange),
                 ..Default::default()
             };
-            card.update(updates);
+            card.update(updates, now);
         }
 
         if let Some(sprint_id) = self.options.sprint_id {
@@ -265,16 +265,8 @@ impl CreateCard {
             let sprint_number = sprint.sprint_number;
             let sprint_name = sprint.get_name(&board).map(|s| s.to_string());
             let sprint_status = format!("{:?}", sprint.status);
-            card.assign_to_sprint(sprint_id, sprint_number, sprint_name, sprint_status);
+            card.assign_to_sprint(sprint_id, sprint_number, sprint_name, sprint_status, now);
         }
-
-        // Card::update and Card::assign_to_sprint both bump updated_at to
-        // Utc::now() internally. Pin it back to the embedded timestamp so
-        // command replay and direct execute paths produce the same on-disk
-        // state — otherwise an undo + redo would shift updated_at to wall
-        // clock time and tests like create_card_uses_embedded_timestamp
-        // would fail whenever any options field is set.
-        card.updated_at = now;
 
         context.store.upsert_board(board)?;
         context.store.upsert_card(card)?;
@@ -539,6 +531,7 @@ impl AssignCardsToSprint {
         let sprint_status = format!("{:?}", sprint.status);
 
         let valid_ids = context.filter_valid_card_ids(&self.ids, "AssignCardsToSprint");
+        let now = Utc::now();
         for id in &valid_ids {
             let mut card = context.get_card(*id)?;
             if let Some(old_sprint_id) = card.sprint_id {
@@ -551,6 +544,7 @@ impl AssignCardsToSprint {
                 sprint_number,
                 sprint_name.clone(),
                 sprint_status.clone(),
+                now,
             );
             context.store.upsert_card(card)?;
         }
