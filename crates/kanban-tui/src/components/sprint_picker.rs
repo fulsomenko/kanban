@@ -287,7 +287,14 @@ impl SprintPicker {
     fn entry_to_cursor(entry: &SprintAssignEntry) -> Cursor {
         match entry {
             SprintAssignEntry::None => Cursor::NoSprint,
-            SprintAssignEntry::Header(_) => Cursor::NoSprint,
+            SprintAssignEntry::Header(_) => {
+                // next_selectable / prev_selectable are supposed to skip
+                // headers, so reaching this arm signals a navigation
+                // bug. Fall back to NoSprint in release, but trip the
+                // assertion in debug/test builds.
+                debug_assert!(false, "navigation landed on a section header entry");
+                Cursor::NoSprint
+            }
             SprintAssignEntry::ActiveOrPlanned(s)
             | SprintAssignEntry::Completed(s)
             | SprintAssignEntry::Ended(s) => Cursor::Sprint(s.id),
