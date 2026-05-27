@@ -1,5 +1,6 @@
 use crate::components::sprint_assign_list::{
-    build_entries_active_only, next_selectable, prev_selectable, sprint_id_of, SprintAssignEntry,
+    build_entries, build_entries_active_only, next_selectable, prev_selectable, sprint_id_of,
+    SprintAssignEntry,
 };
 use crate::components::sprint_picker_view::SprintPickerView;
 use chrono::{DateTime, Utc};
@@ -34,19 +35,31 @@ enum Cursor {
     Sprint(Uuid),
 }
 
-/// Stateful sprint picker for dialogs that embed a sprint selector
-/// alongside other inputs (e.g. the Create Card dialog). The picker
-/// keeps two independent identities:
+/// Which subset of sprints the picker shows. Create-card flows hide
+/// finished sprints (you can't bind a brand-new card to one), while
+/// assign-to-existing-card flows let the user pick from everything so
+/// they can look back at the card's history.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SprintFilter {
+    /// Only the Active/Planned section; no Completed/Ended entries.
+    #[default]
+    ActiveOnly,
+    /// Active/Planned and Completed/Ended sections both shown.
+    All,
+}
+
+/// Stateful sprint picker shared by every sprint-selection dialog. The
+/// picker keeps two independent identities:
 ///
 /// - `cursor` is where Up/Down/j/k arrow keys move; it is what the
 ///   user is currently *pointing at*.
 /// - `selection` is what gets the `[x]` checkbox and is what the host
 ///   reads back via `selected_sprint_id`. Only Space writes to it.
 ///
-/// On open, the cursor is positioned on the sole Active non-ended
-/// sprint when there is exactly one (so Space is one keystroke away
-/// from assigning it), but selection starts `Unset` — the user must
-/// deliberately press Space to commit a choice.
+/// The same struct drives both the create-card picker (built with
+/// `SprintFilter::ActiveOnly`) and the assign-to-card picker (built
+/// with `SprintFilter::All`); the filter only changes which entries
+/// the picker considers, the navigation and toggle model is identical.
 ///
 /// Composition: `SprintPicker` -> `SprintPickerView` (stateless adapter
 /// that turns sprints into ListItem rows) -> `RadioList<Option<Uuid>>`
@@ -55,33 +68,73 @@ enum Cursor {
 pub struct SprintPicker {
     selection: Selection,
     cursor: Cursor,
+    filter: SprintFilter,
 }
 
 impl SprintPicker {
+    /// Convenience: a picker for the create-card dialog
+    /// (`SprintFilter::ActiveOnly`).
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            filter: SprintFilter::ActiveOnly,
+            ..Default::default()
+        }
     }
 
-    /// Reset for a fresh dialog opening. The selection is cleared to
-    /// `Unset` (no `[x]` shown yet — the user has to press Space to
-    /// commit). The cursor lands on the sole Active non-ended sprint
-    /// when there is exactly one; otherwise on the "(None)" row.
+    /// Construct a picker with an explicit filter. Use
+    /// `SprintFilter::All` for the assign-to-existing-card dialogs so
+    /// the user can also pick Completed/Ended sprints; use
+    /// `SprintFilter::ActiveOnly` for create-card flows.
+    pub fn with_filter(filter: SprintFilter) -> Self {
+        Self {
+            filter,
+            ..Default::default()
+        }
+    }
+
+    /// Reset for a fresh create-card dialog. The cursor lands on the
+    /// sole Active non-ended sprint when there is exactly one — and in
+    /// that case the sprint is also pre-checked. Otherwise the cursor
+    /// parks on (None) and selection starts `Unset`.
     pub fn reset_for_board(&mut self, sprints: &[Sprint], board: &Board, now: DateTime<Utc>) {
         let view = SprintPickerView::for_new_card(sprints, board, now);
-        let entries = build_entries_active_only(sprints, board.id, now);
+        let entries = self.build_entries(sprints, board, now);
         self.cursor = view
             .initial_selection()
             .and_then(|idx| entries.get(idx).map(Self::entry_to_cursor))
             .unwrap_or(Cursor::NoSprint);
-        // The view's initial-selection rule only lands on a sprint row
-        // when there is exactly one Active non-ended sprint. In that
-        // case pre-check it so the dialog opens with [x] already on
-        // the sprint and Enter confirms in one keystroke. Otherwise no
-        // [x] is shown — the user must press Space to commit a choice.
         self.selection = match self.cursor {
             Cursor::Sprint(id) => Selection::Sprint(id),
             Cursor::NoSprint => Selection::Unset,
         };
+    }
+
+    /// Reset for an assign-to-card dialog where the card already has a
+    /// `current_sprint_id` (or `None` if it's unassigned). Cursor +
+    /// selection both follow that current id, so the dialog opens with
+    /// `[x]` already on whatever the card is bound to.
+    pub fn reset_for_card_assignment(
+        &mut self,
+        current_sprint_id: Option<Uuid>,
+        sprints: &[Sprint],
+        board: &Board,
+        now: DateTime<Utc>,
+    ) {
+        let entries = self.build_entries(sprints, board, now);
+        let (cursor, selection) = match current_sprint_id {
+            Some(id) => {
+                // Only consider it pre-checked if the sprint is in the
+                // current entry list (the filter might exclude it).
+                if entries.iter().any(|e| sprint_id_of(e) == Some(id)) {
+                    (Cursor::Sprint(id), Selection::Sprint(id))
+                } else {
+                    (Cursor::NoSprint, Selection::Unset)
+                }
+            }
+            None => (Cursor::NoSprint, Selection::NoSprint),
+        };
+        self.cursor = cursor;
+        self.selection = selection;
     }
 
     pub fn clear(&mut self) {
@@ -90,9 +143,9 @@ impl SprintPicker {
     }
 
     /// Try to consume a key. Returns true when the picker handled it:
-    /// Up/Down/j/k move the cursor; Space commits the cursor's row as
-    /// the new selection (placing or moving `[x]`). Other keys fall
-    /// through to the host (text input, etc.).
+    /// Up/Down/j/k move the cursor; Space toggles `[x]` at the cursor
+    /// (places or moves it, or removes it from a row that already has
+    /// it). Other keys fall through to the host (text input, etc.).
     pub fn handle_key(
         &mut self,
         key_code: KeyCode,
@@ -105,8 +158,6 @@ impl SprintPicker {
                 Cursor::NoSprint => Selection::NoSprint,
                 Cursor::Sprint(id) => Selection::Sprint(id),
             };
-            // Toggle: Space on the row that already has [x] removes the
-            // checkbox; on any other row it places or moves [x] there.
             self.selection = if self.selection == cursor_as_selection {
                 Selection::Unset
             } else {
@@ -114,7 +165,7 @@ impl SprintPicker {
             };
             return true;
         }
-        let entries = build_entries_active_only(sprints, board.id, now);
+        let entries = self.build_entries(sprints, board, now);
         let cur = self.cursor_index(&entries);
         let next_idx = match key_code {
             KeyCode::Down | KeyCode::Char('j') => next_selectable(&entries, cur),
@@ -138,6 +189,14 @@ impl SprintPicker {
         }
     }
 
+    /// True when the user has explicitly committed a "(None)" choice
+    /// via Space. Used by the assign-to-existing-card flow to
+    /// distinguish "unassign the card" from "user didn't touch the
+    /// picker so leave the card alone".
+    pub fn explicitly_unassigned(&self) -> bool {
+        matches!(self.selection, Selection::NoSprint)
+    }
+
     pub fn render(
         &self,
         frame: &mut Frame,
@@ -146,7 +205,7 @@ impl SprintPicker {
         board: &Board,
         now: DateTime<Utc>,
     ) {
-        let view = SprintPickerView::for_new_card(sprints, board, now);
+        let view = self.build_view(sprints, board, now);
         let checked = match self.selection {
             Selection::Unset => None,
             Selection::NoSprint => view.index_of_sprint(None),
@@ -157,6 +216,30 @@ impl SprintPicker {
             Cursor::Sprint(id) => view.index_of_sprint(Some(id)),
         };
         view.render_with_cursor(frame, area, checked, cursor);
+    }
+
+    fn build_entries<'a>(
+        &self,
+        sprints: &'a [Sprint],
+        board: &Board,
+        now: DateTime<Utc>,
+    ) -> Vec<SprintAssignEntry<'a>> {
+        match self.filter {
+            SprintFilter::ActiveOnly => build_entries_active_only(sprints, board.id, now),
+            SprintFilter::All => build_entries(sprints, board.id, now),
+        }
+    }
+
+    fn build_view<'a>(
+        &self,
+        sprints: &'a [Sprint],
+        board: &'a Board,
+        now: DateTime<Utc>,
+    ) -> SprintPickerView<'a> {
+        match self.filter {
+            SprintFilter::ActiveOnly => SprintPickerView::for_new_card(sprints, board, now),
+            SprintFilter::All => SprintPickerView::for_card_assignment(sprints, board, None, now),
+        }
     }
 
     fn cursor_index(&self, entries: &[SprintAssignEntry]) -> Option<usize> {
