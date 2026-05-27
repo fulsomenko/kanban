@@ -69,6 +69,12 @@ pub struct SprintPicker {
     selection: Selection,
     cursor: Cursor,
     filter: SprintFilter,
+    /// Sprint id the host's card is currently bound to. Drives the
+    /// "(current)" suffix in the rendered rows so the user can see at
+    /// a glance which sprint the card is on. Independent of `selection`
+    /// — the user might toggle [x] elsewhere while (current) still
+    /// points at the unchanged on-disk value.
+    current_sprint_id: Option<Uuid>,
 }
 
 impl SprintPicker {
@@ -120,6 +126,7 @@ impl SprintPicker {
         board: &Board,
         now: DateTime<Utc>,
     ) {
+        self.current_sprint_id = current_sprint_id;
         let entries = self.build_entries(sprints, board, now);
         let (cursor, selection) = match current_sprint_id {
             Some(id) => {
@@ -140,6 +147,7 @@ impl SprintPicker {
     pub fn clear(&mut self) {
         self.selection = Selection::Unset;
         self.cursor = Cursor::NoSprint;
+        self.current_sprint_id = None;
     }
 
     /// Try to consume a key. Returns true when the picker handled it:
@@ -238,7 +246,9 @@ impl SprintPicker {
     ) -> SprintPickerView<'a> {
         match self.filter {
             SprintFilter::ActiveOnly => SprintPickerView::for_new_card(sprints, board, now),
-            SprintFilter::All => SprintPickerView::for_card_assignment(sprints, board, None, now),
+            SprintFilter::All => {
+                SprintPickerView::for_card_assignment(sprints, board, self.current_sprint_id, now)
+            }
         }
     }
 
@@ -266,8 +276,11 @@ impl SprintPicker {
         self.selection
     }
 
-    #[cfg(test)]
-    pub(crate) fn cursor_sprint_id(&self) -> Option<Uuid> {
+    /// The sprint id under the keyboard cursor, or None when the cursor
+    /// is parked on the "(None)" row. Useful for callers that want to
+    /// drive navigation programmatically (e.g. tests walking the cursor
+    /// to a specific sprint before pressing Space).
+    pub fn cursor_sprint_id(&self) -> Option<Uuid> {
         match self.cursor {
             Cursor::NoSprint => None,
             Cursor::Sprint(id) => Some(id),

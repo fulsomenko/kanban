@@ -2,10 +2,7 @@ mod helpers;
 
 use chrono::{Duration, Utc};
 use crossterm::event::KeyCode;
-use kanban_domain::{
-    field_update::FieldUpdate, CreateCardOptions, KanbanOperations, Sprint, SprintUpdate,
-};
-use kanban_tui::components::{build_entries, sprint_id_of};
+use kanban_domain::{field_update::FieldUpdate, CreateCardOptions, KanbanOperations, SprintUpdate};
 use kanban_tui::{
     app::mode::{AppMode, DialogMode},
     components::{SelectionDialog, SprintAssignDialog},
@@ -75,7 +72,21 @@ fn setup_app_with_sprints() -> DialogFixture {
 }
 
 fn open_assign_dialog(app: &mut App) {
-    app.dialog_input.sprint_assign_selection.set(Some(0));
+    let current_sprint_id = app
+        .selection
+        .active_card_id
+        .and_then(|id| app.model.card(id))
+        .and_then(|c| c.sprint_id);
+    let sprints = app.model.sprints().to_vec();
+    let board = app
+        .model
+        .boards()
+        .first()
+        .cloned()
+        .expect("test app has at least one board");
+    app.dialog_input
+        .assign_sprint_picker
+        .reset_for_card_assignment(current_sprint_id, &sprints, &board, Utc::now());
     app.push_mode(AppMode::Dialog(DialogMode::AssignCardToSprint));
 }
 
@@ -211,18 +222,33 @@ fn test_down_arrow_skips_headers() {
     let fx = setup_app_with_sprints();
     let mut app = fx.app;
     open_assign_dialog(&mut app);
-    // Selection starts at 0 (None entry).
-    assert_eq!(app.dialog_input.sprint_assign_selection.get(), Some(0));
-
-    // Pressing j once should land on the first selectable entry past the
-    // (None) entry — the "Active / Planned" header is at index 1, so
-    // selection should jump to index 2 (the first sprint).
-    app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
+    // The fixture's card has no current sprint, so the picker opens
+    // with the cursor on the (None) row.
     assert_eq!(
-        app.dialog_input.sprint_assign_selection.get(),
-        Some(2),
-        "down should skip the Active / Planned header"
+        app.dialog_input.assign_sprint_picker.cursor_sprint_id(),
+        None
     );
+
+    // One Down lands on a real sprint row — the Active/Planned section
+    // header gets skipped by next_selectable.
+    app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
+    assert!(
+        app.dialog_input
+            .assign_sprint_picker
+            .cursor_sprint_id()
+            .is_some(),
+        "Down should land the cursor on a sprint row, not a header"
+    );
+}
+
+fn walk_cursor_to_sprint(app: &mut App, target: Uuid, max_steps: usize) {
+    for _ in 0..max_steps {
+        if app.dialog_input.assign_sprint_picker.cursor_sprint_id() == Some(target) {
+            return;
+        }
+        app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
+    }
+    panic!("could not navigate cursor to target sprint within {max_steps} steps");
 }
 
 #[test]
@@ -233,26 +259,11 @@ fn test_assigning_to_completed_sprint_succeeds() {
     let target_sprint = fx.completed_id;
 
     open_assign_dialog(&mut app);
-
-    // Walk down with j until selection_idx points at the completed sprint.
-    let max_steps = 20;
-    let mut steps = 0;
-    loop {
-        let idx = app
-            .dialog_input
-            .sprint_assign_selection
-            .get()
-            .expect("selection set");
-        if let Some(s) = sprint_at(&app, idx) {
-            if s == target_sprint {
-                break;
-            }
-        }
-        app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
-        steps += 1;
-        assert!(steps < max_steps, "could not navigate to completed sprint");
-    }
+    walk_cursor_to_sprint(&mut app, target_sprint, 20);
+    // Space commits the cursor's row as the [x] selection, Enter applies.
+    app.handle_assign_card_to_sprint_popup(KeyCode::Char(' '));
     app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
+
     let card = app.ctx.get_card(card_id).unwrap().unwrap();
     assert_eq!(
         card.sprint_id,
@@ -269,25 +280,10 @@ fn test_assigning_to_ended_sprint_succeeds() {
     let target_sprint = fx.ended_id;
 
     open_assign_dialog(&mut app);
-
-    let max_steps = 20;
-    let mut steps = 0;
-    loop {
-        let idx = app
-            .dialog_input
-            .sprint_assign_selection
-            .get()
-            .expect("selection set");
-        if let Some(s) = sprint_at(&app, idx) {
-            if s == target_sprint {
-                break;
-            }
-        }
-        app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
-        steps += 1;
-        assert!(steps < max_steps, "could not navigate to ended sprint");
-    }
+    walk_cursor_to_sprint(&mut app, target_sprint, 20);
+    app.handle_assign_card_to_sprint_popup(KeyCode::Char(' '));
     app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
+
     let card = app.ctx.get_card(card_id).unwrap().unwrap();
     assert_eq!(
         card.sprint_id,
@@ -303,29 +299,26 @@ fn test_bulk_assign_handler_supports_completed_sprint() {
     let card_id = fx.card_id;
     let target_sprint = fx.completed_id;
 
-    // Switch to bulk-assign flow with one selected card.
+    // Switch to bulk-assign flow with one selected card, with picker
+    // primed (no single "current" sprint in bulk mode).
     app.multi_select.selected_cards.insert(card_id);
-    app.dialog_input.sprint_assign_selection.set(Some(0));
+    let sprints = app.model.sprints().to_vec();
+    let board = app.model.boards().first().cloned().unwrap();
+    app.dialog_input
+        .assign_sprint_picker
+        .reset_for_card_assignment(None, &sprints, &board, Utc::now());
     app.push_mode(AppMode::Dialog(DialogMode::AssignMultipleCardsToSprint));
 
     let max_steps = 20;
-    let mut steps = 0;
-    loop {
-        let idx = app
-            .dialog_input
-            .sprint_assign_selection
-            .get()
-            .expect("selection set");
-        if let Some(s) = sprint_at(&app, idx) {
-            if s == target_sprint {
-                break;
-            }
+    for _ in 0..max_steps {
+        if app.dialog_input.assign_sprint_picker.cursor_sprint_id() == Some(target_sprint) {
+            break;
         }
         app.handle_assign_multiple_cards_to_sprint_popup(KeyCode::Char('j'));
-        steps += 1;
-        assert!(steps < max_steps, "could not navigate to completed sprint");
     }
+    app.handle_assign_multiple_cards_to_sprint_popup(KeyCode::Char(' '));
     app.handle_assign_multiple_cards_to_sprint_popup(KeyCode::Enter);
+
     let card = app.ctx.get_card(card_id).unwrap().unwrap();
     assert_eq!(
         card.sprint_id,
@@ -349,6 +342,19 @@ fn test_current_sprint_indicator_does_not_apply_color_override_in_completed_ende
     app.prepare_frame();
 
     open_assign_dialog(&mut app);
+    // The dialog opens with cursor + checkbox on the current sprint —
+    // which is the completed one here. Move the cursor off that row
+    // (onto the (None) row at the top) so the focus-blue does not
+    // dominate the row's color, leaving the status colour test
+    // meaningful.
+    while app
+        .dialog_input
+        .assign_sprint_picker
+        .cursor_sprint_id()
+        .is_some()
+    {
+        app.handle_assign_card_to_sprint_popup(KeyCode::Char('k'));
+    }
 
     let board = app.model.boards()[0].clone();
     let completed = app
@@ -362,8 +368,8 @@ fn test_current_sprint_indicator_does_not_apply_color_override_in_completed_ende
 
     let grid = render_dialog_with_colors(&app);
 
-    // The completed entry should still render in green (status colour wins),
-    // not in any "current sprint" highlight that would override it.
+    // Cursor is off the completed row, so its row keeps the Completed
+    // status colour (green) instead of the cursor-focus blue.
     let color = line_color(&grid, &completed_name);
     assert_eq!(
         color,
@@ -379,15 +385,6 @@ fn test_current_sprint_indicator_does_not_apply_color_override_in_completed_ende
         "expected ' (current)' suffix on the completed-current entry; output:\n{}",
         output
     );
-}
-
-// Helper: returns the sprint id selected by the dialog at index `idx`,
-// using the same entry layout the renderer/handler uses.
-fn sprint_at(app: &App, idx: usize) -> Option<Uuid> {
-    let board = app.model.boards().first().cloned()?;
-    let sprints: Vec<Sprint> = app.model.sprints().to_vec();
-    let entries = build_entries(&sprints, board.id, Utc::now());
-    sprint_id_of(entries.get(idx)?)
 }
 
 #[test]
@@ -428,21 +425,7 @@ fn test_dialog_scrolls_to_keep_selected_sprint_visible_when_list_overflows() {
         .map(|s| s.id)
         .unwrap();
 
-    let max_steps = 50;
-    let mut steps = 0;
-    loop {
-        let idx = app
-            .dialog_input
-            .sprint_assign_selection
-            .get()
-            .expect("selection set");
-        if sprint_at(&app, idx) == Some(oldest_id) {
-            break;
-        }
-        app.handle_assign_card_to_sprint_popup(KeyCode::Char('j'));
-        steps += 1;
-        assert!(steps < max_steps, "could not navigate to oldest sprint");
-    }
+    walk_cursor_to_sprint(&mut app, oldest_id, 50);
 
     let board_after = app.model.boards()[0].clone();
     let oldest = app

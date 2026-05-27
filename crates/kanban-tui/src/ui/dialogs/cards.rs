@@ -132,8 +132,6 @@ pub(crate) fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 }
 
 pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
-    use crate::components::sprint_picker_view::SprintPickerView;
-
     let area = centered_rect(60, 50, frame.area());
     frame.render_widget(Clear, area);
 
@@ -165,11 +163,11 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
     let Some(board) = app.model.boards().get(board_idx) else {
         return;
     };
-    let picker =
-        SprintPickerView::for_card_assignment(app.model.sprints(), board, None, chrono::Utc::now());
-    picker.render(
+    app.dialog_input.assign_sprint_picker.render(
         frame,
         chunks[1],
-        app.dialog_input.sprint_assign_selection.get(),
+        app.model.sprints(),
+        board,
+        chrono::Utc::now(),
     );
 }

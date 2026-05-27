@@ -95,38 +95,60 @@ impl App {
         }
 
         if !self.multi_select.selected_cards.is_empty() {
-            self.dialog_input.sprint_assign_selection.clear();
-            self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
-        } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.selection.active_board_index {
-                let boards = self.model.boards();
-                if let Some(board) = boards.get(board_idx) {
-                    let sprints = self.model.sprints();
-                    let entries = crate::components::sprint_assign_list::build_entries(
-                        sprints,
-                        board.id,
-                        chrono::Utc::now(),
-                    );
-                    let has_assignable = entries.iter().any(|e| {
-                        matches!(
-                            e,
-                            crate::components::sprint_assign_list::SprintAssignEntry::ActiveOrPlanned(_)
-                                | crate::components::sprint_assign_list::SprintAssignEntry::Completed(_)
-                                | crate::components::sprint_assign_list::SprintAssignEntry::Ended(_)
-                        )
-                    });
-                    if has_assignable {
-                        if let Some(selected_card) = self.get_selected_card_in_context() {
-                            self.set_active_card_or_clear(selected_card.id);
-                        }
-                        let selection_idx = self.get_current_sprint_selection_index();
-                        self.dialog_input
-                            .sprint_assign_selection
-                            .set(Some(selection_idx));
-                        self.open_dialog(DialogMode::AssignCardToSprint);
-                    }
+                if let Some(board) = self.model.boards().get(board_idx) {
+                    self.dialog_input
+                        .assign_sprint_picker
+                        .reset_for_card_assignment(
+                            None, // bulk: no single "current" sprint to pre-check
+                            self.model.sprints(),
+                            board,
+                            chrono::Utc::now(),
+                        );
                 }
             }
+            self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
+        } else if self.get_selected_card_id().is_some() {
+            let Some(board_idx) = self.selection.active_board_index else {
+                return;
+            };
+            let board_id = match self.model.boards().get(board_idx) {
+                Some(b) => b.id,
+                None => return,
+            };
+            let now = chrono::Utc::now();
+            let has_assignable = {
+                let sprints = self.model.sprints();
+                let entries =
+                    crate::components::sprint_assign_list::build_entries(sprints, board_id, now);
+                entries.iter().any(|e| {
+                    matches!(
+                        e,
+                        crate::components::sprint_assign_list::SprintAssignEntry::ActiveOrPlanned(
+                            _
+                        ) | crate::components::sprint_assign_list::SprintAssignEntry::Completed(_)
+                            | crate::components::sprint_assign_list::SprintAssignEntry::Ended(_)
+                    )
+                })
+            };
+            if !has_assignable {
+                return;
+            }
+            if let Some(selected_card) = self.get_selected_card_in_context() {
+                self.set_active_card_or_clear(selected_card.id);
+            }
+            let current_sprint_id = self
+                .selection
+                .active_card_id
+                .and_then(|id| self.model.card(id))
+                .and_then(|c| c.sprint_id);
+            // Re-borrow board after the &mut self call above.
+            if let Some(board) = self.model.boards().get(board_idx) {
+                self.dialog_input
+                    .assign_sprint_picker
+                    .reset_for_card_assignment(current_sprint_id, self.model.sprints(), board, now);
+            }
+            self.open_dialog(DialogMode::AssignCardToSprint);
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::components::sprint_picker::SprintPicker;
+use crate::components::sprint_picker::{SprintFilter, SprintPicker};
 use kanban_core::SelectionState;
 use std::cell::Cell;
 use uuid::Uuid;
@@ -10,7 +10,6 @@ pub enum CreateCardFocus {
     Sprint,
 }
 
-#[derive(Default)]
 pub struct DialogInputState {
     pub import_files: Vec<String>,
     pub import_selection: SelectionState,
@@ -23,6 +22,30 @@ pub struct DialogInputState {
     pub carry_over_source_sprint_id: Option<Uuid>,
     pub create_card_sprint_picker: SprintPicker,
     pub create_card_focus: CreateCardFocus,
+    /// Picker for the assign-to-existing-card dialogs (single and
+    /// bulk). Configured with SprintFilter::All so the user can pick
+    /// from completed/ended sprints as well, which the create-card
+    /// picker intentionally hides.
+    pub assign_sprint_picker: SprintPicker,
+}
+
+impl Default for DialogInputState {
+    fn default() -> Self {
+        Self {
+            import_files: Vec::new(),
+            import_selection: SelectionState::default(),
+            priority_selection: SelectionState::default(),
+            column_selection: SelectionState::default(),
+            column_scroll: Cell::new(0),
+            sprint_assign_selection: SelectionState::default(),
+            task_list_view_selection: SelectionState::default(),
+            carry_over_sprint_selection: SelectionState::default(),
+            carry_over_source_sprint_id: None,
+            create_card_sprint_picker: SprintPicker::with_filter(SprintFilter::ActiveOnly),
+            create_card_focus: CreateCardFocus::default(),
+            assign_sprint_picker: SprintPicker::with_filter(SprintFilter::All),
+        }
+    }
 }
 
 impl DialogInputState {
