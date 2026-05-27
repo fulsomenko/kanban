@@ -29,6 +29,28 @@ impl SprintAssignEntry<'_> {
 pub const ACTIVE_PLANNED_HEADER: &str = "Active / Planned";
 pub const COMPLETED_ENDED_HEADER: &str = "Completed / Ended";
 
+/// Build the entry list for the new-card picker: same as
+/// [`build_entries`], minus the Completed/Ended section. Completed and
+/// Ended sprints aren't valid targets when creating a brand-new card,
+/// so they don't appear at all (no row, no section header).
+pub fn build_entries_active_only<'a>(
+    sprints: &'a [Sprint],
+    board_id: Uuid,
+    now: DateTime<Utc>,
+) -> Vec<SprintAssignEntry<'a>> {
+    build_entries(sprints, board_id, now)
+        .into_iter()
+        .filter(|entry| {
+            !matches!(
+                entry,
+                SprintAssignEntry::Header(COMPLETED_ENDED_HEADER)
+                    | SprintAssignEntry::Completed(_)
+                    | SprintAssignEntry::Ended(_)
+            )
+        })
+        .collect()
+}
+
 /// Build the entry list for the dialog. Headers are emitted only when their
 /// section is non-empty. The `(None)` entry is always at index 0.
 pub fn build_entries<'a>(

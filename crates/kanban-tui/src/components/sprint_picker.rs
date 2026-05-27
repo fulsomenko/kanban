@@ -1,5 +1,5 @@
 use crate::components::sprint_assign_list::{
-    build_entries, next_selectable, prev_selectable, sprint_id_of, SprintAssignEntry,
+    build_entries_active_only, next_selectable, prev_selectable, sprint_id_of, SprintAssignEntry,
 };
 use crate::components::sprint_picker_view::SprintPickerView;
 use chrono::{DateTime, Utc};
@@ -68,8 +68,8 @@ impl SprintPicker {
     /// when there is exactly one; otherwise on the "(None)" row.
     pub fn reset_for_board(&mut self, sprints: &[Sprint], board: &Board, now: DateTime<Utc>) {
         self.selection = Selection::Unset;
-        let view = SprintPickerView::for_board(sprints, board, now);
-        let entries = build_entries(sprints, board.id, now);
+        let view = SprintPickerView::for_new_card(sprints, board, now);
+        let entries = build_entries_active_only(sprints, board.id, now);
         self.cursor = view
             .initial_selection()
             .and_then(|idx| entries.get(idx).map(Self::entry_to_cursor))
@@ -99,7 +99,7 @@ impl SprintPicker {
             };
             return true;
         }
-        let entries = build_entries(sprints, board.id, now);
+        let entries = build_entries_active_only(sprints, board.id, now);
         let cur = self.cursor_index(&entries);
         let next_idx = match key_code {
             KeyCode::Down | KeyCode::Char('j') => next_selectable(&entries, cur),
@@ -131,7 +131,7 @@ impl SprintPicker {
         board: &Board,
         now: DateTime<Utc>,
     ) {
-        let view = SprintPickerView::for_card_assignment(sprints, board, None, now);
+        let view = SprintPickerView::for_new_card(sprints, board, now);
         let checked = match self.selection {
             Selection::Unset => None,
             Selection::NoSprint => view.index_of_sprint(None),
@@ -448,6 +448,42 @@ mod tests {
         // demonstrated via the navigation path that handle_key follows.
         assert_eq!(picker.current_index(&entries_confirm), idx_confirm);
         assert_eq!(picker.selected_sprint_id(), Some(sprint_a.id));
+    }
+
+    #[test]
+    fn test_picker_skips_completed_and_ended_sprints_during_navigation() {
+        // Active and Planning sprints are valid targets in the create-card
+        // picker; Completed and Ended ones are intentionally hidden so the
+        // user can't accidentally bind a brand-new card to a sprint that's
+        // already wrapped up. Arrowing past the active section should
+        // clamp instead of walking into a Completed row.
+        let now = Utc::now();
+        let board = make_board();
+        let active = active_sprint(board.id, 1, now);
+
+        // Sprint that ended in the past — would normally appear in the
+        // Completed/Ended section of build_entries.
+        let mut completed = Sprint::new(board.id, 2, None, None);
+        completed.status = SprintStatus::Completed;
+        completed.start_date = Some(now - Duration::days(30));
+        completed.end_date = Some(now - Duration::days(15));
+
+        let sprints = vec![active.clone(), completed.clone()];
+
+        let mut picker = SprintPicker::new();
+        picker.reset_for_board(&sprints, &board, now);
+        // Cursor parks on the sole active sprint (the only candidate).
+        assert_eq!(picker.cursor_sprint_id(), Some(active.id));
+
+        // Walk down — completed sprint must not be reachable.
+        for _ in 0..3 {
+            picker.handle_key(KeyCode::Down, &sprints, &board, now);
+        }
+        assert_ne!(
+            picker.cursor_sprint_id(),
+            Some(completed.id),
+            "Down must not reach a completed sprint in the new-card picker"
+        );
     }
 
     #[test]

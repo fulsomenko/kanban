@@ -1,6 +1,6 @@
 use crate::components::radio_list::{ListItem, RadioList};
 use crate::components::sprint_assign_list::{
-    build_entries, render_entry_line, sprint_id_of, SprintAssignEntry,
+    build_entries, build_entries_active_only, render_entry_line, sprint_id_of, SprintAssignEntry,
 };
 use chrono::{DateTime, Utc};
 use kanban_domain::{Board, Sprint, SprintStatus};
@@ -33,6 +33,37 @@ impl<'a> SprintPickerView<'a> {
             entries,
             board,
             current_sprint_id,
+            initial,
+        }
+    }
+
+    /// Variant of [`for_board`] that excludes the Completed/Ended
+    /// section entirely. Used by the create-card picker, where a card
+    /// being created right now should never be bound to a sprint that
+    /// has already finished.
+    pub fn for_new_card(sprints: &'a [Sprint], board: &'a Board, now: DateTime<Utc>) -> Self {
+        let entries = build_entries_active_only(sprints, board.id, now);
+        let active_non_ended: Vec<usize> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, entry)| match entry {
+                SprintAssignEntry::ActiveOrPlanned(s)
+                    if s.status == SprintStatus::Active && !s.is_ended(now) =>
+                {
+                    Some(idx)
+                }
+                _ => None,
+            })
+            .collect();
+        let initial = if active_non_ended.len() == 1 {
+            Some(active_non_ended[0])
+        } else {
+            Some(0)
+        };
+        Self {
+            entries,
+            board,
+            current_sprint_id: None,
             initial,
         }
     }
