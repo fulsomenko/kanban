@@ -75,6 +75,11 @@ pub struct SprintPicker {
     /// — the user might toggle [x] elsewhere while (current) still
     /// points at the unchanged on-disk value.
     current_sprint_id: Option<Uuid>,
+    /// Board the picker was last reset for. Callers that read
+    /// `selected_sprint_id` after a possible board switch should use
+    /// `selected_sprint_id_for(board_id)` so a stale sprint UUID from
+    /// the previous board can't leak into a write command.
+    bound_board_id: Option<Uuid>,
 }
 
 impl SprintPicker {
@@ -113,6 +118,7 @@ impl SprintPicker {
             Cursor::Sprint(id) => Selection::Sprint(id),
             Cursor::NoSprint => Selection::Unset,
         };
+        self.bound_board_id = Some(board.id);
     }
 
     /// Reset for an assign-to-card dialog where the card already has a
@@ -147,6 +153,7 @@ impl SprintPicker {
         };
         self.cursor = cursor;
         self.selection = selection;
+        self.bound_board_id = Some(board.id);
     }
 
     /// Reset for the bulk-assign-many-cards-to-sprint dialog. Unlike
@@ -159,18 +166,41 @@ impl SprintPicker {
     pub fn reset_for_bulk_card_assignment(
         &mut self,
         _sprints: &[Sprint],
-        _board: &Board,
+        board: &Board,
         _now: DateTime<Utc>,
     ) {
         self.current_sprint_id = None;
         self.cursor = Cursor::NoSprint;
         self.selection = Selection::Unset;
+        self.bound_board_id = Some(board.id);
     }
 
     pub fn clear(&mut self) {
         self.selection = Selection::Unset;
         self.cursor = Cursor::NoSprint;
         self.current_sprint_id = None;
+        self.bound_board_id = None;
+    }
+
+    /// Board the picker was last reset for, or `None` if it has been
+    /// cleared. Callers about to act on `selected_sprint_id` should
+    /// either check this matches the board they think they're on, or
+    /// use [`selected_sprint_id_for`] which does the check internally.
+    pub fn bound_board_id(&self) -> Option<Uuid> {
+        self.bound_board_id
+    }
+
+    /// Like [`selected_sprint_id`], but returns `None` when the picker
+    /// was last reset for a different board than `board_id`. Use this
+    /// at write-command boundaries to defend against a board switch
+    /// between dialog open and submit (which would otherwise leak a
+    /// sprint UUID from the previous board into the command).
+    pub fn selected_sprint_id_for(&self, board_id: Uuid) -> Option<Uuid> {
+        if self.bound_board_id == Some(board_id) {
+            self.selected_sprint_id()
+        } else {
+            None
+        }
     }
 
     /// Try to consume a key. Returns true when the picker handled it:
@@ -684,6 +714,53 @@ mod tests {
 
         picker.clear();
         assert_eq!(picker.raw_selection(), Selection::Unset);
+    }
+
+    #[test]
+    fn test_bound_board_id_returns_id_passed_to_reset() {
+        let now = Utc::now();
+        let board = make_board();
+        let sprint = active_sprint(board.id, 1, now);
+        let sprints = vec![sprint];
+
+        let mut picker = SprintPicker::new();
+        assert_eq!(picker.bound_board_id(), None);
+        picker.reset_for_board(&sprints, &board, now);
+        assert_eq!(picker.bound_board_id(), Some(board.id));
+    }
+
+    #[test]
+    fn test_selected_sprint_id_for_returns_none_on_board_mismatch() {
+        // The picker was reset for board A; a caller that thinks it's
+        // on board B must NOT receive board A's sprint id, otherwise a
+        // stale UUID could leak into CreateCard::execute and only
+        // surface as a cross-board validation error.
+        let now = Utc::now();
+        let board_a = make_board();
+        let sprint_a = active_sprint(board_a.id, 1, now);
+        let board_b = make_board();
+        let sprints = vec![sprint_a.clone()];
+
+        let mut picker = SprintPicker::new();
+        picker.reset_for_board(&sprints, &board_a, now);
+        assert_eq!(picker.selected_sprint_id(), Some(sprint_a.id));
+
+        assert_eq!(picker.selected_sprint_id_for(board_a.id), Some(sprint_a.id));
+        assert_eq!(picker.selected_sprint_id_for(board_b.id), None);
+    }
+
+    #[test]
+    fn test_clear_drops_bound_board_id() {
+        let now = Utc::now();
+        let board = make_board();
+        let sprints: Vec<Sprint> = vec![];
+
+        let mut picker = SprintPicker::new();
+        picker.reset_for_board(&sprints, &board, now);
+        assert_eq!(picker.bound_board_id(), Some(board.id));
+
+        picker.clear();
+        assert_eq!(picker.bound_board_id(), None);
     }
 
     #[test]

@@ -312,9 +312,7 @@ fn test_bulk_assign_bare_enter_is_a_no_op_and_does_not_mass_unassign() {
         .find(|s| s.board_id == board.id)
         .map(|s| s.id)
         .unwrap();
-    app.ctx
-        .assign_card_to_sprint(card_id, some_sprint)
-        .unwrap();
+    app.ctx.assign_card_to_sprint(card_id, some_sprint).unwrap();
     app.prepare_frame();
 
     // Open bulk dialog with no interaction, then press Enter immediately.

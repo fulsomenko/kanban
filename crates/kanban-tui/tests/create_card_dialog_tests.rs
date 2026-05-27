@@ -298,3 +298,55 @@ fn test_arrow_down_then_space_assigns_navigated_sprint() {
         .expect("card created");
     assert_eq!(created.sprint_id, Some(planning.id));
 }
+
+#[test]
+fn test_create_card_does_not_carry_sprint_id_from_a_different_board() {
+    // Defense: the picker was reset for board A but by submit time the
+    // active board is B. The selected sprint id belongs to A and would
+    // otherwise leak into B's CreateCard command, surfacing only as a
+    // cross-board validation error from the domain. The board-aware
+    // accessor should drop the stale id before the command is built.
+    let mut app = setup_app_with_board();
+    let board_a = board_id(&app);
+    let sprint_on_a = app.ctx.create_sprint(board_a, None, None).unwrap();
+    app.ctx.activate_sprint(sprint_on_a.id, Some(7)).unwrap();
+
+    let board_b = app.ctx.create_board("Board B".to_string(), None).unwrap();
+    let col_b = app
+        .ctx
+        .create_column(board_b.id, "Todo".to_string(), Some(0))
+        .unwrap();
+    app.prepare_frame();
+
+    // Reset picker for board A.
+    let sprints = app.model.sprints().to_vec();
+    let board_a_ref = app
+        .model
+        .boards()
+        .iter()
+        .find(|b| b.id == board_a)
+        .cloned()
+        .unwrap();
+    app.dialog_input.create_card_sprint_picker.reset_for_board(
+        &sprints,
+        &board_a_ref,
+        chrono::Utc::now(),
+    );
+
+    // Sanity: the picker holds board A's sprint id.
+    assert_eq!(
+        app.dialog_input
+            .create_card_sprint_picker
+            .selected_sprint_id(),
+        Some(sprint_on_a.id)
+    );
+    // Board-aware accessor refuses to return it for board B.
+    assert_eq!(
+        app.dialog_input
+            .create_card_sprint_picker
+            .selected_sprint_id_for(board_b.id),
+        None
+    );
+    // Ditto column on B exists for completeness of the scenario.
+    let _ = col_b;
+}

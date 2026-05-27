@@ -386,7 +386,7 @@ impl App {
                 let sprint_id = self
                     .dialog_input
                     .create_card_sprint_picker
-                    .selected_sprint_id();
+                    .selected_sprint_id_for(bid);
                 let card_id = uuid::Uuid::new_v4();
                 let mut commands: Vec<Command> =
                     vec![Command::Card(CardCommand::Create(CreateCard {
