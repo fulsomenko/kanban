@@ -37,39 +37,12 @@ impl<'a> SprintPickerView<'a> {
         }
     }
 
-    /// Variant of [`for_board`] that excludes the Completed/Ended
-    /// section entirely. Used by the create-card picker, where a card
-    /// being created right now should never be bound to a sprint that
-    /// has already finished.
+    /// Variant for the create-card picker: hides the Completed/Ended
+    /// section entirely (a card being created right now should never
+    /// be bound to a sprint that has already finished) and pre-selects
+    /// the sole Active non-ended sprint if there is exactly one.
     pub fn for_new_card(sprints: &'a [Sprint], board: &'a Board, now: DateTime<Utc>) -> Self {
         let entries = build_entries_active_only(sprints, board.id, now);
-        let active_non_ended: Vec<usize> = entries
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, entry)| match entry {
-                SprintAssignEntry::ActiveOrPlanned(s)
-                    if s.status == SprintStatus::Active && !s.is_ended(now) =>
-                {
-                    Some(idx)
-                }
-                _ => None,
-            })
-            .collect();
-        let initial = if active_non_ended.len() == 1 {
-            Some(active_non_ended[0])
-        } else {
-            Some(0)
-        };
-        Self {
-            entries,
-            board,
-            current_sprint_id: None,
-            initial,
-        }
-    }
-
-    pub fn for_board(sprints: &'a [Sprint], board: &'a Board, now: DateTime<Utc>) -> Self {
-        let entries = build_entries(sprints, board.id, now);
         let active_non_ended: Vec<usize> = entries
             .iter()
             .enumerate()

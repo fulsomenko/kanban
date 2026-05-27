@@ -208,16 +208,11 @@ fn test_for_card_assignment_render_shows_current_suffix_for_card_sprint() {
 }
 
 #[test]
-fn test_for_board_preselects_sole_active_non_ended_sprint() {
+fn test_for_new_card_preselects_sole_active_non_ended_sprint() {
     let (mut app, board_id, _col) = make_app_with_board();
     let active = add_active_sprint(&mut app, board_id);
     add_planning_sprint(&mut app, board_id);
     let now = Utc::now();
-    let entries = build_entries(app.model.sprints(), board_id, now);
-    let expected_idx = entries
-        .iter()
-        .position(|e| sprint_id_of(e) == Some(active))
-        .expect("active sprint must appear");
     let board = app
         .model
         .boards()
@@ -225,7 +220,10 @@ fn test_for_board_preselects_sole_active_non_ended_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPickerView::for_board(app.model.sprints(), &board, now);
+    let picker = SprintPickerView::for_new_card(app.model.sprints(), &board, now);
+    let expected_idx = picker
+        .index_of_sprint(Some(active))
+        .expect("active sprint must appear in the new-card picker");
     assert_eq!(
         picker.initial_selection(),
         Some(expected_idx),
@@ -234,7 +232,7 @@ fn test_for_board_preselects_sole_active_non_ended_sprint() {
 }
 
 #[test]
-fn test_for_board_preselects_none_when_no_active_sprints() {
+fn test_for_new_card_preselects_none_when_no_active_sprints() {
     let (mut app, board_id, _col) = make_app_with_board();
     add_planning_sprint(&mut app, board_id);
     add_completed_sprint(&mut app, board_id);
@@ -246,7 +244,7 @@ fn test_for_board_preselects_none_when_no_active_sprints() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPickerView::for_board(app.model.sprints(), &board, now);
+    let picker = SprintPickerView::for_new_card(app.model.sprints(), &board, now);
     assert_eq!(
         picker.initial_selection(),
         Some(0),
@@ -255,7 +253,7 @@ fn test_for_board_preselects_none_when_no_active_sprints() {
 }
 
 #[test]
-fn test_for_board_preselects_none_when_multiple_active_sprints() {
+fn test_for_new_card_preselects_none_when_multiple_active_sprints() {
     let (mut app, board_id, _col) = make_app_with_board();
     add_active_sprint(&mut app, board_id);
     add_active_sprint(&mut app, board_id);
@@ -267,7 +265,7 @@ fn test_for_board_preselects_none_when_multiple_active_sprints() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker = SprintPickerView::for_board(app.model.sprints(), &board, now);
+    let picker = SprintPickerView::for_new_card(app.model.sprints(), &board, now);
     assert_eq!(
         picker.initial_selection(),
         Some(0),
