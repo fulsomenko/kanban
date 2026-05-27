@@ -130,13 +130,18 @@ impl SprintPicker {
         let entries = self.build_entries(sprints, board, now);
         let (cursor, selection) = match current_sprint_id {
             Some(id) => {
-                // Only consider it pre-checked if the sprint is in the
-                // current entry list (the filter might exclude it).
-                if entries.iter().any(|e| sprint_id_of(e) == Some(id)) {
-                    (Cursor::Sprint(id), Selection::Sprint(id))
+                // The sprint might be hidden by the filter (e.g. an
+                // ActiveOnly picker pointed at a card on a Completed
+                // sprint). Carry the id in Selection regardless so a
+                // bare Enter re-assigns to the same sprint (no-op)
+                // rather than silently falling through to "do nothing"
+                // — the cursor can only park on a visible row.
+                let cursor = if entries.iter().any(|e| sprint_id_of(e) == Some(id)) {
+                    Cursor::Sprint(id)
                 } else {
-                    (Cursor::NoSprint, Selection::Unset)
-                }
+                    Cursor::NoSprint
+                };
+                (cursor, Selection::Sprint(id))
             }
             None => (Cursor::NoSprint, Selection::NoSprint),
         };
@@ -654,5 +659,28 @@ mod tests {
 
         picker.clear();
         assert_eq!(picker.raw_selection(), Selection::Unset);
+    }
+
+    #[test]
+    fn test_reset_for_assignment_preserves_current_sprint_even_when_filter_hides_it() {
+        // Build an ActiveOnly picker (filter excludes Completed) and reset
+        // it for a card whose current sprint is Completed. The picker
+        // must still carry the sprint id in Selection::Sprint so a bare
+        // Enter is a safe no-op re-assignment to the existing sprint —
+        // not Selection::Unset (silent fall-through) which would leave
+        // ambiguity about what Enter should do.
+        let now = Utc::now();
+        let board = make_board();
+        let mut completed = Sprint::new(board.id, 1, None, None);
+        completed.status = SprintStatus::Completed;
+        completed.start_date = Some(now - Duration::days(30));
+        completed.end_date = Some(now - Duration::days(15));
+        let sprints = vec![completed.clone()];
+
+        let mut picker = SprintPicker::with_filter(SprintFilter::ActiveOnly);
+        picker.reset_for_card_assignment(Some(completed.id), &sprints, &board, now);
+
+        assert_eq!(picker.selected_sprint_id(), Some(completed.id));
+        assert_eq!(picker.raw_selection(), Selection::Sprint(completed.id));
     }
 }
