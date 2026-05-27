@@ -67,13 +67,21 @@ impl SprintPicker {
     /// commit). The cursor lands on the sole Active non-ended sprint
     /// when there is exactly one; otherwise on the "(None)" row.
     pub fn reset_for_board(&mut self, sprints: &[Sprint], board: &Board, now: DateTime<Utc>) {
-        self.selection = Selection::Unset;
         let view = SprintPickerView::for_new_card(sprints, board, now);
         let entries = build_entries_active_only(sprints, board.id, now);
         self.cursor = view
             .initial_selection()
             .and_then(|idx| entries.get(idx).map(Self::entry_to_cursor))
             .unwrap_or(Cursor::NoSprint);
+        // The view's initial-selection rule only lands on a sprint row
+        // when there is exactly one Active non-ended sprint. In that
+        // case pre-check it so the dialog opens with [x] already on
+        // the sprint and Enter confirms in one keystroke. Otherwise no
+        // [x] is shown — the user must press Space to commit a choice.
+        self.selection = match self.cursor {
+            Cursor::Sprint(id) => Selection::Sprint(id),
+            Cursor::NoSprint => Selection::Unset,
+        };
     }
 
     pub fn clear(&mut self) {
@@ -93,9 +101,16 @@ impl SprintPicker {
         now: DateTime<Utc>,
     ) -> bool {
         if matches!(key_code, KeyCode::Char(' ')) {
-            self.selection = match self.cursor {
+            let cursor_as_selection = match self.cursor {
                 Cursor::NoSprint => Selection::NoSprint,
                 Cursor::Sprint(id) => Selection::Sprint(id),
+            };
+            // Toggle: Space on the row that already has [x] removes the
+            // checkbox; on any other row it places or moves [x] there.
+            self.selection = if self.selection == cursor_as_selection {
+                Selection::Unset
+            } else {
+                cursor_as_selection
             };
             return true;
         }
@@ -217,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reset_with_sole_active_sprint_positions_cursor_but_does_not_check() {
+    fn test_reset_with_sole_active_sprint_pre_checks_it() {
         let now = Utc::now();
         let board = make_board();
         let sprint = active_sprint(board.id, 1, now);
@@ -226,12 +241,51 @@ mod tests {
         let mut picker = SprintPicker::new();
         picker.reset_for_board(&sprints, &board, now);
 
-        // Nothing is checked yet — the user has to press Space to place [x].
-        assert_eq!(picker.selected_sprint_id(), None);
-        assert_eq!(picker.raw_selection(), Selection::Unset);
-        // But the cursor is parked on the sole active sprint so Space is
-        // one keystroke away from assigning it.
+        // Exactly one active non-ended sprint → both cursor and selection
+        // land on it, so the dialog opens with [x] already there and the
+        // user can Enter immediately to confirm.
+        assert_eq!(picker.selected_sprint_id(), Some(sprint.id));
+        assert_eq!(picker.raw_selection(), Selection::Sprint(sprint.id));
         assert_eq!(picker.cursor_sprint_id(), Some(sprint.id));
+    }
+
+    #[test]
+    fn test_space_on_already_checked_row_unchecks_it() {
+        let now = Utc::now();
+        let board = make_board();
+        let sprint = active_sprint(board.id, 1, now);
+        let sprints = vec![sprint.clone()];
+
+        let mut picker = SprintPicker::new();
+        picker.reset_for_board(&sprints, &board, now);
+        assert_eq!(picker.raw_selection(), Selection::Sprint(sprint.id));
+
+        // Cursor already on the checked sprint — Space toggles off.
+        picker.handle_key(KeyCode::Char(' '), &sprints, &board, now);
+        assert_eq!(picker.raw_selection(), Selection::Unset);
+        assert_eq!(picker.selected_sprint_id(), None);
+
+        // And toggles back on.
+        picker.handle_key(KeyCode::Char(' '), &sprints, &board, now);
+        assert_eq!(picker.raw_selection(), Selection::Sprint(sprint.id));
+    }
+
+    #[test]
+    fn test_space_on_none_row_toggles_between_nosprint_and_unset() {
+        let now = Utc::now();
+        let board = make_board();
+        let sprints: Vec<Sprint> = vec![];
+
+        let mut picker = SprintPicker::new();
+        picker.reset_for_board(&sprints, &board, now);
+        // No active sprint → cursor parks on (None), selection starts Unset.
+        assert_eq!(picker.raw_selection(), Selection::Unset);
+
+        picker.handle_key(KeyCode::Char(' '), &sprints, &board, now);
+        assert_eq!(picker.raw_selection(), Selection::NoSprint);
+
+        picker.handle_key(KeyCode::Char(' '), &sprints, &board, now);
+        assert_eq!(picker.raw_selection(), Selection::Unset);
     }
 
     #[test]
@@ -256,19 +310,26 @@ mod tests {
     }
 
     #[test]
-    fn test_space_at_cursor_places_check_on_cursor_sprint() {
+    fn test_space_at_uncrossed_sprint_cursor_places_check_there() {
         let now = Utc::now();
         let board = make_board();
-        let sprint = active_sprint(board.id, 1, now);
-        let sprints = vec![sprint.clone()];
+        // Two planning sprints — no active, so the picker opens with
+        // selection Unset and cursor on (None). Down walks the cursor
+        // onto a sprint; Space then checks it.
+        let p_a = Sprint::new(board.id, 1, None, None);
+        let p_b = Sprint::new(board.id, 2, None, None);
+        let sprints = vec![p_a, p_b];
 
         let mut picker = SprintPicker::new();
         picker.reset_for_board(&sprints, &board, now);
         assert_eq!(picker.selected_sprint_id(), None);
+        assert_eq!(picker.raw_selection(), Selection::Unset);
 
+        picker.handle_key(KeyCode::Down, &sprints, &board, now);
+        let cursor_id = picker.cursor_sprint_id().expect("cursor on sprint");
         picker.handle_key(KeyCode::Char(' '), &sprints, &board, now);
 
-        assert_eq!(picker.selected_sprint_id(), Some(sprint.id));
+        assert_eq!(picker.selected_sprint_id(), Some(cursor_id));
     }
 
     #[test]
@@ -415,11 +476,8 @@ mod tests {
 
         let mut picker = SprintPicker::new();
         picker.reset_for_board(&sprints, &board, now_open);
-        // Cursor parks on A; user presses Space to commit it as the
-        // selection. (After decoupling, reset alone does not check
-        // anything — see test_reset_with_sole_active_sprint_positions_
-        // cursor_but_does_not_check.)
-        picker.handle_key(KeyCode::Char(' '), &sprints, &board, now_open);
+        // Sole active sprint at open time → A is pre-checked, no Space
+        // needed.
         assert_eq!(picker.selected_sprint_id(), Some(sprint_a.id));
         assert_eq!(picker.raw_selection(), Selection::Sprint(sprint_a.id));
 
@@ -487,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clear_resets_selection_to_unset_after_space_commit() {
+    fn test_clear_resets_selection_to_unset() {
         let now = Utc::now();
         let board = make_board();
         let sprint = active_sprint(board.id, 1, now);
@@ -495,8 +553,7 @@ mod tests {
 
         let mut picker = SprintPicker::new();
         picker.reset_for_board(&sprints, &board, now);
-        // Commit a selection via Space so there's something for clear() to reset.
-        picker.handle_key(KeyCode::Char(' '), &sprints, &board, now);
+        // Sole active sprint → pre-checked.
         assert_eq!(picker.raw_selection(), Selection::Sprint(sprint.id));
 
         picker.clear();

@@ -33,7 +33,7 @@ fn confirm_create_card_dialog(app: &mut App, title: &str) {
 }
 
 #[test]
-fn test_create_card_dialog_does_not_auto_assign_active_sprint_without_space() {
+fn test_create_card_dialog_auto_assigns_sole_active_sprint_on_open() {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
     let sprint = app.ctx.create_sprint(bid, None, None).unwrap();
@@ -48,17 +48,15 @@ fn test_create_card_dialog_does_not_auto_assign_active_sprint_without_space() {
         .find(|c| c.title == "Task")
         .expect("card created");
     assert_eq!(
-        created.sprint_id, None,
-        "the sole active sprint is the cursor target on open, but the user \
-         must press Space to commit it; pressing Enter without Space leaves \
-         the card unassigned"
+        created.sprint_id,
+        Some(sprint.id),
+        "exactly one active sprint pre-checks it, so Enter without Space \
+         confirms the assignment in one keystroke"
     );
-    // Sanity: the sprint exists, just wasn't selected.
-    let _ = sprint;
 }
 
 #[test]
-fn test_create_card_dialog_space_at_sole_active_sprint_assigns_it() {
+fn test_create_card_dialog_space_on_pre_checked_sprint_unchecks_it() {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
     let sprint = app.ctx.create_sprint(bid, None, None).unwrap();
@@ -70,6 +68,8 @@ fn test_create_card_dialog_space_at_sole_active_sprint_assigns_it() {
     for ch in "Task".chars() {
         app.handle_create_card_dialog(KeyCode::Char(ch));
     }
+    // Sole active sprint was pre-checked on open. Tab into the picker
+    // (cursor already on that sprint), Space toggles the check off.
     app.handle_create_card_dialog(KeyCode::Tab);
     app.handle_create_card_dialog(KeyCode::Char(' '));
     app.handle_create_card_dialog(KeyCode::Enter);
@@ -80,7 +80,7 @@ fn test_create_card_dialog_space_at_sole_active_sprint_assigns_it() {
         .iter()
         .find(|c| c.title == "Task")
         .expect("card created");
-    assert_eq!(created.sprint_id, Some(sprint.id));
+    assert_eq!(created.sprint_id, None);
 }
 
 #[test]
