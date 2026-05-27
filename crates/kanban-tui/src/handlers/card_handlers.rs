@@ -11,6 +11,15 @@ use std::io;
 impl App {
     pub fn handle_create_card_key(&mut self) {
         if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
+            if let Some(idx) = self.selection.active_board_index {
+                if let Some(board) = self.model.boards().get(idx) {
+                    self.dialog_input.create_card_sprint_picker.reset_for_board(
+                        self.model.sprints(),
+                        board,
+                        chrono::Utc::now(),
+                    );
+                }
+            }
             self.open_dialog(DialogMode::CreateCard);
             self.input.clear();
         }
@@ -86,38 +95,59 @@ impl App {
         }
 
         if !self.multi_select.selected_cards.is_empty() {
-            self.dialog_input.sprint_assign_selection.clear();
-            self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
-        } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.selection.active_board_index {
-                let boards = self.model.boards();
-                if let Some(board) = boards.get(board_idx) {
-                    let sprints = self.model.sprints();
-                    let entries = crate::components::sprint_assign_list::build_entries(
-                        sprints,
-                        board.id,
-                        chrono::Utc::now(),
-                    );
-                    let has_assignable = entries.iter().any(|e| {
-                        matches!(
-                            e,
-                            crate::components::sprint_assign_list::SprintAssignEntry::ActiveOrPlanned(_)
-                                | crate::components::sprint_assign_list::SprintAssignEntry::Completed(_)
-                                | crate::components::sprint_assign_list::SprintAssignEntry::Ended(_)
-                        )
-                    });
-                    if has_assignable {
-                        if let Some(selected_card) = self.get_selected_card_in_context() {
-                            self.set_active_card_or_clear(selected_card.id);
-                        }
-                        let selection_idx = self.get_current_sprint_selection_index();
-                        self.dialog_input
-                            .sprint_assign_selection
-                            .set(Some(selection_idx));
-                        self.open_dialog(DialogMode::AssignCardToSprint);
-                    }
+                if let Some(board) = self.model.boards().get(board_idx) {
+                    self.dialog_input
+                        .assign_sprint_picker
+                        .reset_for_bulk_card_assignment(
+                            self.model.sprints(),
+                            board,
+                            chrono::Utc::now(),
+                        );
                 }
             }
+            self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
+        } else if self.get_selected_card_id().is_some() {
+            let Some(board_idx) = self.selection.active_board_index else {
+                return;
+            };
+            let board_id = match self.model.boards().get(board_idx) {
+                Some(b) => b.id,
+                None => return,
+            };
+            let now = chrono::Utc::now();
+            let has_assignable = {
+                let sprints = self.model.sprints();
+                let entries =
+                    crate::components::sprint_assign_list::build_entries(sprints, board_id, now);
+                entries.iter().any(|e| {
+                    matches!(
+                        e,
+                        crate::components::sprint_assign_list::SprintAssignEntry::ActiveOrPlanned(
+                            _
+                        ) | crate::components::sprint_assign_list::SprintAssignEntry::Completed(_)
+                            | crate::components::sprint_assign_list::SprintAssignEntry::Ended(_)
+                    )
+                })
+            };
+            if !has_assignable {
+                return;
+            }
+            if let Some(selected_card) = self.get_selected_card_in_context() {
+                self.set_active_card_or_clear(selected_card.id);
+            }
+            let current_sprint_id = self
+                .selection
+                .active_card_id
+                .and_then(|id| self.model.card(id))
+                .and_then(|c| c.sprint_id);
+            // Re-borrow board after the &mut self call above.
+            if let Some(board) = self.model.boards().get(board_idx) {
+                self.dialog_input
+                    .assign_sprint_picker
+                    .reset_for_card_assignment(current_sprint_id, self.model.sprints(), board, now);
+            }
+            self.open_dialog(DialogMode::AssignCardToSprint);
         }
     }
 
@@ -352,6 +382,11 @@ impl App {
                     })
                     .unwrap_or(false);
 
+                let now = chrono::Utc::now();
+                let sprint_id = self
+                    .dialog_input
+                    .create_card_sprint_picker
+                    .selected_sprint_id_for(bid);
                 let card_id = uuid::Uuid::new_v4();
                 let mut commands: Vec<Command> =
                     vec![Command::Card(CardCommand::Create(CreateCard {
@@ -361,8 +396,11 @@ impl App {
                         column_id: column.id,
                         title: self.input.as_str().to_string(),
                         position,
-                        options: kanban_domain::CreateCardOptions::default(),
-                        timestamp: chrono::Utc::now(),
+                        options: kanban_domain::CreateCardOptions {
+                            sprint_id,
+                            ..Default::default()
+                        },
+                        timestamp: now,
                     }))];
 
                 if mark_as_complete {

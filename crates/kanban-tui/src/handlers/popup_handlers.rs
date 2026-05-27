@@ -1,7 +1,4 @@
 use crate::app::App;
-use crate::components::sprint_assign_list::{
-    build_entries, next_selectable, prev_selectable, sprint_id_of, SprintAssignEntry,
-};
 use crossterm::event::KeyCode;
 use kanban_domain::{GraphOperations, KanbanOperations, SortField, SortOrder};
 
@@ -236,189 +233,150 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(next) = next_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(next));
-                }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(prev) = prev_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(prev));
-                }
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
-                    if let Some(active_id) = self.selection.active_card_id {
-                        let card_id = match self.model.card(active_id) {
-                            Some(card) => card.id,
-                            None => return,
-                        };
-
-                        let entries = self.sprint_assign_entries();
-                        match entries.get(selection_idx) {
-                            Some(SprintAssignEntry::None) => {
-                                let unassign_cmd = kanban_domain::commands::Command::Card(
-                                    kanban_domain::commands::CardCommand::UnassignFromSprint(
-                                        kanban_domain::commands::UnassignCardFromSprint {
-                                            card_id,
-                                            timestamp: chrono::Utc::now(),
-                                        },
-                                    ),
-                                );
-                                if let Err(e) = self.execute_commands_batch(vec![unassign_cmd]) {
-                                    tracing::error!("Failed to unassign card from sprint: {}", e);
-                                    self.set_error(format!(
-                                        "Failed to unassign card from sprint: {}",
-                                        e
-                                    ));
-                                } else {
-                                    tracing::info!("Unassigned card from sprint");
-                                }
-                            }
-                            Some(entry) => {
-                                if let Some(sprint_id) = sprint_id_of(entry) {
-                                    let assign_cmd = kanban_domain::commands::Command::Card(
-                                        kanban_domain::commands::CardCommand::AssignToSprint(
-                                            kanban_domain::commands::AssignCardsToSprint {
-                                                ids: vec![card_id],
-                                                sprint_id,
-                                            },
-                                        ),
-                                    );
-                                    if let Err(e) = self.execute_commands_batch(vec![assign_cmd]) {
-                                        tracing::error!("Failed to assign card to sprint: {}", e);
-                                        self.set_error(format!(
-                                            "Failed to assign card to sprint: {}",
-                                            e
-                                        ));
-                                    } else {
-                                        tracing::info!(
-                                            "Assigned card to sprint with id: {}",
-                                            sprint_id
-                                        );
-                                    }
-                                }
-                            }
-                            None => {}
-                        }
+            KeyCode::Enter => {
+                let active_card_id = match self.selection.active_card_id {
+                    Some(id) => id,
+                    None => {
+                        self.pop_mode();
+                        self.dialog_input.assign_sprint_picker.clear();
+                        return;
+                    }
+                };
+                let card_id = match self.model.card(active_card_id) {
+                    Some(card) => card.id,
+                    None => return,
+                };
+                let active_board_id = self
+                    .selection
+                    .active_board_index
+                    .and_then(|idx| self.model.boards().get(idx))
+                    .map(|b| b.id);
+                let picker = &self.dialog_input.assign_sprint_picker;
+                let board_matches = active_board_id
+                    .map(|bid| picker.bound_board_id() == Some(bid))
+                    .unwrap_or(false);
+                let cmd = if !board_matches {
+                    None
+                } else if let Some(sprint_id) = picker.selected_sprint_id() {
+                    Some(kanban_domain::commands::Command::Card(
+                        kanban_domain::commands::CardCommand::AssignToSprint(
+                            kanban_domain::commands::AssignCardsToSprint {
+                                ids: vec![card_id],
+                                sprint_id,
+                            },
+                        ),
+                    ))
+                } else if picker.explicitly_unassigned() {
+                    Some(kanban_domain::commands::Command::Card(
+                        kanban_domain::commands::CardCommand::UnassignFromSprint(
+                            kanban_domain::commands::UnassignCardFromSprint {
+                                card_id,
+                                timestamp: chrono::Utc::now(),
+                            },
+                        ),
+                    ))
+                } else {
+                    None
+                };
+                if let Some(cmd) = cmd {
+                    if let Err(e) = self.execute_commands_batch(vec![cmd]) {
+                        tracing::error!("Failed to update card sprint: {}", e);
+                        self.set_error(format!("Failed to update card sprint: {}", e));
                     }
                 }
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
             }
-            _ => {}
-        }
-    }
-
-    fn sprint_assign_entries(&self) -> Vec<SprintAssignEntry<'_>> {
-        if let Some(board_idx) = self.selection.active_board_index {
-            let boards = self.model.boards();
-            if let Some(board) = boards.get(board_idx) {
-                let sprints = self.model.sprints();
-                return build_entries(sprints, board.id, chrono::Utc::now());
+            _ => {
+                if let Some(board_idx) = self.selection.active_board_index {
+                    if let Some(board) = self.model.boards().get(board_idx) {
+                        let now = chrono::Utc::now();
+                        self.dialog_input.assign_sprint_picker.handle_key(
+                            key_code,
+                            self.model.sprints(),
+                            board,
+                            now,
+                        );
+                    }
+                }
             }
         }
-        Vec::new()
     }
 
     pub fn handle_assign_multiple_cards_to_sprint_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
                 self.multi_select.selected_cards.clear();
                 self.multi_select.selection_mode_active = false;
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(next) = next_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(next));
-                }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(prev) = prev_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(prev));
-                }
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
-                    let card_ids: Vec<uuid::Uuid> =
-                        self.multi_select.selected_cards.iter().copied().collect();
-
-                    let entries = self.sprint_assign_entries();
-                    match entries.get(selection_idx) {
-                        Some(SprintAssignEntry::None) => {
-                            let mut unassign_commands: Vec<kanban_domain::commands::Command> =
-                                Vec::new();
-                            for card_id in &card_ids {
-                                let cmd = kanban_domain::commands::Command::Card(
-                                    kanban_domain::commands::CardCommand::UnassignFromSprint(
-                                        kanban_domain::commands::UnassignCardFromSprint {
-                                            card_id: *card_id,
-                                            timestamp: chrono::Utc::now(),
-                                        },
-                                    ),
-                                );
-                                unassign_commands.push(cmd);
-                            }
-                            if let Err(e) = self.execute_commands_batch(unassign_commands) {
-                                tracing::error!("Failed to unassign cards from sprint: {}", e);
-                                self.set_error(format!(
-                                    "Failed to unassign cards from sprint: {}",
-                                    e
-                                ));
-                            } else {
-                                tracing::info!(
-                                    "Unassigned {} cards from sprint",
-                                    self.multi_select.selected_cards.len()
-                                );
-                            }
-                        }
-                        Some(entry) => {
-                            if let Some(sprint_id) = sprint_id_of(entry) {
-                                let assigned_count = self.multi_select.selected_cards.len();
-                                let commands: Vec<kanban_domain::commands::Command> =
-                                    vec![kanban_domain::commands::Command::Card(
-                                        kanban_domain::commands::CardCommand::AssignToSprint(
-                                            kanban_domain::commands::AssignCardsToSprint {
-                                                ids: card_ids.clone(),
-                                                sprint_id,
-                                            },
-                                        ),
-                                    )];
-                                if let Err(e) = self.execute_commands_batch(commands) {
-                                    tracing::error!("Failed to assign cards to sprint: {}", e);
-                                    self.set_error(format!(
-                                        "Failed to assign cards to sprint: {}",
-                                        e
-                                    ));
-                                } else {
-                                    tracing::info!(
-                                        "Assigned {} cards to sprint with id: {}",
-                                        assigned_count,
-                                        sprint_id
-                                    );
-                                }
-                            }
-                        }
-                        None => {}
+            KeyCode::Enter => {
+                let card_ids: Vec<uuid::Uuid> =
+                    self.multi_select.selected_cards.iter().copied().collect();
+                let active_board_id = self
+                    .selection
+                    .active_board_index
+                    .and_then(|idx| self.model.boards().get(idx))
+                    .map(|b| b.id);
+                let picker = &self.dialog_input.assign_sprint_picker;
+                let board_matches = active_board_id
+                    .map(|bid| picker.bound_board_id() == Some(bid))
+                    .unwrap_or(false);
+                let cmds: Vec<kanban_domain::commands::Command> = if !board_matches {
+                    Vec::new()
+                } else if let Some(sprint_id) = picker.selected_sprint_id() {
+                    vec![kanban_domain::commands::Command::Card(
+                        kanban_domain::commands::CardCommand::AssignToSprint(
+                            kanban_domain::commands::AssignCardsToSprint {
+                                ids: card_ids.clone(),
+                                sprint_id,
+                            },
+                        ),
+                    )]
+                } else if picker.explicitly_unassigned() {
+                    card_ids
+                        .iter()
+                        .map(|card_id| {
+                            kanban_domain::commands::Command::Card(
+                                kanban_domain::commands::CardCommand::UnassignFromSprint(
+                                    kanban_domain::commands::UnassignCardFromSprint {
+                                        card_id: *card_id,
+                                        timestamp: chrono::Utc::now(),
+                                    },
+                                ),
+                            )
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                if !cmds.is_empty() {
+                    if let Err(e) = self.execute_commands_batch(cmds) {
+                        tracing::error!("Failed to update cards' sprint: {}", e);
+                        self.set_error(format!("Failed to update cards' sprint: {}", e));
                     }
                 }
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
                 self.multi_select.selected_cards.clear();
                 self.multi_select.selection_mode_active = false;
             }
-            _ => {}
+            _ => {
+                if let Some(board_idx) = self.selection.active_board_index {
+                    if let Some(board) = self.model.boards().get(board_idx) {
+                        let now = chrono::Utc::now();
+                        self.dialog_input.assign_sprint_picker.handle_key(
+                            key_code,
+                            self.model.sprints(),
+                            board,
+                            now,
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -695,23 +653,24 @@ mod tests {
     #[test]
     fn test_handle_assign_card_to_sprint_popup_after_reload_resort_acts_on_originally_selected_card(
     ) {
-        use crate::components::sprint_assign_list::{build_entries, sprint_id_of};
-
         let mut app = App::test_default();
         let fx = setup_reload_resort_fixture(&mut app);
 
         let sprint = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
         load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
+        // Prime the picker with the target sprint pre-checked.
         let sprints = app.model.sprints().to_vec();
-        let entries = build_entries(&sprints, fx.board_id, chrono::Utc::now());
-        let target_idx = entries
+        let board = app
+            .model
+            .boards()
             .iter()
-            .position(|e| sprint_id_of(e) == Some(sprint.id))
-            .expect("created sprint must appear in entries");
+            .find(|b| b.id == fx.board_id)
+            .cloned()
+            .expect("board exists");
         app.dialog_input
-            .sprint_assign_selection
-            .set(Some(target_idx));
+            .assign_sprint_picker
+            .reset_for_card_assignment(Some(sprint.id), &sprints, &board, chrono::Utc::now());
 
         app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
 

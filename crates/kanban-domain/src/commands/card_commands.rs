@@ -120,7 +120,7 @@ pub struct UpdateCard {
 impl UpdateCard {
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let mut card = context.get_card(self.card_id)?;
-        card.update(self.updates.clone());
+        card.update(self.updates.clone(), Utc::now());
         context.store.upsert_card(card)?;
         Ok(())
     }
@@ -251,7 +251,21 @@ impl CreateCard {
                     .unwrap_or(crate::FieldUpdate::NoChange),
                 ..Default::default()
             };
-            card.update(updates);
+            card.update(updates, now);
+        }
+
+        if let Some(sprint_id) = self.options.sprint_id {
+            let sprint = context.get_sprint(sprint_id)?;
+            if sprint.board_id != self.board_id {
+                return Err(KanbanError::validation(format!(
+                    "sprint {} belongs to board {} but card is being created on board {}",
+                    sprint_id, sprint.board_id, self.board_id
+                )));
+            }
+            let sprint_number = sprint.sprint_number;
+            let sprint_name = sprint.get_name(&board).map(|s| s.to_string());
+            let sprint_status = format!("{:?}", sprint.status);
+            card.assign_to_sprint(sprint_id, sprint_number, sprint_name, sprint_status, now);
         }
 
         context.store.upsert_board(board)?;
@@ -517,6 +531,7 @@ impl AssignCardsToSprint {
         let sprint_status = format!("{:?}", sprint.status);
 
         let valid_ids = context.filter_valid_card_ids(&self.ids, "AssignCardsToSprint");
+        let now = Utc::now();
         for id in &valid_ids {
             let mut card = context.get_card(*id)?;
             if let Some(old_sprint_id) = card.sprint_id {
@@ -529,6 +544,7 @@ impl AssignCardsToSprint {
                 sprint_number,
                 sprint_name.clone(),
                 sprint_status.clone(),
+                now,
             );
             context.store.upsert_card(card)?;
         }
@@ -1083,6 +1099,226 @@ mod tests {
         let cards = tc.store.list_cards_by_column(column_id).unwrap();
         assert_eq!(cards[0].position, 0);
         assert_eq!(cards[1].position, 1);
+    }
+
+    #[test]
+    fn test_create_card_with_sprint_id_assigns_card_to_sprint() {
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, None);
+        let board_id = board.id;
+        let column_id = col.id;
+        let sprint_id = sprint.id;
+        // Bump card_counter so upsert_board doesn't reset it; mirrors real usage.
+        board.card_counter = 1;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                sprint_id: Some(sprint_id),
+                ..Default::default()
+            },
+            timestamp: Utc::now(),
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.sprint_id, Some(sprint_id));
+        assert_eq!(card.sprint_logs.len(), 1);
+        assert_eq!(card.sprint_logs[0].sprint_id, sprint_id);
+    }
+
+    #[test]
+    fn test_create_card_without_sprint_id_leaves_card_unassigned() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions::default(),
+            timestamp: Utc::now(),
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.sprint_id, None);
+        assert!(card.sprint_logs.is_empty());
+    }
+
+    #[test]
+    fn test_create_card_with_invalid_sprint_id_returns_not_found_error() {
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "Test".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                sprint_id: Some(Uuid::new_v4()),
+                ..Default::default()
+            },
+            timestamp: Utc::now(),
+        };
+        let err = cmd.execute(&context).unwrap_err();
+        assert!(err.is_not_found(), "Expected not found, got: {:?}", err);
+    }
+
+    #[test]
+    fn test_create_card_with_options_only_uses_embedded_timestamp() {
+        use chrono::TimeZone;
+
+        let tc = TestContext::new();
+        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board_id = board.id;
+        let column_id = col.id;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "T".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                description: Some("d".to_string()),
+                priority: Some(crate::CardPriority::High),
+                points: Some(3),
+                due_date: None,
+                sprint_id: None,
+            },
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.created_at, fixed_time);
+        assert_eq!(
+            card.updated_at, fixed_time,
+            "updated_at must match the embedded command timestamp even when \
+             CardUpdate options reset it inside Card::update"
+        );
+    }
+
+    #[test]
+    fn test_create_card_with_options_and_sprint_uses_embedded_timestamp() {
+        use chrono::TimeZone;
+
+        let tc = TestContext::new();
+        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
+        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, None);
+        let board_id = board.id;
+        let column_id = col.id;
+        let sprint_id = sprint.id;
+        board.card_counter = 1;
+        tc.store.upsert_board(board).unwrap();
+        tc.store.upsert_column(col).unwrap();
+        tc.store.upsert_sprint(sprint).unwrap();
+
+        let fixed_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let context = tc.as_command_context();
+        let card_id = Uuid::new_v4();
+        let cmd = CreateCard {
+            id: card_id,
+            card_number: 1,
+            board_id,
+            column_id,
+            title: "T".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                description: Some("d".to_string()),
+                priority: Some(crate::CardPriority::High),
+                points: Some(3),
+                due_date: None,
+                sprint_id: Some(sprint_id),
+            },
+            timestamp: fixed_time,
+        };
+        cmd.execute(&context).unwrap();
+
+        let card = tc.store.get_card(card_id).unwrap().unwrap();
+        assert_eq!(card.created_at, fixed_time);
+        assert_eq!(
+            card.updated_at, fixed_time,
+            "updated_at must match the embedded command timestamp even when both \
+             CardUpdate options and sprint assignment run inside execute"
+        );
+    }
+
+    #[test]
+    fn test_create_card_with_sprint_from_different_board_returns_validation_error() {
+        let tc = TestContext::new();
+        let board_a = crate::Board::new("A".to_string(), Some("AAA".to_string()));
+        let board_b = crate::Board::new("B".to_string(), Some("BBB".to_string()));
+        let col_a = crate::Column::new(board_a.id, "Col".to_string(), 0);
+        // Sprint belongs to board B.
+        let sprint_b = crate::Sprint::new(board_b.id, 1, None, None);
+        let board_a_id = board_a.id;
+        let column_id = col_a.id;
+        let sprint_b_id = sprint_b.id;
+        tc.store.upsert_board(board_a).unwrap();
+        tc.store.upsert_board(board_b).unwrap();
+        tc.store.upsert_column(col_a).unwrap();
+        tc.store.upsert_sprint(sprint_b).unwrap();
+
+        let context = tc.as_command_context();
+        let cmd = CreateCard {
+            id: Uuid::new_v4(),
+            card_number: 1,
+            board_id: board_a_id,
+            column_id,
+            title: "X".to_string(),
+            position: 0,
+            options: CreateCardOptions {
+                sprint_id: Some(sprint_b_id),
+                ..Default::default()
+            },
+            timestamp: Utc::now(),
+        };
+        let err = cmd.execute(&context).unwrap_err();
+        assert!(
+            err.is_validation(),
+            "expected validation variant, got: {err:?}"
+        );
     }
 
     #[test]

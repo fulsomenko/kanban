@@ -1559,6 +1559,206 @@ mod card_tests {
             .stderr(predicate::str::contains(&card_a_id))
             .stderr(predicate::str::contains(&card_b_id));
     }
+
+    fn create_sprint(file: &std::path::Path, board_id: &str) -> String {
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "create",
+                "--board",
+                board_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        extract_id(&parse_json_output(&String::from_utf8_lossy(&output)))
+    }
+
+    fn activate_sprint(file: &std::path::Path, sprint_id: &str) {
+        kanban()
+            .args([file.to_str().unwrap(), "sprint", "activate", sprint_id])
+            .assert()
+            .success();
+    }
+
+    #[test]
+    fn test_card_create_with_assign_id_assigns_new_card_to_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let sprint_id = create_sprint(&file, &board_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "Sprinted",
+                "--assign",
+                &sprint_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["sprint_id"], sprint_id);
+    }
+
+    #[test]
+    fn test_card_create_with_assign_short_flag_assigns_to_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let sprint_id = create_sprint(&file, &board_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "Sprinted",
+                "-a",
+                &sprint_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["sprint_id"], sprint_id);
+    }
+
+    #[test]
+    fn test_card_create_with_assign_no_value_uses_sole_active_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let sprint_id = create_sprint(&file, &board_id);
+        activate_sprint(&file, &sprint_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "AutoSprinted",
+                "--assign",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["sprint_id"], sprint_id);
+    }
+
+    #[test]
+    fn test_card_create_with_assign_no_value_errors_when_no_active_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let _ = create_sprint(&file, &board_id); // planning only
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "NoSprint",
+                "--assign",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("found none"));
+    }
+
+    #[test]
+    fn test_card_create_with_assign_no_value_errors_when_multiple_active_sprints() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let s1 = create_sprint(&file, &board_id);
+        let s2 = create_sprint(&file, &board_id);
+        activate_sprint(&file, &s1);
+        activate_sprint(&file, &s2);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "Ambig",
+                "--assign",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("found 2"));
+    }
+
+    #[test]
+    fn test_card_create_without_assign_leaves_card_unassigned() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let _ = create_sprint(&file, &board_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "NoAssign",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["data"]["sprint_id"].is_null());
+    }
 }
 
 mod sprint_tests {

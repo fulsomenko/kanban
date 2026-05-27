@@ -796,6 +796,7 @@ async fn tool_move_card_resolves_names_through_locked_session() {
             priority: None,
             points: None,
             due_date: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -848,6 +849,7 @@ async fn tool_move_cards_rejects_cross_board_batch() {
                 priority: None,
                 points: None,
                 due_date: None,
+                sprint_id: None,
             }))
             .await
             .unwrap();
@@ -972,6 +974,7 @@ async fn tool_assign_card_to_sprint_resolves_by_name_then_mutates() {
             priority: None,
             points: None,
             due_date: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -1030,6 +1033,7 @@ async fn setup_server_with_two_cards() -> (KanbanMcpServer, TempDir, String, Str
             priority: None,
             points: None,
             due_date: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -1042,6 +1046,7 @@ async fn setup_server_with_two_cards() -> (KanbanMcpServer, TempDir, String, Str
             priority: None,
             points: None,
             due_date: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -1210,4 +1215,128 @@ async fn tool_remove_card_parent_returns_error_when_edge_missing() {
         msg.contains("not found") || msg.contains("missing") || msg.contains("does not exist"),
         "expected edge-not-found message, got: {msg}"
     );
+}
+
+#[tokio::test]
+async fn tool_create_card_with_sprint_id_assigns_to_sprint() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    let sprint_result = server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "B".into(),
+            prefix: None,
+            name: Some("alpha".into()),
+        }))
+        .await
+        .unwrap();
+    let sprint_body = text_payload(&sprint_result);
+    let sprint_id = sprint_body["id"].as_str().unwrap().to_string();
+
+    let result = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some(sprint_id.clone()),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert_eq!(body["sprint_id"].as_str().unwrap(), sprint_id);
+}
+
+#[tokio::test]
+async fn tool_create_card_with_sprint_name_resolves_and_assigns() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "B".into(),
+            prefix: None,
+            name: Some("alpha".into()),
+        }))
+        .await
+        .unwrap();
+    let result = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some("alpha".into()),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert!(body["sprint_id"].is_string());
+}
+
+#[tokio::test]
+async fn tool_create_card_without_sprint_id_leaves_card_unassigned() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    let result = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Plain".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: None,
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert!(body["sprint_id"].is_null());
 }

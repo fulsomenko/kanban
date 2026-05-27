@@ -29,6 +29,28 @@ impl SprintAssignEntry<'_> {
 pub const ACTIVE_PLANNED_HEADER: &str = "Active / Planned";
 pub const COMPLETED_ENDED_HEADER: &str = "Completed / Ended";
 
+/// Build the entry list for the new-card picker: same as
+/// [`build_entries`], minus the Completed/Ended section. Completed and
+/// Ended sprints aren't valid targets when creating a brand-new card,
+/// so they don't appear at all (no row, no section header).
+pub fn build_entries_active_only<'a>(
+    sprints: &'a [Sprint],
+    board_id: Uuid,
+    now: DateTime<Utc>,
+) -> Vec<SprintAssignEntry<'a>> {
+    build_entries(sprints, board_id, now)
+        .into_iter()
+        .filter(|entry| {
+            !matches!(
+                entry,
+                SprintAssignEntry::Header(COMPLETED_ENDED_HEADER)
+                    | SprintAssignEntry::Completed(_)
+                    | SprintAssignEntry::Ended(_)
+            )
+        })
+        .collect()
+}
+
 /// Build the entry list for the dialog. Headers are emitted only when their
 /// section is non-empty. The `(None)` entry is always at index 0.
 pub fn build_entries<'a>(
@@ -116,7 +138,8 @@ pub fn sprint_id_of(entry: &SprintAssignEntry) -> Option<Uuid> {
 /// sprint (e.g. the multi-card variant).
 pub fn render_entry_line(
     entry: &SprintAssignEntry<'_>,
-    is_selected: bool,
+    is_checked: bool,
+    is_focused: bool,
     current_sprint_id: Option<Uuid>,
     board: &Board,
 ) -> Line<'static> {
@@ -129,9 +152,9 @@ pub fn render_entry_line(
         )),
         SprintAssignEntry::None => {
             let is_current = current_sprint_id.is_none();
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else if is_current {
                 Style::default()
@@ -144,9 +167,9 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::ActiveOrPlanned(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else if is_current {
                 Style::default()
@@ -162,14 +185,14 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
             let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
                 Color::Green
             } else {
                 Color::Red
             };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else {
                 Style::default().fg(status_color)
@@ -472,5 +495,77 @@ mod tests {
             section_header_for(&entries, 4),
             Some((3, COMPLETED_ENDED_HEADER))
         );
+    }
+
+    fn line_to_string(line: &Line<'_>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    fn make_board_for_render() -> Board {
+        Board::new("B".to_string(), Some("TST".to_string()))
+    }
+
+    #[test]
+    fn test_render_entry_line_marks_checked_with_filled_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::None;
+        let line = render_entry_line(&entry, /*is_checked=*/ true, false, None, &board);
+        assert!(
+            line_to_string(&line).starts_with("[x]"),
+            "checked row should start with [x], got: {:?}",
+            line_to_string(&line)
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_marks_unchecked_with_empty_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::None;
+        let line = render_entry_line(&entry, /*is_checked=*/ false, false, None, &board);
+        assert!(
+            line_to_string(&line).starts_with("[ ]"),
+            "unchecked row should start with [ ], got: {:?}",
+            line_to_string(&line)
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_checkbox_applies_to_sprint_rows() {
+        let board = make_board_for_render();
+        let sprint = make_sprint(1, board.id, SprintStatus::Planning, None);
+        let entry = SprintAssignEntry::ActiveOrPlanned(&sprint);
+
+        let checked = render_entry_line(&entry, true, false, None, &board);
+        let unchecked = render_entry_line(&entry, false, false, None, &board);
+
+        assert!(line_to_string(&checked).starts_with("[x]"));
+        assert!(line_to_string(&unchecked).starts_with("[ ]"));
+    }
+
+    #[test]
+    fn test_render_entry_line_header_has_no_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::Header(ACTIVE_PLANNED_HEADER);
+        let line = render_entry_line(&entry, false, false, None, &board);
+        let text = line_to_string(&line);
+        assert!(
+            !text.contains("[x]") && !text.contains("[ ]"),
+            "section headers should not render a checkbox, got: {text:?}"
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_checked_and_focused_are_independent() {
+        let board = make_board_for_render();
+        let sprint = make_sprint(1, board.id, SprintStatus::Planning, None);
+        let entry = SprintAssignEntry::ActiveOrPlanned(&sprint);
+
+        // Checked but cursor is elsewhere: [x] without blue background.
+        let checked_only = render_entry_line(&entry, true, false, None, &board);
+        // Focused but not checked: [ ] with blue background.
+        let focused_only = render_entry_line(&entry, false, true, None, &board);
+
+        assert!(line_to_string(&checked_only).starts_with("[x]"));
+        assert!(line_to_string(&focused_only).starts_with("[ ]"));
     }
 }

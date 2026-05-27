@@ -30,17 +30,59 @@ impl App {
     }
 
     pub fn handle_create_card_dialog(&mut self, key_code: KeyCode) {
-        match handle_dialog_input(&mut self.input, key_code, false) {
-            DialogAction::Confirm => {
+        // Enter always submits and Tab always toggles focus, regardless of
+        // which sub-field currently has focus.
+        match key_code {
+            KeyCode::Enter => {
                 self.create_card();
                 self.pop_mode();
                 self.input.clear();
+                self.dialog_input.create_card_sprint_picker.clear();
+                self.dialog_input.reset_create_card_focus();
+                return;
             }
-            DialogAction::Cancel => {
-                self.pop_mode();
-                self.input.clear();
+            KeyCode::Tab => {
+                self.dialog_input.toggle_create_card_focus();
+                return;
             }
-            DialogAction::None => {}
+            _ => {}
+        }
+
+        if self.dialog_input.create_card_focus_is_title() {
+            // Title focus: Down/Esc drop focus into the sprint picker so the
+            // visual cursor moves out of the text input; all other keys edit
+            // the title.
+            match key_code {
+                KeyCode::Down | KeyCode::Esc => {
+                    self.dialog_input.toggle_create_card_focus();
+                }
+                _ => {
+                    handle_dialog_input(&mut self.input, key_code, false);
+                }
+            }
+            return;
+        }
+
+        // Sprint focus: Esc closes the dialog, Up/Down navigate the picker,
+        // everything else is ignored so a stray keystroke does not modify
+        // the title behind the user's back.
+        if matches!(key_code, KeyCode::Esc) {
+            self.pop_mode();
+            self.input.clear();
+            self.dialog_input.create_card_sprint_picker.clear();
+            self.dialog_input.reset_create_card_focus();
+            return;
+        }
+        if let Some(idx) = self.selection.active_board_index {
+            if let Some(board) = self.model.boards().get(idx) {
+                let now = chrono::Utc::now();
+                self.dialog_input.create_card_sprint_picker.handle_key(
+                    key_code,
+                    self.model.sprints(),
+                    board,
+                    now,
+                );
+            }
         }
     }
 

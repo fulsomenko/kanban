@@ -372,6 +372,11 @@ pub struct CardCreateArgs {
     pub points: Option<u8>,
     #[arg(long)]
     pub due_date: Option<String>,
+    /// Assign the new card to a sprint. Pass a UUID, name, or number to pick a
+    /// specific sprint; pass without a value to use the board's sole active
+    /// sprint (errors if zero or more than one active sprint exists).
+    #[arg(long = "assign", short = 'a', num_args = 0..=1, default_missing_value = "")]
+    pub assign_sprint: Option<String>,
 }
 
 #[derive(Args)]
