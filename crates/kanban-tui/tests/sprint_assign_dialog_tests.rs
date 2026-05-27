@@ -293,6 +293,47 @@ fn test_assigning_to_ended_sprint_succeeds() {
 }
 
 #[test]
+fn test_bulk_assign_bare_enter_is_a_no_op_and_does_not_mass_unassign() {
+    // Regression guard for KAN-556 review: opening the bulk-assign
+    // dialog and pressing Enter without first touching the picker must
+    // leave every selected card's sprint_id untouched. Previously the
+    // dialog opened with Selection::NoSprint, so a bare Enter
+    // unassigned the entire selection.
+    let fx = setup_app_with_sprints();
+    let mut app = fx.app;
+    let card_id = fx.card_id;
+
+    // Pre-assign the card to a sprint so we can detect the regression
+    // (unassign-on-open would clear sprint_id).
+    let sprints = app.model.sprints().to_vec();
+    let board = app.model.boards().first().cloned().unwrap();
+    let some_sprint = sprints
+        .iter()
+        .find(|s| s.board_id == board.id)
+        .map(|s| s.id)
+        .unwrap();
+    app.ctx
+        .assign_card_to_sprint(card_id, some_sprint)
+        .unwrap();
+    app.prepare_frame();
+
+    // Open bulk dialog with no interaction, then press Enter immediately.
+    app.multi_select.selected_cards.insert(card_id);
+    app.dialog_input
+        .assign_sprint_picker
+        .reset_for_bulk_card_assignment(&sprints, &board, Utc::now());
+    app.push_mode(AppMode::Dialog(DialogMode::AssignMultipleCardsToSprint));
+    app.handle_assign_multiple_cards_to_sprint_popup(KeyCode::Enter);
+
+    let card = app.ctx.get_card(card_id).unwrap().unwrap();
+    assert_eq!(
+        card.sprint_id,
+        Some(some_sprint),
+        "bare Enter on bulk-assign must not clobber the pre-existing assignment"
+    );
+}
+
+#[test]
 fn test_bulk_assign_handler_supports_completed_sprint() {
     let fx = setup_app_with_sprints();
     let mut app = fx.app;
@@ -306,7 +347,7 @@ fn test_bulk_assign_handler_supports_completed_sprint() {
     let board = app.model.boards().first().cloned().unwrap();
     app.dialog_input
         .assign_sprint_picker
-        .reset_for_card_assignment(None, &sprints, &board, Utc::now());
+        .reset_for_bulk_card_assignment(&sprints, &board, Utc::now());
     app.push_mode(AppMode::Dialog(DialogMode::AssignMultipleCardsToSprint));
 
     let max_steps = 20;

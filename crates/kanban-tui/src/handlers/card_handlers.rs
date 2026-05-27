@@ -99,8 +99,7 @@ impl App {
                 if let Some(board) = self.model.boards().get(board_idx) {
                     self.dialog_input
                         .assign_sprint_picker
-                        .reset_for_card_assignment(
-                            None, // bulk: no single "current" sprint to pre-check
+                        .reset_for_bulk_card_assignment(
                             self.model.sprints(),
                             board,
                             chrono::Utc::now(),

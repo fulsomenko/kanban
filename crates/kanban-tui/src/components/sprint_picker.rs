@@ -149,6 +149,24 @@ impl SprintPicker {
         self.selection = selection;
     }
 
+    /// Reset for the bulk-assign-many-cards-to-sprint dialog. Unlike
+    /// the single-card flow there is no shared "current" sprint to
+    /// pre-check, so selection starts `Unset`: a bare Enter is a no-op
+    /// and the user must commit a row with Space before the dialog
+    /// mutates any card. This prevents the prior footgun where opening
+    /// the dialog and immediately pressing Enter mass-unassigned every
+    /// selected card.
+    pub fn reset_for_bulk_card_assignment(
+        &mut self,
+        _sprints: &[Sprint],
+        _board: &Board,
+        _now: DateTime<Utc>,
+    ) {
+        self.current_sprint_id = None;
+        self.cursor = Cursor::NoSprint;
+        self.selection = Selection::Unset;
+    }
+
     pub fn clear(&mut self) {
         self.selection = Selection::Unset;
         self.cursor = Cursor::NoSprint;
@@ -659,6 +677,25 @@ mod tests {
 
         picker.clear();
         assert_eq!(picker.raw_selection(), Selection::Unset);
+    }
+
+    #[test]
+    fn test_reset_for_bulk_assignment_opens_with_selection_unset() {
+        // In bulk mode there is no shared "current" sprint to pre-check.
+        // A bare Enter should be a no-op until the user commits a row
+        // with Space — otherwise opening the dialog and pressing Enter
+        // would mass-unassign every selected card.
+        let now = Utc::now();
+        let board = make_board();
+        let sprint = active_sprint(board.id, 1, now);
+        let sprints = vec![sprint];
+
+        let mut picker = SprintPicker::with_filter(SprintFilter::All);
+        picker.reset_for_bulk_card_assignment(&sprints, &board, now);
+
+        assert_eq!(picker.raw_selection(), Selection::Unset);
+        assert!(!picker.explicitly_unassigned());
+        assert_eq!(picker.selected_sprint_id(), None);
     }
 
     #[test]
