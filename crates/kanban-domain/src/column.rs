@@ -60,6 +60,26 @@ impl Column {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_column_new_accepts_str_name_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let column = Column::new(board_id, "To Do", 0);
+        assert_eq!(column.name, "To Do");
+    }
+
+    #[test]
+    fn test_column_update_name_accepts_str_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let mut column = Column::new(board_id, "To Do".to_string(), 0);
+        column.update_name("In Progress");
+        assert_eq!(column.name, "In Progress");
+    }
+}
+
 /// Partial update struct for Column
 ///
 /// Uses `FieldUpdate<T>` for optional fields to provide clear three-state updates.

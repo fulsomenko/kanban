@@ -240,6 +240,29 @@ mod tests {
     }
 
     #[test]
+    fn test_sprint_new_accepts_str_prefix_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let sprint = Sprint::new(board_id, 1, None, Some("sprint"));
+        assert_eq!(sprint.prefix, Some("sprint".to_string()));
+    }
+
+    #[test]
+    fn test_sprint_update_prefix_accepts_str_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let mut sprint = Sprint::new(board_id, 1, None, None::<String>);
+        sprint.update_prefix(Some("custom"));
+        assert_eq!(sprint.prefix, Some("custom".to_string()));
+    }
+
+    #[test]
+    fn test_sprint_update_card_prefix_accepts_str_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let mut sprint = Sprint::new(board_id, 1, None, None::<String>);
+        sprint.update_card_prefix(Some("KAN"));
+        assert_eq!(sprint.card_prefix, Some("KAN".to_string()));
+    }
+
+    #[test]
     fn test_is_ended_returns_true_for_active_with_past_end_date() {
         let now = ts("2026-05-07T00:00:00Z");
         let s = make_sprint(

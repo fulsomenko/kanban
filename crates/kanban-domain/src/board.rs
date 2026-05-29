@@ -452,6 +452,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_board_new_accepts_str_literal_without_to_string() {
+        let board = Board::new("my-board", Some("KAN"));
+        assert_eq!(board.name, "my-board");
+        assert_eq!(board.card_prefix, Some("KAN".to_string()));
+    }
+
+    #[test]
+    fn test_board_update_name_accepts_str_without_to_string() {
+        let mut board = Board::new("initial".to_string(), None);
+        board.update_name("updated");
+        assert_eq!(board.name, "updated");
+    }
+
+    #[test]
+    fn test_board_update_description_accepts_str_without_to_string() {
+        let mut board = Board::new("board".to_string(), None);
+        board.update_description(Some("desc"));
+        assert_eq!(board.description, Some("desc".to_string()));
+    }
+
+    #[test]
+    fn test_board_update_sprint_prefix_accepts_str_without_to_string() {
+        let mut board = Board::new("board".to_string(), None);
+        board.update_sprint_prefix(Some("sprint"));
+        assert_eq!(board.sprint_prefix, Some("sprint".to_string()));
+    }
+
+    #[test]
+    fn test_board_update_card_prefix_accepts_str_without_to_string() {
+        let mut board = Board::new("board".to_string(), None);
+        board.update_card_prefix(Some("KAN"));
+        assert_eq!(board.card_prefix, Some("KAN".to_string()));
+    }
+
+    #[test]
+    fn test_board_add_sprint_name_at_used_index_accepts_str_without_to_string() {
+        let mut board = Board::new("board".to_string(), None);
+        let idx = board.add_sprint_name_at_used_index("Alpha");
+        assert_eq!(board.sprint_names[idx], "Alpha");
+    }
+
+    #[test]
     fn test_board_new_card_counter_initialized_to_one() {
         let board = Board::new("Test".to_string(), None);
         assert_eq!(board.card_counter, 1);

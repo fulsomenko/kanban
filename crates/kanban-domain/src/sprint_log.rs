@@ -33,3 +33,16 @@ impl SprintLog {
         self.ended_at = Some(Utc::now());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sprint_log_new_accepts_str_args_without_to_string() {
+        let sprint_id = uuid::Uuid::new_v4();
+        let log = SprintLog::new(sprint_id, 1, Some("Sprint 1"), "Active");
+        assert_eq!(log.sprint_name, Some("Sprint 1".to_string()));
+        assert_eq!(log.status, "Active");
+    }
+}

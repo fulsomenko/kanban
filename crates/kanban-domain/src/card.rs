@@ -333,6 +333,45 @@ mod tests {
     use crate::board::Board;
 
     #[test]
+    fn test_card_new_accepts_str_title_without_to_string() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("board".to_string(), None);
+        let card = Card::new(&mut board, column_id, "my card", 0);
+        assert_eq!(card.title, "my card");
+    }
+
+    #[test]
+    fn test_card_update_title_accepts_str_without_to_string() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "initial".to_string(), 0);
+        card.update_title("updated");
+        assert_eq!(card.title, "updated");
+    }
+
+    #[test]
+    fn test_card_update_description_accepts_str_without_to_string() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "card".to_string(), 0);
+        card.update_description(Some("desc"));
+        assert_eq!(card.description, Some("desc".to_string()));
+    }
+
+    #[test]
+    fn test_card_assign_to_sprint_accepts_str_args_without_to_string() {
+        let column_id = uuid::Uuid::new_v4();
+        let mut board = Board::new("board".to_string(), None);
+        let mut card = Card::new(&mut board, column_id, "card".to_string(), 0);
+        let sprint_id = uuid::Uuid::new_v4();
+        card.assign_to_sprint(sprint_id, 1, Some("Sprint 1"), "Active", Utc::now());
+        assert_eq!(card.sprint_id, Some(sprint_id));
+        let log = &card.sprint_logs[0];
+        assert_eq!(log.sprint_name, Some("Sprint 1".to_string()));
+        assert_eq!(log.status, "Active");
+    }
+
+    #[test]
     fn test_card_new_uses_board_card_counter_no_prefix_arg() {
         let column_id = uuid::Uuid::new_v4();
         let mut board = Board::new("Test Board".to_string(), None);

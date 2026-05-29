@@ -19,3 +19,15 @@ impl Tag {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tag_new_accepts_str_args_without_to_string() {
+        let tag = Tag::new("feature", "blue");
+        assert_eq!(tag.name, "feature");
+        assert_eq!(tag.color, "blue");
+    }
+}
