@@ -37,7 +37,7 @@ impl Sprint {
         board_id: Uuid,
         sprint_number: u32,
         name_index: Option<usize>,
-        prefix: Option<String>,
+        prefix: Option<impl Into<String>>,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -45,7 +45,7 @@ impl Sprint {
             board_id,
             sprint_number,
             name_index,
-            prefix,
+            prefix: prefix.map(Into::into),
             card_prefix: None,
             status: SprintStatus::Planning,
             start_date: None,
@@ -118,13 +118,13 @@ impl Sprint {
         self.updated_at = Utc::now();
     }
 
-    pub fn update_prefix(&mut self, prefix: Option<String>) {
-        self.prefix = prefix;
+    pub fn update_prefix(&mut self, prefix: Option<impl Into<String>>) {
+        self.prefix = prefix.map(Into::into);
         self.updated_at = Utc::now();
     }
 
-    pub fn update_card_prefix(&mut self, card_prefix: Option<String>) {
-        self.card_prefix = card_prefix;
+    pub fn update_card_prefix(&mut self, card_prefix: Option<impl Into<String>>) {
+        self.card_prefix = card_prefix.map(Into::into);
         self.updated_at = Utc::now();
     }
 

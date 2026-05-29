@@ -24,7 +24,7 @@ async fn test_load_initial_state_with_boards_refreshes_card_view() -> KanbanResu
     let path = dir.path().join("with_cards.json");
     let path_str = path.to_str().unwrap().to_string();
 
-    let mut board = Board::new("Alpha".to_string(), None);
+    let mut board = Board::new("Alpha", None::<String>);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let card = Card::new(&mut board, column.id, "Task One".to_string(), 0);
     let snapshot = Snapshot {

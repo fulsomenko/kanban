@@ -383,7 +383,7 @@ mod tests {
         let path = dir.path().join("md.json");
         let jds = make_store(&path);
         // Trigger a write so flush has something to persist.
-        jds.upsert_board(Board::new("B".to_string(), None)).unwrap();
+        jds.upsert_board(Board::new("B".to_string(), None::<String>)).unwrap();
         jds.flush().await.unwrap();
         let meta = jds
             .persistence_metadata()
@@ -454,7 +454,7 @@ mod tests {
         }
 
         let jds = JsonDataStore::new(Arc::new(FailingStore));
-        jds.upsert_board(Board::new("B".into(), None)).unwrap();
+        jds.upsert_board(Board::new("B", None::<String>)).unwrap();
         assert!(jds.needs_flush(), "must be dirty before flush attempt");
 
         let result = jds.flush().await;
@@ -482,7 +482,7 @@ mod tests {
         // Pre-create a file with one board.
         let (boards_json, _) = {
             let store = JsonFileStore::new(&path);
-            let board = Board::new("Alpha".into(), None);
+            let board = Board::new("Alpha", None::<String>);
             let snap = Snapshot {
                 boards: vec![board],
                 ..Snapshot::new()
@@ -528,7 +528,7 @@ mod tests {
     async fn test_needs_flush_true_after_upsert() {
         let dir = tempdir().unwrap();
         let jds = make_store(&dir.path().join("t.json"));
-        jds.upsert_board(Board::new("B".into(), None)).unwrap();
+        jds.upsert_board(Board::new("B", None::<String>)).unwrap();
         assert!(jds.needs_flush());
     }
 
@@ -537,7 +537,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("flush.json");
         let jds = make_store(&path);
-        jds.upsert_board(Board::new("Flushed".into(), None))
+        jds.upsert_board(Board::new("Flushed", None::<String>))
             .unwrap();
         jds.flush().await.unwrap();
         assert!(!jds.needs_flush(), "dirty flag cleared after flush");
@@ -556,7 +556,7 @@ mod tests {
         // Write initial data via a separate store.
         let writer = make_store(&path);
         writer
-            .upsert_board(Board::new("Initial".into(), None))
+            .upsert_board(Board::new("Initial", None::<String>))
             .unwrap();
         writer.flush().await.unwrap();
 
@@ -567,7 +567,7 @@ mod tests {
 
         // Externally update the file by flushing a new board through the writer.
         writer
-            .upsert_board(Board::new("Updated".into(), None))
+            .upsert_board(Board::new("Updated", None::<String>))
             .unwrap();
         writer.flush().await.unwrap();
 
@@ -605,7 +605,7 @@ mod tests {
         // Pre-populate the file with one board.
         {
             let store = Arc::new(JsonFileStore::new(&path));
-            let board = Board::new("ConcurrentBoard".into(), None);
+            let board = Board::new("ConcurrentBoard", None::<String>);
             let snap = kanban_domain::Snapshot {
                 boards: vec![board],
                 ..kanban_domain::Snapshot::new()

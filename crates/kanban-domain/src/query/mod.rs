@@ -123,7 +123,7 @@ mod tests {
     use crate::{SortField, SortOrder};
 
     fn create_test_board() -> Board {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test".to_string(), None::<String>);
         board.update_task_sort(SortField::Default, SortOrder::Ascending);
         board
     }

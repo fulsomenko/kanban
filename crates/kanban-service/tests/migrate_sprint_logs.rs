@@ -116,9 +116,7 @@ macro_rules! migrate_sprint_logs_tests {
                 card_already_logged
                     .sprint_logs
                     .push(kanban_domain::SprintLog::new(
-                        sprint_id,
-                        1,
-                        None,
+                        sprint_id, 1, None::<String>,
                         "Active".to_string(),
                     ));
                 let already_logged_id = card_already_logged.id;

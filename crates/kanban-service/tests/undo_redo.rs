@@ -530,7 +530,7 @@ async fn test_import_entities_is_undoable() -> KanbanResult<()> {
     ctx.create_board("B1".into(), None)?;
     ctx.clear_history()?;
 
-    let b2 = kanban_domain::Board::new("B2".to_string(), None);
+    let b2 = kanban_domain::Board::new("B2".to_string(), None::<String>);
     let col = kanban_domain::Column::new(b2.id, "Todo".to_string(), 0);
     let cmd = Command::Board(BoardCommand::Import(ImportEntities {
         boards: vec![b2],

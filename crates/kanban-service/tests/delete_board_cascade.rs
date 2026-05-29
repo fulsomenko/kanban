@@ -54,7 +54,7 @@ macro_rules! cascade_tests {
                 let col2 = Column::new(board_id, "Col2".to_string(), 1);
                 let card1 = Card::new(&mut board, col1.id, "C1".to_string(), 0);
                 let card2 = Card::new(&mut board, col2.id, "C2".to_string(), 0);
-                let sprint = Sprint::new(board_id, 1, None, None);
+                let sprint = Sprint::new(board_id, 1, None, None::<String>);
                 backend.upsert_board(board).unwrap();
                 backend.upsert_column(col1).unwrap();
                 backend.upsert_column(col2).unwrap();

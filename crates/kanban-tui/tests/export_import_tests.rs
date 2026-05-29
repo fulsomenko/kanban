@@ -239,7 +239,7 @@ async fn test_async_load_initial_state_sqlite() {
         .await
         .unwrap();
 
-    let board = Board::new("SQLite Board".to_string(), None);
+    let board = Board::new("SQLite Board", None::<String>);
     let column = Column::new(board.id, "Backlog".to_string(), 0);
 
     let snapshot = kanban_domain::Snapshot {

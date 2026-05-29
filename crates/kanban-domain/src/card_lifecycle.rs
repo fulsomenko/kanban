@@ -345,7 +345,7 @@ mod tests {
     use crate::Board;
 
     fn test_board() -> Board {
-        Board::new("Test".to_string(), None)
+        Board::new("Test".to_string(), None::<String>)
     }
 
     fn add_columns(board: &Board, names: &[&str]) -> Vec<Column> {
@@ -655,7 +655,7 @@ mod tests {
     fn migrate_backfills_empty_sprint_logs() {
         let mut board = test_board();
         let col = Column::new(board.id, "Todo".to_string(), 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let mut card = test_card(&mut board, &col, "Task", 0);
         card.sprint_id = Some(sprint.id);
 
@@ -671,11 +671,11 @@ mod tests {
     fn migrate_skips_cards_with_existing_logs() {
         let mut board = test_board();
         let col = Column::new(board.id, "Todo".to_string(), 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let mut card = test_card(&mut board, &col, "Task", 0);
         card.sprint_id = Some(sprint.id);
         card.sprint_logs
-            .push(SprintLog::new(sprint.id, 1, None, "Active".to_string()));
+            .push(SprintLog::new(sprint.id, 1, None::<String>, "Active".to_string()));
 
         let mut cards = vec![card];
         let count = migrate_sprint_logs(&mut cards, &[sprint], &[board]);
@@ -700,7 +700,7 @@ mod tests {
     fn migrate_with_mixed_cards_only_backfills_eligible() {
         let mut board = test_board();
         let col = Column::new(board.id, "Todo".to_string(), 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
 
         let mut card_needs_backfill = test_card(&mut board, &col, "Needs Backfill", 0);
         card_needs_backfill.sprint_id = Some(sprint.id);
@@ -708,9 +708,7 @@ mod tests {
         let mut card_already_logged = test_card(&mut board, &col, "Already Logged", 1);
         card_already_logged.sprint_id = Some(sprint.id);
         card_already_logged.sprint_logs.push(SprintLog::new(
-            sprint.id,
-            1,
-            None,
+            sprint.id, 1, None::<String>,
             "Active".to_string(),
         ));
         let already_logged_before = card_already_logged.sprint_logs.clone();

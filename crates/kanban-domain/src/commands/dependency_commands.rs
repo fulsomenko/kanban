@@ -1084,7 +1084,7 @@ mod tests {
         let tc = TestContext::new();
         let column_id = Uuid::new_v4();
 
-        let mut board = Board::new("Test Board".to_string(), None);
+        let mut board = Board::new("Test Board".to_string(), None::<String>);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;
         let parent = crate::Card::new(&mut board, column_id, "Parent".to_string(), 0);

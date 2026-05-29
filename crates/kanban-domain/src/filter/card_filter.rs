@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_board_filter() {
-        let board = Board::new("Test Board".to_string(), None);
+        let board = Board::new("Test Board".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
         let other_column = Column::new(Uuid::new_v4(), "Other".to_string(), 0); // Different board
 
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_column_filter() {
-        let board = Board::new("Test Board".to_string(), None);
+        let board = Board::new("Test Board".to_string(), None::<String>);
         let column1 = Column::new(board.id, "Todo".to_string(), 0);
         let column2 = Column::new(board.id, "Done".to_string(), 1);
 
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_sprint_filter() {
-        let board = Board::new("Test Board".to_string(), None);
+        let board = Board::new("Test Board".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_unassigned_only_filter() {
-        let board = Board::new("Test Board".to_string(), None);
+        let board = Board::new("Test Board".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();

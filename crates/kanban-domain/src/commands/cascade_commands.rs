@@ -325,13 +325,13 @@ mod tests {
     #[test]
     fn test_delete_cards_by_columns_removes_only_cards_in_given_columns() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".into(), Some("TST".into()));
-        let col1 = crate::Column::new(board.id, "C1".into(), 0);
-        let col2 = crate::Column::new(board.id, "C2".into(), 1);
-        let col3 = crate::Column::new(board.id, "C3".into(), 2);
-        let card1 = crate::Card::new(&mut board, col1.id, "1".into(), 0);
-        let card2 = crate::Card::new(&mut board, col2.id, "2".into(), 0);
-        let card3 = crate::Card::new(&mut board, col3.id, "3".into(), 0);
+        let mut board = crate::Board::new("B", Some("TST"));
+        let col1 = crate::Column::new(board.id, "C1", 0);
+        let col2 = crate::Column::new(board.id, "C2", 1);
+        let col3 = crate::Column::new(board.id, "C3", 2);
+        let card1 = crate::Card::new(&mut board, col1.id, "1", 0);
+        let card2 = crate::Card::new(&mut board, col2.id, "2", 0);
+        let card3 = crate::Card::new(&mut board, col3.id, "3", 0);
         let card3_id = card3.id;
         let col3_id = col3.id;
         tc.store.upsert_board(board).unwrap();
@@ -357,13 +357,13 @@ mod tests {
     #[test]
     fn test_delete_archived_cards_by_columns_removes_only_archived_in_given_columns() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".into(), Some("TST".into()));
-        let col1 = crate::Column::new(board.id, "C1".into(), 0);
-        let col2 = crate::Column::new(board.id, "C2".into(), 1);
+        let mut board = crate::Board::new("B", Some("TST"));
+        let col1 = crate::Column::new(board.id, "C1", 0);
+        let col2 = crate::Column::new(board.id, "C2", 1);
         let col1_id = col1.id;
         let col2_id = col2.id;
-        let card1 = crate::Card::new(&mut board, col1_id, "1".into(), 0);
-        let card2 = crate::Card::new(&mut board, col2_id, "2".into(), 0);
+        let card1 = crate::Card::new(&mut board, col1_id, "1", 0);
+        let card2 = crate::Card::new(&mut board, col2_id, "2", 0);
         let arch1 = crate::ArchivedCard::new(card1, col1_id, 0);
         let arch2 = crate::ArchivedCard::new(card2, col2_id, 0);
         let arch2_card_id = arch2.card.id;
@@ -387,13 +387,13 @@ mod tests {
     #[test]
     fn test_delete_columns_by_board_removes_all_columns_of_board() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".into(), None);
+        let board = crate::Board::new("B", None::<String>);
         let board_id = board.id;
-        let other_board = crate::Board::new("Other".into(), None);
+        let other_board = crate::Board::new("Other", None::<String>);
         let other_board_id = other_board.id;
-        let col1 = crate::Column::new(board_id, "C1".into(), 0);
-        let col2 = crate::Column::new(board_id, "C2".into(), 1);
-        let other_col = crate::Column::new(other_board_id, "OC".into(), 0);
+        let col1 = crate::Column::new(board_id, "C1", 0);
+        let col2 = crate::Column::new(board_id, "C2", 1);
+        let other_col = crate::Column::new(other_board_id, "OC", 0);
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_board(other_board).unwrap();
         tc.store.upsert_column(col1).unwrap();
@@ -412,13 +412,13 @@ mod tests {
     #[test]
     fn test_delete_sprints_by_board_removes_all_sprints_of_board() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), None);
+        let board = crate::Board::new("B".to_string(), None::<String>);
         let board_id = board.id;
-        let other_board = crate::Board::new("Other".to_string(), None);
+        let other_board = crate::Board::new("Other".to_string(), None::<String>);
         let other_board_id = other_board.id;
-        let sprint1 = crate::Sprint::new(board_id, 1, None, None);
-        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
-        let other_sprint = crate::Sprint::new(other_board_id, 1, None, None);
+        let sprint1 = crate::Sprint::new(board_id, 1, None, None::<String>);
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None::<String>);
+        let other_sprint = crate::Sprint::new(other_board_id, 1, None, None::<String>);
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_board(other_board).unwrap();
         tc.store.upsert_sprint(sprint1).unwrap();

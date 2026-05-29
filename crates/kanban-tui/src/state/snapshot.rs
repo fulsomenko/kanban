@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn test_apply_to_app_syncs_sort_field_from_board() {
         // Create a board with Position sort field
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test".to_string(), None::<String>);
         board.update_task_sort(SortField::Position, kanban_domain::SortOrder::Ascending);
 
         let snapshot = Snapshot {

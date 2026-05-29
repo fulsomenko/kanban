@@ -521,7 +521,7 @@ mod tests {
     fn test_update_sprint_name_with_nonexistent_board_returns_error() {
         let tc = TestContext::new();
         let nonexistent_board_id = Uuid::new_v4();
-        let sprint = crate::Sprint::new(nonexistent_board_id, 1, None, None);
+        let sprint = crate::Sprint::new(nonexistent_board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_sprint(sprint).unwrap();
 
@@ -574,7 +574,7 @@ mod tests {
     #[test]
     fn test_create_sprint_auto_consume_name_uses_name_pool() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), None);
+        let mut board = crate::Board::new("Test".to_string(), None::<String>);
         board.sprint_names = vec!["Alpha".to_string(), "Beta".to_string()];
         let board_id = board.id;
         tc.store.upsert_board(board).unwrap();
@@ -730,9 +730,9 @@ mod tests {
         let tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
-        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None);
+        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None::<String>);
         sprint1.card_prefix = Some("SPR".to_string());
-        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None::<String>);
         let sprint2_id = sprint2.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint1).unwrap();
@@ -758,7 +758,7 @@ mod tests {
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
         let col = crate::Column::new(board_id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint = crate::Sprint::new(board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col.clone()).unwrap();
@@ -798,7 +798,7 @@ mod tests {
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
         let col = crate::Column::new(board_id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint = crate::Sprint::new(board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col.clone()).unwrap();
@@ -903,7 +903,7 @@ mod tests {
         let tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint = crate::Sprint::new(board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -957,9 +957,9 @@ mod tests {
         let tc = TestContext::new();
         let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
         let board_id = board.id;
-        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None);
+        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None::<String>);
         sprint1.card_prefix = Some("SPR".to_string());
-        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None::<String>);
         let sprint2_id = sprint2.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint1).unwrap();

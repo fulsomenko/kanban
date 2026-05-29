@@ -159,7 +159,7 @@ async fn test_open_context_first_list_boards_triggers_load() -> KanbanResult<()>
         use kanban_persistence::{snapshot_to_json_bytes, PersistenceMetadata, StoreSnapshot};
 
         let snap = Snapshot {
-            boards: vec![Board::new("Alpha".into(), None)],
+            boards: vec![Board::new("Alpha", None::<String>)],
             ..Snapshot::new()
         };
         let data = snapshot_to_json_bytes(&snap).unwrap();
@@ -246,7 +246,7 @@ async fn test_open_context_reload_delegates_to_backend() -> KanbanResult<()> {
 
     // External writer adds a board.
     let external = make_json_data_store(&path);
-    external.upsert_board(kanban_domain::Board::new("External".into(), None))?;
+    external.upsert_board(kanban_domain::Board::new("External", None::<String>))?;
     external.flush().await?;
 
     // Before reload the context cache is stale.
@@ -311,7 +311,7 @@ async fn test_reload_after_external_json_change_returns_updated_data() -> Kanban
 
     // External writer adds a board, bypassing ctx.
     let external = make_json_data_store(&path);
-    external.upsert_board(kanban_domain::Board::new("External".into(), None))?;
+    external.upsert_board(kanban_domain::Board::new("External", None::<String>))?;
     external.flush().await?;
 
     // reload() clears the lazy cache; next read loads the updated file.
@@ -365,7 +365,7 @@ mod sqlite_tests {
 
         // Second instance writes a board directly to the DB.
         let backend2 = SqliteBackend::open(path.to_str().unwrap()).await?;
-        backend2.upsert_board(kanban_domain::Board::new("Via2nd".into(), None))?;
+        backend2.upsert_board(kanban_domain::Board::new("Via2nd", None::<String>))?;
 
         // First context sees the write immediately — SQLite reads are live.
         let boards = ctx.boards()?;
@@ -420,7 +420,7 @@ async fn test_replace_backend_reads_go_to_new_backend() -> KanbanResult<()> {
 
     // Pre-populate backend B with one board.
     let writer = make_json_data_store(&path_b);
-    writer.upsert_board(kanban_domain::Board::new("B".into(), None))?;
+    writer.upsert_board(kanban_domain::Board::new("B", None::<String>))?;
     writer.flush().await?;
 
     let mut ctx = KanbanContext::open(
@@ -467,7 +467,7 @@ async fn test_open_session_undo_preserves_preexisting_boards() -> KanbanResult<(
     // Session 0: pre-populate the file with B0.
     {
         let jds = make_json_data_store(&path);
-        jds.upsert_board(kanban_domain::Board::new("B0".into(), None))?;
+        jds.upsert_board(kanban_domain::Board::new("B0", None::<String>))?;
         jds.flush().await?;
     }
 

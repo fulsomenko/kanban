@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn test_check_wip_limit_no_limit_always_ok() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
+        let mut board = crate::Board::new("B".to_string(), None::<String>);
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
         let col_id = col.id;
         let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_check_wip_limit_below_limit_ok() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
+        let mut board = crate::Board::new("B".to_string(), None::<String>);
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(2);
         let col_id = col.id;
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn test_check_wip_limit_at_limit_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
+        let mut board = crate::Board::new("B".to_string(), None::<String>);
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn test_check_wip_limit_exclude_reduces_count() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
+        let mut board = crate::Board::new("B".to_string(), None::<String>);
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn test_check_wip_limit_batch_exceeds_limit_returns_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), None);
+        let board = crate::Board::new("B".to_string(), None::<String>);
         let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
         col.wip_limit = Some(1);
         let col_id = col.id;

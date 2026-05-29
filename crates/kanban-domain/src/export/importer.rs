@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_extract_entities() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_convert_snapshot_to_export() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let snapshot = Snapshot {

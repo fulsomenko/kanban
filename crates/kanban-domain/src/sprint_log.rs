@@ -16,16 +16,16 @@ impl SprintLog {
     pub fn new(
         sprint_id: Uuid,
         sprint_number: u32,
-        sprint_name: Option<String>,
-        status: String,
+        sprint_name: Option<impl Into<String>>,
+        status: impl Into<String>,
     ) -> Self {
         Self {
             sprint_id,
             sprint_number,
-            sprint_name,
+            sprint_name: sprint_name.map(Into::into),
             started_at: Utc::now(),
             ended_at: None,
-            status,
+            status: status.into(),
         }
     }
 

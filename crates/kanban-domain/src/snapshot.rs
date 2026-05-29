@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_from_data() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let snapshot = Snapshot::from_data(
             vec![board.clone()],
             vec![],
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_serialization_roundtrip() {
-        let board = Board::new("Test Board".to_string(), None);
+        let board = Board::new("Test Board".to_string(), None::<String>);
         let snapshot = Snapshot::from_data(
             vec![board],
             vec![],

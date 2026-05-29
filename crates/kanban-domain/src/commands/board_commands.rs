@@ -574,11 +574,11 @@ mod tests {
     #[test]
     fn test_import_entities_with_duplicate_board_id_returns_error() {
         let tc = TestContext::new();
-        let b1 = Board::new("B1".to_string(), None);
+        let b1 = Board::new("B1".to_string(), None::<String>);
         let dup_id = b1.id;
         tc.store.upsert_board(b1).unwrap();
 
-        let mut dup = Board::new("Dup".to_string(), None);
+        let mut dup = Board::new("Dup".to_string(), None::<String>);
         dup.id = dup_id;
 
         let cmd = ImportEntities {
@@ -626,10 +626,10 @@ mod tests {
     #[test]
     fn test_import_entities_appends_without_replacing() {
         let tc = TestContext::new();
-        let b1 = Board::new("B1".to_string(), None);
+        let b1 = Board::new("B1".to_string(), None::<String>);
         tc.store.upsert_board(b1).unwrap();
 
-        let b2 = Board::new("B2".to_string(), None);
+        let b2 = Board::new("B2".to_string(), None::<String>);
         let col = crate::Column::new(b2.id, "Todo".to_string(), 0);
         let mut b2_clone = b2.clone();
         let card = crate::Card::new(&mut b2_clone, col.id, "Card".to_string(), 0);

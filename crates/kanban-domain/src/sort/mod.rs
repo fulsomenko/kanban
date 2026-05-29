@@ -117,7 +117,7 @@ mod tests {
     use crate::{Board, Column};
 
     fn create_test_cards() -> (Board, Column, Card, Card) {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_position_sorter() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
 
         let mut board_mut = board.clone();
@@ -186,7 +186,7 @@ mod tests {
     fn test_get_sorter_for_field() {
         let sorter = get_sorter_for_field(SortField::Position);
 
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
         let mut board_mut = board.clone();
 
@@ -218,7 +218,7 @@ mod tests {
     /// re-render.
     #[test]
     fn test_ordered_sorter_is_deterministic_when_primary_keys_tie() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
         let mut board_mut = board.clone();
 
@@ -255,7 +255,7 @@ mod tests {
     /// the original instability.
     #[test]
     fn test_ordered_sorter_tiebreaker_is_ascending_under_descending_primary() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
         let mut board_mut = board.clone();
 
@@ -287,7 +287,7 @@ mod tests {
         ];
 
         for variant in variants {
-            let board = Board::new("Test".to_string(), None);
+            let board = Board::new("Test".to_string(), None::<String>);
             let column = Column::new(board.id, "Todo".to_string(), 0);
             let mut board_mut = board.clone();
             let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);

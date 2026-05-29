@@ -11,11 +11,11 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub fn new(name: String, color: String) -> Self {
+    pub fn new(name: impl Into<String>, color: impl Into<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
-            name,
-            color,
+            name: name.into(),
+            color: color.into(),
         }
     }
 }

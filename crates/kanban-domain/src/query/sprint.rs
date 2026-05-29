@@ -93,7 +93,7 @@ mod tests {
     use crate::{Board, CardStatus, Column};
 
     fn create_test_board() -> Board {
-        Board::new("Test".to_string(), None)
+        Board::new("Test".to_string(), None::<String>)
     }
 
     fn create_test_column(board: &Board) -> Column {

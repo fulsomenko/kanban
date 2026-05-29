@@ -1106,7 +1106,7 @@ mod tests {
         let tc = TestContext::new();
         let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, None);
+        let sprint = crate::Sprint::new(board.id, 1, None, None::<String>);
         let board_id = board.id;
         let column_id = col.id;
         let sprint_id = sprint.id;
@@ -1245,7 +1245,7 @@ mod tests {
         let tc = TestContext::new();
         let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
         let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, None);
+        let sprint = crate::Sprint::new(board.id, 1, None, None::<String>);
         let board_id = board.id;
         let column_id = col.id;
         let sprint_id = sprint.id;
@@ -1291,7 +1291,7 @@ mod tests {
         let board_b = crate::Board::new("B".to_string(), Some("BBB".to_string()));
         let col_a = crate::Column::new(board_a.id, "Col".to_string(), 0);
         // Sprint belongs to board B.
-        let sprint_b = crate::Sprint::new(board_b.id, 1, None, None);
+        let sprint_b = crate::Sprint::new(board_b.id, 1, None, None::<String>);
         let board_a_id = board_a.id;
         let column_id = col_a.id;
         let sprint_b_id = sprint_b.id;

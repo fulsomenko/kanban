@@ -9,7 +9,7 @@ async fn test_import_failure_prevents_empty_state_save() {
     let file_path = dir.path().join("kanban.json");
 
     // Create a real board and then save it in V2 format
-    let board = Board::new("Test Board".to_string(), None);
+    let board = Board::new("Test Board".to_string(), None::<String>);
     let column = Column::new(board.id, "Todo".to_string(), 0);
 
     // Create snapshot with one board
@@ -82,7 +82,7 @@ async fn test_v2_format_is_imported_correctly() {
     let file_path = dir.path().join("kanban.json");
 
     // Create a real board
-    let board = Board::new("My Project".to_string(), None);
+    let board = Board::new("My Project".to_string(), None::<String>);
     let column = Column::new(board.id, "Todo".to_string(), 0);
     let mut board_mut = board.clone();
     let card = Card::new(&mut board_mut, column.id, "Important Task".to_string(), 0);

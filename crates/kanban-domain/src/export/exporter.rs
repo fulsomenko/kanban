@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_export_single_board() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let column = Column::new(board.id, "Todo".to_string(), 0);
         let columns = vec![column.clone()];
 
@@ -112,8 +112,8 @@ mod tests {
 
     #[test]
     fn test_export_all_boards() {
-        let board1 = Board::new("Board 1".to_string(), None);
-        let board2 = Board::new("Board 2".to_string(), None);
+        let board1 = Board::new("Board 1".to_string(), None::<String>);
+        let board2 = Board::new("Board 2".to_string(), None::<String>);
         let boards = vec![board1.clone(), board2.clone()];
 
         let column1 = Column::new(board1.id, "Todo".to_string(), 0);
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_export_to_json() {
-        let board = Board::new("Test".to_string(), None);
+        let board = Board::new("Test".to_string(), None::<String>);
         let export = AllBoardsExport {
             boards: vec![BoardExport {
                 board,
