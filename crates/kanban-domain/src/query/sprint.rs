@@ -93,11 +93,11 @@ mod tests {
     use crate::{Board, CardStatus, Column};
 
     fn create_test_board() -> Board {
-        Board::new("Test".to_string(), None::<String>)
+        Board::new("Test", None::<String>)
     }
 
     fn create_test_column(board: &Board) -> Column {
-        Column::new(board.id, "Todo".to_string(), 0)
+        Column::new(board.id, "Todo", 0)
     }
 
     fn create_test_card(board: &mut Board, column: &Column, title: &str) -> Card {

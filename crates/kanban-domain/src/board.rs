@@ -460,48 +460,48 @@ mod tests {
 
     #[test]
     fn test_board_update_name_accepts_str_without_to_string() {
-        let mut board = Board::new("initial".to_string(), None::<String>);
+        let mut board = Board::new("initial", None::<String>);
         board.update_name("updated");
         assert_eq!(board.name, "updated");
     }
 
     #[test]
     fn test_board_update_description_accepts_str_without_to_string() {
-        let mut board = Board::new("board".to_string(), None::<String>);
+        let mut board = Board::new("board", None::<String>);
         board.update_description(Some("desc"));
         assert_eq!(board.description, Some("desc".to_string()));
     }
 
     #[test]
     fn test_board_update_sprint_prefix_accepts_str_without_to_string() {
-        let mut board = Board::new("board".to_string(), None::<String>);
+        let mut board = Board::new("board", None::<String>);
         board.update_sprint_prefix(Some("sprint"));
         assert_eq!(board.sprint_prefix, Some("sprint".to_string()));
     }
 
     #[test]
     fn test_board_update_card_prefix_accepts_str_without_to_string() {
-        let mut board = Board::new("board".to_string(), None::<String>);
+        let mut board = Board::new("board", None::<String>);
         board.update_card_prefix(Some("KAN"));
         assert_eq!(board.card_prefix, Some("KAN".to_string()));
     }
 
     #[test]
     fn test_board_add_sprint_name_at_used_index_accepts_str_without_to_string() {
-        let mut board = Board::new("board".to_string(), None::<String>);
+        let mut board = Board::new("board", None::<String>);
         let idx = board.add_sprint_name_at_used_index("Alpha");
         assert_eq!(board.sprint_names[idx], "Alpha");
     }
 
     #[test]
     fn test_board_new_card_counter_initialized_to_one() {
-        let board = Board::new("Test".to_string(), None::<String>);
+        let board = Board::new("Test", None::<String>);
         assert_eq!(board.card_counter, 1);
     }
 
     #[test]
     fn test_board_get_next_card_number_increments_without_prefix() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         assert_eq!(board.get_next_card_number(), 1);
         assert_eq!(board.get_next_card_number(), 2);
         assert_eq!(board.get_next_card_number(), 3);
@@ -510,7 +510,7 @@ mod tests {
 
     #[test]
     fn test_board_initialize_card_counter_sets_value_and_get_next_returns_it() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         board.initialize_card_counter(10);
         assert_eq!(board.get_card_counter(), 10);
         assert_eq!(board.get_next_card_number(), 10);
@@ -629,10 +629,10 @@ mod tests {
 
     #[test]
     fn test_update_sprint_prefix() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         assert_eq!(board.sprint_prefix, None);
 
-        board.update_sprint_prefix(Some("feat".to_string()));
+        board.update_sprint_prefix(Some("feat"));
         assert_eq!(board.sprint_prefix, Some("feat".to_string()));
 
         board.update_sprint_prefix(None::<String>);
@@ -641,10 +641,10 @@ mod tests {
 
     #[test]
     fn test_update_card_prefix() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         assert_eq!(board.card_prefix, None);
 
-        board.update_card_prefix(Some("task".to_string()));
+        board.update_card_prefix(Some("task"));
         assert_eq!(board.card_prefix, Some("task".to_string()));
 
         board.update_card_prefix(None::<String>);
@@ -653,35 +653,35 @@ mod tests {
 
     #[test]
     fn test_effective_sprint_prefix() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         assert_eq!(board.effective_sprint_prefix("default"), "default");
 
-        board.update_sprint_prefix(Some("custom".to_string()));
+        board.update_sprint_prefix(Some("custom"));
         assert_eq!(board.effective_sprint_prefix("default"), "custom");
     }
 
     #[test]
     fn test_effective_card_prefix() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         assert_eq!(board.effective_card_prefix("task"), "task");
 
-        board.update_card_prefix(Some("feature".to_string()));
+        board.update_card_prefix(Some("feature"));
         assert_eq!(board.effective_card_prefix("task"), "feature");
     }
 
     #[test]
     fn test_effective_branch_prefix_backward_compat() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
-        board.update_sprint_prefix(Some("custom".to_string()));
+        let mut board = Board::new("Test", None::<String>);
+        board.update_sprint_prefix(Some("custom"));
         assert_eq!(board.effective_branch_prefix("default"), "custom");
     }
 
     #[test]
     fn test_resolve_completion_column_fallback() {
-        let board = Board::new("Test".to_string(), None::<String>);
-        let col1 = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let col2 = crate::Column::new(board.id, "In Progress".to_string(), 1);
-        let col3 = crate::Column::new(board.id, "Done".to_string(), 2);
+        let board = Board::new("Test", None::<String>);
+        let col1 = crate::Column::new(board.id, "Todo", 0);
+        let col2 = crate::Column::new(board.id, "In Progress", 1);
+        let col3 = crate::Column::new(board.id, "Done", 2);
         let columns = vec![col1, col2, col3.clone()];
 
         assert_eq!(board.resolve_completion_column(&columns), Some(col3.id));
@@ -689,10 +689,10 @@ mod tests {
 
     #[test]
     fn test_resolve_completion_column_explicit() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
-        let col1 = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
-        let col3 = crate::Column::new(board.id, "Archive".to_string(), 2);
+        let mut board = Board::new("Test", None::<String>);
+        let col1 = crate::Column::new(board.id, "Todo", 0);
+        let col2 = crate::Column::new(board.id, "Done", 1);
+        let col3 = crate::Column::new(board.id, "Archive", 2);
         let columns = vec![col1, col2.clone(), col3];
 
         board.update_completion_column_id(Some(col2.id));
@@ -701,9 +701,9 @@ mod tests {
 
     #[test]
     fn test_resolve_completion_column_stale_id_falls_back() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
-        let col1 = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let col2 = crate::Column::new(board.id, "Done".to_string(), 1);
+        let mut board = Board::new("Test", None::<String>);
+        let col1 = crate::Column::new(board.id, "Todo", 0);
+        let col2 = crate::Column::new(board.id, "Done", 1);
         let columns = vec![col1, col2.clone()];
 
         board.update_completion_column_id(Some(Uuid::new_v4()));
@@ -712,13 +712,13 @@ mod tests {
 
     #[test]
     fn test_resolve_completion_column_empty_columns() {
-        let board = Board::new("Test".to_string(), None::<String>);
+        let board = Board::new("Test", None::<String>);
         assert_eq!(board.resolve_completion_column(&[]), None);
     }
 
     #[test]
     fn test_sprint_counter_initialization() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         assert_eq!(board.get_sprint_counter("sprint"), None);
 
         let num = board.get_next_sprint_number("sprint");
@@ -728,7 +728,7 @@ mod tests {
 
     #[test]
     fn test_shared_sprint_sequence() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
 
         let num1 = board.get_next_sprint_number("SPRINT");
         assert_eq!(num1, 1);
@@ -744,7 +744,7 @@ mod tests {
 
     #[test]
     fn test_initialize_sprint_counter() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         board.initialize_sprint_counter("RELEASE", 5);
 
         let num = board.get_next_sprint_number("RELEASE");
@@ -756,7 +756,7 @@ mod tests {
     fn test_ensure_sprint_counter_initialized_with_existing_sprints() {
         use crate::Sprint;
 
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
 
         let sprint1 = Sprint::new(board.id, 1, None, None::<String>);
         let sprint2 = Sprint::new(board.id, 2, None, None::<String>);
@@ -776,11 +776,11 @@ mod tests {
     fn test_ensure_sprint_counter_not_reinitialize() {
         use crate::Sprint;
 
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         board.initialize_sprint_counter("test", 10);
 
-        let sprint1 = Sprint::new(board.id, 1, None, Some("test".to_string()));
-        let sprint2 = Sprint::new(board.id, 2, None, Some("test".to_string()));
+        let sprint1 = Sprint::new(board.id, 1, None, Some("test"));
+        let sprint2 = Sprint::new(board.id, 2, None, Some("test"));
         let sprints = vec![sprint1, sprint2];
 
         board.ensure_sprint_counter_initialized("test", &sprints);
@@ -808,7 +808,7 @@ mod sort_field_serialization_tests {
 
     #[test]
     fn test_board_with_position_sort_serializes() {
-        let mut board = Board::new("Test".to_string(), None::<String>);
+        let mut board = Board::new("Test", None::<String>);
         board.update_task_sort(SortField::Position, SortOrder::Descending);
 
         let json = serde_json::to_string(&board).unwrap();

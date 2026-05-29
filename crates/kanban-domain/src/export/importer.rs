@@ -208,11 +208,11 @@ mod tests {
 
     #[test]
     fn test_extract_entities() {
-        let board = Board::new("Test".to_string(), None::<String>);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
 
         let mut board_mut = board.clone();
-        let card = Card::new(&mut board_mut, column.id, "Task".to_string(), 0);
+        let card = Card::new(&mut board_mut, column.id, "Task", 0);
 
         let export = AllBoardsExport {
             boards: vec![BoardExport {
@@ -241,8 +241,8 @@ mod tests {
 
     #[test]
     fn test_convert_snapshot_to_export() {
-        let board = Board::new("Test".to_string(), None::<String>);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
 
         let snapshot = Snapshot {
             boards: vec![board.clone()],

@@ -743,7 +743,7 @@ mod tests {
     #[test]
     fn test_move_card_not_found_returns_error() {
         let tc = TestContext::new();
-        let column = crate::Column::new(Uuid::new_v4(), "Col".to_string(), 0);
+        let column = crate::Column::new(Uuid::new_v4(), "Col", 0);
         let column_id = column.id;
         tc.store.upsert_column(column).unwrap();
         let context = tc.as_command_context();
@@ -759,8 +759,8 @@ mod tests {
     #[test]
     fn test_move_card_column_not_found_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card", 0);
         let card_id = card.id;
         tc.store.upsert_card(card).unwrap();
         let context = tc.as_command_context();
@@ -787,8 +787,8 @@ mod tests {
     #[test]
     fn test_archive_cards_invalid_ids_skipped_valid_ids_archived() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card", 0);
         let valid_id = card.id;
         tc.store.upsert_card(card).unwrap();
 
@@ -805,11 +805,11 @@ mod tests {
     #[test]
     fn test_create_card_exceeding_wip_limit_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let mut column = crate::Column::new(board.id, "Limited", 0);
         column.wip_limit = Some(1);
         let column_id = column.id;
-        let existing = crate::Card::new(&mut board, column_id, "Existing".to_string(), 0);
+        let existing = crate::Card::new(&mut board, column_id, "Existing", 0);
         let board_id = board.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(column).unwrap();
@@ -833,12 +833,12 @@ mod tests {
     #[test]
     fn test_create_card_at_wip_limit_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let mut column = crate::Column::new(board.id, "Limited", 0);
         column.wip_limit = Some(2);
         let column_id = column.id;
-        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
-        let card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 1);
+        let card1 = crate::Card::new(&mut board, column_id, "C1", 0);
+        let card2 = crate::Card::new(&mut board, column_id, "C2", 1);
         let board_id = board.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(column).unwrap();
@@ -863,11 +863,11 @@ mod tests {
     #[test]
     fn test_create_card_below_wip_limit_succeeds() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let mut column = crate::Column::new(board.id, "Limited".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let mut column = crate::Column::new(board.id, "Limited", 0);
         column.wip_limit = Some(2);
         let column_id = column.id;
-        let card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
+        let card1 = crate::Card::new(&mut board, column_id, "C1", 0);
         let board_id = board.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(column).unwrap();
@@ -890,13 +890,13 @@ mod tests {
     #[test]
     fn test_move_card_exceeding_wip_limit_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let src_col = crate::Column::new(board.id, "Source".to_string(), 0);
-        let mut dst_col = crate::Column::new(board.id, "Dest".to_string(), 1);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let src_col = crate::Column::new(board.id, "Source", 0);
+        let mut dst_col = crate::Column::new(board.id, "Dest", 1);
         dst_col.wip_limit = Some(1);
         let dst_id = dst_col.id;
-        let existing = crate::Card::new(&mut board, dst_id, "Existing".to_string(), 0);
-        let mover = crate::Card::new(&mut board, src_col.id, "Mover".to_string(), 0);
+        let existing = crate::Card::new(&mut board, dst_id, "Existing", 0);
+        let mover = crate::Card::new(&mut board, src_col.id, "Mover", 0);
         let mover_id = mover.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(src_col).unwrap();
@@ -917,10 +917,10 @@ mod tests {
     #[test]
     fn test_restore_card_to_deleted_column_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "Card", 0);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
         tc.store.upsert_board(board).unwrap();
@@ -941,10 +941,10 @@ mod tests {
     #[test]
     fn test_restore_card_to_valid_column_succeeds() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "Card", 0);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
         tc.store.upsert_board(board).unwrap();
@@ -966,12 +966,12 @@ mod tests {
     #[test]
     fn test_restore_card_exceeding_wip_limit_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let existing = crate::Card::new(&mut board, col_id, "Existing".to_string(), 0);
-        let card = crate::Card::new(&mut board, col_id, "Card".to_string(), 1);
+        let existing = crate::Card::new(&mut board, col_id, "Existing", 0);
+        let card = crate::Card::new(&mut board, col_id, "Card", 1);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, col_id, 0);
         tc.store.upsert_board(board).unwrap();
@@ -1007,8 +1007,8 @@ mod tests {
     #[test]
     fn test_assign_cards_to_sprint_validates_sprint_exists() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card", 0);
         let card_id = card.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_card(card).unwrap();
@@ -1025,10 +1025,10 @@ mod tests {
     #[test]
     fn test_assign_cards_to_sprint_invalid_ids_skipped_valid_ids_assigned() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card", 0);
         let valid_id = card.id;
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("Sprint".to_string()));
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("Sprint"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_card(card).unwrap();
@@ -1060,8 +1060,8 @@ mod tests {
     #[test]
     fn test_archive_cards_missing_card_after_filter_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card".to_string(), 0);
+        let mut board = crate::Board::new("Test", Some("TST"));
+        let card = crate::Card::new(&mut board, Uuid::new_v4(), "Card", 0);
         let card_id = card.id;
         tc.store.upsert_card(card).unwrap();
 
@@ -1080,12 +1080,12 @@ mod tests {
     #[test]
     fn test_compact_column_positions_makes_sequential() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let column_id = col.id;
-        let mut card1 = crate::Card::new(&mut board, column_id, "C1".to_string(), 0);
+        let mut card1 = crate::Card::new(&mut board, column_id, "C1", 0);
         card1.position = 0;
-        let mut card2 = crate::Card::new(&mut board, column_id, "C2".to_string(), 5);
+        let mut card2 = crate::Card::new(&mut board, column_id, "C2", 5);
         card2.position = 5;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col).unwrap();
@@ -1104,8 +1104,8 @@ mod tests {
     #[test]
     fn test_create_card_with_sprint_id_assigns_card_to_sprint() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let sprint = crate::Sprint::new(board.id, 1, None, None::<String>);
         let board_id = board.id;
         let column_id = col.id;
@@ -1142,8 +1142,8 @@ mod tests {
     #[test]
     fn test_create_card_without_sprint_id_leaves_card_unassigned() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let board_id = board.id;
         let column_id = col.id;
         tc.store.upsert_board(board).unwrap();
@@ -1171,8 +1171,8 @@ mod tests {
     #[test]
     fn test_create_card_with_invalid_sprint_id_returns_not_found_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let board_id = board.id;
         let column_id = col.id;
         tc.store.upsert_board(board).unwrap();
@@ -1201,8 +1201,8 @@ mod tests {
         use chrono::TimeZone;
 
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let board_id = board.id;
         let column_id = col.id;
         tc.store.upsert_board(board).unwrap();
@@ -1243,8 +1243,8 @@ mod tests {
         use chrono::TimeZone;
 
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let sprint = crate::Sprint::new(board.id, 1, None, None::<String>);
         let board_id = board.id;
         let column_id = col.id;
@@ -1287,9 +1287,9 @@ mod tests {
     #[test]
     fn test_create_card_with_sprint_from_different_board_returns_validation_error() {
         let tc = TestContext::new();
-        let board_a = crate::Board::new("A".to_string(), Some("AAA".to_string()));
-        let board_b = crate::Board::new("B".to_string(), Some("BBB".to_string()));
-        let col_a = crate::Column::new(board_a.id, "Col".to_string(), 0);
+        let board_a = crate::Board::new("A", Some("AAA"));
+        let board_b = crate::Board::new("B", Some("BBB"));
+        let col_a = crate::Column::new(board_a.id, "Col", 0);
         // Sprint belongs to board B.
         let sprint_b = crate::Sprint::new(board_b.id, 1, None, None::<String>);
         let board_a_id = board_a.id;
@@ -1326,8 +1326,8 @@ mod tests {
         use chrono::{TimeZone, Utc};
 
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let board_id = board.id;
         let column_id = col.id;
         tc.store.upsert_board(board).unwrap();
@@ -1358,12 +1358,12 @@ mod tests {
         use chrono::{TimeZone, Utc};
 
         let tc = TestContext::new();
-        let col = crate::Column::new(Uuid::new_v4(), "Col".to_string(), 0);
+        let col = crate::Column::new(Uuid::new_v4(), "Col", 0);
         let column_id = col.id;
         tc.store.upsert_column(col).unwrap();
 
-        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let card = crate::Card::new(&mut board, column_id, "Card".to_string(), 0);
+        let mut board = crate::Board::new("B", Some("TST"));
+        let card = crate::Card::new(&mut board, column_id, "Card", 0);
         let card_id = card.id;
         let archived = crate::ArchivedCard::new(card, column_id, 0);
         tc.store.insert_archived_card(archived).unwrap();
@@ -1387,9 +1387,9 @@ mod tests {
         use chrono::{TimeZone, Utc};
 
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let mut card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
+        let mut board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
+        let mut card = crate::Card::new(&mut board, col.id, "Card", 0);
         let card_id = card.id;
         card.sprint_id = Some(Uuid::new_v4());
         tc.store.upsert_card(card).unwrap();

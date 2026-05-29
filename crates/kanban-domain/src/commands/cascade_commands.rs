@@ -412,9 +412,9 @@ mod tests {
     #[test]
     fn test_delete_sprints_by_board_removes_all_sprints_of_board() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), None::<String>);
+        let board = crate::Board::new("B", None::<String>);
         let board_id = board.id;
-        let other_board = crate::Board::new("Other".to_string(), None::<String>);
+        let other_board = crate::Board::new("Other", None::<String>);
         let other_board_id = other_board.id;
         let sprint1 = crate::Sprint::new(board_id, 1, None, None::<String>);
         let sprint2 = crate::Sprint::new(board_id, 2, None, None::<String>);

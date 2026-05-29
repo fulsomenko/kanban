@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn test_column_update_name_accepts_str_without_to_string() {
         let board_id = uuid::Uuid::new_v4();
-        let mut column = Column::new(board_id, "To Do".to_string(), 0);
+        let mut column = Column::new(board_id, "To Do", 0);
         column.update_name("In Progress");
         assert_eq!(column.name, "In Progress");
     }

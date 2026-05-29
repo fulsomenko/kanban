@@ -154,10 +154,10 @@ mod tests {
     #[test]
     fn test_check_wip_limit_no_limit_always_ok() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None::<String>);
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let col = crate::Column::new(board.id, "Col", 0);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
         let ctx = tc.as_command_context();
@@ -167,11 +167,11 @@ mod tests {
     #[test]
     fn test_check_wip_limit_below_limit_ok() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None::<String>);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(2);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
         let ctx = tc.as_command_context();
@@ -181,11 +181,11 @@ mod tests {
     #[test]
     fn test_check_wip_limit_at_limit_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None::<String>);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
         let ctx = tc.as_command_context();
@@ -196,11 +196,11 @@ mod tests {
     #[test]
     fn test_check_wip_limit_exclude_reduces_count() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None::<String>);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         let card_id = card.id;
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
@@ -211,8 +211,8 @@ mod tests {
     #[test]
     fn test_check_wip_limit_batch_exceeds_limit_returns_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), None::<String>);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
         tc.store.upsert_board(board).unwrap();
@@ -306,8 +306,8 @@ mod tests {
 
     #[test]
     fn test_command_serde_roundtrip_import_entities() {
-        let board = crate::Board::new("Imported".to_string(), Some("IMP".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("Imported", Some("IMP"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let cmd = Command::Board(BoardCommand::Import(ImportEntities {
             boards: vec![board],
             columns: vec![col],

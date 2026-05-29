@@ -117,12 +117,12 @@ mod tests {
     use crate::{Board, Column};
 
     fn create_test_cards() -> (Board, Column, Card, Card) {
-        let board = Board::new("Test".to_string(), None::<String>);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
 
         let mut board_mut = board.clone();
-        let card1 = Card::new(&mut board_mut, column.id, "First".to_string(), 0);
-        let card2 = Card::new(&mut board_mut, column.id, "Second".to_string(), 1);
+        let card1 = Card::new(&mut board_mut, column.id, "First", 0);
+        let card2 = Card::new(&mut board_mut, column.id, "Second", 1);
 
         (board, column, card1, card2)
     }
@@ -170,13 +170,13 @@ mod tests {
 
     #[test]
     fn test_position_sorter() {
-        let board = Board::new("Test".to_string(), None::<String>);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
 
         let mut board_mut = board.clone();
-        let card1 = Card::new(&mut board_mut, column.id, "Third".to_string(), 20);
-        let card2 = Card::new(&mut board_mut, column.id, "First".to_string(), 5);
-        let card3 = Card::new(&mut board_mut, column.id, "Second".to_string(), 10);
+        let card1 = Card::new(&mut board_mut, column.id, "Third", 20);
+        let card2 = Card::new(&mut board_mut, column.id, "First", 5);
+        let card3 = Card::new(&mut board_mut, column.id, "Second", 10);
 
         assert_eq!(SortBy::Position.compare(&card2, &card3), Ordering::Less); // 5 < 10
         assert_eq!(SortBy::Position.compare(&card3, &card1), Ordering::Less); // 10 < 20
@@ -186,12 +186,12 @@ mod tests {
     fn test_get_sorter_for_field() {
         let sorter = get_sorter_for_field(SortField::Position);
 
-        let board = Board::new("Test".to_string(), None::<String>);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
         let mut board_mut = board.clone();
 
-        let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 10);
-        let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 5);
+        let card1 = Card::new(&mut board_mut, column.id, "A", 10);
+        let card2 = Card::new(&mut board_mut, column.id, "B", 5);
 
         assert_eq!(sorter.compare(&card2, &card1), Ordering::Less);
     }
@@ -218,14 +218,14 @@ mod tests {
     /// re-render.
     #[test]
     fn test_ordered_sorter_is_deterministic_when_primary_keys_tie() {
-        let board = Board::new("Test".to_string(), None::<String>);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
         let mut board_mut = board.clone();
 
         // All three cards have points=None, so SortBy::Points reports them equal.
-        let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);
-        let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 1);
-        let card3 = Card::new(&mut board_mut, column.id, "C".to_string(), 2);
+        let card1 = Card::new(&mut board_mut, column.id, "A", 0);
+        let card2 = Card::new(&mut board_mut, column.id, "B", 1);
+        let card3 = Card::new(&mut board_mut, column.id, "C", 2);
         let card_numbers = (card1.card_number, card2.card_number, card3.card_number);
 
         let sorter = OrderedSorter::new(SortBy::Points, SortOrder::Ascending);
@@ -255,12 +255,12 @@ mod tests {
     /// the original instability.
     #[test]
     fn test_ordered_sorter_tiebreaker_is_ascending_under_descending_primary() {
-        let board = Board::new("Test".to_string(), None::<String>);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
         let mut board_mut = board.clone();
 
-        let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);
-        let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 1);
+        let card1 = Card::new(&mut board_mut, column.id, "A", 0);
+        let card2 = Card::new(&mut board_mut, column.id, "B", 1);
         let expected = (card1.card_number, card2.card_number);
 
         let sorter = OrderedSorter::new(SortBy::Points, SortOrder::Descending);
@@ -287,12 +287,12 @@ mod tests {
         ];
 
         for variant in variants {
-            let board = Board::new("Test".to_string(), None::<String>);
-            let column = Column::new(board.id, "Todo".to_string(), 0);
+            let board = Board::new("Test", None::<String>);
+            let column = Column::new(board.id, "Todo", 0);
             let mut board_mut = board.clone();
-            let card1 = Card::new(&mut board_mut, column.id, "A".to_string(), 0);
-            let card2 = Card::new(&mut board_mut, column.id, "B".to_string(), 1);
-            let card3 = Card::new(&mut board_mut, column.id, "C".to_string(), 2);
+            let card1 = Card::new(&mut board_mut, column.id, "A", 0);
+            let card2 = Card::new(&mut board_mut, column.id, "B", 1);
+            let card3 = Card::new(&mut board_mut, column.id, "C", 2);
             let expected = (card1.card_number, card2.card_number, card3.card_number);
 
             let sorter = OrderedSorter::new(variant, SortOrder::Ascending);
