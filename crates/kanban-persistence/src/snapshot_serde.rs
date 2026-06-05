@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_roundtrip() {
-        let board = Board::new("Test Board".to_string(), None::<String>);
+        let board = Board::new("Test Board", None::<String>);
         let snapshot = Snapshot::from_data(
             vec![board],
             vec![],

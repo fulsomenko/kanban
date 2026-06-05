@@ -21,7 +21,7 @@ async fn test_import_board_checkpoints_wal_on_sqlite_path() {
         .await
         .unwrap();
     let snapshot = Snapshot {
-        boards: vec![Board::new("Imported".to_string(), None::<String>)],
+        boards: vec![Board::new("Imported", None::<String>)],
         columns: vec![],
         cards: vec![],
         archived_cards: vec![],

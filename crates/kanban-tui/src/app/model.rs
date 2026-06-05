@@ -81,7 +81,7 @@ mod tests {
     use kanban_domain::{ArchivedCard, Board, Card, Column, Snapshot};
 
     fn make_card(board: &mut Board, column_id: Uuid) -> Card {
-        Card::new(board, column_id, "task".to_string(), 0)
+        Card::new(board, column_id, "task", 0)
     }
 
     #[test]
@@ -98,8 +98,8 @@ mod tests {
     #[test]
     fn test_load_from_snapshot_populates_boards_and_columns() {
         let mut m = Model::default();
-        let board = Board::new("B".to_string(), None::<String>);
-        let col = Column::new(board.id, "Col".to_string(), 0);
+        let board = Board::new("B", None::<String>);
+        let col = Column::new(board.id, "Col", 0);
         m.load_from_snapshot(Snapshot {
             boards: vec![board.clone()],
             columns: vec![col.clone()],
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn test_card_lookup_by_id_returns_correct_card() {
         let mut m = Model::default();
-        let mut board = Board::new("B".to_string(), None::<String>);
+        let mut board = Board::new("B", None::<String>);
         let col_id = Uuid::new_v4();
         let card_a = make_card(&mut board, col_id);
         let card_b = make_card(&mut board, col_id);
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn test_archived_card_lookup_by_id() {
         let mut m = Model::default();
-        let mut board = Board::new("B".to_string(), None::<String>);
+        let mut board = Board::new("B", None::<String>);
         let col_id = Uuid::new_v4();
         let card = make_card(&mut board, col_id);
         let card_id = card.id;
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn test_archived_cards_flat_matches_archived_cards() {
         let mut m = Model::default();
-        let mut board = Board::new("B".to_string(), None::<String>);
+        let mut board = Board::new("B", None::<String>);
         let col_id = Uuid::new_v4();
         let card = make_card(&mut board, col_id);
         let card_id = card.id;
@@ -173,15 +173,15 @@ mod tests {
     #[test]
     fn test_load_from_snapshot_overwrites_previous_state() {
         let mut m = Model::default();
-        let board_a = Board::new("A".to_string(), None::<String>);
+        let board_a = Board::new("A", None::<String>);
         m.load_from_snapshot(Snapshot {
             boards: vec![board_a],
             ..Default::default()
         });
         assert_eq!(m.boards().len(), 1);
 
-        let board_b = Board::new("B".to_string(), None::<String>);
-        let board_c = Board::new("C".to_string(), None::<String>);
+        let board_b = Board::new("B", None::<String>);
+        let board_c = Board::new("C", None::<String>);
         m.load_from_snapshot(Snapshot {
             boards: vec![board_b, board_c],
             ..Default::default()
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn test_load_from_snapshot_clears_stale_card_index() {
         let mut m = Model::default();
-        let mut board = Board::new("B".to_string(), None::<String>);
+        let mut board = Board::new("B", None::<String>);
         let col_id = Uuid::new_v4();
         let card = make_card(&mut board, col_id);
         let old_id = card.id;

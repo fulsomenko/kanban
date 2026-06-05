@@ -764,12 +764,7 @@ mod tests {
         tc.store.upsert_column(col.clone()).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
 
-        let mut card = crate::Card::new(
-            &mut crate::Board::new("B", Some("KAN")),
-            col.id,
-            "C".to_string(),
-            0,
-        );
+        let mut card = crate::Card::new(&mut crate::Board::new("B", Some("KAN")), col.id, "C", 0);
         card.sprint_id = Some(sprint_id);
         let card_id = card.id;
         tc.store.upsert_card(card).unwrap();

@@ -21,8 +21,8 @@ fn test_empty_model_returns_empty_slices() {
 fn test_load_from_snapshot_populates_all_fields() {
     let mut model = Model::default();
 
-    let mut board = Board::new("Board1".to_string(), None::<String>);
-    let column = Column::new(board.id, "Col1".to_string(), 0);
+    let mut board = Board::new("Board1", None::<String>);
+    let column = Column::new(board.id, "Col1", 0);
     let card = make_card(&mut board, column.id, "Card1", 0);
     let sprint = Sprint::new(board.id, 1, None, None::<String>);
 
@@ -51,7 +51,7 @@ fn test_load_from_snapshot_populates_all_fields() {
 fn test_card_lookup_by_id() {
     let mut model = Model::default();
 
-    let mut board = Board::new("B".to_string(), None::<String>);
+    let mut board = Board::new("B", None::<String>);
     let column_id = Uuid::new_v4();
     let card1 = make_card(&mut board, column_id, "First", 0);
     let card2 = make_card(&mut board, column_id, "Second", 1);
@@ -71,7 +71,7 @@ fn test_card_lookup_by_id() {
 fn test_card_lookup_missing_id_returns_none() {
     let mut model = Model::default();
 
-    let mut board = Board::new("B".to_string(), None::<String>);
+    let mut board = Board::new("B", None::<String>);
     let card = make_card(&mut board, Uuid::new_v4(), "Exists", 0);
     model.load_from_snapshot(Snapshot {
         cards: vec![card],
@@ -85,7 +85,7 @@ fn test_card_lookup_missing_id_returns_none() {
 fn test_load_from_snapshot_rebuilds_card_index() {
     let mut model = Model::default();
 
-    let mut board = Board::new("B".to_string(), None::<String>);
+    let mut board = Board::new("B", None::<String>);
     let column_id = Uuid::new_v4();
     let card_a = make_card(&mut board, column_id, "A", 0);
     let id_a = card_a.id;
@@ -111,7 +111,7 @@ fn test_load_from_snapshot_rebuilds_card_index() {
 fn test_archived_cards_flat_returns_card_data() {
     let mut model = Model::default();
 
-    let mut board = Board::new("B".to_string(), None::<String>);
+    let mut board = Board::new("B", None::<String>);
     let column_id = Uuid::new_v4();
     let card1 = make_card(&mut board, column_id, "Archived1", 0);
     let card2 = make_card(&mut board, column_id, "Archived2", 1);
@@ -133,7 +133,7 @@ fn test_archived_cards_flat_returns_card_data() {
 fn test_archived_cards_flat_rebuilds_on_reload() {
     let mut model = Model::default();
 
-    let mut board = Board::new("B".to_string(), None::<String>);
+    let mut board = Board::new("B", None::<String>);
     let column_id = Uuid::new_v4();
 
     let card1 = make_card(&mut board, column_id, "First", 0);
@@ -164,7 +164,7 @@ fn test_archived_cards_flat_rebuilds_on_reload() {
 fn test_archived_card_lookup_by_id() {
     let mut model = Model::default();
 
-    let mut board = Board::new("B".to_string(), None::<String>);
+    let mut board = Board::new("B", None::<String>);
     let column_id = Uuid::new_v4();
     let card1 = make_card(&mut board, column_id, "Archived1", 0);
     let card2 = make_card(&mut board, column_id, "Archived2", 1);
@@ -186,7 +186,7 @@ fn test_archived_card_lookup_by_id() {
 fn test_archived_card_lookup_missing_returns_none() {
     let mut model = Model::default();
 
-    let mut board = Board::new("B".to_string(), None::<String>);
+    let mut board = Board::new("B", None::<String>);
     let column_id = Uuid::new_v4();
     let card = make_card(&mut board, column_id, "Archived", 0);
     let ac = ArchivedCard::new(card, column_id, 0);

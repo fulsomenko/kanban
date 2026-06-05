@@ -1950,7 +1950,7 @@ mod tests {
 
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
-            let board = Board::new("Test Board".to_string(), None::<String>);
+            let board = Board::new("Test Board", None::<String>);
             let snapshot = Snapshot::from_data(
                 vec![board],
                 vec![],
@@ -2137,9 +2137,9 @@ mod tests {
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
 
-            let mut board = kanban_domain::Board::new("B".to_string(), None::<String>);
-            let column = kanban_domain::Column::new(board.id, "Col".to_string(), 0);
-            let card = kanban_domain::Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let mut board = kanban_domain::Board::new("B", None::<String>);
+            let column = kanban_domain::Column::new(board.id, "Col", 0);
+            let card = kanban_domain::Card::new(&mut board, column.id, "Task", 0);
             let card_id = card.id;
             let column_id = column.id;
             store.upsert_board(board).unwrap();
@@ -2173,9 +2173,9 @@ mod tests {
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
 
-            let mut board = kanban_domain::Board::new("B".to_string(), None::<String>);
-            let column = kanban_domain::Column::new(board.id, "Col".to_string(), 0);
-            let card = kanban_domain::Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let mut board = kanban_domain::Board::new("B", None::<String>);
+            let column = kanban_domain::Column::new(board.id, "Col", 0);
+            let card = kanban_domain::Card::new(&mut board, column.id, "Task", 0);
             let card_id = card.id;
             let column_id = column.id;
             store.upsert_board(board).unwrap();
@@ -2618,13 +2618,13 @@ mod tests {
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
 
-            let mut board = Board::new("B".to_string(), None::<String>);
-            let column = Column::new(board.id, "Col".to_string(), 0);
-            let mut card = Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let mut board = Board::new("B", None::<String>);
+            let column = Column::new(board.id, "Col", 0);
+            let mut card = Card::new(&mut board, column.id, "Task", 0);
             store.upsert_board(board).unwrap();
             store.upsert_column(column).unwrap();
 
-            let log = SprintLog::new(uuid::Uuid::new_v4(), 1, None::<String>, "".to_string());
+            let log = SprintLog::new(uuid::Uuid::new_v4(), 1, None::<String>, "");
             card.sprint_logs.push(log);
 
             let result = store.upsert_card(card);
@@ -2644,7 +2644,7 @@ mod tests {
         let rt = make_rt();
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
-            let board = Board::new("".to_string(), None::<String>);
+            let board = Board::new("", None::<String>);
             let result = store.upsert_board(board);
             assert!(
                 result.is_err(),
@@ -2662,10 +2662,10 @@ mod tests {
         let rt = make_rt();
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
-            let board = Board::new("B".to_string(), None::<String>);
+            let board = Board::new("B", None::<String>);
             let board_id = board.id;
             store.upsert_board(board).unwrap();
-            let col = Column::new(board_id, "".to_string(), 0);
+            let col = Column::new(board_id, "", 0);
             let result = store.upsert_column(col);
             assert!(
                 result.is_err(),
@@ -2683,11 +2683,11 @@ mod tests {
         let rt = make_rt();
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
-            let mut board = Board::new("B".to_string(), None::<String>);
-            let col = Column::new(board.id, "Col".to_string(), 0);
+            let mut board = Board::new("B", None::<String>);
+            let col = Column::new(board.id, "Col", 0);
             let col_id = col.id;
             // Card::new borrows &mut board -- call it before upsert_board moves board
-            let card = Card::new(&mut board, col_id, "".to_string(), 0);
+            let card = Card::new(&mut board, col_id, "", 0);
             store.upsert_board(board).unwrap();
             store.upsert_column(col).unwrap();
             let result = store.upsert_card(card);

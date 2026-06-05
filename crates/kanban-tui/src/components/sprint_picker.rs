@@ -368,7 +368,7 @@ mod tests {
     use kanban_domain::SprintStatus;
 
     fn make_board() -> Board {
-        Board::new("B".to_string(), Some("TST".to_string()))
+        Board::new("B", Some("TST"))
     }
 
     fn active_sprint(board_id: Uuid, n: u32, now: DateTime<Utc>) -> Sprint {

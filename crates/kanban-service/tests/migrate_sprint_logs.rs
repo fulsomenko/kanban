@@ -45,11 +45,11 @@ macro_rules! migrate_sprint_logs_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let backend = ctx.backend();
 
-                let mut board = Board::new("B".to_string(), Some("TST".to_string()));
-                let col = Column::new(board.id, "Col".to_string(), 0);
-                let sprint = Sprint::new(board.id, 1, None, Some("Alpha".to_string()));
+                let mut board = Board::new("B", Some("TST"));
+                let col = Column::new(board.id, "Col", 0);
+                let sprint = Sprint::new(board.id, 1, None, Some("Alpha"));
                 let sprint_id = sprint.id;
-                let mut card = Card::new(&mut board, col.id, "Card".to_string(), 0);
+                let mut card = Card::new(&mut board, col.id, "Card", 0);
                 let card_id = card.id;
                 card.sprint_id = Some(sprint_id);
                 assert!(card.sprint_logs.is_empty());
@@ -75,9 +75,9 @@ macro_rules! migrate_sprint_logs_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let backend = ctx.backend();
 
-                let mut board = Board::new("B".to_string(), Some("TST".to_string()));
-                let col = Column::new(board.id, "Col".to_string(), 0);
-                let card = Card::new(&mut board, col.id, "Card".to_string(), 0);
+                let mut board = Board::new("B", Some("TST"));
+                let col = Column::new(board.id, "Col", 0);
+                let card = Card::new(&mut board, col.id, "Card", 0);
                 backend.upsert_board(board).unwrap();
                 backend.upsert_column(col).unwrap();
                 backend.upsert_card(card).unwrap();
@@ -100,18 +100,16 @@ macro_rules! migrate_sprint_logs_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let backend = ctx.backend();
 
-                let mut board = Board::new("B".to_string(), Some("TST".to_string()));
-                let col = Column::new(board.id, "Col".to_string(), 0);
-                let sprint = Sprint::new(board.id, 1, None, Some("Alpha".to_string()));
+                let mut board = Board::new("B", Some("TST"));
+                let col = Column::new(board.id, "Col", 0);
+                let sprint = Sprint::new(board.id, 1, None, Some("Alpha"));
                 let sprint_id = sprint.id;
 
-                let mut card_needs_backfill =
-                    Card::new(&mut board, col.id, "Needs Backfill".to_string(), 0);
+                let mut card_needs_backfill = Card::new(&mut board, col.id, "Needs Backfill", 0);
                 card_needs_backfill.sprint_id = Some(sprint_id);
                 let needs_backfill_id = card_needs_backfill.id;
 
-                let mut card_already_logged =
-                    Card::new(&mut board, col.id, "Already Logged".to_string(), 1);
+                let mut card_already_logged = Card::new(&mut board, col.id, "Already Logged", 1);
                 card_already_logged.sprint_id = Some(sprint_id);
                 card_already_logged
                     .sprint_logs
@@ -119,12 +117,12 @@ macro_rules! migrate_sprint_logs_tests {
                         sprint_id,
                         1,
                         None::<String>,
-                        "Active".to_string(),
+                        "Active",
                     ));
                 let already_logged_id = card_already_logged.id;
                 let already_logged_before = card_already_logged.sprint_logs.clone();
 
-                let card_no_sprint = Card::new(&mut board, col.id, "No Sprint".to_string(), 2);
+                let card_no_sprint = Card::new(&mut board, col.id, "No Sprint", 2);
                 let no_sprint_id = card_no_sprint.id;
 
                 backend.upsert_board(board).unwrap();
