@@ -59,7 +59,7 @@ cargo fmt --all
   - Read-only inspection / parsing: `&str`
   - Validate-then-maybe-store (rejection possible): `&str`
   - Always store (constructors, unconditional setters): `impl Into<String>` (or `Option<impl Into<String>>`)
-  - In-place mutation: `&mut String`
+  - In-place mutation of existing string: `&mut String`
   - Avoid `impl AsRef<str>` -- signature clutter without ergonomic gain
 - Use `impl Trait` for return types when appropriate
 - Keep functions focused and under 50 lines when possible
