@@ -708,7 +708,9 @@ mod tests {
         let mut card_already_logged = test_card(&mut board, &col, "Already Logged", 1);
         card_already_logged.sprint_id = Some(sprint.id);
         card_already_logged.sprint_logs.push(SprintLog::new(
-            sprint.id, 1, None::<String>,
+            sprint.id,
+            1,
+            None::<String>,
             "Active",
         ));
         let already_logged_before = card_already_logged.sprint_logs.clone();

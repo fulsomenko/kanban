@@ -2762,7 +2762,9 @@ mod tests {
         // Seed in-memory state with a board so we can detect whether adopt
         // transferred it to the new on-disk backend.
         let mut snapshot = app.ctx.snapshot().unwrap();
-        snapshot.boards.push(Board::new("BeforeAdopt", None::<String>));
+        snapshot
+            .boards
+            .push(Board::new("BeforeAdopt", None::<String>));
         app.ctx.apply_snapshot(snapshot).unwrap();
 
         app.maybe_push_startup_file_dialog();

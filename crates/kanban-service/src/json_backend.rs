@@ -383,7 +383,8 @@ mod tests {
         let path = dir.path().join("md.json");
         let jds = make_store(&path);
         // Trigger a write so flush has something to persist.
-        jds.upsert_board(Board::new("B".to_string(), None::<String>)).unwrap();
+        jds.upsert_board(Board::new("B".to_string(), None::<String>))
+            .unwrap();
         jds.flush().await.unwrap();
         let meta = jds
             .persistence_metadata()

@@ -119,7 +119,12 @@ impl From<&Card> for CardSummary {
 }
 
 impl Card {
-    pub fn new(board: &mut Board, column_id: ColumnId, title: impl Into<String>, position: i32) -> Self {
+    pub fn new(
+        board: &mut Board,
+        column_id: ColumnId,
+        title: impl Into<String>,
+        position: i32,
+    ) -> Self {
         let now = Utc::now();
         let card_number = board.get_next_card_number();
         Self {
@@ -569,13 +574,7 @@ mod tests {
         assert_eq!(card.get_sprint_history().len(), 0);
 
         let sprint_id_1 = uuid::Uuid::new_v4();
-        card.assign_to_sprint(
-            sprint_id_1,
-            1,
-            Some("Sprint 1"),
-            "Active",
-            Utc::now(),
-        );
+        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1"), "Active", Utc::now());
 
         assert_eq!(card.get_sprint_history().len(), 1);
         assert_eq!(card.sprint_id, Some(sprint_id_1));
@@ -593,13 +592,7 @@ mod tests {
         let mut card = Card::new(&mut board, column_id, "Test Card", 0);
 
         let sprint_id_1 = uuid::Uuid::new_v4();
-        card.assign_to_sprint(
-            sprint_id_1,
-            1,
-            Some("Sprint 1"),
-            "Active",
-            Utc::now(),
-        );
+        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1"), "Active", Utc::now());
 
         card.end_current_sprint_log();
 
@@ -616,24 +609,12 @@ mod tests {
         let sprint_id_1 = uuid::Uuid::new_v4();
         let sprint_id_2 = uuid::Uuid::new_v4();
 
-        card.assign_to_sprint(
-            sprint_id_1,
-            1,
-            Some("Sprint 1"),
-            "Active",
-            Utc::now(),
-        );
+        card.assign_to_sprint(sprint_id_1, 1, Some("Sprint 1"), "Active", Utc::now());
         assert_eq!(card.sprint_id, Some(sprint_id_1));
         assert_eq!(card.get_sprint_history().len(), 1);
 
         card.end_current_sprint_log();
-        card.assign_to_sprint(
-            sprint_id_2,
-            2,
-            Some("Sprint 2"),
-            "Active",
-            Utc::now(),
-        );
+        card.assign_to_sprint(sprint_id_2, 2, Some("Sprint 2"), "Active", Utc::now());
 
         assert_eq!(card.sprint_id, Some(sprint_id_2));
         assert_eq!(card.get_sprint_history().len(), 2);
@@ -651,23 +632,11 @@ mod tests {
 
         let sprint_id = uuid::Uuid::new_v4();
 
-        card.assign_to_sprint(
-            sprint_id,
-            1,
-            Some("Sprint 1"),
-            "Active",
-            Utc::now(),
-        );
+        card.assign_to_sprint(sprint_id, 1, Some("Sprint 1"), "Active", Utc::now());
         assert_eq!(card.sprint_id, Some(sprint_id));
         assert_eq!(card.get_sprint_history().len(), 1);
 
-        card.assign_to_sprint(
-            sprint_id,
-            1,
-            Some("Sprint 1"),
-            "Active",
-            Utc::now(),
-        );
+        card.assign_to_sprint(sprint_id, 1, Some("Sprint 1"), "Active", Utc::now());
 
         assert_eq!(card.sprint_id, Some(sprint_id));
         assert_eq!(card.get_sprint_history().len(), 1);
@@ -686,13 +655,7 @@ mod tests {
         let fixed_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
         let sprint_id = uuid::Uuid::new_v4();
 
-        card.assign_to_sprint(
-            sprint_id,
-            1,
-            Some("Sprint 1"),
-            "Active",
-            fixed_time,
-        );
+        card.assign_to_sprint(sprint_id, 1, Some("Sprint 1"), "Active", fixed_time);
 
         assert_eq!(card.updated_at, fixed_time);
     }

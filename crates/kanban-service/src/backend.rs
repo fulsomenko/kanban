@@ -161,7 +161,9 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("t.sqlite3");
             let backend = SqliteBackend::open(path.to_str().unwrap()).await.unwrap();
-            backend.upsert_board(Board::new("B", None::<String>)).unwrap();
+            backend
+                .upsert_board(Board::new("B", None::<String>))
+                .unwrap();
             backend
                 .flush()
                 .await
@@ -196,7 +198,9 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("t.sqlite3");
             let backend = SqliteBackend::open(path.to_str().unwrap()).await.unwrap();
-            backend.upsert_board(Board::new("A", None::<String>)).unwrap();
+            backend
+                .upsert_board(Board::new("A", None::<String>))
+                .unwrap();
             backend.reload().await.unwrap();
             let boards = backend.list_boards().unwrap();
             assert_eq!(boards.len(), 1);
