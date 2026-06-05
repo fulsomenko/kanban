@@ -1,4 +1,5 @@
 pub mod config;
+pub mod datetime_input;
 pub mod error;
 pub mod graph;
 pub mod input;
@@ -13,6 +14,7 @@ pub use config::{
     validate_branch_prefix, AppConfig, DEFAULT_JSON_FILENAME, DEFAULT_SQLITE_FILENAME,
     DEFAULT_STORAGE_BACKEND,
 };
+pub use datetime_input::parse_datetime_input;
 pub use error::{CoreError, CoreResult};
 pub use graph::{
     Cascadable, DagGraph, Directed, Edge, EdgeBase, EdgeSet, EdgeStore, Graph, GraphError,
