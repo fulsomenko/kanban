@@ -11,7 +11,13 @@ rather than being forced at the domain boundary.
 There is no behaviour change for users. Saved files, the CLI surface,
 the MCP tool schemas, and the TUI all work exactly as before. The
 refactor is API-source-compatible for any external caller already
-passing `String`, and only loosens what those APIs accept.
+passing `String` or `Some("...".to_string())`, and only loosens what
+those APIs accept. One ergonomic note: parameters that became
+`Option<impl Into<String>>` can no longer infer the type of a bare
+`None`, so external callers that previously wrote `update_prefix(None)`
+must now write `update_prefix(None::<String>)` (or any concrete
+`Option::<T>::None`). This only affects the `None` case; `Some("...")`
+callers are unchanged.
 
 Call sites across the service, persistence-sqlite, and TUI test suites
 were updated to drop the now-redundant `.to_string()` allocations, which
