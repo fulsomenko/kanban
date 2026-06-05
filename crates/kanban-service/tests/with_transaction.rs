@@ -9,7 +9,7 @@ use std::sync::Arc;
 #[test]
 fn test_with_transaction_commits_on_success() -> KanbanResult<()> {
     let backend: Arc<dyn KanbanBackend> = Arc::new(InMemoryStore::new());
-    let board = Board::new("Committed".into(), None);
+    let board = Board::new("Committed", None::<String>);
     let board_id = board.id;
 
     let backend_for_closure = Arc::clone(&backend);
@@ -29,13 +29,13 @@ fn test_with_transaction_rolls_back_on_failure() -> KanbanResult<()> {
     let backend: Arc<dyn KanbanBackend> = Arc::new(InMemoryStore::new());
     // Pre-state: one board already exists; the transaction below tries to add
     // a second but fails. After rollback only the pre-state survives.
-    backend.upsert_board(Board::new("Original".into(), None))?;
+    backend.upsert_board(Board::new("Original", None::<String>))?;
     let pre_count = backend.list_boards()?.len();
 
     let backend_for_closure = Arc::clone(&backend);
     let result = backend.with_transaction(&mut || {
         let store: &dyn DataStore = backend_for_closure.as_data_store();
-        store.upsert_board(Board::new("Will be rolled back".into(), None))?;
+        store.upsert_board(Board::new("Will be rolled back", None::<String>))?;
         Err(KanbanError::Internal("simulated failure".into()))
     });
 

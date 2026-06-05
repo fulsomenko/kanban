@@ -368,7 +368,7 @@ mod tests {
     use kanban_domain::SprintStatus;
 
     fn make_board() -> Board {
-        Board::new("B".to_string(), Some("TST".to_string()))
+        Board::new("B", Some("TST"))
     }
 
     fn active_sprint(board_id: Uuid, n: u32, now: DateTime<Utc>) -> Sprint {
@@ -448,8 +448,8 @@ mod tests {
     fn test_arrow_moves_cursor_without_changing_selection() {
         let now = Utc::now();
         let board = make_board();
-        let planning_a = Sprint::new(board.id, 1, None, None);
-        let planning_b = Sprint::new(board.id, 2, None, None);
+        let planning_a = Sprint::new(board.id, 1, None, None::<String>);
+        let planning_b = Sprint::new(board.id, 2, None, None::<String>);
         let sprints = vec![planning_a, planning_b];
 
         let mut picker = SprintPicker::new();
@@ -472,8 +472,8 @@ mod tests {
         // Two planning sprints — no active, so the picker opens with
         // selection Unset and cursor on (None). Down walks the cursor
         // onto a sprint; Space then checks it.
-        let p_a = Sprint::new(board.id, 1, None, None);
-        let p_b = Sprint::new(board.id, 2, None, None);
+        let p_a = Sprint::new(board.id, 1, None, None::<String>);
+        let p_b = Sprint::new(board.id, 2, None, None::<String>);
         let sprints = vec![p_a, p_b];
 
         let mut picker = SprintPicker::new();
@@ -492,8 +492,8 @@ mod tests {
     fn test_space_after_arrow_switches_check_to_new_cursor_sprint() {
         let now = Utc::now();
         let board = make_board();
-        let planning_a = Sprint::new(board.id, 1, None, None);
-        let planning_b = Sprint::new(board.id, 2, None, None);
+        let planning_a = Sprint::new(board.id, 1, None, None::<String>);
+        let planning_b = Sprint::new(board.id, 2, None, None::<String>);
         let sprints = vec![planning_a.clone(), planning_b.clone()];
 
         let mut picker = SprintPicker::new();
@@ -572,8 +572,8 @@ mod tests {
     fn test_handle_key_down_moves_cursor_returns_true() {
         let now = Utc::now();
         let board = make_board();
-        let planning_a = Sprint::new(board.id, 1, None, None);
-        let planning_b = Sprint::new(board.id, 2, None, None);
+        let planning_a = Sprint::new(board.id, 1, None, None::<String>);
+        let planning_b = Sprint::new(board.id, 2, None, None::<String>);
         let sprints = vec![planning_a, planning_b];
 
         let mut picker = SprintPicker::new();
@@ -627,7 +627,7 @@ mod tests {
             created_at: now_open,
             updated_at: now_open,
         };
-        let sprint_b = Sprint::new(board.id, 2, None, None);
+        let sprint_b = Sprint::new(board.id, 2, None, None::<String>);
         let sprints = vec![sprint_a.clone(), sprint_b];
 
         let mut picker = SprintPicker::new();
@@ -677,7 +677,7 @@ mod tests {
 
         // Sprint that ended in the past — would normally appear in the
         // Completed/Ended section of build_entries.
-        let mut completed = Sprint::new(board.id, 2, None, None);
+        let mut completed = Sprint::new(board.id, 2, None, None::<String>);
         completed.status = SprintStatus::Completed;
         completed.start_date = Some(now - Duration::days(30));
         completed.end_date = Some(now - Duration::days(15));
@@ -792,7 +792,7 @@ mod tests {
         // ambiguity about what Enter should do.
         let now = Utc::now();
         let board = make_board();
-        let mut completed = Sprint::new(board.id, 1, None, None);
+        let mut completed = Sprint::new(board.id, 1, None, None::<String>);
         completed.status = SprintStatus::Completed;
         completed.start_date = Some(now - Duration::days(30));
         completed.end_date = Some(now - Duration::days(15));

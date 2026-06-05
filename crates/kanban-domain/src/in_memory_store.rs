@@ -490,7 +490,7 @@ mod tests {
     use crate::{Board, Card, Column, Sprint};
 
     fn make_board(name: &str) -> Board {
-        Board::new(name.to_string(), None)
+        Board::new(name.to_string(), None::<String>)
     }
 
     fn make_column(board_id: Uuid, name: &str, pos: i32) -> Column {
@@ -976,7 +976,7 @@ mod tests {
     fn test_upsert_and_get_sprint() {
         let store = InMemoryStore::new();
         let board = make_board("B");
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         store.upsert_sprint(sprint).unwrap();
 
@@ -990,9 +990,9 @@ mod tests {
         let store = InMemoryStore::new();
         let board1 = make_board("B1");
         let board2 = make_board("B2");
-        let s1 = Sprint::new(board1.id, 1, None, None);
-        let s2 = Sprint::new(board1.id, 2, None, None);
-        let s3 = Sprint::new(board2.id, 1, None, None);
+        let s1 = Sprint::new(board1.id, 1, None, None::<String>);
+        let s2 = Sprint::new(board1.id, 2, None, None::<String>);
+        let s3 = Sprint::new(board2.id, 1, None, None::<String>);
         store.upsert_sprint(s1).unwrap();
         store.upsert_sprint(s2).unwrap();
         store.upsert_sprint(s3).unwrap();
@@ -1007,8 +1007,8 @@ mod tests {
         let store = InMemoryStore::new();
         let board1 = make_board("B1");
         let board2 = make_board("B2");
-        let s1 = Sprint::new(board1.id, 1, None, None);
-        let s2 = Sprint::new(board2.id, 1, None, None);
+        let s1 = Sprint::new(board1.id, 1, None, None::<String>);
+        let s2 = Sprint::new(board2.id, 1, None, None::<String>);
         let s2_id = s2.id;
         store.upsert_sprint(s1).unwrap();
         store.upsert_sprint(s2).unwrap();
@@ -1167,7 +1167,7 @@ mod tests {
         let mut board = make_board("B");
         let col = make_column(board.id, "C", 0);
         let card = make_card(&mut board, col.id, "Card", 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         store.upsert_board(board).unwrap();
         store.upsert_column(col).unwrap();
         store.upsert_card(card).unwrap();
@@ -1206,8 +1206,8 @@ mod tests {
         store.upsert_card(card3).unwrap();
         store.upsert_card(card1).unwrap();
 
-        let s2 = Sprint::new(board_a.id, 2, None, None);
-        let s1 = Sprint::new(board_a.id, 1, None, None);
+        let s2 = Sprint::new(board_a.id, 2, None, None::<String>);
+        let s1 = Sprint::new(board_a.id, 1, None, None::<String>);
         store.upsert_sprint(s2).unwrap();
         store.upsert_sprint(s1).unwrap();
 
@@ -1266,7 +1266,7 @@ mod tests {
         let mut board = make_board("B");
         let col = make_column(board.id, "C", 0);
         let card = make_card(&mut board, col.id, "Card", 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let ac = ArchivedCard::new(card.clone(), col.id, 0);
 
         assert!(store.upsert_board(board.clone()).is_ok());

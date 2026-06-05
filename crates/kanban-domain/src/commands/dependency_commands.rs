@@ -1084,10 +1084,10 @@ mod tests {
         let tc = TestContext::new();
         let column_id = Uuid::new_v4();
 
-        let mut board = Board::new("Test Board".to_string(), None);
+        let mut board = Board::new("Test Board", None::<String>);
         board.card_prefix = Some("TEST".to_string());
         let board_id = board.id;
-        let parent = crate::Card::new(&mut board, column_id, "Parent".to_string(), 0);
+        let parent = crate::Card::new(&mut board, column_id, "Parent", 0);
         let parent_id = parent.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_card(parent).unwrap();
@@ -1119,8 +1119,8 @@ mod tests {
     #[test]
     fn test_create_subcard_with_nonexistent_parent_returns_not_found() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let board_id = board.id;
         let column_id = col.id;
         tc.store.upsert_board(board).unwrap();

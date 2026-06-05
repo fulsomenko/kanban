@@ -2575,7 +2575,7 @@ mod tests {
 
         let backend = Arc::new(JsonDataStore::new(Arc::new(ConflictingStore)));
         backend
-            .upsert_board(kanban_domain::Board::new("B".into(), None))
+            .upsert_board(kanban_domain::Board::new("B", None::<String>))
             .unwrap();
 
         let inner = kanban_service::KanbanContext::open_deferred(
@@ -2762,7 +2762,9 @@ mod tests {
         // Seed in-memory state with a board so we can detect whether adopt
         // transferred it to the new on-disk backend.
         let mut snapshot = app.ctx.snapshot().unwrap();
-        snapshot.boards.push(Board::new("BeforeAdopt".into(), None));
+        snapshot
+            .boards
+            .push(Board::new("BeforeAdopt", None::<String>));
         app.ctx.apply_snapshot(snapshot).unwrap();
 
         app.maybe_push_startup_file_dialog();

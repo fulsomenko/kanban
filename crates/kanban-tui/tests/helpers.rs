@@ -99,7 +99,7 @@ pub async fn create_test_json_file(dir: &std::path::Path, name: &str, boards: &[
 
     let domain_boards: Vec<kanban_domain::Board> = boards
         .iter()
-        .map(|n| kanban_domain::Board::new(n.to_string(), None))
+        .map(|n| kanban_domain::Board::new(n.to_string(), None::<String>))
         .collect();
     let snapshot = kanban_domain::Snapshot {
         boards: domain_boards,
@@ -130,7 +130,7 @@ pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: 
 
     let domain_boards: Vec<kanban_domain::Board> = boards
         .iter()
-        .map(|n| kanban_domain::Board::new(n.to_string(), None))
+        .map(|n| kanban_domain::Board::new(n.to_string(), None::<String>))
         .collect();
     let snapshot = kanban_domain::Snapshot {
         boards: domain_boards,

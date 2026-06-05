@@ -12,7 +12,7 @@ async fn make_store() -> (SqliteStore, TempDir) {
 }
 
 fn make_board(name: &str) -> Board {
-    Board::new(name.to_string(), None)
+    Board::new(name.to_string(), None::<String>)
 }
 
 fn make_column(board_id: Uuid, name: &str, pos: i32) -> Column {
@@ -150,7 +150,7 @@ async fn test_sqlite_list_cards_by_sprint() {
     let (store, _dir) = make_store().await;
     let mut board = make_board("B");
     let col = make_column(board.id, "C", 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     store.upsert_board(board.clone()).unwrap();
     store.upsert_column(col.clone()).unwrap();
     store.upsert_sprint(sprint.clone()).unwrap();
@@ -213,7 +213,7 @@ async fn test_sqlite_clear_sprint_from_cards() {
     let (store, _dir) = make_store().await;
     let mut board = make_board("B");
     let col = make_column(board.id, "C", 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     store.upsert_board(board.clone()).unwrap();
     store.upsert_column(col.clone()).unwrap();
     store.upsert_sprint(sprint.clone()).unwrap();
@@ -242,7 +242,7 @@ async fn test_sqlite_upsert_and_get_sprint() {
     let (store, _dir) = make_store().await;
     let board = make_board("B");
     store.upsert_board(board.clone()).unwrap();
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     let sprint_id = sprint.id;
     store.upsert_sprint(sprint).unwrap();
 
@@ -260,13 +260,13 @@ async fn test_sqlite_list_sprints_by_board() {
     store.upsert_board(board2.clone()).unwrap();
 
     store
-        .upsert_sprint(Sprint::new(board1.id, 1, None, None))
+        .upsert_sprint(Sprint::new(board1.id, 1, None, None::<String>))
         .unwrap();
     store
-        .upsert_sprint(Sprint::new(board1.id, 2, None, None))
+        .upsert_sprint(Sprint::new(board1.id, 2, None, None::<String>))
         .unwrap();
     store
-        .upsert_sprint(Sprint::new(board2.id, 1, None, None))
+        .upsert_sprint(Sprint::new(board2.id, 1, None, None::<String>))
         .unwrap();
 
     let sprints = store.list_sprints_by_board(board1.id).unwrap();
@@ -318,7 +318,7 @@ async fn test_sqlite_snapshot_roundtrip() {
     let (store, _dir) = make_store().await;
     let mut board = make_board("B");
     let col = make_column(board.id, "C", 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     store.upsert_board(board.clone()).unwrap();
     store.upsert_column(col.clone()).unwrap();
     store.upsert_sprint(sprint.clone()).unwrap();
@@ -468,7 +468,7 @@ async fn test_sqlite_concurrent_reads_and_writes_no_panic() {
     for i in 0..10 {
         let s = Arc::clone(&store);
         handles.push(tokio::spawn(async move {
-            let board = Board::new(format!("Board-{i}"), None);
+            let board = Board::new(format!("Board-{i}"), None::<String>);
             s.upsert_board(board.clone()).unwrap();
             let col = Column::new(board.id, format!("Col-{i}"), i);
             s.upsert_column(col).unwrap();

@@ -118,11 +118,11 @@ fn test_markdown_rendering_of_description() {
     use kanban_domain::{Board, Card};
     use kanban_tui::components::*;
 
-    let mut board = Board::new("Test Board".to_string(), None);
+    let mut board = Board::new("Test Board", None::<String>);
     let column_id = uuid::Uuid::new_v4();
 
     // Test rendering of non-empty description
-    let mut card = Card::new(&mut board, column_id, "Test".to_string(), 0);
+    let mut card = Card::new(&mut board, column_id, "Test", 0);
     card.description = Some("# Heading\n\nSome **bold** text".to_string());
 
     let lines = build_description_lines(&card);

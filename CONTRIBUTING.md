@@ -55,7 +55,12 @@ cargo fmt --all
 - Follow standard Rust conventions and idioms
 - Use `rustfmt` for formatting (enforced in CI)
 - Address all `clippy` warnings before submitting PR
-- Prefer `&str` over `String` for function parameters
+- Choose string parameter types by what the function does with the value:
+  - Read-only inspection / parsing: `&str`
+  - Validate-then-maybe-store (rejection possible): `&str`
+  - Always store (constructors, unconditional setters): `impl Into<String>` (or `Option<impl Into<String>>`)
+  - In-place mutation of existing string: `&mut String`
+  - Avoid `impl AsRef<str>` -- signature clutter without ergonomic gain
 - Use `impl Trait` for return types when appropriate
 - Keep functions focused and under 50 lines when possible
 

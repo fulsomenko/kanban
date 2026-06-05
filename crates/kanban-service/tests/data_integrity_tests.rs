@@ -29,10 +29,20 @@ async fn open_json_ctx() -> (KanbanContext, tempfile::TempDir) {
 async fn test_delete_card_cleans_dependencies() -> KanbanResult<()> {
     let (mut ctx, _dir) = open_json_ctx().await;
 
-    let board = ctx.create_board("B".into(), None)?;
-    let col = ctx.create_column(board.id, "Col".into(), None)?;
-    let card_a = ctx.create_card(board.id, col.id, "A".into(), CreateCardOptions::default())?;
-    let card_b = ctx.create_card(board.id, col.id, "B".into(), CreateCardOptions::default())?;
+    let board = ctx.create_board("B".to_string(), None)?;
+    let col = ctx.create_column(board.id, "Col".to_string(), None)?;
+    let card_a = ctx.create_card(
+        board.id,
+        col.id,
+        "A".to_string(),
+        CreateCardOptions::default(),
+    )?;
+    let card_b = ctx.create_card(
+        board.id,
+        col.id,
+        "B".to_string(),
+        CreateCardOptions::default(),
+    )?;
 
     ctx.block(card_a.id, card_b.id, Severity::default())?;
     assert_eq!(
@@ -58,10 +68,15 @@ async fn test_delete_card_cleans_dependencies() -> KanbanResult<()> {
 async fn test_delete_column_with_cards_returns_error() -> KanbanResult<()> {
     let (mut ctx, _dir) = open_json_ctx().await;
 
-    let board = ctx.create_board("B".into(), None)?;
-    let col = ctx.create_column(board.id, "Col".into(), None)?;
+    let board = ctx.create_board("B".to_string(), None)?;
+    let col = ctx.create_column(board.id, "Col".to_string(), None)?;
     let col_id = col.id;
-    ctx.create_card(board.id, col_id, "C".into(), CreateCardOptions::default())?;
+    ctx.create_card(
+        board.id,
+        col_id,
+        "C".to_string(),
+        CreateCardOptions::default(),
+    )?;
 
     let result = ctx.delete_column(col_id);
     assert!(
@@ -85,13 +100,23 @@ async fn test_delete_column_with_cards_returns_error() -> KanbanResult<()> {
 async fn test_delete_sprint_unassigns_cards() -> KanbanResult<()> {
     let (mut ctx, _dir) = open_json_ctx().await;
 
-    let board = ctx.create_board("B".into(), None)?;
-    let col = ctx.create_column(board.id, "Col".into(), None)?;
+    let board = ctx.create_board("B".to_string(), None)?;
+    let col = ctx.create_column(board.id, "Col".to_string(), None)?;
     let sprint = ctx.create_sprint(board.id, None, None)?;
     let sprint_id = sprint.id;
 
-    let card_a = ctx.create_card(board.id, col.id, "A".into(), CreateCardOptions::default())?;
-    let card_b = ctx.create_card(board.id, col.id, "B".into(), CreateCardOptions::default())?;
+    let card_a = ctx.create_card(
+        board.id,
+        col.id,
+        "A".to_string(),
+        CreateCardOptions::default(),
+    )?;
+    let card_b = ctx.create_card(
+        board.id,
+        col.id,
+        "B".to_string(),
+        CreateCardOptions::default(),
+    )?;
     ctx.assign_card_to_sprint(card_a.id, sprint_id)?;
     ctx.assign_card_to_sprint(card_b.id, sprint_id)?;
 
@@ -139,13 +164,13 @@ async fn test_update_nonexistent_card_returns_not_found() -> KanbanResult<()> {
 async fn test_import_with_invalid_column_reference_fails() -> KanbanResult<()> {
     let (mut ctx, _dir) = open_json_ctx().await;
 
-    let board = kanban_domain::Board::new("Imported".into(), None);
+    let board = kanban_domain::Board::new("Imported", None::<String>);
     let board_id = board.id;
     let nonexistent_column_id = Uuid::new_v4();
 
     let mut orphan_board = board.clone();
     let orphan_card =
-        kanban_domain::Card::new(&mut orphan_board, nonexistent_column_id, "Orphan".into(), 0);
+        kanban_domain::Card::new(&mut orphan_board, nonexistent_column_id, "Orphan", 0);
 
     let snapshot = kanban_domain::Snapshot {
         boards: vec![board],
@@ -183,8 +208,8 @@ async fn test_import_with_invalid_column_reference_fails() -> KanbanResult<()> {
 async fn test_rapid_save_queue_completes_all() -> KanbanResult<()> {
     let (mut ctx, _dir) = open_json_ctx().await;
 
-    let board = ctx.create_board("Board".into(), None)?;
-    let col = ctx.create_column(board.id, "Col".into(), None)?;
+    let board = ctx.create_board("Board".to_string(), None)?;
+    let col = ctx.create_column(board.id, "Col".to_string(), None)?;
 
     let mut card_ids = Vec::new();
     for i in 0..220 {

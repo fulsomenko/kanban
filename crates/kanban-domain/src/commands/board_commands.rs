@@ -574,11 +574,11 @@ mod tests {
     #[test]
     fn test_import_entities_with_duplicate_board_id_returns_error() {
         let tc = TestContext::new();
-        let b1 = Board::new("B1".to_string(), None);
+        let b1 = Board::new("B1", None::<String>);
         let dup_id = b1.id;
         tc.store.upsert_board(b1).unwrap();
 
-        let mut dup = Board::new("Dup".to_string(), None);
+        let mut dup = Board::new("Dup", None::<String>);
         dup.id = dup_id;
 
         let cmd = ImportEntities {
@@ -598,15 +598,15 @@ mod tests {
     #[test]
     fn test_import_entities_with_duplicate_card_id_returns_error() {
         let tc = TestContext::new();
-        let mut board = Board::new("B".to_string(), Some("TST".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let card = crate::Card::new(&mut board, col.id, "Card".to_string(), 0);
+        let mut board = Board::new("B", Some("TST"));
+        let col = crate::Column::new(board.id, "Col", 0);
+        let card = crate::Card::new(&mut board, col.id, "Card", 0);
         let dup_card_id = card.id;
         tc.store.upsert_board(board.clone()).unwrap();
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
 
-        let mut dup_card = crate::Card::new(&mut board, Uuid::new_v4(), "Dup".to_string(), 0);
+        let mut dup_card = crate::Card::new(&mut board, Uuid::new_v4(), "Dup", 0);
         dup_card.id = dup_card_id;
 
         let cmd = ImportEntities {
@@ -626,13 +626,13 @@ mod tests {
     #[test]
     fn test_import_entities_appends_without_replacing() {
         let tc = TestContext::new();
-        let b1 = Board::new("B1".to_string(), None);
+        let b1 = Board::new("B1", None::<String>);
         tc.store.upsert_board(b1).unwrap();
 
-        let b2 = Board::new("B2".to_string(), None);
-        let col = crate::Column::new(b2.id, "Todo".to_string(), 0);
+        let b2 = Board::new("B2", None::<String>);
+        let col = crate::Column::new(b2.id, "Todo", 0);
         let mut b2_clone = b2.clone();
-        let card = crate::Card::new(&mut b2_clone, col.id, "Card".to_string(), 0);
+        let card = crate::Card::new(&mut b2_clone, col.id, "Card", 0);
 
         let cmd = ImportEntities {
             boards: vec![b2],
@@ -657,7 +657,7 @@ mod tests {
     #[test]
     fn test_update_board_card_prefix_allowed_before_first_card_succeeds() {
         let tc = TestContext::new();
-        let board = Board::new("B".to_string(), Some("OLD".to_string()));
+        let board = Board::new("B", Some("OLD"));
         let board_id = board.id;
         tc.store.upsert_board(board).unwrap();
         let context = tc.as_command_context();
@@ -677,10 +677,10 @@ mod tests {
     #[test]
     fn test_update_board_card_prefix_locked_after_first_card_returns_validation_error() {
         let tc = TestContext::new();
-        let mut board = Board::new("B".to_string(), Some("OLD".to_string()));
+        let mut board = Board::new("B", Some("OLD"));
         let board_id = board.id;
-        let col = Column::new(board_id, "Col".to_string(), 0);
-        let _card = Card::new(&mut board, col.id, "C".to_string(), 0);
+        let col = Column::new(board_id, "Col", 0);
+        let _card = Card::new(&mut board, col.id, "C", 0);
         // card_counter is now 2 (incremented past initial 1)
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col).unwrap();
@@ -700,10 +700,10 @@ mod tests {
     #[test]
     fn test_update_board_clear_card_prefix_locked_after_first_card_returns_validation_error() {
         let tc = TestContext::new();
-        let mut board = Board::new("B".to_string(), Some("OLD".to_string()));
+        let mut board = Board::new("B", Some("OLD"));
         let board_id = board.id;
-        let col = Column::new(board_id, "Col".to_string(), 0);
-        let _card = Card::new(&mut board, col.id, "C".to_string(), 0);
+        let col = Column::new(board_id, "Col", 0);
+        let _card = Card::new(&mut board, col.id, "C", 0);
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col).unwrap();
         let context = tc.as_command_context();
@@ -722,9 +722,9 @@ mod tests {
     #[test]
     fn test_delete_board_atomic_removes_only_board_record() {
         let tc = TestContext::new();
-        let board = Board::new("B".to_string(), Some("TST".to_string()));
+        let board = Board::new("B", Some("TST"));
         let board_id = board.id;
-        let col = Column::new(board_id, "Col".to_string(), 0);
+        let col = Column::new(board_id, "Col", 0);
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col.clone()).unwrap();
 

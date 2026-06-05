@@ -521,7 +521,7 @@ mod tests {
     fn test_update_sprint_name_with_nonexistent_board_returns_error() {
         let tc = TestContext::new();
         let nonexistent_board_id = Uuid::new_v4();
-        let sprint = crate::Sprint::new(nonexistent_board_id, 1, None, None);
+        let sprint = crate::Sprint::new(nonexistent_board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_sprint(sprint).unwrap();
 
@@ -574,7 +574,7 @@ mod tests {
     #[test]
     fn test_create_sprint_auto_consume_name_uses_name_pool() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("Test".to_string(), None);
+        let mut board = crate::Board::new("Test", None::<String>);
         board.sprint_names = vec!["Alpha".to_string(), "Beta".to_string()];
         let board_id = board.id;
         tc.store.upsert_board(board).unwrap();
@@ -604,11 +604,11 @@ mod tests {
     #[test]
     fn test_update_sprint_card_prefix_locked_after_card_assigned_returns_validation_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let mut board = crate::Board::new("B", Some("KAN"));
+        let col = crate::Column::new(board.id, "Col", 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
-        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        let mut card = crate::Card::new(&mut board, col.id, "C", 0);
         card.sprint_id = Some(sprint_id);
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col).unwrap();
@@ -631,11 +631,11 @@ mod tests {
     fn test_update_sprint_card_prefix_locked_after_archived_card_assigned_returns_validation_error()
     {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let mut board = crate::Board::new("B", Some("KAN"));
+        let col = crate::Column::new(board.id, "Col", 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
-        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        let mut card = crate::Card::new(&mut board, col.id, "C", 0);
         card.sprint_id = Some(sprint_id);
         let archived = crate::ArchivedCard::new(card, col.id, 0);
         tc.store.upsert_board(board).unwrap();
@@ -658,11 +658,11 @@ mod tests {
     #[test]
     fn test_update_sprint_clear_card_prefix_locked_after_card_assigned_returns_validation_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let mut board = crate::Board::new("B", Some("KAN"));
+        let col = crate::Column::new(board.id, "Col", 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
-        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        let mut card = crate::Card::new(&mut board, col.id, "C", 0);
         card.sprint_id = Some(sprint_id);
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col).unwrap();
@@ -684,9 +684,9 @@ mod tests {
     #[test]
     fn test_update_sprint_card_prefix_collides_with_board_prefix_returns_validation_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -706,9 +706,9 @@ mod tests {
     #[test]
     fn test_update_sprint_card_prefix_case_insensitive_collision_returns_validation_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -728,11 +728,11 @@ mod tests {
     #[test]
     fn test_update_sprint_card_prefix_collides_with_sibling_sprint_returns_validation_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None);
+        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None::<String>);
         sprint1.card_prefix = Some("SPR".to_string());
-        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None::<String>);
         let sprint2_id = sprint2.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint1).unwrap();
@@ -755,21 +755,16 @@ mod tests {
         use chrono::{TimeZone, Utc};
 
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let col = crate::Column::new(board_id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let col = crate::Column::new(board_id, "Col", 0);
+        let sprint = crate::Sprint::new(board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col.clone()).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
 
-        let mut card = crate::Card::new(
-            &mut crate::Board::new("B".to_string(), Some("KAN".to_string())),
-            col.id,
-            "C".to_string(),
-            0,
-        );
+        let mut card = crate::Card::new(&mut crate::Board::new("B", Some("KAN")), col.id, "C", 0);
         card.sprint_id = Some(sprint_id);
         let card_id = card.id;
         tc.store.upsert_card(card).unwrap();
@@ -795,10 +790,10 @@ mod tests {
         use chrono::{TimeZone, Utc};
 
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let col = crate::Column::new(board_id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let col = crate::Column::new(board_id, "Col", 0);
+        let sprint = crate::Sprint::new(board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col.clone()).unwrap();
@@ -841,8 +836,8 @@ mod tests {
     #[test]
     fn test_validate_card_prefix_not_locked_with_no_cards_returns_ok() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -854,11 +849,11 @@ mod tests {
     #[test]
     fn test_validate_card_prefix_not_locked_with_active_card_returns_validation_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let mut board = crate::Board::new("B", Some("KAN"));
+        let col = crate::Column::new(board.id, "Col", 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
-        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        let mut card = crate::Card::new(&mut board, col.id, "C", 0);
         card.sprint_id = Some(sprint_id);
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_column(col).unwrap();
@@ -873,9 +868,9 @@ mod tests {
     #[test]
     fn test_validate_card_prefix_unique_for_distinct_prefix_returns_ok() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -887,9 +882,9 @@ mod tests {
     #[test]
     fn test_validate_card_prefix_unique_self_does_not_collide() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -901,9 +896,9 @@ mod tests {
     #[test]
     fn test_allocate_sprint_name_sets_name_index_and_upserts_board() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, None);
+        let sprint = crate::Sprint::new(board_id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -920,11 +915,11 @@ mod tests {
     #[test]
     fn test_validate_card_prefix_not_locked_with_archived_card_returns_validation_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
-        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR".to_string()));
+        let mut board = crate::Board::new("B", Some("KAN"));
+        let col = crate::Column::new(board.id, "Col", 0);
+        let sprint = crate::Sprint::new(board.id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
-        let mut card = crate::Card::new(&mut board, col.id, "C".to_string(), 0);
+        let mut card = crate::Card::new(&mut board, col.id, "C", 0);
         card.sprint_id = Some(sprint_id);
         let archived = crate::ArchivedCard::new(card, col.id, 0);
         tc.store.upsert_board(board).unwrap();
@@ -940,9 +935,9 @@ mod tests {
     #[test]
     fn test_validate_card_prefix_unique_collides_with_board_prefix_returns_validation_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();
@@ -955,11 +950,11 @@ mod tests {
     #[test]
     fn test_validate_card_prefix_unique_collides_with_sibling_sprint_returns_validation_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None);
+        let mut sprint1 = crate::Sprint::new(board_id, 1, None, None::<String>);
         sprint1.card_prefix = Some("SPR".to_string());
-        let sprint2 = crate::Sprint::new(board_id, 2, None, None);
+        let sprint2 = crate::Sprint::new(board_id, 2, None, None::<String>);
         let sprint2_id = sprint2.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint1).unwrap();
@@ -973,9 +968,9 @@ mod tests {
     #[test]
     fn test_update_sprint_card_prefix_unique_valid_succeeds() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), Some("KAN".to_string()));
+        let board = crate::Board::new("B", Some("KAN"));
         let board_id = board.id;
-        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR".to_string()));
+        let sprint = crate::Sprint::new(board_id, 1, None, Some("SPR"));
         let sprint_id = sprint.id;
         tc.store.upsert_board(board).unwrap();
         tc.store.upsert_sprint(sprint).unwrap();

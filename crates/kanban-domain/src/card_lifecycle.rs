@@ -345,7 +345,7 @@ mod tests {
     use crate::Board;
 
     fn test_board() -> Board {
-        Board::new("Test".to_string(), None)
+        Board::new("Test", None::<String>)
     }
 
     fn add_columns(board: &Board, names: &[&str]) -> Vec<Column> {
@@ -381,7 +381,7 @@ mod tests {
         let board = test_board();
         let other_board = test_board();
         let mut cols = add_columns(&board, &["Mine"]);
-        cols.push(Column::new(other_board.id, "Other".to_string(), 0));
+        cols.push(Column::new(other_board.id, "Other", 0));
 
         let sorted = sorted_board_columns(board.id, &cols);
         assert_eq!(sorted.len(), 1);
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn compact_resequences_positions() {
         let mut board = test_board();
-        let col = Column::new(board.id, "Todo".to_string(), 0);
+        let col = Column::new(board.id, "Todo", 0);
         let mut cards = vec![
             test_card(&mut board, &col, "A", 0),
             test_card(&mut board, &col, "B", 5),
@@ -579,8 +579,8 @@ mod tests {
     #[test]
     fn compact_only_affects_target_column() {
         let mut board = test_board();
-        let col1 = Column::new(board.id, "Todo".to_string(), 0);
-        let col2 = Column::new(board.id, "Done".to_string(), 1);
+        let col1 = Column::new(board.id, "Todo", 0);
+        let col2 = Column::new(board.id, "Done", 1);
         let mut cards = vec![
             test_card(&mut board, &col1, "A", 5),
             test_card(&mut board, &col2, "B", 99),
@@ -654,8 +654,8 @@ mod tests {
     #[test]
     fn migrate_backfills_empty_sprint_logs() {
         let mut board = test_board();
-        let col = Column::new(board.id, "Todo".to_string(), 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let col = Column::new(board.id, "Todo", 0);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let mut card = test_card(&mut board, &col, "Task", 0);
         card.sprint_id = Some(sprint.id);
 
@@ -670,12 +670,12 @@ mod tests {
     #[test]
     fn migrate_skips_cards_with_existing_logs() {
         let mut board = test_board();
-        let col = Column::new(board.id, "Todo".to_string(), 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let col = Column::new(board.id, "Todo", 0);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let mut card = test_card(&mut board, &col, "Task", 0);
         card.sprint_id = Some(sprint.id);
         card.sprint_logs
-            .push(SprintLog::new(sprint.id, 1, None, "Active".to_string()));
+            .push(SprintLog::new(sprint.id, 1, None::<String>, "Active"));
 
         let mut cards = vec![card];
         let count = migrate_sprint_logs(&mut cards, &[sprint], &[board]);
@@ -687,7 +687,7 @@ mod tests {
     #[test]
     fn migrate_skips_cards_without_sprint() {
         let mut board = test_board();
-        let col = Column::new(board.id, "Todo".to_string(), 0);
+        let col = Column::new(board.id, "Todo", 0);
         let card = test_card(&mut board, &col, "Task", 0);
 
         let mut cards = vec![card];
@@ -699,8 +699,8 @@ mod tests {
     #[test]
     fn migrate_with_mixed_cards_only_backfills_eligible() {
         let mut board = test_board();
-        let col = Column::new(board.id, "Todo".to_string(), 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let col = Column::new(board.id, "Todo", 0);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
 
         let mut card_needs_backfill = test_card(&mut board, &col, "Needs Backfill", 0);
         card_needs_backfill.sprint_id = Some(sprint.id);
@@ -710,8 +710,8 @@ mod tests {
         card_already_logged.sprint_logs.push(SprintLog::new(
             sprint.id,
             1,
-            None,
-            "Active".to_string(),
+            None::<String>,
+            "Active",
         ));
         let already_logged_before = card_already_logged.sprint_logs.clone();
 

@@ -502,7 +502,7 @@ mod tests {
     }
 
     fn make_board_for_render() -> Board {
-        Board::new("B".to_string(), Some("TST".to_string()))
+        Board::new("B", Some("TST"))
     }
 
     #[test]

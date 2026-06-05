@@ -6,10 +6,10 @@ use kanban_domain::{Board, Card, Column, Snapshot};
 fn test_active_card_detail_shows_selected_card() {
     let mut app = kanban_tui::App::test_default();
 
-    let mut board = Board::new("TestBoard".to_string(), None);
-    let col = Column::new(board.id, "Backlog".to_string(), 0);
-    let card_a = Card::new(&mut board, col.id, "Card Alpha".to_string(), 0);
-    let card_b = Card::new(&mut board, col.id, "Card Beta".to_string(), 1);
+    let mut board = Board::new("TestBoard", None::<String>);
+    let col = Column::new(board.id, "Backlog", 0);
+    let card_a = Card::new(&mut board, col.id, "Card Alpha", 0);
+    let card_b = Card::new(&mut board, col.id, "Card Beta", 1);
 
     let card_b_id = card_b.id;
 

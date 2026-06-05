@@ -382,13 +382,13 @@ mod tests {
     use uuid::Uuid;
 
     fn create_test_card(board: &mut Board, title: &str) -> Card {
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
         Card::new(board, column.id, title.to_string(), 0)
     }
 
     #[test]
     fn test_title_searcher_matches() {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test", None::<String>);
         let card = create_test_card(&mut board, "Fix authentication bug");
 
         let searcher = TitleSearcher::new("auth");
@@ -403,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_title_searcher_empty_query() {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test", None::<String>);
         let card = create_test_card(&mut board, "Any card");
 
         let searcher = TitleSearcher::new("");
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_branch_name_searcher_matches() {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test", None::<String>);
         let card = create_test_card(&mut board, "Add new feature");
 
         let searcher = BranchNameSearcher::new("feature");
@@ -421,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_composite_searcher_any_match() {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test", None::<String>);
         let card = create_test_card(&mut board, "Fix bug");
 
         // Should match because title contains "bug"
@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_composite_searcher_empty() {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test", None::<String>);
         let card = create_test_card(&mut board, "Any card");
 
         let searcher = CompositeSearcher::new();
@@ -444,10 +444,10 @@ mod tests {
 
     #[test]
     fn test_card_identifier_searcher_with_prefix() {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
 
         let searcher = CardIdentifierSearcher::new("KAN-1");
         assert!(searcher.matches(&card, &board, &[]));
@@ -464,10 +464,10 @@ mod tests {
 
     #[test]
     fn test_card_identifier_searcher_number_only() {
-        let mut board = Board::new("Test".to_string(), None);
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let _card1 = Card::new(&mut board, column.id, "First".to_string(), 0);
-        let card2 = Card::new(&mut board, column.id, "Second".to_string(), 1);
+        let mut board = Board::new("Test", None::<String>);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let _card1 = Card::new(&mut board, column.id, "First", 0);
+        let card2 = Card::new(&mut board, column.id, "Second", 1);
 
         // card2 has card_number=2
         let searcher = CardIdentifierSearcher::new("2");
@@ -484,10 +484,10 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_unparseable_identifier_returns_empty() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card];
@@ -497,10 +497,10 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_single_prefix_match_returns_one() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card.clone()];
@@ -512,15 +512,15 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_ambiguous_prefix_returns_both() {
-        let mut board1 = Board::new("Board One".to_string(), None);
+        let mut board1 = Board::new("Board One", None::<String>);
         board1.card_prefix = Some("KAN".to_string());
-        let col1 = crate::Column::new(board1.id, "Todo".to_string(), 0);
-        let card1 = Card::new(&mut board1, col1.id, "First".to_string(), 0);
+        let col1 = crate::Column::new(board1.id, "Todo", 0);
+        let card1 = Card::new(&mut board1, col1.id, "First", 0);
 
-        let mut board2 = Board::new("Board Two".to_string(), None);
+        let mut board2 = Board::new("Board Two", None::<String>);
         board2.card_prefix = Some("KAN".to_string());
-        let col2 = crate::Column::new(board2.id, "Todo".to_string(), 0);
-        let card2 = Card::new(&mut board2, col2.id, "Second".to_string(), 0);
+        let col2 = crate::Column::new(board2.id, "Todo", 0);
+        let card2 = Card::new(&mut board2, col2.id, "Second", 0);
 
         let boards = vec![board1, board2];
         let columns = vec![col1, col2];
@@ -532,10 +532,10 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_single_bare_number_returns_one() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card.clone()];
@@ -547,15 +547,15 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_ambiguous_bare_number_returns_both() {
-        let mut board1 = Board::new("Board One".to_string(), None);
+        let mut board1 = Board::new("Board One", None::<String>);
         board1.card_prefix = Some("AAA".to_string());
-        let col1 = crate::Column::new(board1.id, "Todo".to_string(), 0);
-        let card1 = Card::new(&mut board1, col1.id, "First".to_string(), 0);
+        let col1 = crate::Column::new(board1.id, "Todo", 0);
+        let card1 = Card::new(&mut board1, col1.id, "First", 0);
 
-        let mut board2 = Board::new("Board Two".to_string(), None);
+        let mut board2 = Board::new("Board Two", None::<String>);
         board2.card_prefix = Some("BBB".to_string());
-        let col2 = crate::Column::new(board2.id, "Todo".to_string(), 0);
-        let card2 = Card::new(&mut board2, col2.id, "Second".to_string(), 0);
+        let col2 = crate::Column::new(board2.id, "Todo", 0);
+        let card2 = Card::new(&mut board2, col2.id, "Second", 0);
 
         let boards = vec![board1, board2];
         let columns = vec![col1, col2];
@@ -567,10 +567,10 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_no_match_returns_empty() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card];
@@ -580,16 +580,16 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_ambiguous_sprint_prefix_returns_both() {
-        let mut board_a = Board::new("Board A".to_string(), None);
+        let mut board_a = Board::new("Board A", None::<String>);
         board_a.card_prefix = Some("PROJ".to_string());
-        let col_a = crate::Column::new(board_a.id, "Todo".to_string(), 0);
-        let card_a = Card::new(&mut board_a, col_a.id, "Card A".to_string(), 0);
+        let col_a = crate::Column::new(board_a.id, "Todo", 0);
+        let card_a = Card::new(&mut board_a, col_a.id, "Card A", 0);
 
-        let mut board_b = Board::new("Board B".to_string(), None);
-        let col_b = crate::Column::new(board_b.id, "Todo".to_string(), 0);
-        let mut sprint = crate::Sprint::new(board_b.id, 1, None, None);
+        let mut board_b = Board::new("Board B", None::<String>);
+        let col_b = crate::Column::new(board_b.id, "Todo", 0);
+        let mut sprint = crate::Sprint::new(board_b.id, 1, None, None::<String>);
         sprint.card_prefix = Some("PROJ".to_string());
-        let mut card_b = Card::new(&mut board_b, col_b.id, "Card B".to_string(), 0);
+        let mut card_b = Card::new(&mut board_b, col_b.id, "Card B", 0);
         card_b.sprint_id = Some(sprint.id);
 
         let boards = vec![board_a, board_b];
@@ -603,10 +603,10 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_prefix_format() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card.clone()];
@@ -627,10 +627,10 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_number_only() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card.clone()];
@@ -645,10 +645,10 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_not_found() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Some task".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Some task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card];
@@ -658,15 +658,15 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_second_board() {
-        let mut board1 = Board::new("Board One".to_string(), None);
+        let mut board1 = Board::new("Board One", None::<String>);
         board1.card_prefix = Some("AAA".to_string());
-        let col1 = crate::Column::new(board1.id, "Todo".to_string(), 0);
-        let card1 = Card::new(&mut board1, col1.id, "First".to_string(), 0);
+        let col1 = crate::Column::new(board1.id, "Todo", 0);
+        let card1 = Card::new(&mut board1, col1.id, "First", 0);
 
-        let mut board2 = Board::new("Board Two".to_string(), None);
+        let mut board2 = Board::new("Board Two", None::<String>);
         board2.card_prefix = Some("BBB".to_string());
-        let col2 = crate::Column::new(board2.id, "Todo".to_string(), 0);
-        let card2 = Card::new(&mut board2, col2.id, "Second".to_string(), 0);
+        let col2 = crate::Column::new(board2.id, "Todo", 0);
+        let card2 = Card::new(&mut board2, col2.id, "Second", 0);
 
         let boards = vec![board1, board2];
         let columns = vec![col1, col2];
@@ -682,12 +682,12 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_no_prefix_collision() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let mut card1 = Card::new(&mut board, column.id, "First".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let mut card1 = Card::new(&mut board, column.id, "First", 0);
         card1.card_number = 1;
-        let mut card11 = Card::new(&mut board, column.id, "Eleventh".to_string(), 0);
+        let mut card11 = Card::new(&mut board, column.id, "Eleventh", 0);
         card11.card_number = 11;
         let boards = vec![board];
         let columns = vec![column];
@@ -700,12 +700,12 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_exact_number() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let mut card11 = Card::new(&mut board, column.id, "Eleven".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let mut card11 = Card::new(&mut board, column.id, "Eleven", 0);
         card11.card_number = 11;
-        let mut card111 = Card::new(&mut board, column.id, "OneHundredEleven".to_string(), 0);
+        let mut card111 = Card::new(&mut board, column.id, "OneHundredEleven", 0);
         card111.card_number = 111;
         let boards = vec![board];
         let columns = vec![column];
@@ -718,12 +718,12 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_sprint_prefix() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let mut sprint = crate::Sprint::new(board.id, 1, None, None);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let mut sprint = crate::Sprint::new(board.id, 1, None, None::<String>);
         sprint.card_prefix = Some("SP".to_string());
-        let mut card = Card::new(&mut board, column.id, "Sprint task".to_string(), 0);
+        let mut card = Card::new(&mut board, column.id, "Sprint task", 0);
         card.sprint_id = Some(sprint.id);
         let boards = vec![board];
         let columns = vec![column];
@@ -738,12 +738,12 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_sprint_prefix_overrides_board() {
-        let mut board = Board::new("Project".to_string(), None);
+        let mut board = Board::new("Project", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let mut sprint = crate::Sprint::new(board.id, 1, None, None);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let mut sprint = crate::Sprint::new(board.id, 1, None, None::<String>);
         sprint.card_prefix = Some("SP".to_string());
-        let mut card = Card::new(&mut board, column.id, "Override task".to_string(), 0);
+        let mut card = Card::new(&mut board, column.id, "Override task", 0);
         card.sprint_id = Some(sprint.id);
         let boards = vec![board];
         let columns = vec![column];
@@ -758,9 +758,9 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_no_prefix_no_match() {
-        let mut board = Board::new("Project".to_string(), None);
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "No prefix task".to_string(), 0);
+        let mut board = Board::new("Project", None::<String>);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "No prefix task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card.clone()];
@@ -773,9 +773,9 @@ mod tests {
 
     #[test]
     fn test_find_cards_by_identifier_uses_task_fallback_for_no_prefix_board() {
-        let mut board = Board::new("Project".to_string(), None);
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "task".to_string(), 0);
+        let mut board = Board::new("Project", None::<String>);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "task", 0);
         let boards = vec![board];
         let columns = vec![column];
         let cards = vec![card.clone()];
@@ -790,10 +790,10 @@ mod tests {
 
     #[test]
     fn test_composite_searcher_matches_by_identifier() {
-        let mut board = Board::new("Test".to_string(), None);
+        let mut board = Board::new("Test", None::<String>);
         board.card_prefix = Some("KAN".to_string());
-        let column = crate::Column::new(board.id, "Todo".to_string(), 0);
-        let card = Card::new(&mut board, column.id, "Unrelated title".to_string(), 0);
+        let column = crate::Column::new(board.id, "Todo", 0);
+        let card = Card::new(&mut board, column.id, "Unrelated title", 0);
 
         // Title doesn't contain "KAN-1", but identifier does
         let searcher = CompositeSearcher::all("KAN-1");
@@ -817,8 +817,8 @@ mod tests {
     #[test]
     fn test_find_boards_by_name_case_insensitive_match() {
         let boards = vec![
-            Board::new("Kanban".to_string(), None),
-            Board::new("Personal".to_string(), None),
+            Board::new("Kanban", None::<String>),
+            Board::new("Personal", None::<String>),
         ];
         let result = find_boards_by_name("kanban", &boards);
         assert_eq!(result.len(), 1);
@@ -831,15 +831,15 @@ mod tests {
 
     #[test]
     fn test_find_boards_by_name_no_match_returns_empty() {
-        let boards = vec![Board::new("Kanban".to_string(), None)];
+        let boards = vec![Board::new("Kanban", None::<String>)];
         assert!(find_boards_by_name("missing", &boards).is_empty());
     }
 
     #[test]
     fn test_find_boards_by_name_multiple_with_same_name_returns_all() {
         let boards = vec![
-            Board::new("Shared".to_string(), None),
-            Board::new("Shared".to_string(), None),
+            Board::new("Shared", None::<String>),
+            Board::new("Shared", None::<String>),
         ];
         let result = find_boards_by_name("shared", &boards);
         assert_eq!(result.len(), 2);
@@ -849,9 +849,9 @@ mod tests {
     fn test_find_columns_by_name_case_insensitive_match() {
         let board_id = Uuid::new_v4();
         let columns = vec![
-            Column::new(board_id, "TODO".to_string(), 0),
-            Column::new(board_id, "Doing".to_string(), 1),
-            Column::new(board_id, "Done".to_string(), 2),
+            Column::new(board_id, "TODO", 0),
+            Column::new(board_id, "Doing", 1),
+            Column::new(board_id, "Done", 2),
         ];
         let result = find_columns_by_name("todo", &columns);
         assert_eq!(result.len(), 1);
@@ -865,8 +865,8 @@ mod tests {
     #[test]
     fn test_find_columns_by_name_returns_multiple_when_same_name_across_boards() {
         let columns = vec![
-            Column::new(Uuid::new_v4(), "TODO".to_string(), 0),
-            Column::new(Uuid::new_v4(), "TODO".to_string(), 0),
+            Column::new(Uuid::new_v4(), "TODO", 0),
+            Column::new(Uuid::new_v4(), "TODO", 0),
         ];
         let result = find_columns_by_name("todo", &columns);
         assert_eq!(result.len(), 2);
@@ -874,17 +874,17 @@ mod tests {
 
     #[test]
     fn test_find_columns_by_name_no_match_returns_empty() {
-        let columns = vec![Column::new(Uuid::new_v4(), "TODO".to_string(), 0)];
+        let columns = vec![Column::new(Uuid::new_v4(), "TODO", 0)];
         assert!(find_columns_by_name("missing", &columns).is_empty());
     }
 
     #[test]
     fn test_find_sprints_by_query_matches_number() {
-        let mut board = Board::new("B".to_string(), None);
+        let mut board = Board::new("B", None::<String>);
         board.sprint_names.push("alpha".to_string());
-        let mut sprint1 = crate::Sprint::new(board.id, 1, Some(0), None);
+        let mut sprint1 = crate::Sprint::new(board.id, 1, Some(0), None::<String>);
         sprint1.sprint_number = 1;
-        let mut sprint2 = crate::Sprint::new(board.id, 2, None, None);
+        let mut sprint2 = crate::Sprint::new(board.id, 2, None, None::<String>);
         sprint2.sprint_number = 2;
         let sprints = vec![sprint1, sprint2];
         let boards = vec![board];
@@ -896,11 +896,11 @@ mod tests {
 
     #[test]
     fn test_find_sprints_by_query_matches_name_case_insensitive() {
-        let mut board = Board::new("B".to_string(), None);
+        let mut board = Board::new("B", None::<String>);
         board.sprint_names.push("yarara-release".to_string());
         board.sprint_names.push("moonshot".to_string());
-        let sprint1 = crate::Sprint::new(board.id, 1, Some(0), None);
-        let sprint2 = crate::Sprint::new(board.id, 2, Some(1), None);
+        let sprint1 = crate::Sprint::new(board.id, 1, Some(0), None::<String>);
+        let sprint2 = crate::Sprint::new(board.id, 2, Some(1), None::<String>);
         let sprints = vec![sprint1.clone(), sprint2];
         let boards = vec![board];
 
@@ -915,10 +915,10 @@ mod tests {
 
     #[test]
     fn test_find_sprints_by_query_number_takes_priority_over_name() {
-        let mut board = Board::new("B".to_string(), None);
+        let mut board = Board::new("B", None::<String>);
         board.sprint_names.push("1".to_string());
-        let sprint_numbered = crate::Sprint::new(board.id, 1, None, None);
-        let sprint_named = crate::Sprint::new(board.id, 99, Some(0), None);
+        let sprint_numbered = crate::Sprint::new(board.id, 1, None, None::<String>);
+        let sprint_named = crate::Sprint::new(board.id, 99, Some(0), None::<String>);
         let sprints = vec![sprint_numbered.clone(), sprint_named];
         let boards = vec![board];
 
@@ -929,9 +929,9 @@ mod tests {
 
     #[test]
     fn test_find_sprints_by_query_no_match_returns_empty() {
-        let mut board = Board::new("B".to_string(), None);
+        let mut board = Board::new("B", None::<String>);
         board.sprint_names.push("alpha".to_string());
-        let sprint = crate::Sprint::new(board.id, 1, Some(0), None);
+        let sprint = crate::Sprint::new(board.id, 1, Some(0), None::<String>);
         let sprints = vec![sprint];
         let boards = vec![board];
 
@@ -941,10 +941,10 @@ mod tests {
 
     #[test]
     fn test_find_sprints_by_query_ambiguous_number_across_boards_returns_all() {
-        let board_a = Board::new("A".to_string(), None);
-        let board_b = Board::new("B".to_string(), None);
-        let sprint_a = crate::Sprint::new(board_a.id, 13, None, None);
-        let sprint_b = crate::Sprint::new(board_b.id, 13, None, None);
+        let board_a = Board::new("A", None::<String>);
+        let board_b = Board::new("B", None::<String>);
+        let sprint_a = crate::Sprint::new(board_a.id, 13, None, None::<String>);
+        let sprint_b = crate::Sprint::new(board_b.id, 13, None, None::<String>);
         let sprints = vec![sprint_a, sprint_b];
         let boards = vec![board_a, board_b];
 
@@ -956,10 +956,10 @@ mod tests {
 
     #[test]
     fn test_find_sprints_by_query_on_board_number_matches_only_on_that_board() {
-        let board_a = Board::new("A".to_string(), None);
-        let board_b = Board::new("B".to_string(), None);
-        let on_a = crate::Sprint::new(board_a.id, 13, None, None);
-        let on_b = crate::Sprint::new(board_b.id, 13, None, None);
+        let board_a = Board::new("A", None::<String>);
+        let board_b = Board::new("B", None::<String>);
+        let on_a = crate::Sprint::new(board_a.id, 13, None, None::<String>);
+        let on_b = crate::Sprint::new(board_b.id, 13, None, None::<String>);
         let sprints = vec![on_a.clone(), on_b];
 
         let result = find_sprints_by_query_on_board("13", &sprints, &board_a);
@@ -969,12 +969,12 @@ mod tests {
 
     #[test]
     fn test_find_sprints_by_query_on_board_name_matches_only_on_that_board() {
-        let mut board_a = Board::new("A".to_string(), None);
+        let mut board_a = Board::new("A", None::<String>);
         board_a.sprint_names.push("alpha".to_string());
-        let mut board_b = Board::new("B".to_string(), None);
+        let mut board_b = Board::new("B", None::<String>);
         board_b.sprint_names.push("alpha".to_string());
-        let on_a = crate::Sprint::new(board_a.id, 1, Some(0), None);
-        let on_b = crate::Sprint::new(board_b.id, 1, Some(0), None);
+        let on_a = crate::Sprint::new(board_a.id, 1, Some(0), None::<String>);
+        let on_b = crate::Sprint::new(board_b.id, 1, Some(0), None::<String>);
         let sprints = vec![on_a.clone(), on_b];
 
         let result = find_sprints_by_query_on_board("alpha", &sprints, &board_a);
@@ -986,9 +986,9 @@ mod tests {
     fn test_find_sprints_by_query_on_board_ignores_other_board_sprints_in_slice() {
         // Footgun-regression: even if a caller passes sprints from a different
         // board, the on_board variant filters them out.
-        let board_a = Board::new("A".to_string(), None);
-        let board_b = Board::new("B".to_string(), None);
-        let only_on_b = crate::Sprint::new(board_b.id, 13, None, None);
+        let board_a = Board::new("A", None::<String>);
+        let board_b = Board::new("B", None::<String>);
+        let only_on_b = crate::Sprint::new(board_b.id, 13, None, None::<String>);
         let sprints = vec![only_on_b];
 
         let result = find_sprints_by_query_on_board("13", &sprints, &board_a);
