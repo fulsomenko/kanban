@@ -307,6 +307,44 @@ mod board_tests {
     }
 
     #[test]
+    fn test_board_update_sort_field_and_order_persists() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban().args([file.to_str().unwrap()]).assert().success();
+        let create_output = kanban()
+            .args([file.to_str().unwrap(), "board", "create", "--name", "B"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&create_output)));
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "update",
+                &board_id,
+                "--sort-field",
+                "due-date",
+                "--sort-order",
+                "desc",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["task_sort_field"], "DueDate");
+        assert_eq!(json["data"]["task_sort_order"], "Descending");
+    }
+
+    #[test]
     fn test_board_delete() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
