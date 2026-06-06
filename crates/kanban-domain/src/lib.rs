@@ -43,16 +43,14 @@ pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, Imp
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
 pub use graph_operations::GraphOperations;
-pub use operations::{
-    count_filtered_cards, filter_and_sort_cards, ArchivedCardListFilter, CardListFilter,
-    KanbanOperations,
-};
+pub use operations::KanbanOperations;
 pub use query::{
+    count_filtered_cards, filter_and_sort_cards,
     sprint::{
         calculate_points, calculate_points_by_ids, get_sprint_cards, get_sprint_completed_cards,
         get_sprint_uncompleted_cards, partition_sprint_cards, sort_card_ids,
     },
-    CardQueryBuilder,
+    ArchivedCardListFilter, CardListFilter, CardQueryBuilder,
 };
 pub use search::{
     find_boards_by_name, find_cards_by_identifier, find_columns_by_name,

@@ -1,11 +1,21 @@
 //! Card query and filtering functionality.
 //!
-//! Provides `CardQueryBuilder` for filtering and sorting cards with a fluent API.
-//! The TUI layer wraps these with ViewRefreshContext for convenience.
+//! - [`filter_sort`] holds the request shapes ([`CardListFilter`],
+//!   [`ArchivedCardListFilter`]) and the in-memory filter+sort engine
+//!   ([`filter_and_sort_cards`], [`count_filtered_cards`]).
+//! - [`CardQueryBuilder`] is the fluent typed wrapper the TUI uses over
+//!   its model snapshot.
+//! - [`sprint`] holds sprint-specific helpers (`get_sprint_cards`,
+//!   `partition_sprint_cards`, `sort_card_ids`, points calculations).
 
+pub mod filter_sort;
 pub mod sprint;
 
-use crate::{filter_and_sort_cards, Board, Card, CardListFilter, Column, Sprint};
+pub use filter_sort::{
+    count_filtered_cards, filter_and_sort_cards, ArchivedCardListFilter, CardListFilter,
+};
+
+use crate::{Board, Card, Column, Sprint};
 use std::collections::HashSet;
 use uuid::Uuid;
 
