@@ -28,11 +28,26 @@ frontends.
 
 **Supporting improvements:**
 
-- Sorting now lives in the service layer. `KanbanContext::list_cards`
-  and the new `list_archived_cards_sorted` apply the board's default
-  sort (or an explicit caller override) before returning results. CLI
-  and MCP inherit consistent ordering from a single source rather than
-  re-sorting in each handler.
+- Sorting and filtering now live in the service layer.
+  `KanbanContext::list_cards` (and a new `list_cards_full` that returns
+  full `Card`s for the TUI render path) and `list_archived_cards_sorted`
+  apply the board's default sort, or an explicit caller override, before
+  returning results. CLI, MCP and the TUI inherit consistent ordering
+  from a single source rather than each re-sorting in their own handler.
+- `CardListFilter` carries the three filters the TUI used to apply
+  client-side: any-of sprint membership (`sprint_ids`), `hide_assigned`,
+  and full-text `search`. The TUI's `get_sorted_board_cards`,
+  `get_board_card_count`, and the layout-strategy `CardQueryBuilder` now
+  delegate to one pure domain helper, `filter_and_sort_cards`, so the
+  three frontends share one filter+sort path.
+- The (override → board default → none) sort-resolution rule and the
+  `OrderedSorter` / `get_sorter_for_field` plumbing have been collapsed
+  into two pure helpers, `resolve_sort` and `sort_cards_in_place`. The
+  duplicated resolution logic in `KanbanContext` and the
+  `KanbanOperations` trait default is gone.
 - The TUI sort-field popup is now driven by a single
   `SORT_FIELD_POPUP_ORDER` table; adding a future sort field only
   requires editing one slice instead of three separate index matches.
+- MCP descriptions for `task_sort_field`, `sort` and the archived-card
+  `sort` now explain that `default` orders by card number and that date
+  fields and points place None values last in ascending order.
