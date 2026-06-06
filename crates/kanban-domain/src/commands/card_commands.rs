@@ -1,6 +1,6 @@
 use super::{Command, CommandContext};
 use crate::data_store::DataStore;
-use crate::{CardUpdate, CreateCardOptions, KanbanError, KanbanResult, SprintLog};
+use crate::{CardUpdate, CreateCardOptions, DomainError, KanbanError, KanbanResult, SprintLog};
 use chrono::{DateTime, Utc};
 use kanban_core::Editable;
 use serde::{Deserialize, Serialize};
@@ -257,10 +257,11 @@ impl CreateCard {
         if let Some(sprint_id) = self.options.sprint_id {
             let sprint = context.get_sprint(sprint_id)?;
             if sprint.board_id != self.board_id {
-                return Err(KanbanError::validation(format!(
-                    "sprint {} belongs to board {} but card is being created on board {}",
-                    sprint_id, sprint.board_id, self.board_id
-                )));
+                return Err(KanbanError::Domain(DomainError::SprintBoardMismatch {
+                    sprint_id,
+                    sprint_board: sprint.board_id,
+                    card_board: self.board_id,
+                }));
             }
             let sprint_number = sprint.sprint_number;
             let sprint_name = sprint.get_name(&board).map(|s| s.to_string());
@@ -1285,7 +1286,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_card_with_sprint_from_different_board_returns_validation_error() {
+    fn test_create_card_with_sprint_from_different_board_returns_typed_mismatch() {
         let tc = TestContext::new();
         let board_a = crate::Board::new("A", Some("AAA"));
         let board_b = crate::Board::new("B", Some("BBB"));
@@ -1293,6 +1294,7 @@ mod tests {
         // Sprint belongs to board B.
         let sprint_b = crate::Sprint::new(board_b.id, 1, None, None::<String>);
         let board_a_id = board_a.id;
+        let board_b_id = board_b.id;
         let column_id = col_a.id;
         let sprint_b_id = sprint_b.id;
         tc.store.upsert_board(board_a).unwrap();
@@ -1316,9 +1318,21 @@ mod tests {
         };
         let err = cmd.execute(&context).unwrap_err();
         assert!(
-            err.is_validation(),
-            "expected validation variant, got: {err:?}"
+            err.is_sprint_board_mismatch(),
+            "expected SprintBoardMismatch, got: {err:?}"
         );
+        match err {
+            KanbanError::Domain(DomainError::SprintBoardMismatch {
+                sprint_id,
+                sprint_board,
+                card_board,
+            }) => {
+                assert_eq!(sprint_id, sprint_b_id);
+                assert_eq!(sprint_board, board_b_id);
+                assert_eq!(card_board, board_a_id);
+            }
+            other => panic!("expected SprintBoardMismatch fields, got: {other:?}"),
+        }
     }
 
     #[test]

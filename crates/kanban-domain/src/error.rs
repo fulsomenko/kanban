@@ -122,6 +122,15 @@ pub enum DomainError {
 
     #[error("column {column_id} has reached its WIP limit of {limit}")]
     WipLimitExceeded { column_id: Uuid, limit: u32 },
+
+    #[error(
+        "sprint {sprint_id} belongs to board {sprint_board} but card is being created on board {card_board}"
+    )]
+    SprintBoardMismatch {
+        sprint_id: Uuid,
+        sprint_board: Uuid,
+        card_board: Uuid,
+    },
 }
 
 impl DomainError {
@@ -325,6 +334,13 @@ impl KanbanError {
         )
     }
 
+    pub fn is_sprint_board_mismatch(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::SprintBoardMismatch { .. })
+        )
+    }
+
     pub fn is_unsupported_future_version(&self) -> bool {
         matches!(self, KanbanError::UnsupportedFutureVersion { .. })
     }
@@ -416,6 +432,35 @@ mod tests {
         let id = Uuid::new_v4();
         let err = KanbanError::Domain(DomainError::wip_limit_exceeded(id, 3));
         assert!(err.is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_sprint_board_mismatch_display_includes_all_three_ids() {
+        let sprint_id = Uuid::new_v4();
+        let sprint_board = Uuid::new_v4();
+        let card_board = Uuid::new_v4();
+        let err = KanbanError::Domain(DomainError::SprintBoardMismatch {
+            sprint_id,
+            sprint_board,
+            card_board,
+        });
+        let msg = err.to_string();
+        assert!(msg.contains(&sprint_id.to_string()), "msg: {msg}");
+        assert!(msg.contains(&sprint_board.to_string()), "msg: {msg}");
+        assert!(msg.contains(&card_board.to_string()), "msg: {msg}");
+        assert!(msg.contains("belongs to board"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_is_sprint_board_mismatch_predicate() {
+        let err = KanbanError::Domain(DomainError::SprintBoardMismatch {
+            sprint_id: Uuid::new_v4(),
+            sprint_board: Uuid::new_v4(),
+            card_board: Uuid::new_v4(),
+        });
+        assert!(err.is_sprint_board_mismatch());
+        assert!(!err.is_validation());
+        assert!(!err.is_not_found());
     }
 
     #[test]
