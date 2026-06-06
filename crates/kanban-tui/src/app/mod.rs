@@ -2436,18 +2436,10 @@ impl App {
     }
 
     pub fn get_current_sort_field_selection_index(&self) -> usize {
-        if let Some(sort_field) = self.filter.current_sort_field {
-            return match sort_field {
-                SortField::Points => 0,
-                SortField::Priority => 1,
-                SortField::CreatedAt => 2,
-                SortField::UpdatedAt => 3,
-                SortField::Status => 4,
-                SortField::Position => 5,
-                SortField::Default => 6,
-            };
-        }
-        0
+        self.filter
+            .current_sort_field
+            .map(crate::components::selection_dialog::popup_index_of_sort_field)
+            .unwrap_or(0)
     }
 }
 

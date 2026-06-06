@@ -1,7 +1,75 @@
 use crate::app::App;
 use crate::components::sprint_assign_list::build_entries;
-use kanban_domain::SprintStatus;
+use kanban_domain::{SortField, SprintStatus};
 use ratatui::Frame;
+
+pub const SORT_FIELD_POPUP_ORDER: &[(SortField, &str)] = &[
+    (SortField::Points, "Points"),
+    (SortField::Priority, "Priority"),
+    (SortField::CreatedAt, "Date Created"),
+    (SortField::UpdatedAt, "Date Updated"),
+    (SortField::Status, "Status"),
+    (SortField::Position, "Position"),
+    (SortField::Default, "Task Number"),
+    (SortField::DueDate, "Due Date"),
+];
+
+pub fn popup_index_of_sort_field(field: SortField) -> usize {
+    SORT_FIELD_POPUP_ORDER
+        .iter()
+        .position(|(f, _)| *f == field)
+        .unwrap_or(0)
+}
+
+pub fn sort_field_at_popup_index(index: usize) -> Option<SortField> {
+    SORT_FIELD_POPUP_ORDER.get(index).map(|(f, _)| *f)
+}
+
+#[cfg(test)]
+mod sort_field_popup_tests {
+    use super::*;
+
+    #[test]
+    fn test_sort_field_popup_order_includes_due_date() {
+        assert!(
+            SORT_FIELD_POPUP_ORDER
+                .iter()
+                .any(|(f, _)| *f == SortField::DueDate),
+            "popup must expose DueDate"
+        );
+    }
+
+    #[test]
+    fn test_popup_index_round_trip_for_every_variant() {
+        let variants = [
+            SortField::Points,
+            SortField::Priority,
+            SortField::CreatedAt,
+            SortField::UpdatedAt,
+            SortField::DueDate,
+            SortField::Status,
+            SortField::Position,
+            SortField::Default,
+        ];
+
+        for v in variants {
+            let idx = popup_index_of_sort_field(v);
+            assert_eq!(
+                sort_field_at_popup_index(idx),
+                Some(v),
+                "round-trip failed for {:?}",
+                v
+            );
+        }
+    }
+
+    #[test]
+    fn test_popup_labels_are_non_empty() {
+        for (field, label) in SORT_FIELD_POPUP_ORDER {
+            assert!(!label.is_empty(), "label for {:?} is empty", field);
+        }
+    }
+}
 
 pub trait SelectionDialog {
     fn title(&self) -> &str;
@@ -119,43 +187,25 @@ impl SelectionDialog for SortFieldDialog {
     }
 
     fn options_count(&self, _app: &App) -> usize {
-        7 // Points, Priority, CreatedAt, UpdatedAt, Status, Position, Default
+        SORT_FIELD_POPUP_ORDER.len()
     }
 
     fn render(&self, app: &App, frame: &mut Frame) {
         use crate::components::render_selection_popup_with_lines;
-        use kanban_domain::{SortField, SortOrder};
+        use kanban_domain::SortOrder;
 
-        let sort_fields = [
-            SortField::Points,
-            SortField::Priority,
-            SortField::CreatedAt,
-            SortField::UpdatedAt,
-            SortField::Status,
-            SortField::Position,
-            SortField::Default,
-        ];
-
-        let active_idx = sort_fields
-            .iter()
-            .position(|f| Some(*f) == app.filter.current_sort_field);
+        let active_idx = app
+            .filter
+            .current_sort_field
+            .map(popup_index_of_sort_field);
 
         render_selection_popup_with_lines(
             frame,
             "Order Tasks By",
             Some("Select sort field:"),
-            sort_fields.iter().enumerate(),
-            |_idx, (_, field), _is_selected, is_active| {
-                let field_name = match field {
-                    SortField::Priority => "Priority",
-                    SortField::Points => "Points",
-                    SortField::CreatedAt => "Date Created",
-                    SortField::UpdatedAt => "Date Updated",
-                    SortField::Default => "Task Number",
-                    SortField::Status => "Status",
-                    SortField::Position => "Position",
-                };
-
+            SORT_FIELD_POPUP_ORDER.iter(),
+            |_idx, entry, _is_selected, is_active| {
+                let (_field, label) = **entry;
                 let order_indicator = if is_active {
                     match app.filter.current_sort_order {
                         Some(SortOrder::Ascending) => Some(" (↑)".to_string()),
@@ -166,7 +216,7 @@ impl SelectionDialog for SortFieldDialog {
                     None
                 };
 
-                (field_name.to_string(), order_indicator)
+                (label.to_string(), order_indicator)
             },
             app.filter.sort_field_selection.get(),
             active_idx,

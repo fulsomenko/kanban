@@ -1,6 +1,6 @@
 use crate::app::App;
 use crossterm::event::KeyCode;
-use kanban_domain::{GraphOperations, KanbanOperations, SortField, SortOrder};
+use kanban_domain::{GraphOperations, KanbanOperations, SortOrder};
 
 const PRIORITY_COUNT: usize = 4;
 
@@ -156,7 +156,9 @@ impl App {
                 false
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.filter.sort_field_selection.next(7);
+                self.filter.sort_field_selection.next(
+                    crate::components::selection_dialog::SORT_FIELD_POPUP_ORDER.len(),
+                );
                 false
             }
             KeyCode::Char('k') | KeyCode::Up => {
@@ -165,15 +167,11 @@ impl App {
             }
             KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('d') => {
                 if let Some(field_idx) = self.filter.sort_field_selection.get() {
-                    let field = match field_idx {
-                        0 => SortField::Points,
-                        1 => SortField::Priority,
-                        2 => SortField::CreatedAt,
-                        3 => SortField::UpdatedAt,
-                        4 => SortField::Status,
-                        5 => SortField::Position,
-                        6 => SortField::Default,
-                        _ => return false,
+                    let field = match crate::components::selection_dialog::sort_field_at_popup_index(
+                        field_idx,
+                    ) {
+                        Some(f) => f,
+                        None => return false,
                     };
 
                     let order = if self.filter.current_sort_field == Some(field)
