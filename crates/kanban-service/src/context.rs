@@ -4,11 +4,10 @@ use kanban_domain::commands::{
     AddBlocks, AddRelates, AddSpawns, BoardCommand, CardCommand, ColumnCommand, Command,
     CommandContext, DependencyCommand, RemoveBlocks, RemoveRelates, RemoveSpawns, SprintCommand,
 };
-use kanban_domain::sort::{get_sorter_for_field, OrderedSorter};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
     Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, GraphOperations,
-    KanbanOperations, RelatesKind, Severity, Snapshot, SortField, SortOrder, Sprint, SprintUpdate,
+    KanbanOperations, RelatesKind, Severity, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -716,37 +715,41 @@ impl KanbanContext {
     /// This is the single source of truth for sort resolution shared by
     /// `list_cards` and `list_archived_cards`. Frontends (TUI, CLI, MCP)
     /// depend on this contract instead of re-implementing it.
-    fn apply_sort<T: std::borrow::Borrow<Card>>(
-        &self,
-        cards: &mut [T],
-        board_id: Option<Uuid>,
-        sort: Option<SortField>,
-        sort_order: Option<SortOrder>,
-    ) -> KanbanResult<()> {
-        let (field, order) = match (sort, sort_order, board_id) {
-            (Some(f), Some(o), _) => (f, o),
-            (Some(f), None, Some(bid)) => {
-                let order = self
-                    .backend
-                    .get_board(bid)?
-                    .map(|b| b.task_sort_order)
-                    .unwrap_or(SortOrder::Ascending);
-                (f, order)
-            }
-            (Some(f), None, None) => (f, SortOrder::Ascending),
-            (None, _, Some(bid)) => {
-                let board = self.backend.get_board(bid)?;
-                match board {
-                    Some(b) => (b.task_sort_field, sort_order.unwrap_or(b.task_sort_order)),
-                    None => return Ok(()),
-                }
-            }
-            (None, _, None) => return Ok(()),
+    /// Apply every filter in `filter` (board scope, column, sprint, status,
+    /// sprint multi-membership, hide_assigned, full-text search) and the
+    /// resolved sort, returning concrete `Card`s.
+    ///
+    /// This is the single source of truth for "give me a filtered, sorted
+    /// view of cards" used by `list_cards`, `list_cards_full`, and the
+    /// frontends. Frontends must not re-implement filtering or sorting.
+    pub fn filter_cards(&self, filter: &CardListFilter) -> KanbanResult<Vec<Card>> {
+        let cards = self.backend.list_all_cards()?;
+        let board = match filter.board_id {
+            Some(bid) => self.backend.get_board(bid)?,
+            None => None,
         };
+        let columns = match filter.board_id {
+            Some(bid) => self.backend.list_columns_by_board(bid)?,
+            None => Vec::new(),
+        };
+        let sprints = match (board.as_ref(), filter.search.as_deref()) {
+            (Some(b), Some(q)) if !q.is_empty() => self.backend.list_sprints_by_board(b.id)?,
+            _ => Vec::new(),
+        };
+        Ok(kanban_domain::filter_and_sort_cards(
+            &cards,
+            &columns,
+            &sprints,
+            board.as_ref(),
+            filter,
+        ))
+    }
 
-        let sorter = OrderedSorter::new(get_sorter_for_field(field), order);
-        sorter.sort_by(cards);
-        Ok(())
+    /// Same contract as `list_cards` but returns full `Card`s rather than
+    /// `CardSummary`. Used by the TUI render path which needs the full
+    /// card for inline detail rendering.
+    pub fn list_cards_full(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
+        self.filter_cards(&filter)
     }
 }
 
@@ -883,32 +886,7 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
-        let mut cards = self.backend.list_all_cards()?;
-
-        if let Some(board_id) = filter.board_id {
-            let board_columns: Vec<Uuid> = self
-                .backend
-                .list_columns_by_board(board_id)?
-                .iter()
-                .map(|c| c.id)
-                .collect();
-            cards.retain(|c| board_columns.contains(&c.column_id));
-        }
-
-        if let Some(column_id) = filter.column_id {
-            cards.retain(|c| c.column_id == column_id);
-        }
-
-        if let Some(sprint_id) = filter.sprint_id {
-            cards.retain(|c| c.sprint_id == Some(sprint_id));
-        }
-
-        if let Some(status) = filter.status {
-            cards.retain(|c| c.status == status);
-        }
-
-        self.apply_sort(&mut cards, filter.board_id, filter.sort, filter.sort_order)?;
-
+        let cards = self.filter_cards(&filter)?;
         Ok(cards.iter().map(CardSummary::from).collect())
     }
 

@@ -395,7 +395,7 @@ pub struct UpdateBoardRequest {
     #[schemars(description = "New card prefix (optional)")]
     pub card_prefix: Option<String>,
     #[schemars(
-        description = "Default sort field for the board's task list. Valid: points, priority, created_at, updated_at, due_date, status, position, default"
+        description = "Default sort field for the board's task list. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order."
     )]
     pub task_sort_field: Option<String>,
     #[schemars(description = "Default sort direction. Valid: asc, desc")]
@@ -503,7 +503,7 @@ pub struct ListCardsRequest {
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
     #[schemars(
-        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. When omitted, falls back to the board's task_sort_field (requires `board`)."
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order. When omitted, falls back to the board's task_sort_field (requires `board`)."
     )]
     pub sort: Option<String>,
     #[schemars(
@@ -523,7 +523,7 @@ pub struct ListArchivedCardsRequest {
     )]
     pub board: Option<String>,
     #[schemars(
-        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. Falls back to the board's task_sort_field when omitted."
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order. Falls back to the board's task_sort_field when omitted."
     )]
     pub sort: Option<String>,
     #[schemars(
@@ -1077,6 +1077,7 @@ impl KanbanMcpServer {
                 status,
                 sort,
                 sort_order,
+                ..Default::default()
             };
             ctx.list_cards_paged(filter, page, page_size)
                 .map_err(kanban_err_to_mcp)
