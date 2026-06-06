@@ -706,23 +706,7 @@ impl KanbanContext {
 }
 
 impl KanbanContext {
-    /// Resolve the effective sort `(field, order)` from a request override
-    /// and an optional board scope, then sort `cards` in place.
-    ///
-    /// Resolution: explicit override wins; otherwise fall back to the
-    /// board's persisted defaults; otherwise leave storage order.
-    ///
-    /// This is the single source of truth for sort resolution shared by
-    /// `list_cards` and `list_archived_cards`. Frontends (TUI, CLI, MCP)
-    /// depend on this contract instead of re-implementing it.
-    /// Apply every filter in `filter` (board scope, column, sprint, status,
-    /// sprint multi-membership, hide_assigned, full-text search) and the
-    /// resolved sort, returning concrete `Card`s.
-    ///
-    /// This is the single source of truth for "give me a filtered, sorted
-    /// view of cards" used by `list_cards`, `list_cards_full`, and the
-    /// frontends. Frontends must not re-implement filtering or sorting.
-    pub fn filter_cards(&self, filter: &CardListFilter) -> KanbanResult<Vec<Card>> {
+    fn filter_cards(&self, filter: &CardListFilter) -> KanbanResult<Vec<Card>> {
         let cards = self.backend.list_all_cards()?;
         let board = match filter.board_id {
             Some(bid) => self.backend.get_board(bid)?,
@@ -743,13 +727,6 @@ impl KanbanContext {
             board.as_ref(),
             filter,
         ))
-    }
-
-    /// Same contract as `list_cards` but returns full `Card`s rather than
-    /// `CardSummary`. Used by the TUI render path which needs the full
-    /// card for inline detail rendering.
-    pub fn list_cards_full(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
-        self.filter_cards(&filter)
     }
 }
 

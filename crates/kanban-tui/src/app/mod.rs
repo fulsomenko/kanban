@@ -1371,19 +1371,38 @@ impl App {
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        self.get_sorted_board_cards(board_id).len()
+        let filter = self.board_card_filter(board_id);
+        let board = self.model.boards().iter().find(|b| b.id == board_id);
+        kanban_domain::count_filtered_cards(
+            self.model.cards(),
+            self.model.columns(),
+            self.model.sprints(),
+            board,
+            &filter,
+        )
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<Card> {
+        let filter = self.board_card_filter(board_id);
+        let board = self.model.boards().iter().find(|b| b.id == board_id);
+        kanban_domain::filter_and_sort_cards(
+            self.model.cards(),
+            self.model.columns(),
+            self.model.sprints(),
+            board,
+            &filter,
+        )
+    }
+
+    fn board_card_filter(&self, board_id: uuid::Uuid) -> kanban_domain::CardListFilter {
         let sprint_ids: std::collections::HashSet<uuid::Uuid> =
             self.filter.active_sprint_filters.iter().copied().collect();
-        let filter = kanban_domain::CardListFilter {
+        kanban_domain::CardListFilter {
             board_id: Some(board_id),
             sprint_ids: (!sprint_ids.is_empty()).then_some(sprint_ids),
             hide_assigned: self.filter.hide_assigned_cards,
             ..Default::default()
-        };
-        self.ctx.list_cards_full(filter).unwrap_or_default()
+        }
     }
 
     pub fn get_selected_card_in_context(&self) -> Option<Card> {

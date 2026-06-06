@@ -1,7 +1,3 @@
-//! Service-layer contract: `CardListFilter` carries the same filters the
-//! TUI used to apply client-side (sprint membership, hide_assigned, full
-//! text search) so all three frontends inherit them from one place.
-
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
     BoardCommand, CardCommand, ColumnCommand, Command, CreateBoard, CreateCard, CreateColumn,
@@ -23,7 +19,6 @@ async fn make_ctx() -> KanbanContext {
 
 struct Setup {
     board_id: Uuid,
-    column_id: Uuid,
     sprint_a: Uuid,
     sprint_b: Uuid,
     card_in_a: Uuid,
@@ -85,7 +80,6 @@ async fn setup(ctx: &mut KanbanContext) -> KanbanResult<Setup> {
 
     Ok(Setup {
         board_id,
-        column_id,
         sprint_a,
         sprint_b,
         card_in_a: ids[0],
@@ -159,6 +153,5 @@ async fn test_list_cards_empty_search_is_noop() -> KanbanResult<()> {
     })?;
 
     assert_eq!(summaries.len(), 3, "empty search must not filter anything");
-    let _column_id = s.column_id;
     Ok(())
 }

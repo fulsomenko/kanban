@@ -395,7 +395,7 @@ pub struct UpdateBoardRequest {
     #[schemars(description = "New card prefix (optional)")]
     pub card_prefix: Option<String>,
     #[schemars(
-        description = "Default sort field for the board's task list. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order."
+        description = "Default sort field for the board's task list. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number. Date fields and points place None values last in ascending order."
     )]
     pub task_sort_field: Option<String>,
     #[schemars(description = "Default sort direction. Valid: asc, desc")]

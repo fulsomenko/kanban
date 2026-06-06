@@ -85,25 +85,9 @@ impl OrderedSorter {
     }
 }
 
-/// Resolve the effective `(SortField, SortOrder)` from an optional caller
-/// override and an optional board scope.
-///
-/// Resolution rules — the single source of truth shared by `KanbanContext`,
-/// the `KanbanOperations` trait default for archives, and any in-memory
-/// query layer:
-///
-/// 1. Explicit `(field, order)` override always wins.
-/// 2. Field override without an order takes the board's order, or falls
-///    back to `Ascending` when no board is in scope.
-/// 3. No field override with a board: use the board's defaults; an
-///    explicit order override still applies on top of the board's field.
-/// 4. No field override, no board scope: return `None` — caller leaves
-///    storage order.
-///
-/// A missing board (e.g. the caller passed `board_id` but the lookup
-/// returned `None`) is the caller's responsibility — `resolve_sort` is
-/// pure and does no I/O. Callers should treat that as "no sort" by
-/// passing `None` here.
+/// Resolve `(field, order)` from a caller override and an optional board.
+/// Override wins; otherwise the board's defaults apply; `None` means
+/// "leave storage order".
 pub fn resolve_sort(
     sort: Option<SortField>,
     sort_order: Option<SortOrder>,
@@ -121,9 +105,6 @@ pub fn resolve_sort(
     }
 }
 
-/// Sort a slice of cards (or anything that `Borrow<Card>`s) in place using
-/// the given field and order. Thin wrapper over `get_sorter_for_field` +
-/// `OrderedSorter` so call sites do not re-wire those two pieces.
 pub fn sort_cards_in_place<T: Borrow<Card>>(cards: &mut [T], field: SortField, order: SortOrder) {
     let sorter = OrderedSorter::new(get_sorter_for_field(field), order);
     sorter.sort_by(cards);
@@ -386,13 +367,6 @@ mod tests {
         assert_eq!((shuffled[0].card_number, shuffled[1].card_number), expected);
     }
 
-    /// The card_number tiebreaker is implemented in `OrderedSorter::sort_by`,
-    /// not in any specific `SortBy` variant — so it should stabilise tied
-    /// cards regardless of which primary sort key the user picks. This test
-    /// exercises every variant where ties realistically occur (Card::new
-    /// defaults make all five primaries tie naturally between fresh cards).
-    /// `CardNumber` and `Position` are excluded because their primaries are
-    /// themselves unique per slice — there's nothing to tiebreak.
     fn board_with_sort(field: SortField, order: SortOrder) -> Board {
         let mut b = Board::new("Test", None::<String>);
         b.update_task_sort(field, order);
@@ -443,22 +417,6 @@ mod tests {
         assert_eq!(resolve_sort(None, Some(SortOrder::Descending), None), None);
     }
 
-    /// Callers (service / trait default impl) pass `None` for `board`
-    /// when a board_id was given but the lookup returned `None`. That
-    /// case must collapse to "leave storage order" rather than panic or
-    /// fall back to an arbitrary sort.
-    #[test]
-    fn test_resolve_sort_missing_board_is_treated_as_no_board() {
-        // No field override + nominally-board-scoped → caller passes
-        // `board: None` → result must be `None` (no sort applied).
-        assert_eq!(resolve_sort(None, None, None), None);
-        assert_eq!(
-            resolve_sort(None, Some(SortOrder::Descending), None),
-            None,
-            "an order override alone (no field, no board) must not produce a sort"
-        );
-    }
-
     #[test]
     fn test_sort_cards_in_place_uses_field_and_order() {
         let (_, _, mut card1, mut card2) = create_test_cards();
@@ -477,6 +435,8 @@ mod tests {
         assert_eq!(cards[1].due_date, Some(later));
     }
 
+    /// `CardNumber` and `Position` are excluded because their primaries
+    /// are themselves unique per slice — there's nothing to tiebreak.
     #[test]
     fn test_ordered_sorter_tiebreaker_applies_to_every_sort_field_with_ties() {
         let variants = [

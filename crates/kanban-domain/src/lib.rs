@@ -44,7 +44,8 @@ pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
 pub use graph_operations::GraphOperations;
 pub use operations::{
-    filter_and_sort_cards, ArchivedCardListFilter, CardListFilter, KanbanOperations,
+    count_filtered_cards, filter_and_sort_cards, ArchivedCardListFilter, CardListFilter,
+    KanbanOperations,
 };
 pub use query::{
     sprint::{

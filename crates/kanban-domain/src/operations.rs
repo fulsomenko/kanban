@@ -6,128 +6,126 @@ use crate::{
     Card, CardStatus, CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions,
     KanbanError, SortField, SortOrder, Sprint, SprintUpdate,
 };
+use std::borrow::Borrow;
+use std::collections::HashSet;
 use uuid::Uuid;
 
-/// Filter options for listing cards.
-///
-/// `sort` / `sort_order` override the board's persisted defaults
-/// (`Board::task_sort_field`, `Board::task_sort_order`). When both are
-/// `None` and a `board_id` is given, the board's defaults apply; without
-/// a board scope and without an override, results are returned in
-/// storage order.
 #[derive(Default, Clone)]
 pub struct CardListFilter {
     pub board_id: Option<Uuid>,
     pub column_id: Option<Uuid>,
     pub sprint_id: Option<Uuid>,
-    /// Any-of sprint membership: when set and non-empty, only cards in
-    /// one of these sprints are returned. Mirrors the TUI's sprint-chip
-    /// multi-select. An empty set is treated as "no filter" so callers
-    /// can pass through user state without special-casing.
-    pub sprint_ids: Option<std::collections::HashSet<Uuid>>,
-    /// Drop cards that have a sprint assignment. Mirrors the TUI's
-    /// "hide assigned" toggle for the unassigned-only column view.
+    pub sprint_ids: Option<HashSet<Uuid>>,
     pub hide_assigned: bool,
     pub status: Option<CardStatus>,
-    /// Full-text search across title, branch name, and card identifier
-    /// (`CompositeSearcher::all` semantics). Empty string is a no-op
-    /// so callers can pipe through unvalidated user input.
+    /// `CompositeSearcher::all` semantics; empty string is a no-op.
     pub search: Option<String>,
     pub sort: Option<SortField>,
     pub sort_order: Option<SortOrder>,
 }
 
-/// Pure filter + sort over an in-memory card slice. The single source of
-/// truth for "given a `CardListFilter`, which cards belong in the
-/// result, in what order".
-///
-/// `cards` is the unfiltered superset. `columns` is consulted only when
-/// `filter.board_id` is set, to translate the board scope into a set of
-/// allowed `column_id`s. `sprints` is consulted only when
-/// `filter.search` is set, to drive branch-name and identifier matching.
-/// `board` is required when `filter.board_id` is set; otherwise it is
-/// only used for sort-default resolution (`resolve_sort`).
-///
-/// Both `KanbanContext::filter_cards` (backend-fetched data) and
-/// `CardQueryBuilder::execute` (TUI model snapshot) delegate here, so
-/// the three frontends share one filter+sort path.
-pub fn filter_and_sort_cards(
-    cards: &[Card],
-    columns: &[Column],
-    sprints: &[Sprint],
-    board: Option<&Board>,
-    filter: &CardListFilter,
-) -> Vec<Card> {
-    let mut result: Vec<Card> = cards
-        .iter()
-        .filter(|c| {
-            if let Some(board_id) = filter.board_id {
-                if !columns
-                    .iter()
-                    .any(|col| col.board_id == board_id && col.id == c.column_id)
-                {
-                    return false;
-                }
-            }
-            if let Some(column_id) = filter.column_id {
-                if c.column_id != column_id {
-                    return false;
-                }
-            }
-            if let Some(sprint_id) = filter.sprint_id {
-                if c.sprint_id != Some(sprint_id) {
-                    return false;
-                }
-            }
-            if let Some(ref ids) = filter.sprint_ids {
-                if !ids.is_empty() {
-                    match c.sprint_id {
-                        Some(sid) if ids.contains(&sid) => {}
-                        _ => return false,
-                    }
-                }
-            }
-            if filter.hide_assigned && c.sprint_id.is_some() {
-                return false;
-            }
-            if let Some(status) = filter.status {
-                if c.status != status {
-                    return false;
-                }
-            }
-            if let Some(ref query) = filter.search {
-                if !query.is_empty() {
-                    let Some(board) = board else {
-                        // No board context → cannot resolve branch-name /
-                        // identifier matches; treat search as no-op.
-                        return true;
-                    };
-                    let searcher = CompositeSearcher::all(query.clone());
-                    if !searcher.matches(c, board, sprints) {
-                        return false;
-                    }
-                }
-            }
-            true
-        })
-        .cloned()
-        .collect();
-
-    if let Some((field, order)) = resolve_sort(filter.sort, filter.sort_order, board) {
-        sort_cards_in_place(&mut result, field, order);
-    }
-
-    result
-}
-
-/// Filter options for listing archived cards. Mirrors `CardListFilter`'s
-/// sort semantics: when `sort` is `None` and `board_id` is given, the
-/// board's `task_sort_field` / `task_sort_order` apply.
 #[derive(Default, Clone)]
 pub struct ArchivedCardListFilter {
     pub board_id: Option<Uuid>,
     pub sort: Option<SortField>,
     pub sort_order: Option<SortOrder>,
+}
+
+fn allowed_column_ids(columns: &[Column], board_id: Option<Uuid>) -> Option<HashSet<Uuid>> {
+    board_id.map(|bid| {
+        columns
+            .iter()
+            .filter(|c| c.board_id == bid)
+            .map(|c| c.id)
+            .collect()
+    })
+}
+
+fn passes_filter(
+    card: &Card,
+    allowed_columns: Option<&HashSet<Uuid>>,
+    board: Option<&Board>,
+    sprints: &[Sprint],
+    filter: &CardListFilter,
+) -> bool {
+    if let Some(allowed) = allowed_columns {
+        if !allowed.contains(&card.column_id) {
+            return false;
+        }
+    }
+    if let Some(column_id) = filter.column_id {
+        if card.column_id != column_id {
+            return false;
+        }
+    }
+    if let Some(sprint_id) = filter.sprint_id {
+        if card.sprint_id != Some(sprint_id) {
+            return false;
+        }
+    }
+    if let Some(ref ids) = filter.sprint_ids {
+        if !ids.is_empty() {
+            match card.sprint_id {
+                Some(sid) if ids.contains(&sid) => {}
+                _ => return false,
+            }
+        }
+    }
+    if filter.hide_assigned && card.sprint_id.is_some() {
+        return false;
+    }
+    if let Some(status) = filter.status {
+        if card.status != status {
+            return false;
+        }
+    }
+    if let Some(ref query) = filter.search {
+        if !query.is_empty() {
+            let Some(board) = board else { return true };
+            if !CompositeSearcher::all(query.clone()).matches(card, board, sprints) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Single filter + sort entry point for in-memory card slices, generic
+/// over anything that borrows a `Card` (so archived cards flow through
+/// the same predicate via their `Borrow<Card>` impl).
+pub fn filter_and_sort_cards<T: Borrow<Card> + Clone>(
+    cards: &[T],
+    columns: &[Column],
+    sprints: &[Sprint],
+    board: Option<&Board>,
+    filter: &CardListFilter,
+) -> Vec<T> {
+    let allowed = allowed_column_ids(columns, filter.board_id);
+    let mut result: Vec<T> = cards
+        .iter()
+        .filter(|c| passes_filter((*c).borrow(), allowed.as_ref(), board, sprints, filter))
+        .cloned()
+        .collect();
+    if let Some((field, order)) = resolve_sort(filter.sort, filter.sort_order, board) {
+        sort_cards_in_place(&mut result, field, order);
+    }
+    result
+}
+
+/// Count-only variant that shares the predicate without allocating a
+/// result vector or sorting. Used by the TUI badge/count render path.
+pub fn count_filtered_cards<T: Borrow<Card>>(
+    cards: &[T],
+    columns: &[Column],
+    sprints: &[Sprint],
+    board: Option<&Board>,
+    filter: &CardListFilter,
+) -> usize {
+    let allowed = allowed_column_ids(columns, filter.board_id);
+    cards
+        .iter()
+        .filter(|c| passes_filter((*c).borrow(), allowed.as_ref(), board, sprints, filter))
+        .count()
 }
 
 /// Trait ensuring TUI and CLI implement the same operations.
@@ -181,34 +179,32 @@ pub trait KanbanOperations {
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()>;
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>>;
 
-    /// Like `list_archived_cards` but applies a board-scoped filter and
-    /// the same sort resolution as `list_cards`: explicit override wins,
-    /// otherwise fall back to `board.task_sort_field` / `task_sort_order`,
-    /// otherwise preserve storage order.
-    ///
-    /// Default impl is sufficient for every implementor — sorting reuses
-    /// the domain's `OrderedSorter` via `Borrow<Card> for ArchivedCard`.
     fn list_archived_cards_sorted(
         &self,
         filter: ArchivedCardListFilter,
     ) -> KanbanResult<Vec<ArchivedCard>> {
-        let mut cards = self.list_archived_cards()?;
-
-        if let Some(board_id) = filter.board_id {
-            let columns = self.list_columns(board_id)?;
-            let col_ids: std::collections::HashSet<Uuid> = columns.iter().map(|c| c.id).collect();
-            cards.retain(|a| col_ids.contains(&a.card.column_id));
-        }
-
+        let cards = self.list_archived_cards()?;
         let board = match filter.board_id {
             Some(bid) => self.get_board(bid)?,
             None => None,
         };
-        if let Some((field, order)) = resolve_sort(filter.sort, filter.sort_order, board.as_ref()) {
-            sort_cards_in_place(&mut cards, field, order);
-        }
-
-        Ok(cards)
+        let columns = match filter.board_id {
+            Some(bid) => self.list_columns(bid)?,
+            None => Vec::new(),
+        };
+        let card_filter = CardListFilter {
+            board_id: filter.board_id,
+            sort: filter.sort,
+            sort_order: filter.sort_order,
+            ..Default::default()
+        };
+        Ok(filter_and_sort_cards(
+            &cards,
+            &columns,
+            &[],
+            board.as_ref(),
+            &card_filter,
+        ))
     }
 
     // Card sprint operations
