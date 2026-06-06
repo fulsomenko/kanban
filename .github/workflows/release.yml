@@ -301,6 +301,8 @@ jobs:
     needs: [release, build-windows]
     if: needs.release.outputs.has_changesets == 'true'
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -318,7 +320,7 @@ jobs:
           $ok = $false
           for ($i = 1; $i -le 30; $i++) {
             $json = gh release view "v$env:VERSION" --repo $env:REPO `
-              --json assets --jq ".assets[] | select(.name == `"$asset`")"
+              --json assets --jq ".assets[] | select(.name == `"$asset`")" 2>$null
             if ($json) {
               $obj = $json | ConvertFrom-Json
               if ($obj.state -eq 'uploaded' -and $obj.digest) {
