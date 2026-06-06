@@ -304,7 +304,7 @@ fn build_filter(ctx: &CliContext, args: &CardListArgs) -> Result<CardListFilter,
     Ok(CardListFilter {
         board_id,
         column_id,
-        sprint_id,
+        sprint_ids: sprint_id.map(|sid| std::iter::once(sid).collect()),
         status,
         sort: args.sort.map(|s| s.to_sort_field()),
         sort_order: args.order.map(|o| o.to_sort_order()),

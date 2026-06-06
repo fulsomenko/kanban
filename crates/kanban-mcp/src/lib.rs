@@ -1073,7 +1073,7 @@ impl KanbanMcpServer {
             let filter = CardListFilter {
                 board_id,
                 column_id,
-                sprint_id,
+                sprint_ids: sprint_id.map(|sid| std::iter::once(sid).collect()),
                 status,
                 sort,
                 sort_order,

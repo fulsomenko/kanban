@@ -14,7 +14,8 @@ use uuid::Uuid;
 pub struct CardListFilter {
     pub board_id: Option<Uuid>,
     pub column_id: Option<Uuid>,
-    pub sprint_id: Option<Uuid>,
+    /// Any-of sprint membership. Pass `Some([sid].into())` for a single
+    /// sprint, or a multi-element set for the TUI's sprint-chip filter.
     pub sprint_ids: Option<HashSet<Uuid>>,
     pub hide_assigned: bool,
     pub status: Option<CardStatus>,
@@ -64,11 +65,6 @@ fn passes_filter(
     }
     if let Some(column_id) = filter.column_id {
         if card.column_id != column_id {
-            return false;
-        }
-    }
-    if let Some(sprint_id) = filter.sprint_id {
-        if card.sprint_id != Some(sprint_id) {
             return false;
         }
     }
