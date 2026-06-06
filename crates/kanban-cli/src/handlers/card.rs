@@ -36,7 +36,20 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
         CardAction::List(args) => {
             let (page, page_size) = resolve_page_params(args.page, args.page_size)?;
             if args.archived {
-                let archived = ctx.list_archived_cards()?;
+                let board_id = match &args.board {
+                    Some(raw) => match ctx.resolve_board_id(raw) {
+                        Ok(u) => Some(u),
+                        Err(e) => return output::output_error(&e.to_string()),
+                    },
+                    None => None,
+                };
+                let archived = ctx.list_archived_cards_sorted(
+                    kanban_domain::ArchivedCardListFilter {
+                        board_id,
+                        sort: args.sort.map(|s| s.to_sort_field()),
+                        sort_order: args.order.map(|o| o.to_sort_order()),
+                    },
+                )?;
                 let summaries: Vec<ArchivedCardSummary> =
                     archived.iter().map(ArchivedCardSummary::from).collect();
                 output::output_success(PaginatedList::paginate(summaries, page, page_size)?);
@@ -294,7 +307,8 @@ fn build_filter(ctx: &CliContext, args: &CardListArgs) -> Result<CardListFilter,
         column_id,
         sprint_id,
         status,
-        ..Default::default()
+        sort: args.sort.map(|s| s.to_sort_field()),
+        sort_order: args.order.map(|o| o.to_sort_order()),
     })
 }
 

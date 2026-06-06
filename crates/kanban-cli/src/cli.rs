@@ -430,6 +430,14 @@ pub struct CardListArgs {
     pub status: Option<String>,
     #[arg(long)]
     pub archived: bool,
+    /// Sort key. When omitted, falls back to the board's `task_sort_field`
+    /// (requires --board).
+    #[arg(long, value_enum)]
+    pub sort: Option<SortKey>,
+    /// Sort direction. When omitted, falls back to the board's
+    /// `task_sort_order` (requires --board).
+    #[arg(long, value_enum)]
+    pub order: Option<SortDir>,
     #[arg(long)]
     pub page: Option<u32>,
     #[arg(long)]
