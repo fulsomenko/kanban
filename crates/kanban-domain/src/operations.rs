@@ -1,3 +1,4 @@
+use crate::sort::{get_sorter_for_field, OrderedSorter};
 use crate::KanbanResult;
 use crate::{
     AmbiguousMatch, ArchivedCard, BatchResolutionCause, BatchResolutionFailure, Board, BoardUpdate,
@@ -19,6 +20,16 @@ pub struct CardListFilter {
     pub column_id: Option<Uuid>,
     pub sprint_id: Option<Uuid>,
     pub status: Option<CardStatus>,
+    pub sort: Option<SortField>,
+    pub sort_order: Option<SortOrder>,
+}
+
+/// Filter options for listing archived cards. Mirrors `CardListFilter`'s
+/// sort semantics: when `sort` is `None` and `board_id` is given, the
+/// board's `task_sort_field` / `task_sort_order` apply.
+#[derive(Default, Clone)]
+pub struct ArchivedCardListFilter {
+    pub board_id: Option<Uuid>,
     pub sort: Option<SortField>,
     pub sort_order: Option<SortOrder>,
 }
@@ -73,6 +84,49 @@ pub trait KanbanOperations {
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card>;
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()>;
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>>;
+
+    /// Like `list_archived_cards` but applies a board-scoped filter and
+    /// the same sort resolution as `list_cards`: explicit override wins,
+    /// otherwise fall back to `board.task_sort_field` / `task_sort_order`,
+    /// otherwise preserve storage order.
+    ///
+    /// Default impl is sufficient for every implementor — sorting reuses
+    /// the domain's `OrderedSorter` via `Borrow<Card> for ArchivedCard`.
+    fn list_archived_cards_sorted(
+        &self,
+        filter: ArchivedCardListFilter,
+    ) -> KanbanResult<Vec<ArchivedCard>> {
+        let mut cards = self.list_archived_cards()?;
+
+        if let Some(board_id) = filter.board_id {
+            let columns = self.list_columns(board_id)?;
+            let col_ids: std::collections::HashSet<Uuid> = columns.iter().map(|c| c.id).collect();
+            cards.retain(|a| col_ids.contains(&a.card.column_id));
+        }
+
+        let resolved = match (filter.sort, filter.sort_order, filter.board_id) {
+            (Some(f), Some(o), _) => Some((f, o)),
+            (Some(f), None, Some(bid)) => {
+                let order = self
+                    .get_board(bid)?
+                    .map(|b| b.task_sort_order)
+                    .unwrap_or(SortOrder::Ascending);
+                Some((f, order))
+            }
+            (Some(f), None, None) => Some((f, SortOrder::Ascending)),
+            (None, _, Some(bid)) => self
+                .get_board(bid)?
+                .map(|b| (b.task_sort_field, filter.sort_order.unwrap_or(b.task_sort_order))),
+            (None, _, None) => None,
+        };
+
+        if let Some((field, order)) = resolved {
+            let sorter = OrderedSorter::new(get_sorter_for_field(field), order);
+            sorter.sort_by(&mut cards);
+        }
+
+        Ok(cards)
+    }
 
     // Card sprint operations
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card>;

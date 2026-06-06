@@ -43,7 +43,7 @@ pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, Imp
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
 pub use graph_operations::GraphOperations;
-pub use operations::{CardListFilter, KanbanOperations};
+pub use operations::{ArchivedCardListFilter, CardListFilter, KanbanOperations};
 pub use query::{
     sprint::{
         calculate_points, calculate_points_by_ids, get_sprint_cards, get_sprint_completed_cards,
