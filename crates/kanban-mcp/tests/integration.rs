@@ -1340,3 +1340,107 @@ async fn tool_create_card_without_sprint_id_leaves_card_unassigned() {
     let body = text_payload(&result);
     assert!(body["sprint_id"].is_null());
 }
+
+/// Negative path: passing a sprint identifier the resolver can't find
+/// surfaces a useful error mentioning both "Sprint" and the offending
+/// name, not a panic or a generic message. Pins the contract that LLM
+/// clients rely on when learning the tool schema by trial.
+#[tokio::test]
+async fn tool_create_card_with_unknown_sprint_name_returns_useful_error() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+
+    let err = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some("nonexistent".into()),
+        }))
+        .await
+        .unwrap_err();
+    let msg = format!("{:?}", err);
+    assert!(msg.contains("Sprint"), "err: {msg}");
+    assert!(msg.contains("nonexistent"), "err: {msg}");
+}
+
+/// Negative path: a sprint UUID from another board cannot be used when
+/// creating a card on the current board. The error returned by the tool
+/// path comes from the typed `SprintBoardMismatch` variant via
+/// `kanban_err_to_mcp`, so the message mentions "belongs to board".
+#[tokio::test]
+async fn tool_create_card_with_cross_board_sprint_returns_useful_error() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "A".into(),
+            card_prefix: Some("A".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("B".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "A".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    let sprint_b_result = server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "B".into(),
+            prefix: None,
+            name: Some("beta".into()),
+        }))
+        .await
+        .unwrap();
+    let sprint_b_id = text_payload(&sprint_b_result)["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Pass sprint B's UUID while creating a card on board A. The
+    // sprint resolver scoped to board A would reject this as a name
+    // miss, so we pass the UUID directly to ensure we exercise the
+    // domain-level cross-board check rather than the resolver miss.
+    let err = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "A".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some(sprint_b_id.clone()),
+        }))
+        .await
+        .unwrap_err();
+    let msg = format!("{:?}", err);
+    assert!(msg.contains("belongs to board"), "err: {msg}");
+}
