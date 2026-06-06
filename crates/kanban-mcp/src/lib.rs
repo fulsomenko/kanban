@@ -1739,6 +1739,58 @@ mod tests {
         assert!(err.message.contains("Invalid status"));
     }
 
+    // parse_sort_field
+
+    #[test]
+    fn parse_sort_field_accepts_due_date_and_kebab_case() {
+        use kanban_domain::SortField;
+        assert_eq!(parse_sort_field("due-date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("due_date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("DueDate").unwrap(), SortField::DueDate);
+    }
+
+    #[test]
+    fn parse_sort_field_covers_every_variant() {
+        use kanban_domain::SortField;
+        assert_eq!(parse_sort_field("points").unwrap(), SortField::Points);
+        assert_eq!(parse_sort_field("priority").unwrap(), SortField::Priority);
+        assert_eq!(parse_sort_field("created-at").unwrap(), SortField::CreatedAt);
+        assert_eq!(parse_sort_field("updated-at").unwrap(), SortField::UpdatedAt);
+        assert_eq!(parse_sort_field("due-date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("status").unwrap(), SortField::Status);
+        assert_eq!(parse_sort_field("position").unwrap(), SortField::Position);
+        assert_eq!(parse_sort_field("default").unwrap(), SortField::Default);
+    }
+
+    #[test]
+    fn parse_sort_field_rejects_unknown() {
+        let err = parse_sort_field("magnitude").unwrap_err();
+        assert!(err.message.contains("Invalid sort field"));
+    }
+
+    // parse_sort_order
+
+    #[test]
+    fn parse_sort_order_accepts_asc_and_desc() {
+        use kanban_domain::SortOrder;
+        assert_eq!(parse_sort_order("asc").unwrap(), SortOrder::Ascending);
+        assert_eq!(
+            parse_sort_order("ascending").unwrap(),
+            SortOrder::Ascending
+        );
+        assert_eq!(parse_sort_order("desc").unwrap(), SortOrder::Descending);
+        assert_eq!(
+            parse_sort_order("Descending").unwrap(),
+            SortOrder::Descending
+        );
+    }
+
+    #[test]
+    fn parse_sort_order_rejects_unknown() {
+        let err = parse_sort_order("sideways").unwrap_err();
+        assert!(err.message.contains("Invalid sort order"));
+    }
+
     // parse_datetime
 
     #[test]
