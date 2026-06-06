@@ -807,6 +807,33 @@ mod sort_field_serialization_tests {
     }
 
     #[test]
+    fn test_due_date_serializes_correctly() {
+        let field = SortField::DueDate;
+        let json = serde_json::to_string(&field).unwrap();
+        assert_eq!(json, "\"DueDate\"");
+    }
+
+    #[test]
+    fn test_due_date_deserializes_correctly() {
+        let json = "\"DueDate\"";
+        let field: SortField = serde_json::from_str(json).unwrap();
+        assert_eq!(field, SortField::DueDate);
+    }
+
+    #[test]
+    fn test_board_with_due_date_sort_serializes() {
+        let mut board = Board::new("Test", None::<String>);
+        board.update_task_sort(SortField::DueDate, SortOrder::Ascending);
+
+        let json = serde_json::to_string(&board).unwrap();
+        assert!(
+            json.contains("\"task_sort_field\":\"DueDate\""),
+            "Expected DueDate in JSON, got: {}",
+            json
+        );
+    }
+
+    #[test]
     fn test_board_with_position_sort_serializes() {
         let mut board = Board::new("Test", None::<String>);
         board.update_task_sort(SortField::Position, SortOrder::Descending);
