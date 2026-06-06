@@ -197,6 +197,71 @@ mod tests {
     }
 
     #[test]
+    fn test_due_date_sorter_orders_earlier_first() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+
+        let earlier = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let later = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        card1.set_due_date(Some(earlier));
+        card2.set_due_date(Some(later));
+
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Less);
+        assert_eq!(SortBy::DueDate.compare(&card2, &card1), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_due_date_sorter_places_none_last() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+
+        let some_date = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(some_date));
+        card2.set_due_date(None);
+
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Less);
+        assert_eq!(SortBy::DueDate.compare(&card2, &card1), Ordering::Greater);
+
+        card1.set_due_date(None);
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_due_date_sorter_equal_dates_returns_equal() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+
+        let d = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(d));
+        card2.set_due_date(Some(d));
+
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_get_sorter_for_field_due_date_maps_to_due_date_sortby() {
+        let sorter = get_sorter_for_field(SortField::DueDate);
+
+        let (_, _, mut card1, mut card2) = create_test_cards();
+        let earlier = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let later = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(earlier));
+        card2.set_due_date(Some(later));
+
+        assert_eq!(sorter.compare(&card1, &card2), Ordering::Less);
+    }
+
+    #[test]
     fn test_points_sorter_none_handling() {
         let (_, _, mut card1, mut card2) = create_test_cards();
 
@@ -284,6 +349,7 @@ mod tests {
             SortBy::Status,
             SortBy::CreatedAt,
             SortBy::UpdatedAt,
+            SortBy::DueDate,
         ];
 
         for variant in variants {
