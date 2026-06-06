@@ -6,7 +6,7 @@ pub use error::{KanbanMcpError, KanbanMcpResult};
 pub use server::McpServer;
 
 use context::McpContext;
-use kanban_core::{resolve_page_params, PaginatedList};
+use kanban_core::{parse_datetime_input, resolve_page_params, PaginatedList};
 use kanban_domain::{
     ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardSummary,
     CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, GraphOperations, KanbanOperations,
@@ -166,20 +166,7 @@ fn parse_status(s: &str) -> Result<CardStatus, McpError> {
 }
 
 fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|_| {
-            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| ())
-                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
-                .map(|dt| dt.and_utc())
-        })
-        .map_err(|_| {
-            McpError::invalid_params(
-                format!("Invalid date '{}'. Use YYYY-MM-DD or RFC 3339", s),
-                None,
-            )
-        })
+    parse_datetime_input(s).map_err(|msg| McpError::invalid_params(msg, None))
 }
 
 // ---------- Locked sessions ----------
