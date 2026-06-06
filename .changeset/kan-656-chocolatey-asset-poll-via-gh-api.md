@@ -7,7 +7,12 @@ ZIP's SHA256 directly from the GitHub Release API's `digest` field
 (exposed since June 2025) and uses `state == "uploaded"` as the
 asset-readiness signal. Two release.yml steps collapse into one:
 the previous `HEAD`-based poll and the separate download-and-hash
-step both go away.
+step both go away. The `publish-chocolatey` job also gains an
+explicit `permissions: contents: read` scope so a future tightening
+of org-default token permissions cannot silently break the digest
+lookup, and per-iteration `gh release view` stderr is suppressed so
+the action log stays clean while the release tag is still being
+created upstream.
 
 The `HEAD` poll was latently broken. GitHub release-download URLs
 302-redirect to S3-style presigned URLs that are cryptographically
