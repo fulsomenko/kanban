@@ -301,49 +301,45 @@ jobs:
     needs: [release, build-windows]
     if: needs.release.outputs.has_changesets == 'true'
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
           ref: v${{ needs.release.outputs.new }}
 
-      - name: Wait for release asset to be fetchable
-        shell: pwsh
-        env:
-          VERSION: ${{ needs.release.outputs.new }}
-        run: |
-          $url = "https://github.com/fulsomenko/kanban/releases/download/v$env:VERSION/kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
-          $ok = $false
-          for ($i = 0; $i -lt 30; $i++) {
-            try {
-              $r = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -ErrorAction Stop
-              if ($r.StatusCode -eq 200) {
-                Write-Output "Asset live at $url"
-                $ok = $true
-                break
-              }
-            } catch {
-              Write-Output ("Attempt {0}: not yet ({1})" -f ($i + 1), $_.Exception.Message)
-            }
-            Start-Sleep -Seconds 5
-          }
-          if (-not $ok) {
-            Write-Error "Release asset never became fetchable after 30 attempts (~150s)"
-            exit 1
-          }
-
-      - name: Compute Windows ZIP SHA256
+      - name: Read Windows ZIP digest from GitHub Release
         id: sha
         shell: pwsh
         env:
           VERSION: ${{ needs.release.outputs.new }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          $url = "https://github.com/fulsomenko/kanban/releases/download/v$env:VERSION/kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
-          $tmp = New-TemporaryFile
-          Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
-          $sha = (Get-FileHash -Algorithm SHA256 $tmp).Hash.ToLower()
-          Remove-Item $tmp
-          Write-Output "Computed SHA256: $sha"
-          "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $asset = "kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
+          $ok = $false
+          for ($i = 1; $i -le 30; $i++) {
+            $json = gh release view "v$env:VERSION" --repo $env:REPO `
+              --json assets --jq ".assets[] | select(.name == `"$asset`")" 2>$null
+            if ($json) {
+              $obj = $json | ConvertFrom-Json
+              if ($obj.state -eq 'uploaded' -and $obj.digest) {
+                $sha = $obj.digest -replace '^sha256:', ''
+                Write-Output "Found $asset: sha=$sha"
+                "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+                $ok = $true
+                break
+              }
+              Write-Output ("Attempt {0}: state='{1}' digest='{2}'" -f $i, $obj.state, $obj.digest)
+            } else {
+              Write-Output ("Attempt {0}: asset not yet listed" -f $i)
+            }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ok) {
+            Write-Error "Release asset never became ready after 30 attempts (~150s)"
+            exit 1
+          }
 
       - name: Stage Chocolatey package with substitutions
         shell: pwsh
