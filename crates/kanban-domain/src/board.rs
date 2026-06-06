@@ -14,6 +14,7 @@ pub enum SortField {
     Priority,
     CreatedAt,
     UpdatedAt,
+    DueDate,
     Status,
     Position,
     Default,
