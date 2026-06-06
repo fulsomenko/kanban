@@ -28,18 +28,25 @@ frontends.
 
 **Supporting improvements:**
 
-- Sorting and filtering now live in the service layer.
-  `KanbanContext::list_cards` (and a new `list_cards_full` that returns
-  full `Card`s for the TUI render path) and `list_archived_cards_sorted`
-  apply the board's default sort, or an explicit caller override, before
-  returning results. CLI, MCP and the TUI inherit consistent ordering
-  from a single source rather than each re-sorting in their own handler.
+- Filtering and sorting now share one pure domain helper,
+  `filter_and_sort_cards`, generic over `T: Borrow<Card> + Clone` so
+  archived cards flow through the same predicate via the existing
+  `Borrow<Card> for ArchivedCard` impl. `KanbanContext::list_cards`,
+  `KanbanOperations::list_archived_cards_sorted` (default impl),
+  `CardQueryBuilder::execute`, and the TUI render path all delegate to
+  it. CLI, MCP and the TUI inherit consistent ordering and filtering
+  from one source instead of each re-implementing them.
 - `CardListFilter` carries the three filters the TUI used to apply
   client-side: any-of sprint membership (`sprint_ids`), `hide_assigned`,
   and full-text `search`. The TUI's `get_sorted_board_cards`,
-  `get_board_card_count`, and the layout-strategy `CardQueryBuilder` now
-  delegate to one pure domain helper, `filter_and_sort_cards`, so the
-  three frontends share one filter+sort path.
+  `get_board_card_count`, and the layout-strategy `CardQueryBuilder`
+  delegate to the domain helper directly on the model snapshot, so the
+  render path no longer touches the backend on every redraw.
+- A new `count_filtered_cards` shares the same predicate without
+  allocating a result vector or sorting; the TUI badge/count path uses
+  it. A regression test pins parity between
+  `count_filtered_cards(filter)` and `list_cards(filter).len()` across
+  every non-trivial filter combination.
 - The (override → board default → none) sort-resolution rule and the
   `OrderedSorter` / `get_sorter_for_field` plumbing have been collapsed
   into two pure helpers, `resolve_sort` and `sort_cards_in_place`. The
