@@ -17,9 +17,7 @@ async fn make_ctx() -> KanbanContext {
 }
 
 fn metadata_json(due_date_value: &str) -> String {
-    format!(
-        r#"{{"priority":"High","status":"Todo","points":null,"due_date":{due_date_value}}}"#
-    )
+    format!(r#"{{"priority":"High","status":"Todo","points":null,"due_date":{due_date_value}}}"#)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -68,7 +66,11 @@ async fn test_editor_rfc3339_due_date_is_persisted_at_exact_instant() -> KanbanR
     let stored = ctx.get_card(card.id)?.unwrap();
     assert_eq!(
         stored.due_date,
-        Some(chrono::Utc.with_ymd_and_hms(2024, 1, 15, 14, 30, 0).unwrap()),
+        Some(
+            chrono::Utc
+                .with_ymd_and_hms(2024, 1, 15, 14, 30, 0)
+                .unwrap()
+        ),
         "RFC3339 must persist at the exact instant the user supplied"
     );
     Ok(())
