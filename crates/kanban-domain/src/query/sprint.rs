@@ -2,7 +2,7 @@
 //!
 //! Provides functions for filtering and partitioning cards by sprint.
 
-use crate::sort::{get_sorter_for_field, OrderedSorter};
+use crate::sort::sort_cards_in_place;
 use crate::{Card, SortField, SortOrder};
 use uuid::Uuid;
 
@@ -63,9 +63,7 @@ pub fn sort_card_ids(
         .filter_map(|id| cards.iter().find(|c| c.id == *id))
         .collect();
 
-    let sorter = get_sorter_for_field(sort_field);
-    let ordered_sorter = OrderedSorter::new(sorter, sort_order);
-    ordered_sorter.sort_by(&mut card_refs);
+    sort_cards_in_place(&mut card_refs, sort_field, sort_order);
 
     card_refs.iter().map(|c| c.id).collect()
 }

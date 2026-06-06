@@ -95,6 +95,12 @@ pub struct BoardUpdateArgs {
     pub sprint_prefix: Option<String>,
     #[arg(long)]
     pub card_prefix: Option<String>,
+    /// Default sort key for the task list view.
+    #[arg(long, value_enum)]
+    pub sort_field: Option<SortKey>,
+    /// Default sort direction for the task list view.
+    #[arg(long, value_enum)]
+    pub sort_order: Option<SortDir>,
 }
 
 // Column commands
@@ -271,6 +277,7 @@ pub enum SortKey {
     Points,
     CreatedAt,
     UpdatedAt,
+    DueDate,
     Status,
     Position,
 }
@@ -291,8 +298,26 @@ impl SortKey {
             SortKey::Points => SortBy::Points,
             SortKey::CreatedAt => SortBy::CreatedAt,
             SortKey::UpdatedAt => SortBy::UpdatedAt,
+            SortKey::DueDate => SortBy::DueDate,
             SortKey::Status => SortBy::Status,
             SortKey::Position => SortBy::Position,
+        }
+    }
+
+    /// Convert a CLI sort flag to the board-level `SortField`. `CardNumber`
+    /// has no `SortField` counterpart, so it falls back to `SortField::Default`
+    /// which `get_sorter_for_field` also resolves via `SortBy::CardNumber`.
+    pub fn to_sort_field(self) -> kanban_domain::SortField {
+        use kanban_domain::SortField;
+        match self {
+            SortKey::CardNumber => SortField::Default,
+            SortKey::Priority => SortField::Priority,
+            SortKey::Points => SortField::Points,
+            SortKey::CreatedAt => SortField::CreatedAt,
+            SortKey::UpdatedAt => SortField::UpdatedAt,
+            SortKey::DueDate => SortField::DueDate,
+            SortKey::Status => SortField::Status,
+            SortKey::Position => SortField::Position,
         }
     }
 }
@@ -303,6 +328,23 @@ impl SortDir {
             SortDir::Asc => kanban_domain::SortOrder::Ascending,
             SortDir::Desc => kanban_domain::SortOrder::Descending,
         }
+    }
+}
+
+#[cfg(test)]
+mod sort_key_tests {
+    use super::*;
+    use kanban_domain::sort::SortBy;
+    use kanban_domain::SortField;
+
+    #[test]
+    fn test_sort_key_due_date_maps_to_sort_by_due_date() {
+        assert!(matches!(SortKey::DueDate.to_sort_by(), SortBy::DueDate));
+    }
+
+    #[test]
+    fn test_sort_key_due_date_maps_to_sort_field_due_date() {
+        assert_eq!(SortKey::DueDate.to_sort_field(), SortField::DueDate);
     }
 }
 
@@ -394,6 +436,14 @@ pub struct CardListArgs {
     pub status: Option<String>,
     #[arg(long)]
     pub archived: bool,
+    /// Sort key. When omitted, falls back to the board's `task_sort_field`
+    /// (requires --board).
+    #[arg(long, value_enum)]
+    pub sort: Option<SortKey>,
+    /// Sort direction. When omitted, falls back to the board's
+    /// `task_sort_order` (requires --board).
+    #[arg(long, value_enum)]
+    pub order: Option<SortDir>,
     #[arg(long)]
     pub page: Option<u32>,
     #[arg(long)]

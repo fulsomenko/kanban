@@ -307,6 +307,44 @@ mod board_tests {
     }
 
     #[test]
+    fn test_board_update_sort_field_and_order_persists() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban().args([file.to_str().unwrap()]).assert().success();
+        let create_output = kanban()
+            .args([file.to_str().unwrap(), "board", "create", "--name", "B"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&create_output)));
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "update",
+                &board_id,
+                "--sort-field",
+                "due-date",
+                "--sort-order",
+                "desc",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["task_sort_field"], "DueDate");
+        assert_eq!(json["data"]["task_sort_order"], "Descending");
+    }
+
+    #[test]
     fn test_board_delete() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("test.json");
@@ -738,6 +776,64 @@ mod card_tests {
             .as_object()
             .unwrap()
             .contains_key("description"));
+    }
+
+    #[test]
+    fn test_card_list_sort_due_date_orders_earliest_first() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        // Insert in non-due-date order so the sort proves it ran rather than
+        // the storage order coincidentally matching.
+        let due_dates = [
+            ("Middle", "2026-06-01T00:00:00Z"),
+            ("Latest", "2026-12-01T00:00:00Z"),
+            ("Earliest", "2026-01-01T00:00:00Z"),
+        ];
+        for (title, due) in &due_dates {
+            kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board",
+                    &board_id,
+                    "--column",
+                    &column_id,
+                    "--title",
+                    title,
+                    "--due-date",
+                    due,
+                ])
+                .assert()
+                .success();
+        }
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--sort",
+                "due-date",
+                "--order",
+                "asc",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        let titles: Vec<String> = json["data"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["title"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(titles, vec!["Earliest", "Middle", "Latest"]);
     }
 
     #[test]

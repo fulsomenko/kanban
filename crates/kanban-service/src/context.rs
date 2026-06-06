@@ -705,6 +705,31 @@ impl KanbanContext {
     }
 }
 
+impl KanbanContext {
+    fn filter_cards(&self, filter: &CardListFilter) -> KanbanResult<Vec<Card>> {
+        let cards = self.backend.list_all_cards()?;
+        let board = match filter.board_id {
+            Some(bid) => self.backend.get_board(bid)?,
+            None => None,
+        };
+        let columns = match filter.board_id {
+            Some(bid) => self.backend.list_columns_by_board(bid)?,
+            None => Vec::new(),
+        };
+        let sprints = match (board.as_ref(), filter.search.as_deref()) {
+            (Some(b), Some(q)) if !q.is_empty() => self.backend.list_sprints_by_board(b.id)?,
+            _ => Vec::new(),
+        };
+        Ok(kanban_domain::filter_and_sort_cards(
+            &cards,
+            &columns,
+            &sprints,
+            board.as_ref(),
+            filter,
+        ))
+    }
+}
+
 // ── KanbanOperations impl ─────────────────────────────────────────────────────
 
 impl KanbanOperations for KanbanContext {
@@ -838,30 +863,7 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
-        let mut cards = self.backend.list_all_cards()?;
-
-        if let Some(board_id) = filter.board_id {
-            let board_columns: Vec<Uuid> = self
-                .backend
-                .list_columns_by_board(board_id)?
-                .iter()
-                .map(|c| c.id)
-                .collect();
-            cards.retain(|c| board_columns.contains(&c.column_id));
-        }
-
-        if let Some(column_id) = filter.column_id {
-            cards.retain(|c| c.column_id == column_id);
-        }
-
-        if let Some(sprint_id) = filter.sprint_id {
-            cards.retain(|c| c.sprint_id == Some(sprint_id));
-        }
-
-        if let Some(status) = filter.status {
-            cards.retain(|c| c.status == status);
-        }
-
+        let cards = self.filter_cards(&filter)?;
         Ok(cards.iter().map(CardSummary::from).collect())
     }
 

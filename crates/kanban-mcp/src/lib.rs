@@ -8,9 +8,9 @@ pub use server::McpServer;
 use context::McpContext;
 use kanban_core::{parse_datetime_input, resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardSummary,
-    CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, GraphOperations, KanbanOperations,
-    SprintUpdate,
+    ArchivedCardListFilter, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
+    CardStatus, CardSummary, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
+    GraphOperations, KanbanOperations, SortField, SortOrder, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_service::StoreManager;
@@ -167,6 +167,37 @@ fn parse_status(s: &str) -> Result<CardStatus, McpError> {
 
 fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
     parse_datetime_input(s).map_err(|msg| McpError::invalid_params(msg, None))
+}
+
+fn parse_sort_field(s: &str) -> Result<SortField, McpError> {
+    match s.to_lowercase().replace(['-', '_'], "").as_str() {
+        "points" => Ok(SortField::Points),
+        "priority" => Ok(SortField::Priority),
+        "createdat" => Ok(SortField::CreatedAt),
+        "updatedat" => Ok(SortField::UpdatedAt),
+        "duedate" => Ok(SortField::DueDate),
+        "status" => Ok(SortField::Status),
+        "position" => Ok(SortField::Position),
+        "default" => Ok(SortField::Default),
+        _ => Err(McpError::invalid_params(
+            format!(
+                "Invalid sort field '{}'. Valid: points, priority, created_at, updated_at, due_date, status, position, default",
+                s
+            ),
+            None,
+        )),
+    }
+}
+
+fn parse_sort_order(s: &str) -> Result<SortOrder, McpError> {
+    match s.to_lowercase().as_str() {
+        "asc" | "ascending" => Ok(SortOrder::Ascending),
+        "desc" | "descending" => Ok(SortOrder::Descending),
+        _ => Err(McpError::invalid_params(
+            format!("Invalid sort order '{}'. Valid: asc, desc", s),
+            None,
+        )),
+    }
 }
 
 // ---------- Locked sessions ----------
@@ -363,6 +394,12 @@ pub struct UpdateBoardRequest {
     pub sprint_prefix: Option<String>,
     #[schemars(description = "New card prefix (optional)")]
     pub card_prefix: Option<String>,
+    #[schemars(
+        description = "Default sort field for the board's task list. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number. Date fields and points place None values last in ascending order."
+    )]
+    pub task_sort_field: Option<String>,
+    #[schemars(description = "Default sort direction. Valid: asc, desc")]
+    pub task_sort_order: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -465,6 +502,14 @@ pub struct ListCardsRequest {
     pub sprint: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
+    #[schemars(
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order. When omitted, falls back to the board's task_sort_field (requires `board`)."
+    )]
+    pub sort: Option<String>,
+    #[schemars(
+        description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order."
+    )]
+    pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -473,6 +518,18 @@ pub struct ListCardsRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListArchivedCardsRequest {
+    #[schemars(
+        description = "Filter archives by board UUID or name (also drives the default sort field)"
+    )]
+    pub board: Option<String>,
+    #[schemars(
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order. Falls back to the board's task_sort_field when omitted."
+    )]
+    pub sort: Option<String>,
+    #[schemars(
+        description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order."
+    )]
+    pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -801,12 +858,22 @@ impl KanbanMcpServer {
     }
 
     #[tool(
-        description = "Update a board's properties (name, description, sprint_prefix, card_prefix)"
+        description = "Update a board's properties (name, description, sprint_prefix, card_prefix, task_sort_field, task_sort_order)"
     )]
     pub async fn tool_update_board(
         &self,
         Parameters(req): Parameters<UpdateBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
+        let task_sort_field = req
+            .task_sort_field
+            .as_deref()
+            .map(parse_sort_field)
+            .transpose()?;
+        let task_sort_order = req
+            .task_sort_order
+            .as_deref()
+            .map(parse_sort_order)
+            .transpose()?;
         let updates = BoardUpdate {
             name: req.name,
             description: req
@@ -821,6 +888,8 @@ impl KanbanMcpServer {
                 .card_prefix
                 .map(FieldUpdate::Set)
                 .unwrap_or(FieldUpdate::NoChange),
+            task_sort_field,
+            task_sort_order,
             ..Default::default()
         };
         let board = locked_write(&self.ctx, |ctx| {
@@ -978,6 +1047,8 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let status = req.status.as_deref().map(parse_status).transpose()?;
+        let sort = req.sort.as_deref().map(parse_sort_field).transpose()?;
+        let sort_order = req.order.as_deref().map(parse_sort_order).transpose()?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let result = locked_read(&self.ctx, |ctx| {
@@ -1002,8 +1073,11 @@ impl KanbanMcpServer {
             let filter = CardListFilter {
                 board_id,
                 column_id,
-                sprint_id,
+                sprint_ids: sprint_id.map(|sid| std::iter::once(sid).collect()),
                 status,
+                sort,
+                sort_order,
+                ..Default::default()
             };
             ctx.list_cards_paged(filter, page, page_size)
                 .map_err(kanban_err_to_mcp)
@@ -1152,9 +1226,23 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListArchivedCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let cards = read_op!(self.ctx, list_archived_cards)?;
+        let sort = req.sort.as_deref().map(parse_sort_field).transpose()?;
+        let sort_order = req.order.as_deref().map(parse_sort_order).transpose()?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
+        let cards = locked_read(&self.ctx, |ctx| {
+            let board_id = match &req.board {
+                Some(raw) => Some(ctx.mcp_resolve_board(raw)?),
+                None => None,
+            };
+            ctx.list_archived_cards_sorted(ArchivedCardListFilter {
+                board_id,
+                sort,
+                sort_order,
+            })
+            .map_err(kanban_err_to_mcp)
+        })
+        .await?;
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(
@@ -1736,6 +1824,97 @@ mod tests {
     fn parse_status_invalid() {
         let err = parse_status("cancelled").unwrap_err();
         assert!(err.message.contains("Invalid status"));
+    }
+
+    // parse_sort_field
+
+    #[test]
+    fn parse_sort_field_accepts_due_date_and_kebab_case() {
+        use kanban_domain::SortField;
+        assert_eq!(parse_sort_field("due-date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("due_date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("DueDate").unwrap(), SortField::DueDate);
+    }
+
+    #[test]
+    fn parse_sort_field_covers_every_variant() {
+        use kanban_domain::SortField;
+        assert_eq!(parse_sort_field("points").unwrap(), SortField::Points);
+        assert_eq!(parse_sort_field("priority").unwrap(), SortField::Priority);
+        assert_eq!(
+            parse_sort_field("created-at").unwrap(),
+            SortField::CreatedAt
+        );
+        assert_eq!(
+            parse_sort_field("updated-at").unwrap(),
+            SortField::UpdatedAt
+        );
+        assert_eq!(parse_sort_field("due-date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("status").unwrap(), SortField::Status);
+        assert_eq!(parse_sort_field("position").unwrap(), SortField::Position);
+        assert_eq!(parse_sort_field("default").unwrap(), SortField::Default);
+    }
+
+    #[test]
+    fn parse_sort_field_rejects_unknown() {
+        let err = parse_sort_field("magnitude").unwrap_err();
+        assert!(err.message.contains("Invalid sort field"));
+    }
+
+    // parse_sort_order
+
+    #[test]
+    fn parse_sort_order_accepts_asc_and_desc() {
+        use kanban_domain::SortOrder;
+        assert_eq!(parse_sort_order("asc").unwrap(), SortOrder::Ascending);
+        assert_eq!(parse_sort_order("ascending").unwrap(), SortOrder::Ascending);
+        assert_eq!(parse_sort_order("desc").unwrap(), SortOrder::Descending);
+        assert_eq!(
+            parse_sort_order("Descending").unwrap(),
+            SortOrder::Descending
+        );
+    }
+
+    #[test]
+    fn parse_sort_order_rejects_unknown() {
+        let err = parse_sort_order("sideways").unwrap_err();
+        assert!(err.message.contains("Invalid sort order"));
+    }
+
+    // request schema coverage — these are the JSON fields MCP clients send.
+
+    #[test]
+    fn update_board_request_accepts_task_sort_field_and_order() {
+        let json = serde_json::json!({
+            "board": "B",
+            "task_sort_field": "due-date",
+            "task_sort_order": "desc",
+        });
+        let req: UpdateBoardRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.task_sort_field.as_deref(), Some("due-date"));
+        assert_eq!(req.task_sort_order.as_deref(), Some("desc"));
+    }
+
+    #[test]
+    fn list_cards_request_accepts_sort_and_order() {
+        let json = serde_json::json!({
+            "sort": "due-date",
+            "order": "asc",
+        });
+        let req: ListCardsRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.sort.as_deref(), Some("due-date"));
+        assert_eq!(req.order.as_deref(), Some("asc"));
+    }
+
+    #[test]
+    fn list_archived_cards_request_accepts_sort_and_order() {
+        let json = serde_json::json!({
+            "sort": "due-date",
+            "order": "asc",
+        });
+        let req: ListArchivedCardsRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.sort.as_deref(), Some("due-date"));
+        assert_eq!(req.order.as_deref(), Some("asc"));
     }
 
     // parse_datetime

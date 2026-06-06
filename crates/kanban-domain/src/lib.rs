@@ -43,7 +43,10 @@ pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, Imp
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
 pub use graph_operations::GraphOperations;
-pub use operations::{CardListFilter, KanbanOperations};
+pub use operations::{
+    count_filtered_cards, filter_and_sort_cards, ArchivedCardListFilter, CardListFilter,
+    KanbanOperations,
+};
 pub use query::{
     sprint::{
         calculate_points, calculate_points_by_ids, get_sprint_cards, get_sprint_completed_cards,
@@ -57,7 +60,7 @@ pub use search::{
     BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy, TitleSearcher,
 };
 pub use snapshot::Snapshot;
-pub use sort::{get_sorter_for_field, OrderedSorter, SortBy};
+pub use sort::{get_sorter_for_field, resolve_sort, sort_cards_in_place, OrderedSorter, SortBy};
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};

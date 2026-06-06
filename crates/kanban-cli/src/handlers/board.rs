@@ -64,6 +64,8 @@ async fn handle_update(
             .card_prefix
             .map(FieldUpdate::Set)
             .unwrap_or(FieldUpdate::NoChange),
+        task_sort_field: args.sort_field.map(|s| s.to_sort_field()),
+        task_sort_order: args.sort_order.map(|o| o.to_sort_order()),
         ..Default::default()
     };
     let board = ctx.update_board(uuid, updates)?;

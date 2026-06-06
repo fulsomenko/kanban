@@ -16,6 +16,7 @@ pub enum SortBy {
     Priority,
     CreatedAt,
     UpdatedAt,
+    DueDate,
     Status,
     CardNumber,
     Position,
@@ -33,6 +34,12 @@ impl SortBy {
             Self::Priority => priority_value(&a.priority).cmp(&priority_value(&b.priority)),
             Self::CreatedAt => a.created_at.cmp(&b.created_at),
             Self::UpdatedAt => a.updated_at.cmp(&b.updated_at),
+            Self::DueDate => match (a.due_date, b.due_date) {
+                (Some(ad), Some(bd)) => ad.cmp(&bd),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            },
             Self::Status => status_value(&a.status).cmp(&status_value(&b.status)),
             Self::CardNumber => a.card_number.cmp(&b.card_number),
             Self::Position => a.position.cmp(&b.position),
@@ -78,6 +85,31 @@ impl OrderedSorter {
     }
 }
 
+/// Resolve `(field, order)` from a caller override and an optional board.
+/// Override wins; otherwise the board's defaults apply; `None` means
+/// "leave storage order".
+pub fn resolve_sort(
+    sort: Option<SortField>,
+    sort_order: Option<SortOrder>,
+    board: Option<&crate::Board>,
+) -> Option<(SortField, SortOrder)> {
+    match (sort, sort_order, board) {
+        (Some(f), Some(o), _) => Some((f, o)),
+        (Some(f), None, Some(b)) => Some((f, b.task_sort_order)),
+        (Some(f), None, None) => Some((f, SortOrder::Ascending)),
+        (None, override_order, Some(b)) => Some((
+            b.task_sort_field,
+            override_order.unwrap_or(b.task_sort_order),
+        )),
+        (None, _, None) => None,
+    }
+}
+
+pub fn sort_cards_in_place<T: Borrow<Card>>(cards: &mut [T], field: SortField, order: SortOrder) {
+    let sorter = OrderedSorter::new(get_sorter_for_field(field), order);
+    sorter.sort_by(cards);
+}
+
 /// Get the appropriate sorter for a sort field.
 pub fn get_sorter_for_field(field: SortField) -> SortBy {
     match field {
@@ -85,6 +117,7 @@ pub fn get_sorter_for_field(field: SortField) -> SortBy {
         SortField::Priority => SortBy::Priority,
         SortField::CreatedAt => SortBy::CreatedAt,
         SortField::UpdatedAt => SortBy::UpdatedAt,
+        SortField::DueDate => SortBy::DueDate,
         SortField::Status => SortBy::Status,
         SortField::Position => SortBy::Position,
         SortField::Default => SortBy::CardNumber,
@@ -197,6 +230,71 @@ mod tests {
     }
 
     #[test]
+    fn test_due_date_sorter_orders_earlier_first() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+
+        let earlier = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let later = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        card1.set_due_date(Some(earlier));
+        card2.set_due_date(Some(later));
+
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Less);
+        assert_eq!(SortBy::DueDate.compare(&card2, &card1), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_due_date_sorter_places_none_last() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+
+        let some_date = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(some_date));
+        card2.set_due_date(None);
+
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Less);
+        assert_eq!(SortBy::DueDate.compare(&card2, &card1), Ordering::Greater);
+
+        card1.set_due_date(None);
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_due_date_sorter_equal_dates_returns_equal() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+
+        let d = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(d));
+        card2.set_due_date(Some(d));
+
+        assert_eq!(SortBy::DueDate.compare(&card1, &card2), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_get_sorter_for_field_due_date_maps_to_due_date_sortby() {
+        let sorter = get_sorter_for_field(SortField::DueDate);
+
+        let (_, _, mut card1, mut card2) = create_test_cards();
+        let earlier = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let later = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(earlier));
+        card2.set_due_date(Some(later));
+
+        assert_eq!(sorter.compare(&card1, &card2), Ordering::Less);
+    }
+
+    #[test]
     fn test_points_sorter_none_handling() {
         let (_, _, mut card1, mut card2) = create_test_cards();
 
@@ -269,13 +367,76 @@ mod tests {
         assert_eq!((shuffled[0].card_number, shuffled[1].card_number), expected);
     }
 
-    /// The card_number tiebreaker is implemented in `OrderedSorter::sort_by`,
-    /// not in any specific `SortBy` variant — so it should stabilise tied
-    /// cards regardless of which primary sort key the user picks. This test
-    /// exercises every variant where ties realistically occur (Card::new
-    /// defaults make all five primaries tie naturally between fresh cards).
-    /// `CardNumber` and `Position` are excluded because their primaries are
-    /// themselves unique per slice — there's nothing to tiebreak.
+    fn board_with_sort(field: SortField, order: SortOrder) -> Board {
+        let mut b = Board::new("Test", None::<String>);
+        b.update_task_sort(field, order);
+        b
+    }
+
+    #[test]
+    fn test_resolve_sort_explicit_override_wins_over_board() {
+        let board = board_with_sort(SortField::Priority, SortOrder::Ascending);
+        let got = resolve_sort(
+            Some(SortField::DueDate),
+            Some(SortOrder::Descending),
+            Some(&board),
+        );
+        assert_eq!(got, Some((SortField::DueDate, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_field_override_takes_board_order_when_no_order_given() {
+        let board = board_with_sort(SortField::Priority, SortOrder::Descending);
+        let got = resolve_sort(Some(SortField::DueDate), None, Some(&board));
+        assert_eq!(got, Some((SortField::DueDate, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_field_override_without_board_defaults_to_ascending() {
+        let got = resolve_sort(Some(SortField::DueDate), None, None);
+        assert_eq!(got, Some((SortField::DueDate, SortOrder::Ascending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_no_field_falls_back_to_board_defaults() {
+        let board = board_with_sort(SortField::Status, SortOrder::Descending);
+        let got = resolve_sort(None, None, Some(&board));
+        assert_eq!(got, Some((SortField::Status, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_order_override_layers_on_board_field() {
+        let board = board_with_sort(SortField::Status, SortOrder::Ascending);
+        let got = resolve_sort(None, Some(SortOrder::Descending), Some(&board));
+        assert_eq!(got, Some((SortField::Status, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_returns_none_when_no_override_and_no_board() {
+        assert_eq!(resolve_sort(None, None, None), None);
+        assert_eq!(resolve_sort(None, Some(SortOrder::Descending), None), None);
+    }
+
+    #[test]
+    fn test_sort_cards_in_place_uses_field_and_order() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+        let earlier = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let later = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(later));
+        card2.set_due_date(Some(earlier));
+
+        let mut cards = vec![&card1, &card2];
+        sort_cards_in_place(&mut cards, SortField::DueDate, SortOrder::Ascending);
+        assert_eq!(cards[0].due_date, Some(earlier));
+        assert_eq!(cards[1].due_date, Some(later));
+    }
+
+    /// `CardNumber` and `Position` are excluded because their primaries
+    /// are themselves unique per slice — there's nothing to tiebreak.
     #[test]
     fn test_ordered_sorter_tiebreaker_applies_to_every_sort_field_with_ties() {
         let variants = [
@@ -284,6 +445,7 @@ mod tests {
             SortBy::Status,
             SortBy::CreatedAt,
             SortBy::UpdatedAt,
+            SortBy::DueDate,
         ];
 
         for variant in variants {

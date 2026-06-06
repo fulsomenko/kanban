@@ -54,10 +54,7 @@ use kanban_domain::AnimationType;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
     export::{AllBoardsExport, BoardExporter, BoardImporter},
-    filter::{BoardFilter, CardFilter, SprintFilter, UnassignedOnlyFilter},
-    partition_sprint_cards,
-    sort::{get_sorter_for_field, OrderedSorter},
-    sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
+    partition_sprint_cards, sort_card_ids, Board, Card, SortField, SortOrder, Sprint,
 };
 use kanban_service::StoreManager;
 
@@ -1374,73 +1371,38 @@ impl App {
     }
 
     pub fn get_board_card_count(&self, board_id: uuid::Uuid) -> usize {
-        let columns = self.model.columns();
-        let board_filter = BoardFilter::new(board_id, columns);
-        let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
-            Some(SprintFilter::in_sprints(
-                self.filter.active_sprint_filters.iter().copied(),
-            ))
-        } else {
-            None
-        };
-
-        let cards = self.model.cards();
-        cards
-            .iter()
-            .filter(|c| {
-                if !board_filter.matches(c) {
-                    return false;
-                }
-                if let Some(ref sf) = sprint_filter {
-                    if !sf.matches(c) {
-                        return false;
-                    }
-                }
-                if self.filter.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
-                    return false;
-                }
-                true
-            })
-            .count()
+        let filter = self.board_card_filter(board_id);
+        let board = self.model.boards().iter().find(|b| b.id == board_id);
+        kanban_domain::count_filtered_cards(
+            self.model.cards(),
+            self.model.columns(),
+            self.model.sprints(),
+            board,
+            &filter,
+        )
     }
 
     pub fn get_sorted_board_cards(&self, board_id: uuid::Uuid) -> Vec<Card> {
-        let boards = self.model.boards();
-        let board = boards.iter().find(|b| b.id == board_id).unwrap();
-        let columns = self.model.columns();
-        let board_filter = BoardFilter::new(board_id, columns);
-        let sprint_filter = if !self.filter.active_sprint_filters.is_empty() {
-            Some(SprintFilter::in_sprints(
-                self.filter.active_sprint_filters.iter().copied(),
-            ))
-        } else {
-            None
-        };
+        let filter = self.board_card_filter(board_id);
+        let board = self.model.boards().iter().find(|b| b.id == board_id);
+        kanban_domain::filter_and_sort_cards(
+            self.model.cards(),
+            self.model.columns(),
+            self.model.sprints(),
+            board,
+            &filter,
+        )
+    }
 
-        let all_cards = self.model.cards();
-        let mut cards: Vec<&Card> = all_cards
-            .iter()
-            .filter(|c| {
-                if !board_filter.matches(c) {
-                    return false;
-                }
-                if let Some(ref sf) = sprint_filter {
-                    if !sf.matches(c) {
-                        return false;
-                    }
-                }
-                if self.filter.hide_assigned_cards && !UnassignedOnlyFilter.matches(c) {
-                    return false;
-                }
-                true
-            })
-            .collect();
-
-        let sorter = get_sorter_for_field(board.task_sort_field);
-        let ordered_sorter = OrderedSorter::new(sorter, board.task_sort_order);
-        ordered_sorter.sort_by(&mut cards);
-
-        cards.into_iter().cloned().collect()
+    fn board_card_filter(&self, board_id: uuid::Uuid) -> kanban_domain::CardListFilter {
+        let sprint_ids: std::collections::HashSet<uuid::Uuid> =
+            self.filter.active_sprint_filters.iter().copied().collect();
+        kanban_domain::CardListFilter {
+            board_id: Some(board_id),
+            sprint_ids: (!sprint_ids.is_empty()).then_some(sprint_ids),
+            hide_assigned: self.filter.hide_assigned_cards,
+            ..Default::default()
+        }
     }
 
     pub fn get_selected_card_in_context(&self) -> Option<Card> {
@@ -2436,18 +2398,10 @@ impl App {
     }
 
     pub fn get_current_sort_field_selection_index(&self) -> usize {
-        if let Some(sort_field) = self.filter.current_sort_field {
-            return match sort_field {
-                SortField::Points => 0,
-                SortField::Priority => 1,
-                SortField::CreatedAt => 2,
-                SortField::UpdatedAt => 3,
-                SortField::Status => 4,
-                SortField::Position => 5,
-                SortField::Default => 6,
-            };
-        }
-        0
+        self.filter
+            .current_sort_field
+            .map(crate::components::selection_dialog::popup_index_of_sort_field)
+            .unwrap_or(0)
     }
 }
 
