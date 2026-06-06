@@ -8,9 +8,9 @@ pub use server::McpServer;
 use context::McpContext;
 use kanban_core::{parse_datetime_input, resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardSummary,
-    CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate, GraphOperations, KanbanOperations,
-    SprintUpdate,
+    ArchivedCardListFilter, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
+    CardStatus, CardSummary, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
+    GraphOperations, KanbanOperations, SortField, SortOrder, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_service::StoreManager;
@@ -167,6 +167,37 @@ fn parse_status(s: &str) -> Result<CardStatus, McpError> {
 
 fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
     parse_datetime_input(s).map_err(|msg| McpError::invalid_params(msg, None))
+}
+
+fn parse_sort_field(s: &str) -> Result<SortField, McpError> {
+    match s.to_lowercase().replace(['-', '_'], "").as_str() {
+        "points" => Ok(SortField::Points),
+        "priority" => Ok(SortField::Priority),
+        "createdat" => Ok(SortField::CreatedAt),
+        "updatedat" => Ok(SortField::UpdatedAt),
+        "duedate" => Ok(SortField::DueDate),
+        "status" => Ok(SortField::Status),
+        "position" => Ok(SortField::Position),
+        "default" => Ok(SortField::Default),
+        _ => Err(McpError::invalid_params(
+            format!(
+                "Invalid sort field '{}'. Valid: points, priority, created_at, updated_at, due_date, status, position, default",
+                s
+            ),
+            None,
+        )),
+    }
+}
+
+fn parse_sort_order(s: &str) -> Result<SortOrder, McpError> {
+    match s.to_lowercase().as_str() {
+        "asc" | "ascending" => Ok(SortOrder::Ascending),
+        "desc" | "descending" => Ok(SortOrder::Descending),
+        _ => Err(McpError::invalid_params(
+            format!("Invalid sort order '{}'. Valid: asc, desc", s),
+            None,
+        )),
+    }
 }
 
 // ---------- Locked sessions ----------
