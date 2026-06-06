@@ -1,7 +1,7 @@
 use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_core::{resolve_page_params, PaginatedList};
+use kanban_core::{parse_datetime_input, resolve_page_params, PaginatedList};
 use kanban_domain::{
     ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardUpdate, CreateCardOptions,
     FieldUpdate, KanbanOperations, SprintStatus,
@@ -334,7 +334,7 @@ fn build_create_options(args: &CardCreateArgs) -> Result<CreateCardOptions, Stri
         None => None,
     };
     let due_date = match &args.due_date {
-        Some(d) => Some(parse_datetime(d)?),
+        Some(d) => Some(parse_datetime_input(d)?),
         None => None,
     };
     Ok(CreateCardOptions {
@@ -374,7 +374,7 @@ fn build_card_update(args: &CardUpdateArgs) -> Result<CardUpdate, String> {
             FieldUpdate::Clear
         } else {
             match &args.due_date {
-                Some(d) => FieldUpdate::Set(parse_datetime(d)?),
+                Some(d) => FieldUpdate::Set(parse_datetime_input(d)?),
                 None => FieldUpdate::NoChange,
             }
         },
@@ -408,19 +408,3 @@ fn parse_status(s: &str) -> Result<CardStatus, String> {
     }
 }
 
-fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|_| {
-            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| ())
-                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
-                .map(|dt| dt.and_utc())
-        })
-        .map_err(|_| {
-            format!(
-                "Invalid date '{}'. Supported formats: YYYY-MM-DD or RFC 3339 (e.g., 2024-01-15T10:30:00Z)",
-                s
-            )
-        })
-}

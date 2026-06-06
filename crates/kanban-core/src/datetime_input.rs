@@ -16,7 +16,7 @@ pub fn parse_datetime_input(input: &str) -> Result<DateTime<Utc>, String> {
         }
     }
     Err(format!(
-        "'{input}' is not a recognised date (expected YYYY-MM-DD or RFC 3339, e.g. 2024-01-15 or 2024-01-15T14:30:00Z)"
+        "Invalid date '{input}'. Supported formats: YYYY-MM-DD or RFC 3339 (e.g. 2024-01-15 or 2024-01-15T14:30:00Z)"
     ))
 }
 

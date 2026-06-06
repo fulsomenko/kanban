@@ -1,25 +1,8 @@
 use crate::cli::{SprintAction, SprintUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_core::{resolve_page_params, PaginatedList};
+use kanban_core::{parse_datetime_input, resolve_page_params, PaginatedList};
 use kanban_domain::{FieldUpdate, KanbanOperations, SprintUpdate};
-
-fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|_| {
-            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| ())
-                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
-                .map(|dt| dt.and_utc())
-        })
-        .map_err(|_| {
-            format!(
-                "Invalid date '{}'. Supported formats: YYYY-MM-DD or RFC 3339 (e.g., 2024-01-15T10:30:00Z)",
-                s
-            )
-        })
-}
 
 pub async fn handle(ctx: &mut CliContext, action: SprintAction) -> anyhow::Result<()> {
     match action {
@@ -137,7 +120,7 @@ async fn handle_update(
         FieldUpdate::Clear
     } else {
         match args.start_date {
-            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            Some(d) => FieldUpdate::Set(parse_datetime_input(&d).map_err(anyhow::Error::msg)?),
             None => FieldUpdate::NoChange,
         }
     };
@@ -146,7 +129,7 @@ async fn handle_update(
         FieldUpdate::Clear
     } else {
         match args.end_date {
-            Some(d) => FieldUpdate::Set(parse_datetime(&d).map_err(anyhow::Error::msg)?),
+            Some(d) => FieldUpdate::Set(parse_datetime_input(&d).map_err(anyhow::Error::msg)?),
             None => FieldUpdate::NoChange,
         }
     };
