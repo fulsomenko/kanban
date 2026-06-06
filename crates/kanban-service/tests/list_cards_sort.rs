@@ -6,7 +6,7 @@
 use chrono::{DateTime, Utc};
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    BoardCommand, CardCommand, Command, CreateBoard, CreateColumn, ColumnCommand, CreateCard,
+    BoardCommand, CardCommand, ColumnCommand, Command, CreateBoard, CreateCard, CreateColumn,
     SetBoardTaskSort, UpdateCard,
 };
 use kanban_domain::{

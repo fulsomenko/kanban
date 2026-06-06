@@ -25,52 +25,6 @@ pub fn sort_field_at_popup_index(index: usize) -> Option<SortField> {
     SORT_FIELD_POPUP_ORDER.get(index).map(|(f, _)| *f)
 }
 
-#[cfg(test)]
-mod sort_field_popup_tests {
-    use super::*;
-
-    #[test]
-    fn test_sort_field_popup_order_includes_due_date() {
-        assert!(
-            SORT_FIELD_POPUP_ORDER
-                .iter()
-                .any(|(f, _)| *f == SortField::DueDate),
-            "popup must expose DueDate"
-        );
-    }
-
-    #[test]
-    fn test_popup_index_round_trip_for_every_variant() {
-        let variants = [
-            SortField::Points,
-            SortField::Priority,
-            SortField::CreatedAt,
-            SortField::UpdatedAt,
-            SortField::DueDate,
-            SortField::Status,
-            SortField::Position,
-            SortField::Default,
-        ];
-
-        for v in variants {
-            let idx = popup_index_of_sort_field(v);
-            assert_eq!(
-                sort_field_at_popup_index(idx),
-                Some(v),
-                "round-trip failed for {:?}",
-                v
-            );
-        }
-    }
-
-    #[test]
-    fn test_popup_labels_are_non_empty() {
-        for (field, label) in SORT_FIELD_POPUP_ORDER {
-            assert!(!label.is_empty(), "label for {:?} is empty", field);
-        }
-    }
-}
-
 pub trait SelectionDialog {
     fn title(&self) -> &str;
     fn get_current_selection(&self, app: &App) -> usize;
@@ -194,10 +148,7 @@ impl SelectionDialog for SortFieldDialog {
         use crate::components::render_selection_popup_with_lines;
         use kanban_domain::SortOrder;
 
-        let active_idx = app
-            .filter
-            .current_sort_field
-            .map(popup_index_of_sort_field);
+        let active_idx = app.filter.current_sort_field.map(popup_index_of_sort_field);
 
         render_selection_popup_with_lines(
             frame,
@@ -391,5 +342,51 @@ impl SelectionDialog for SprintAssignDialog {
             board,
             chrono::Utc::now(),
         );
+    }
+}
+
+#[cfg(test)]
+mod sort_field_popup_tests {
+    use super::*;
+
+    #[test]
+    fn test_sort_field_popup_order_includes_due_date() {
+        assert!(
+            SORT_FIELD_POPUP_ORDER
+                .iter()
+                .any(|(f, _)| *f == SortField::DueDate),
+            "popup must expose DueDate"
+        );
+    }
+
+    #[test]
+    fn test_popup_index_round_trip_for_every_variant() {
+        let variants = [
+            SortField::Points,
+            SortField::Priority,
+            SortField::CreatedAt,
+            SortField::UpdatedAt,
+            SortField::DueDate,
+            SortField::Status,
+            SortField::Position,
+            SortField::Default,
+        ];
+
+        for v in variants {
+            let idx = popup_index_of_sort_field(v);
+            assert_eq!(
+                sort_field_at_popup_index(idx),
+                Some(v),
+                "round-trip failed for {:?}",
+                v
+            );
+        }
+    }
+
+    #[test]
+    fn test_popup_labels_are_non_empty() {
+        for (field, label) in SORT_FIELD_POPUP_ORDER {
+            assert!(!label.is_empty(), "label for {:?} is empty", field);
+        }
     }
 }

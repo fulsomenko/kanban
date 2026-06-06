@@ -506,7 +506,9 @@ pub struct ListCardsRequest {
         description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. When omitted, falls back to the board's task_sort_field (requires `board`)."
     )]
     pub sort: Option<String>,
-    #[schemars(description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order.")]
+    #[schemars(
+        description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order."
+    )]
     pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
@@ -516,13 +518,17 @@ pub struct ListCardsRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListArchivedCardsRequest {
-    #[schemars(description = "Filter archives by board UUID or name (also drives the default sort field)")]
+    #[schemars(
+        description = "Filter archives by board UUID or name (also drives the default sort field)"
+    )]
     pub board: Option<String>,
     #[schemars(
         description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. Falls back to the board's task_sort_field when omitted."
     )]
     pub sort: Option<String>,
-    #[schemars(description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order.")]
+    #[schemars(
+        description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order."
+    )]
     pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
@@ -1834,8 +1840,14 @@ mod tests {
         use kanban_domain::SortField;
         assert_eq!(parse_sort_field("points").unwrap(), SortField::Points);
         assert_eq!(parse_sort_field("priority").unwrap(), SortField::Priority);
-        assert_eq!(parse_sort_field("created-at").unwrap(), SortField::CreatedAt);
-        assert_eq!(parse_sort_field("updated-at").unwrap(), SortField::UpdatedAt);
+        assert_eq!(
+            parse_sort_field("created-at").unwrap(),
+            SortField::CreatedAt
+        );
+        assert_eq!(
+            parse_sort_field("updated-at").unwrap(),
+            SortField::UpdatedAt
+        );
         assert_eq!(parse_sort_field("due-date").unwrap(), SortField::DueDate);
         assert_eq!(parse_sort_field("status").unwrap(), SortField::Status);
         assert_eq!(parse_sort_field("position").unwrap(), SortField::Position);
@@ -1854,10 +1866,7 @@ mod tests {
     fn parse_sort_order_accepts_asc_and_desc() {
         use kanban_domain::SortOrder;
         assert_eq!(parse_sort_order("asc").unwrap(), SortOrder::Ascending);
-        assert_eq!(
-            parse_sort_order("ascending").unwrap(),
-            SortOrder::Ascending
-        );
+        assert_eq!(parse_sort_order("ascending").unwrap(), SortOrder::Ascending);
         assert_eq!(parse_sort_order("desc").unwrap(), SortOrder::Descending);
         assert_eq!(
             parse_sort_order("Descending").unwrap(),

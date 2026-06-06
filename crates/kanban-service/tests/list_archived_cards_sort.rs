@@ -54,7 +54,7 @@ async fn seed_three_archived_with_due_dates(
             board_id,
             column_id,
             title: format!("card-{}", i),
-            position: i as i32,
+            position: i,
             options: CreateCardOptions::default(),
             timestamp: chrono::Utc::now(),
         }))])?;
@@ -116,7 +116,6 @@ async fn test_list_archived_cards_sorted_explicit_override_wins() -> KanbanResul
         board_id: Some(board_id),
         sort: Some(SortField::DueDate),
         sort_order: Some(SortOrder::Descending),
-        ..Default::default()
     })?;
 
     let ids: Vec<Uuid> = archived.iter().map(|a| a.card.id).collect();

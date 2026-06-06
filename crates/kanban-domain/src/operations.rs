@@ -114,9 +114,12 @@ pub trait KanbanOperations {
                 Some((f, order))
             }
             (Some(f), None, None) => Some((f, SortOrder::Ascending)),
-            (None, _, Some(bid)) => self
-                .get_board(bid)?
-                .map(|b| (b.task_sort_field, filter.sort_order.unwrap_or(b.task_sort_order))),
+            (None, _, Some(bid)) => self.get_board(bid)?.map(|b| {
+                (
+                    b.task_sort_field,
+                    filter.sort_order.unwrap_or(b.task_sort_order),
+                )
+            }),
             (None, _, None) => None,
         };
 

@@ -156,9 +156,9 @@ impl App {
                 false
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.filter.sort_field_selection.next(
-                    crate::components::selection_dialog::SORT_FIELD_POPUP_ORDER.len(),
-                );
+                self.filter
+                    .sort_field_selection
+                    .next(crate::components::selection_dialog::SORT_FIELD_POPUP_ORDER.len());
                 false
             }
             KeyCode::Char('k') | KeyCode::Up => {
