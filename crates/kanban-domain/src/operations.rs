@@ -1,4 +1,5 @@
-use crate::sort::{get_sorter_for_field, OrderedSorter};
+use crate::search::{CardSearcher, CompositeSearcher};
+use crate::sort::{resolve_sort, sort_cards_in_place};
 use crate::KanbanResult;
 use crate::{
     AmbiguousMatch, ArchivedCard, BatchResolutionCause, BatchResolutionFailure, Board, BoardUpdate,
@@ -19,9 +20,104 @@ pub struct CardListFilter {
     pub board_id: Option<Uuid>,
     pub column_id: Option<Uuid>,
     pub sprint_id: Option<Uuid>,
+    /// Any-of sprint membership: when set and non-empty, only cards in
+    /// one of these sprints are returned. Mirrors the TUI's sprint-chip
+    /// multi-select. An empty set is treated as "no filter" so callers
+    /// can pass through user state without special-casing.
+    pub sprint_ids: Option<std::collections::HashSet<Uuid>>,
+    /// Drop cards that have a sprint assignment. Mirrors the TUI's
+    /// "hide assigned" toggle for the unassigned-only column view.
+    pub hide_assigned: bool,
     pub status: Option<CardStatus>,
+    /// Full-text search across title, branch name, and card identifier
+    /// (`CompositeSearcher::all` semantics). Empty string is a no-op
+    /// so callers can pipe through unvalidated user input.
+    pub search: Option<String>,
     pub sort: Option<SortField>,
     pub sort_order: Option<SortOrder>,
+}
+
+/// Pure filter + sort over an in-memory card slice. The single source of
+/// truth for "given a `CardListFilter`, which cards belong in the
+/// result, in what order".
+///
+/// `cards` is the unfiltered superset. `columns` is consulted only when
+/// `filter.board_id` is set, to translate the board scope into a set of
+/// allowed `column_id`s. `sprints` is consulted only when
+/// `filter.search` is set, to drive branch-name and identifier matching.
+/// `board` is required when `filter.board_id` is set; otherwise it is
+/// only used for sort-default resolution (`resolve_sort`).
+///
+/// Both `KanbanContext::filter_cards` (backend-fetched data) and
+/// `CardQueryBuilder::execute` (TUI model snapshot) delegate here, so
+/// the three frontends share one filter+sort path.
+pub fn filter_and_sort_cards(
+    cards: &[Card],
+    columns: &[Column],
+    sprints: &[Sprint],
+    board: Option<&Board>,
+    filter: &CardListFilter,
+) -> Vec<Card> {
+    let mut result: Vec<Card> = cards
+        .iter()
+        .filter(|c| {
+            if let Some(board_id) = filter.board_id {
+                if !columns
+                    .iter()
+                    .any(|col| col.board_id == board_id && col.id == c.column_id)
+                {
+                    return false;
+                }
+            }
+            if let Some(column_id) = filter.column_id {
+                if c.column_id != column_id {
+                    return false;
+                }
+            }
+            if let Some(sprint_id) = filter.sprint_id {
+                if c.sprint_id != Some(sprint_id) {
+                    return false;
+                }
+            }
+            if let Some(ref ids) = filter.sprint_ids {
+                if !ids.is_empty() {
+                    match c.sprint_id {
+                        Some(sid) if ids.contains(&sid) => {}
+                        _ => return false,
+                    }
+                }
+            }
+            if filter.hide_assigned && c.sprint_id.is_some() {
+                return false;
+            }
+            if let Some(status) = filter.status {
+                if c.status != status {
+                    return false;
+                }
+            }
+            if let Some(ref query) = filter.search {
+                if !query.is_empty() {
+                    let Some(board) = board else {
+                        // No board context → cannot resolve branch-name /
+                        // identifier matches; treat search as no-op.
+                        return true;
+                    };
+                    let searcher = CompositeSearcher::all(query.clone());
+                    if !searcher.matches(c, board, sprints) {
+                        return false;
+                    }
+                }
+            }
+            true
+        })
+        .cloned()
+        .collect();
+
+    if let Some((field, order)) = resolve_sort(filter.sort, filter.sort_order, board) {
+        sort_cards_in_place(&mut result, field, order);
+    }
+
+    result
 }
 
 /// Filter options for listing archived cards. Mirrors `CardListFilter`'s
@@ -104,28 +200,12 @@ pub trait KanbanOperations {
             cards.retain(|a| col_ids.contains(&a.card.column_id));
         }
 
-        let resolved = match (filter.sort, filter.sort_order, filter.board_id) {
-            (Some(f), Some(o), _) => Some((f, o)),
-            (Some(f), None, Some(bid)) => {
-                let order = self
-                    .get_board(bid)?
-                    .map(|b| b.task_sort_order)
-                    .unwrap_or(SortOrder::Ascending);
-                Some((f, order))
-            }
-            (Some(f), None, None) => Some((f, SortOrder::Ascending)),
-            (None, _, Some(bid)) => self.get_board(bid)?.map(|b| {
-                (
-                    b.task_sort_field,
-                    filter.sort_order.unwrap_or(b.task_sort_order),
-                )
-            }),
-            (None, _, None) => None,
+        let board = match filter.board_id {
+            Some(bid) => self.get_board(bid)?,
+            None => None,
         };
-
-        if let Some((field, order)) = resolved {
-            let sorter = OrderedSorter::new(get_sorter_for_field(field), order);
-            sorter.sort_by(&mut cards);
+        if let Some((field, order)) = resolve_sort(filter.sort, filter.sort_order, board.as_ref()) {
+            sort_cards_in_place(&mut cards, field, order);
         }
 
         Ok(cards)

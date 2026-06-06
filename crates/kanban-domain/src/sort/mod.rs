@@ -85,6 +85,50 @@ impl OrderedSorter {
     }
 }
 
+/// Resolve the effective `(SortField, SortOrder)` from an optional caller
+/// override and an optional board scope.
+///
+/// Resolution rules — the single source of truth shared by `KanbanContext`,
+/// the `KanbanOperations` trait default for archives, and any in-memory
+/// query layer:
+///
+/// 1. Explicit `(field, order)` override always wins.
+/// 2. Field override without an order takes the board's order, or falls
+///    back to `Ascending` when no board is in scope.
+/// 3. No field override with a board: use the board's defaults; an
+///    explicit order override still applies on top of the board's field.
+/// 4. No field override, no board scope: return `None` — caller leaves
+///    storage order.
+///
+/// A missing board (e.g. the caller passed `board_id` but the lookup
+/// returned `None`) is the caller's responsibility — `resolve_sort` is
+/// pure and does no I/O. Callers should treat that as "no sort" by
+/// passing `None` here.
+pub fn resolve_sort(
+    sort: Option<SortField>,
+    sort_order: Option<SortOrder>,
+    board: Option<&crate::Board>,
+) -> Option<(SortField, SortOrder)> {
+    match (sort, sort_order, board) {
+        (Some(f), Some(o), _) => Some((f, o)),
+        (Some(f), None, Some(b)) => Some((f, b.task_sort_order)),
+        (Some(f), None, None) => Some((f, SortOrder::Ascending)),
+        (None, override_order, Some(b)) => Some((
+            b.task_sort_field,
+            override_order.unwrap_or(b.task_sort_order),
+        )),
+        (None, _, None) => None,
+    }
+}
+
+/// Sort a slice of cards (or anything that `Borrow<Card>`s) in place using
+/// the given field and order. Thin wrapper over `get_sorter_for_field` +
+/// `OrderedSorter` so call sites do not re-wire those two pieces.
+pub fn sort_cards_in_place<T: Borrow<Card>>(cards: &mut [T], field: SortField, order: SortOrder) {
+    let sorter = OrderedSorter::new(get_sorter_for_field(field), order);
+    sorter.sort_by(cards);
+}
+
 /// Get the appropriate sorter for a sort field.
 pub fn get_sorter_for_field(field: SortField) -> SortBy {
     match field {
@@ -349,6 +393,90 @@ mod tests {
     /// defaults make all five primaries tie naturally between fresh cards).
     /// `CardNumber` and `Position` are excluded because their primaries are
     /// themselves unique per slice — there's nothing to tiebreak.
+    fn board_with_sort(field: SortField, order: SortOrder) -> Board {
+        let mut b = Board::new("Test", None::<String>);
+        b.update_task_sort(field, order);
+        b
+    }
+
+    #[test]
+    fn test_resolve_sort_explicit_override_wins_over_board() {
+        let board = board_with_sort(SortField::Priority, SortOrder::Ascending);
+        let got = resolve_sort(
+            Some(SortField::DueDate),
+            Some(SortOrder::Descending),
+            Some(&board),
+        );
+        assert_eq!(got, Some((SortField::DueDate, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_field_override_takes_board_order_when_no_order_given() {
+        let board = board_with_sort(SortField::Priority, SortOrder::Descending);
+        let got = resolve_sort(Some(SortField::DueDate), None, Some(&board));
+        assert_eq!(got, Some((SortField::DueDate, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_field_override_without_board_defaults_to_ascending() {
+        let got = resolve_sort(Some(SortField::DueDate), None, None);
+        assert_eq!(got, Some((SortField::DueDate, SortOrder::Ascending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_no_field_falls_back_to_board_defaults() {
+        let board = board_with_sort(SortField::Status, SortOrder::Descending);
+        let got = resolve_sort(None, None, Some(&board));
+        assert_eq!(got, Some((SortField::Status, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_order_override_layers_on_board_field() {
+        let board = board_with_sort(SortField::Status, SortOrder::Ascending);
+        let got = resolve_sort(None, Some(SortOrder::Descending), Some(&board));
+        assert_eq!(got, Some((SortField::Status, SortOrder::Descending)));
+    }
+
+    #[test]
+    fn test_resolve_sort_returns_none_when_no_override_and_no_board() {
+        assert_eq!(resolve_sort(None, None, None), None);
+        assert_eq!(resolve_sort(None, Some(SortOrder::Descending), None), None);
+    }
+
+    /// Callers (service / trait default impl) pass `None` for `board`
+    /// when a board_id was given but the lookup returned `None`. That
+    /// case must collapse to "leave storage order" rather than panic or
+    /// fall back to an arbitrary sort.
+    #[test]
+    fn test_resolve_sort_missing_board_is_treated_as_no_board() {
+        // No field override + nominally-board-scoped → caller passes
+        // `board: None` → result must be `None` (no sort applied).
+        assert_eq!(resolve_sort(None, None, None), None);
+        assert_eq!(
+            resolve_sort(None, Some(SortOrder::Descending), None),
+            None,
+            "an order override alone (no field, no board) must not produce a sort"
+        );
+    }
+
+    #[test]
+    fn test_sort_cards_in_place_uses_field_and_order() {
+        let (_, _, mut card1, mut card2) = create_test_cards();
+        let earlier = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let later = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        card1.set_due_date(Some(later));
+        card2.set_due_date(Some(earlier));
+
+        let mut cards = vec![&card1, &card2];
+        sort_cards_in_place(&mut cards, SortField::DueDate, SortOrder::Ascending);
+        assert_eq!(cards[0].due_date, Some(earlier));
+        assert_eq!(cards[1].due_date, Some(later));
+    }
+
     #[test]
     fn test_ordered_sorter_tiebreaker_applies_to_every_sort_field_with_ties() {
         let variants = [
