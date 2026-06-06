@@ -95,6 +95,12 @@ pub struct BoardUpdateArgs {
     pub sprint_prefix: Option<String>,
     #[arg(long)]
     pub card_prefix: Option<String>,
+    /// Default sort key for the task list view.
+    #[arg(long, value_enum)]
+    pub sort_field: Option<SortKey>,
+    /// Default sort direction for the task list view.
+    #[arg(long, value_enum)]
+    pub sort_order: Option<SortDir>,
 }
 
 // Column commands
