@@ -1004,6 +1004,7 @@ impl KanbanMcpServer {
                 column_id,
                 sprint_id,
                 status,
+                ..Default::default()
             };
             ctx.list_cards_paged(filter, page, page_size)
                 .map_err(kanban_err_to_mcp)

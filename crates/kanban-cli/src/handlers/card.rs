@@ -294,6 +294,7 @@ fn build_filter(ctx: &CliContext, args: &CardListArgs) -> Result<CardListFilter,
         column_id,
         sprint_id,
         status,
+        ..Default::default()
     })
 }
 

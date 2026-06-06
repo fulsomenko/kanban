@@ -4,10 +4,11 @@ use kanban_domain::commands::{
     AddBlocks, AddRelates, AddSpawns, BoardCommand, CardCommand, ColumnCommand, Command,
     CommandContext, DependencyCommand, RemoveBlocks, RemoveRelates, RemoveSpawns, SprintCommand,
 };
+use kanban_domain::sort::{get_sorter_for_field, OrderedSorter};
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
     Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, GraphOperations,
-    KanbanOperations, RelatesKind, Severity, Snapshot, Sprint, SprintUpdate,
+    KanbanOperations, RelatesKind, Severity, Snapshot, SortField, SortOrder, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -705,6 +706,50 @@ impl KanbanContext {
     }
 }
 
+impl KanbanContext {
+    /// Resolve the effective sort `(field, order)` from a request override
+    /// and an optional board scope, then sort `cards` in place.
+    ///
+    /// Resolution: explicit override wins; otherwise fall back to the
+    /// board's persisted defaults; otherwise leave storage order.
+    ///
+    /// This is the single source of truth for sort resolution shared by
+    /// `list_cards` and `list_archived_cards`. Frontends (TUI, CLI, MCP)
+    /// depend on this contract instead of re-implementing it.
+    fn apply_sort<T: std::borrow::Borrow<Card>>(
+        &self,
+        cards: &mut [T],
+        board_id: Option<Uuid>,
+        sort: Option<SortField>,
+        sort_order: Option<SortOrder>,
+    ) -> KanbanResult<()> {
+        let (field, order) = match (sort, sort_order, board_id) {
+            (Some(f), Some(o), _) => (f, o),
+            (Some(f), None, Some(bid)) => {
+                let order = self
+                    .backend
+                    .get_board(bid)?
+                    .map(|b| b.task_sort_order)
+                    .unwrap_or(SortOrder::Ascending);
+                (f, order)
+            }
+            (Some(f), None, None) => (f, SortOrder::Ascending),
+            (None, _, Some(bid)) => {
+                let board = self.backend.get_board(bid)?;
+                match board {
+                    Some(b) => (b.task_sort_field, sort_order.unwrap_or(b.task_sort_order)),
+                    None => return Ok(()),
+                }
+            }
+            (None, _, None) => return Ok(()),
+        };
+
+        let sorter = OrderedSorter::new(get_sorter_for_field(field), order);
+        sorter.sort_by(cards);
+        Ok(())
+    }
+}
+
 // ── KanbanOperations impl ─────────────────────────────────────────────────────
 
 impl KanbanOperations for KanbanContext {
@@ -861,6 +906,8 @@ impl KanbanOperations for KanbanContext {
         if let Some(status) = filter.status {
             cards.retain(|c| c.status == status);
         }
+
+        self.apply_sort(&mut cards, filter.board_id, filter.sort, filter.sort_order)?;
 
         Ok(cards.iter().map(CardSummary::from).collect())
     }

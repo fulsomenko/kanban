@@ -2,17 +2,25 @@ use crate::KanbanResult;
 use crate::{
     AmbiguousMatch, ArchivedCard, BatchResolutionCause, BatchResolutionFailure, Board, BoardUpdate,
     Card, CardStatus, CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions,
-    KanbanError, Sprint, SprintUpdate,
+    KanbanError, SortField, SortOrder, Sprint, SprintUpdate,
 };
 use uuid::Uuid;
 
-/// Filter options for listing cards
+/// Filter options for listing cards.
+///
+/// `sort` / `sort_order` override the board's persisted defaults
+/// (`Board::task_sort_field`, `Board::task_sort_order`). When both are
+/// `None` and a `board_id` is given, the board's defaults apply; without
+/// a board scope and without an override, results are returned in
+/// storage order.
 #[derive(Default, Clone)]
 pub struct CardListFilter {
     pub board_id: Option<Uuid>,
     pub column_id: Option<Uuid>,
     pub sprint_id: Option<Uuid>,
     pub status: Option<CardStatus>,
+    pub sort: Option<SortField>,
+    pub sort_order: Option<SortOrder>,
 }
 
 /// Trait ensuring TUI and CLI implement the same operations.
