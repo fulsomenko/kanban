@@ -1822,6 +1822,42 @@ mod tests {
         assert!(err.message.contains("Invalid sort order"));
     }
 
+    // request schema coverage — these are the JSON fields MCP clients send.
+
+    #[test]
+    fn update_board_request_accepts_task_sort_field_and_order() {
+        let json = serde_json::json!({
+            "board": "B",
+            "task_sort_field": "due-date",
+            "task_sort_order": "desc",
+        });
+        let req: UpdateBoardRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.task_sort_field.as_deref(), Some("due-date"));
+        assert_eq!(req.task_sort_order.as_deref(), Some("desc"));
+    }
+
+    #[test]
+    fn list_cards_request_accepts_sort_and_order() {
+        let json = serde_json::json!({
+            "sort": "due-date",
+            "order": "asc",
+        });
+        let req: ListCardsRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.sort.as_deref(), Some("due-date"));
+        assert_eq!(req.order.as_deref(), Some("asc"));
+    }
+
+    #[test]
+    fn list_archived_cards_request_accepts_sort_and_order() {
+        let json = serde_json::json!({
+            "sort": "due-date",
+            "order": "asc",
+        });
+        let req: ListArchivedCardsRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.sort.as_deref(), Some("due-date"));
+        assert_eq!(req.order.as_deref(), Some("asc"));
+    }
+
     // parse_datetime
 
     #[test]
