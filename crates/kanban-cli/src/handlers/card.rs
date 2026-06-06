@@ -407,4 +407,3 @@ fn parse_status(s: &str) -> Result<CardStatus, String> {
         )),
     }
 }
-

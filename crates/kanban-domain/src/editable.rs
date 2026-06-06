@@ -1,6 +1,7 @@
 use crate::{Board, Card};
-use kanban_core::Editable;
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, NaiveTime, Utc};
+use kanban_core::{parse_datetime_input, Editable};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 
 // Case-insensitive enum parsers that normalize to canonical format
 fn parse_card_priority_case_insensitive(s: &str) -> Option<String> {
@@ -39,7 +40,46 @@ pub struct CardMetadataDto {
     pub priority: String,
     pub status: String,
     pub points: Option<u8>,
-    pub due_date: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_date_input",
+        serialize_with = "serialize_optional_date_input"
+    )]
+    pub due_date: Option<DateTime<Utc>>,
+}
+
+fn deserialize_optional_date_input<'de, D>(
+    deserializer: D,
+) -> Result<Option<DateTime<Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        None => Ok(None),
+        Some(s) => parse_datetime_input(&s).map(Some).map_err(D::Error::custom),
+    }
+}
+
+fn serialize_optional_date_input<S>(
+    value: &Option<DateTime<Utc>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        None => serializer.serialize_none(),
+        Some(dt) => {
+            let midnight = NaiveTime::from_hms_opt(0, 0, 0).expect("midnight is valid");
+            let rendered = if dt.time() == midnight {
+                dt.format("%Y-%m-%d").to_string()
+            } else {
+                dt.to_rfc3339()
+            };
+            serializer.serialize_some(&rendered)
+        }
+    }
 }
 
 impl Editable<Board> for BoardSettingsDto {
@@ -69,7 +109,7 @@ impl Editable<Card> for CardMetadataDto {
             priority: format!("{:?}", card.priority),
             status: format!("{:?}", card.status),
             points: card.points,
-            due_date: card.due_date.map(|dt| dt.to_rfc3339()),
+            due_date: card.due_date,
         }
     }
 
@@ -94,10 +134,8 @@ impl Editable<Card> for CardMetadataDto {
             card.points = Some(points);
         }
 
-        if let Some(due_date_str) = self.due_date {
-            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&due_date_str) {
-                card.due_date = Some(dt.with_timezone(&chrono::Utc));
-            }
+        if let Some(due_date) = self.due_date {
+            card.due_date = Some(due_date);
         }
 
         card.updated_at = chrono::Utc::now();
@@ -107,6 +145,148 @@ impl Editable<Card> for CardMetadataDto {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
+
+    fn metadata_json(due_date_value: &str) -> String {
+        format!(
+            r#"{{"priority":"High","status":"Todo","points":null,"due_date":{due_date_value}}}"#
+        )
+    }
+
+    #[test]
+    fn test_card_metadata_dto_deserializes_yyyy_mm_dd_as_midnight_utc() {
+        let dto: CardMetadataDto = serde_json::from_str(&metadata_json(r#""2024-01-15""#)).unwrap();
+        assert_eq!(
+            dto.due_date,
+            Some(chrono::Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap())
+        );
+    }
+
+    #[test]
+    fn test_card_metadata_dto_deserializes_full_rfc3339_preserved() {
+        let dto: CardMetadataDto =
+            serde_json::from_str(&metadata_json(r#""2024-01-15T14:30:00Z""#)).unwrap();
+        assert_eq!(
+            dto.due_date,
+            Some(
+                chrono::Utc
+                    .with_ymd_and_hms(2024, 1, 15, 14, 30, 0)
+                    .unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn test_card_metadata_dto_deserializes_null_due_date() {
+        let dto: CardMetadataDto = serde_json::from_str(&metadata_json("null")).unwrap();
+        assert_eq!(dto.due_date, None);
+    }
+
+    #[test]
+    fn test_card_metadata_dto_rejects_garbage_due_date_with_serde_error() {
+        let err = serde_json::from_str::<CardMetadataDto>(&metadata_json(r#""yesterday""#))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("yesterday"),
+            "serde error should include the offending input, got: {err}"
+        );
+        assert!(
+            err.contains("YYYY-MM-DD"),
+            "serde error should mention the supported format, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_card_metadata_dto_serializes_midnight_utc_as_yyyy_mm_dd() {
+        let dto = CardMetadataDto {
+            priority: "High".to_string(),
+            status: "Todo".to_string(),
+            points: None,
+            due_date: Some(chrono::Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap()),
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        assert!(
+            json.contains(r#""due_date":"2024-01-15""#),
+            "midnight UTC should serialize as YYYY-MM-DD for round-trip-friendly display, got: {json}"
+        );
+    }
+
+    #[test]
+    fn test_card_metadata_dto_serializes_non_midnight_as_rfc3339() {
+        let dto = CardMetadataDto {
+            priority: "High".to_string(),
+            status: "Todo".to_string(),
+            points: None,
+            due_date: Some(
+                chrono::Utc
+                    .with_ymd_and_hms(2024, 1, 15, 14, 30, 0)
+                    .unwrap(),
+            ),
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        assert!(
+            json.contains(r#""due_date":"2024-01-15T14:30:00+00:00""#),
+            "non-midnight should round-trip as full RFC3339, got: {json}"
+        );
+    }
+
+    #[test]
+    fn test_card_metadata_dto_serializes_none_as_json_null() {
+        let dto = CardMetadataDto {
+            priority: "High".to_string(),
+            status: "Todo".to_string(),
+            points: None,
+            due_date: None,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        assert!(json.contains(r#""due_date":null"#), "got: {json}");
+    }
+
+    #[test]
+    fn test_apply_to_writes_due_date_when_dto_is_some() {
+        let mut card = Card {
+            due_date: None,
+            ..fresh_card_for_tests()
+        };
+        let dto = CardMetadataDto {
+            priority: "High".to_string(),
+            status: "Todo".to_string(),
+            points: None,
+            due_date: Some(chrono::Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap()),
+        };
+        dto.apply_to(&mut card);
+        assert_eq!(
+            card.due_date,
+            Some(chrono::Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap())
+        );
+    }
+
+    #[test]
+    fn test_apply_to_preserves_existing_due_date_when_dto_is_none() {
+        let preset = chrono::Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+        let mut card = Card {
+            due_date: Some(preset),
+            ..fresh_card_for_tests()
+        };
+        let dto = CardMetadataDto {
+            priority: "High".to_string(),
+            status: "Todo".to_string(),
+            points: None,
+            due_date: None,
+        };
+        dto.apply_to(&mut card);
+        assert_eq!(
+            card.due_date,
+            Some(preset),
+            "null in editor must leave the existing due_date untouched (consistent with priority/status/points behaviour)"
+        );
+    }
+
+    fn fresh_card_for_tests() -> Card {
+        let mut board = crate::Board::new("B".to_string(), None);
+        crate::Card::new(&mut board, uuid::Uuid::new_v4(), "title".to_string(), 0)
+    }
 
     #[test]
     fn test_deserialize_old_branch_prefix_format() {
