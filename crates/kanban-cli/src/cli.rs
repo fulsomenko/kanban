@@ -306,6 +306,23 @@ impl SortDir {
     }
 }
 
+#[cfg(test)]
+mod sort_key_tests {
+    use super::*;
+    use kanban_domain::sort::SortBy;
+    use kanban_domain::SortField;
+
+    #[test]
+    fn test_sort_key_due_date_maps_to_sort_by_due_date() {
+        assert!(matches!(SortKey::DueDate.to_sort_by(), SortBy::DueDate));
+    }
+
+    #[test]
+    fn test_sort_key_due_date_maps_to_sort_field_due_date() {
+        assert_eq!(SortKey::DueDate.to_sort_field(), SortField::DueDate);
+    }
+}
+
 #[derive(Args)]
 pub struct RelationCommand {
     #[command(subcommand)]
