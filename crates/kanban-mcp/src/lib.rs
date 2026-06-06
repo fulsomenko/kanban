@@ -394,6 +394,12 @@ pub struct UpdateBoardRequest {
     pub sprint_prefix: Option<String>,
     #[schemars(description = "New card prefix (optional)")]
     pub card_prefix: Option<String>,
+    #[schemars(
+        description = "Default sort field for the board's task list. Valid: points, priority, created_at, updated_at, due_date, status, position, default"
+    )]
+    pub task_sort_field: Option<String>,
+    #[schemars(description = "Default sort direction. Valid: asc, desc")]
+    pub task_sort_order: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -496,6 +502,12 @@ pub struct ListCardsRequest {
     pub sprint: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
+    #[schemars(
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. When omitted, falls back to the board's task_sort_field (requires `board`)."
+    )]
+    pub sort: Option<String>,
+    #[schemars(description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order.")]
+    pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -504,6 +516,14 @@ pub struct ListCardsRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListArchivedCardsRequest {
+    #[schemars(description = "Filter archives by board UUID or name (also drives the default sort field)")]
+    pub board: Option<String>,
+    #[schemars(
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. Falls back to the board's task_sort_field when omitted."
+    )]
+    pub sort: Option<String>,
+    #[schemars(description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order.")]
+    pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -832,12 +852,22 @@ impl KanbanMcpServer {
     }
 
     #[tool(
-        description = "Update a board's properties (name, description, sprint_prefix, card_prefix)"
+        description = "Update a board's properties (name, description, sprint_prefix, card_prefix, task_sort_field, task_sort_order)"
     )]
     pub async fn tool_update_board(
         &self,
         Parameters(req): Parameters<UpdateBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
+        let task_sort_field = req
+            .task_sort_field
+            .as_deref()
+            .map(parse_sort_field)
+            .transpose()?;
+        let task_sort_order = req
+            .task_sort_order
+            .as_deref()
+            .map(parse_sort_order)
+            .transpose()?;
         let updates = BoardUpdate {
             name: req.name,
             description: req
@@ -852,6 +882,8 @@ impl KanbanMcpServer {
                 .card_prefix
                 .map(FieldUpdate::Set)
                 .unwrap_or(FieldUpdate::NoChange),
+            task_sort_field,
+            task_sort_order,
             ..Default::default()
         };
         let board = locked_write(&self.ctx, |ctx| {
@@ -1009,6 +1041,8 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let status = req.status.as_deref().map(parse_status).transpose()?;
+        let sort = req.sort.as_deref().map(parse_sort_field).transpose()?;
+        let sort_order = req.order.as_deref().map(parse_sort_order).transpose()?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let result = locked_read(&self.ctx, |ctx| {
@@ -1035,7 +1069,8 @@ impl KanbanMcpServer {
                 column_id,
                 sprint_id,
                 status,
-                ..Default::default()
+                sort,
+                sort_order,
             };
             ctx.list_cards_paged(filter, page, page_size)
                 .map_err(kanban_err_to_mcp)
@@ -1184,9 +1219,23 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListArchivedCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let cards = read_op!(self.ctx, list_archived_cards)?;
+        let sort = req.sort.as_deref().map(parse_sort_field).transpose()?;
+        let sort_order = req.order.as_deref().map(parse_sort_order).transpose()?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
+        let cards = locked_read(&self.ctx, |ctx| {
+            let board_id = match &req.board {
+                Some(raw) => Some(ctx.mcp_resolve_board(raw)?),
+                None => None,
+            };
+            ctx.list_archived_cards_sorted(ArchivedCardListFilter {
+                board_id,
+                sort,
+                sort_order,
+            })
+            .map_err(kanban_err_to_mcp)
+        })
+        .await?;
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(
