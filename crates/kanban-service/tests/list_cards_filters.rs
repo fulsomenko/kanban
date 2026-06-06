@@ -4,7 +4,8 @@ use kanban_domain::commands::{
     CreateSprint, SprintCommand,
 };
 use kanban_domain::{
-    CardListFilter, CreateCardOptions, InMemoryStore, KanbanOperations, KanbanResult,
+    count_filtered_cards, CardListFilter, CreateCardOptions, InMemoryStore, KanbanOperations,
+    KanbanResult,
 };
 use kanban_service::KanbanContext;
 use std::collections::HashSet;
@@ -153,5 +154,78 @@ async fn test_list_cards_empty_search_is_noop() -> KanbanResult<()> {
     })?;
 
     assert_eq!(summaries.len(), 3, "empty search must not filter anything");
+    Ok(())
+}
+
+/// `count_filtered_cards` and `list_cards` are two sides of the same
+/// predicate (`passes_filter`). If a future change touches one but not
+/// the other, badge counts in the TUI silently disagree with what's
+/// actually rendered. Pin them together across every non-trivial filter.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_count_filtered_cards_matches_list_cards_len() -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let s = setup(&mut ctx).await?;
+
+    let cases: Vec<(&str, CardListFilter)> = vec![
+        (
+            "board scope only",
+            CardListFilter {
+                board_id: Some(s.board_id),
+                ..Default::default()
+            },
+        ),
+        (
+            "sprint_ids any-of",
+            CardListFilter {
+                board_id: Some(s.board_id),
+                sprint_ids: Some([s.sprint_a, s.sprint_b].into_iter().collect()),
+                ..Default::default()
+            },
+        ),
+        (
+            "hide_assigned",
+            CardListFilter {
+                board_id: Some(s.board_id),
+                hide_assigned: true,
+                ..Default::default()
+            },
+        ),
+        (
+            "search substring",
+            CardListFilter {
+                board_id: Some(s.board_id),
+                search: Some("bug".into()),
+                ..Default::default()
+            },
+        ),
+    ];
+
+    let store = ctx.data_store();
+    let all_cards = store.list_all_cards()?;
+    let all_columns = store.list_all_columns()?;
+    let all_sprints = store.list_all_sprints()?;
+
+    for (label, filter) in cases {
+        let board = match filter.board_id {
+            Some(bid) => store.get_board(bid)?,
+            None => None,
+        };
+        let listed = ctx.list_cards(filter.clone())?;
+        let counted = count_filtered_cards(
+            &all_cards,
+            &all_columns,
+            &all_sprints,
+            board.as_ref(),
+            &filter,
+        );
+        assert_eq!(
+            listed.len(),
+            counted,
+            "count/list parity broken for case `{}`: list={} count={}",
+            label,
+            listed.len(),
+            counted
+        );
+    }
     Ok(())
 }
