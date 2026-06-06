@@ -5,10 +5,7 @@
 
 pub mod sprint;
 
-use crate::filter::{BoardFilter, CardFilter, ColumnFilter, SprintFilter, UnassignedOnlyFilter};
-use crate::search::{CardSearcher, CompositeSearcher};
-use crate::sort::{get_sorter_for_field, OrderedSorter};
-use crate::{Board, Card, Column, Sprint};
+use crate::{filter_and_sort_cards, Board, Card, CardListFilter, Column, Sprint};
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -72,48 +69,29 @@ impl<'a> CardQueryBuilder<'a> {
     }
 
     /// Execute the query and return matching card IDs.
+    ///
+    /// Thin shim over `filter_and_sort_cards` — the actual filter/sort
+    /// logic lives in the domain helper so the service, CLI and MCP
+    /// share it. This builder is the TUI's typed API into that helper.
     pub fn execute(self) -> Vec<Uuid> {
-        let board_filter = BoardFilter::new(self.board.id, self.columns);
-        let column_filter = self.column_id.map(ColumnFilter::new);
-        let sprint_member_filter = self.sprint_filter.as_ref().and_then(|ids| {
-            (!ids.is_empty()).then(|| SprintFilter::in_sprints(ids.iter().copied()))
-        });
-        let search_filter = self.search_query.as_deref().map(CompositeSearcher::all);
-
-        let mut filtered_cards: Vec<&Card> = self
-            .cards
-            .iter()
-            .filter(|c| {
-                if !board_filter.matches(c) {
-                    return false;
-                }
-                if let Some(ref cf) = column_filter {
-                    if !cf.matches(c) {
-                        return false;
-                    }
-                }
-                if let Some(ref sf) = sprint_member_filter {
-                    if !sf.matches(c) {
-                        return false;
-                    }
-                }
-                if self.hide_assigned && !UnassignedOnlyFilter.matches(c) {
-                    return false;
-                }
-                if let Some(ref searcher) = search_filter {
-                    if !searcher.matches(c, self.board, self.sprints) {
-                        return false;
-                    }
-                }
-                true
-            })
-            .collect();
-
-        let sorter = get_sorter_for_field(self.board.task_sort_field);
-        let ordered_sorter = OrderedSorter::new(sorter, self.board.task_sort_order);
-        ordered_sorter.sort_by(&mut filtered_cards);
-
-        filtered_cards.iter().map(|c| c.id).collect()
+        let filter = CardListFilter {
+            board_id: Some(self.board.id),
+            column_id: self.column_id,
+            sprint_ids: self.sprint_filter,
+            hide_assigned: self.hide_assigned,
+            search: self.search_query,
+            ..Default::default()
+        };
+        filter_and_sort_cards(
+            self.cards,
+            self.columns,
+            self.sprints,
+            Some(self.board),
+            &filter,
+        )
+        .into_iter()
+        .map(|c| c.id)
+        .collect()
     }
 }
 

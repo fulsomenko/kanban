@@ -134,6 +134,14 @@ impl TuiContext {
         self.inner.data_store()
     }
 
+    /// Render-path delegate for the TUI: returns full `Card`s filtered
+    /// and sorted by the service. The TUI must not re-implement
+    /// filtering or sorting on top of its model snapshot — go through
+    /// this method so CLI, MCP, and the TUI share one resolution path.
+    pub fn list_cards_full(&self, filter: CardListFilter) -> KanbanResult<Vec<Card>> {
+        self.inner.list_cards_full(filter)
+    }
+
     pub fn persistence_metadata(&self) -> Option<kanban_persistence::PersistenceMetadata> {
         self.inner.persistence_metadata()
     }
