@@ -271,6 +271,7 @@ pub enum SortKey {
     Points,
     CreatedAt,
     UpdatedAt,
+    DueDate,
     Status,
     Position,
 }
@@ -291,8 +292,26 @@ impl SortKey {
             SortKey::Points => SortBy::Points,
             SortKey::CreatedAt => SortBy::CreatedAt,
             SortKey::UpdatedAt => SortBy::UpdatedAt,
+            SortKey::DueDate => SortBy::DueDate,
             SortKey::Status => SortBy::Status,
             SortKey::Position => SortBy::Position,
+        }
+    }
+
+    /// Convert a CLI sort flag to the board-level `SortField`. `CardNumber`
+    /// has no `SortField` counterpart, so it falls back to `SortField::Default`
+    /// which `get_sorter_for_field` also resolves via `SortBy::CardNumber`.
+    pub fn to_sort_field(self) -> kanban_domain::SortField {
+        use kanban_domain::SortField;
+        match self {
+            SortKey::CardNumber => SortField::Default,
+            SortKey::Priority => SortField::Priority,
+            SortKey::Points => SortField::Points,
+            SortKey::CreatedAt => SortField::CreatedAt,
+            SortKey::UpdatedAt => SortField::UpdatedAt,
+            SortKey::DueDate => SortField::DueDate,
+            SortKey::Status => SortField::Status,
+            SortKey::Position => SortField::Position,
         }
     }
 }
