@@ -120,8 +120,10 @@ URL but not yet listed in the default search/install path.
 **Recovery**: wait. Watch
 `https://community.chocolatey.org/packages/kanban`. There is
 nothing to do on our side. If users ask, the version is
-installable today from a direct nupkg URL or `choco install
-kanban --version X.Y.Z --pre`.
+installable today via direct download from
+`https://community.chocolatey.org/packages/kanban/X.Y.Z`. Once
+it appears in the OData feed (usually within hours of approval)
+`choco install kanban --version X.Y.Z` works.
 
 ## Anti-patterns — do not do these
 

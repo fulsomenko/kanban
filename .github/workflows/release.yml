@@ -390,12 +390,13 @@ jobs:
           # package is unpublished — see packaging/chocolatey/RECOVERY.md.
           $checkUrl = "https://community.chocolatey.org/api/v2/Packages(Id='kanban',Version='$env:VERSION')"
           try {
-            $null = Invoke-RestMethod -Uri $checkUrl -UseBasicParsing -ErrorAction Stop
+            $null = Invoke-RestMethod -Uri $checkUrl -TimeoutSec 30 -ErrorAction Stop
             Write-Output "kanban $env:VERSION is already published on Chocolatey; nothing to do."
             exit 0
           } catch {
-            if ($_.Exception.Response.StatusCode.value__ -ne 404) {
-              Write-Output ("Pre-check returned non-404 error ({0}); proceeding to push anyway." -f $_.Exception.Message)
+            $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+            if ($status -ne 404) {
+              Write-Output ("Pre-check returned status {0} ({1}); proceeding to push anyway." -f $status, $_.Exception.Message)
             }
           }
 
