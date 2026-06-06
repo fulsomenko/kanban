@@ -382,9 +382,38 @@ jobs:
           CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
           VERSION: ${{ needs.release.outputs.new }}
         run: |
-          choco push "kanban.$env:VERSION.nupkg" `
-            --api-key="$env:CHOCO_API_KEY" `
-            --source="https://push.chocolatey.org/"
+          # Pre-check: if this version is already published and approved,
+          # treat as success. This makes the job safe to re-run after a
+          # transient workflow failure that followed a successful push.
+          # NB: Submitted/Waiting-for-Reviewer states are NOT visible via
+          # the public v2 OData API, so a 404 here does not prove the
+          # package is unpublished — see packaging/chocolatey/RECOVERY.md.
+          $checkUrl = "https://community.chocolatey.org/api/v2/Packages(Id='kanban',Version='$env:VERSION')"
+          try {
+            $null = Invoke-RestMethod -Uri $checkUrl -TimeoutSec 30 -ErrorAction Stop
+            Write-Output "kanban $env:VERSION is already published on Chocolatey; nothing to do."
+            exit 0
+          } catch {
+            $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+            if ($status -ne 404) {
+              Write-Output ("Pre-check returned status {0} ({1}); proceeding to push anyway." -f $status, $_.Exception.Message)
+            }
+          }
+
+          try {
+            choco push "kanban.$env:VERSION.nupkg" `
+              --api-key="$env:CHOCO_API_KEY" `
+              --source="https://push.chocolatey.org/"
+            if ($LASTEXITCODE -ne 0) { throw "choco push exited $LASTEXITCODE" }
+          } catch {
+            Write-Output ""
+            Write-Output "=== Chocolatey publish failed ==="
+            Write-Output "Recovery runbook: packaging/chocolatey/RECOVERY.md"
+            Write-Output "Chocolatey rejects re-push of the same id+version permanently."
+            Write-Output "Do NOT simply re-run this job before diagnosing — see the runbook."
+            Write-Output "================================="
+            throw
+          }
 
       - name: Note moderation expectations
         shell: pwsh

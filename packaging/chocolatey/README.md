@@ -30,3 +30,8 @@ variables; set them before running the rest:
 
 To re-run the smoke locally on a Windows box, copy the build/ steps above.
 Do NOT commit substituted files.
+
+When the `publish-chocolatey` workflow job fails, see [RECOVERY.md](RECOVERY.md)
+for the diagnosis flowchart. Chocolatey rejects re-pushing the same
+`id + version` permanently, so the recovery path differs sharply by failure
+mode and is not safe to guess.
