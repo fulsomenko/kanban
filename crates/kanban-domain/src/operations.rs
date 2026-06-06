@@ -41,9 +41,18 @@ fn allowed_column_ids(columns: &[Column], board_id: Option<Uuid>) -> Option<Hash
     })
 }
 
+fn build_searcher(filter: &CardListFilter) -> Option<CompositeSearcher> {
+    filter
+        .search
+        .as_deref()
+        .filter(|q| !q.is_empty())
+        .map(|q| CompositeSearcher::all(q.to_string()))
+}
+
 fn passes_filter(
     card: &Card,
     allowed_columns: Option<&HashSet<Uuid>>,
+    searcher: Option<&CompositeSearcher>,
     board: Option<&Board>,
     sprints: &[Sprint],
     filter: &CardListFilter,
@@ -79,12 +88,10 @@ fn passes_filter(
             return false;
         }
     }
-    if let Some(ref query) = filter.search {
-        if !query.is_empty() {
-            let Some(board) = board else { return true };
-            if !CompositeSearcher::all(query.clone()).matches(card, board, sprints) {
-                return false;
-            }
+    if let Some(searcher) = searcher {
+        let Some(board) = board else { return true };
+        if !searcher.matches(card, board, sprints) {
+            return false;
         }
     }
     true
@@ -101,9 +108,19 @@ pub fn filter_and_sort_cards<T: Borrow<Card> + Clone>(
     filter: &CardListFilter,
 ) -> Vec<T> {
     let allowed = allowed_column_ids(columns, filter.board_id);
+    let searcher = build_searcher(filter);
     let mut result: Vec<T> = cards
         .iter()
-        .filter(|c| passes_filter((*c).borrow(), allowed.as_ref(), board, sprints, filter))
+        .filter(|c| {
+            passes_filter(
+                (*c).borrow(),
+                allowed.as_ref(),
+                searcher.as_ref(),
+                board,
+                sprints,
+                filter,
+            )
+        })
         .cloned()
         .collect();
     if let Some((field, order)) = resolve_sort(filter.sort, filter.sort_order, board) {
@@ -122,9 +139,19 @@ pub fn count_filtered_cards<T: Borrow<Card>>(
     filter: &CardListFilter,
 ) -> usize {
     let allowed = allowed_column_ids(columns, filter.board_id);
+    let searcher = build_searcher(filter);
     cards
         .iter()
-        .filter(|c| passes_filter((*c).borrow(), allowed.as_ref(), board, sprints, filter))
+        .filter(|c| {
+            passes_filter(
+                (*c).borrow(),
+                allowed.as_ref(),
+                searcher.as_ref(),
+                board,
+                sprints,
+                filter,
+            )
+        })
         .count()
 }
 
