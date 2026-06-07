@@ -29,5 +29,6 @@ Negative-path test coverage has been added for `card create
 
 No behavioural change for end users; this fills a coverage gap and
 strengthens the error contract for library and MCP consumers.
+
 Library consumers exhaustively matching on `kanban_domain::DomainError`
 will need to add an arm for `SprintBoardMismatch`.
