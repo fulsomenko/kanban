@@ -51,11 +51,17 @@ list.
 **State on origin:** release commit pushed; tag not yet created; one or
 more crates may have been pushed to crates.io already.
 
-**Recovery:** re-run the failed job. `scripts/publish-crates.sh` checks
-each crate against crates.io and skips the ones that are already at the
-target version, so re-running converges. Investigate the underlying
-failure (rate-limit, network blip, validation error) only if the re-run
-hits the same crate twice.
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. `scripts/publish-crates.sh` is itself
+idempotent — it checks each crate against crates.io and skips the ones
+already at the target version — so re-invoking it locally converges.
+
+If you must finish by hand:
+```bash
+export CARGO_REGISTRY_TOKEN=<token>
+git fetch origin && git checkout master && git pull --ff-only
+nix run .#publish-crates
+```
 
 ## Step: Tag version
 
@@ -90,9 +96,10 @@ no Release object; downstream jobs (`build-windows`,
 `publish-chocolatey`) cannot start because they checkout the tag and
 upload to the Release.
 
-**Recovery:** re-run the failed job. `softprops/action-gh-release@v2`
-creates the release if missing and updates it if present, so re-running
-is safe.
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. `softprops/action-gh-release@v2` is
+idempotent — it creates the release if missing and updates it if
+present — so triggering the same operation by hand is safe.
 
 If you must finish by hand:
 ```bash
@@ -106,9 +113,10 @@ gh release create "v<VERSION>" --generate-notes
 **State on origin:** crates.io, tag, and GitHub Release are at the new
 version; AUR may have a stale `pkgver`.
 
-**Recovery:** re-run the failed job. The AUR commit step skips empty
-commits (`git diff --cached --quiet`) and the deploy action exits
-cleanly when there is nothing to push, so re-running converges.
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. The AUR commit step is idempotent against
+the local working copy (empty-commit skip + `allow_empty_commits: false`
+on deploy), so the same operation by hand converges.
 
 If you must finish by hand:
 ```bash
@@ -129,8 +137,10 @@ git push
 **State on origin:** crates.io, tag, GitHub Release, and AUR are at
 the new version; the tap formula may be stale.
 
-**Recovery:** re-run the failed job. The bump step skips empty commits,
-so re-running is safe if the formula already matches the target.
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. The bump step is idempotent (empty-commit
+skip), so the same operation by hand is safe when the formula already
+matches the target.
 
 If you must finish by hand:
 ```bash
