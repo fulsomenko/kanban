@@ -1,19 +1,23 @@
 //! Shared backup-path policy used by both the async `Migrator::migrate`
 //! orchestrator and the sync `migrate_to_v7_sync` chain.
 //!
-//! The destructive V→V7 chain (`split_graph` and/or `v6_to_v7_rename`)
-//! runs against a freshly-written file via the atomic temp+rename
-//! pattern. A pre-chain `.v{N}.backup` is the user's rollback artifact
-//! if a step fails mid-chain. V1→V2 and V2→V3 manage their own backups
-//! (or none — V2→V3 is shape-stable) and are excluded from this policy.
+//! The destructive V→V7 chain (per-step migrations plus `split_graph`
+//! and `v6_to_v7_rename`) runs against a freshly-written file via the
+//! atomic temp+rename pattern. A pre-chain `.v{N}.backup` is the user's
+//! rollback artifact if any step fails mid-chain. The backup is taken
+//! before the first per-step migration runs and removed only on full
+//! V→V7 success, so it covers the entire chain from V1/V2/V3/V4/V5/V6
+//! all the way to V7.
 
 use kanban_persistence::FormatVersion;
 use std::path::{Path, PathBuf};
 
 /// Return `Some(path.vN.backup)` for source versions that need a
-/// pre-V7-chain backup; `None` otherwise.
+/// pre-V7-chain backup; `None` for V7 (no migration needed).
 pub(crate) fn pre_v7_backup_path_for(from: FormatVersion, path: &Path) -> Option<PathBuf> {
     match from {
+        FormatVersion::V1 => Some(path.with_extension("v1.backup")),
+        FormatVersion::V2 => Some(path.with_extension("v2.backup")),
         FormatVersion::V3 => Some(path.with_extension("v3.backup")),
         FormatVersion::V4 => Some(path.with_extension("v4.backup")),
         FormatVersion::V5 => Some(path.with_extension("v5.backup")),
@@ -29,6 +33,22 @@ mod tests {
 
     fn p() -> PathBuf {
         PathBuf::from("/tmp/board.json")
+    }
+
+    #[test]
+    fn returns_some_for_v1() {
+        assert_eq!(
+            pre_v7_backup_path_for(FormatVersion::V1, &p()),
+            Some(PathBuf::from("/tmp/board.v1.backup"))
+        );
+    }
+
+    #[test]
+    fn returns_some_for_v2() {
+        assert_eq!(
+            pre_v7_backup_path_for(FormatVersion::V2, &p()),
+            Some(PathBuf::from("/tmp/board.v2.backup"))
+        );
     }
 
     #[test]
@@ -61,14 +81,6 @@ mod tests {
             pre_v7_backup_path_for(FormatVersion::V6, &p()),
             Some(PathBuf::from("/tmp/board.v6.backup"))
         );
-    }
-
-    #[test]
-    fn returns_none_for_v1_and_v2() {
-        // V1 manages its own .v1.backup inside migrate_v1_to_v2; V2 is
-        // shape-stable through V2→V3 and needs no backup.
-        assert_eq!(pre_v7_backup_path_for(FormatVersion::V1, &p()), None);
-        assert_eq!(pre_v7_backup_path_for(FormatVersion::V2, &p()), None);
     }
 
     #[test]
