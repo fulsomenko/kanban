@@ -1855,6 +1855,68 @@ mod card_tests {
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["data"]["sprint_id"].is_null());
     }
+
+    /// Negative path: `--assign` with a name that doesn't match any sprint
+    /// produces an error mentioning both "sprint" and the offending name,
+    /// not a panic or a generic message. Pins the surface contract that
+    /// MCP/CLI/TUI agents rely on when learning the schema by trial.
+    #[test]
+    fn test_card_create_with_assign_unknown_name_fails_with_useful_error() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        // No sprint created on purpose.
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "X",
+                "--assign",
+                "nonexistent",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Sprint"))
+            .stderr(predicate::str::contains("nonexistent"));
+    }
+
+    /// Negative path: `--assign <random-uuid>` produces an error mentioning
+    /// both "sprint" and the offending UUID. Same surface contract as the
+    /// name case above; the resolver accepts UUIDs first, so this exercises
+    /// a different code path inside `resolve_sprint_id`.
+    #[test]
+    fn test_card_create_with_assign_unknown_uuid_fails_with_useful_error() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        let bogus = "11111111-2222-3333-4444-555555555555";
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "X",
+                "--assign",
+                bogus,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("sprint"))
+            .stderr(predicate::str::contains(bogus));
+    }
 }
 
 mod sprint_tests {

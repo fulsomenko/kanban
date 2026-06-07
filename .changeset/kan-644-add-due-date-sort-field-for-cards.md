@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 Cards can now be sorted by their due date in every view across all three
@@ -58,3 +58,7 @@ frontends.
 - MCP descriptions for `task_sort_field`, `sort` and the archived-card
   `sort` now explain that `default` orders by card number and that date
   fields and points place None values last in ascending order.
+
+Library consumers exhaustively matching on `kanban_domain::SortField` or
+`kanban_domain::SortBy` will need to add an arm for the new `DueDate`
+variant.

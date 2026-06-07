@@ -1,5 +1,5 @@
 ---
-bump: patch
+bump: minor
 ---
 
 Kanban now refuses to silently mishandle data files written by a newer
@@ -53,3 +53,6 @@ schema additions — no manual migration required.
 display string from the new raw `KANBAN_VERSION` / `KANBAN_COMMIT`
 components used by the writer stamp. This is only relevant to anyone
 embedding kanban-core as a library.
+
+Library consumers exhaustively matching on `kanban_domain::KanbanError`
+will need to add an arm for the new `UnsupportedFutureVersion` variant.
