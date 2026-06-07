@@ -79,12 +79,10 @@ impl Migrator {
                 // them. V6 files skip the split-graph step entirely and go
                 // straight to the v6→v7 rename.
                 //
-                // A `.v{N}.backup` is created before the shape-changing step
-                // and removed on successful migration. V7 files cannot be
-                // opened by pre-V7 binaries, so this is the user's escape
-                // hatch if the upgrade has to be rolled back. The
-                // source-version → backup-path policy is shared with the
-                // sync orchestrator in `json_file_store::migrate_to_v7_sync`.
+                // See `migration::backup` for the source-version → backup-path
+                // policy shared with the sync orchestrator. A `.v{N}.backup`
+                // is the user's escape hatch if the upgrade has to be rolled
+                // back, since V7 files cannot be opened by pre-V7 binaries.
                 let backup_path = super::pre_v7_backup_path_for(from, path);
                 if let Some(backup) = &backup_path {
                     tokio::fs::copy(path, backup).await?;

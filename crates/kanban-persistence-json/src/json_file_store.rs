@@ -85,13 +85,8 @@ impl JsonEnvelope {
 // ─── Sync migration helpers ───────────────────────────────────────────────────
 
 /// Synchronous V*→V7 migration chain used by [`JsonFileStore::load_sync`].
-///
-/// Mirrors the async `Migrator::migrate` orchestrator's `.v{N}.backup`
-/// behaviour: for V3/V4/V5/V6 sources a backup of the original file is
-/// written before the shape-changing chain runs. On success the backup
-/// is removed; on failure it is preserved so the user can roll back.
-/// V1→V2 manages its own backup inside `migrate_v1_to_v2_sync`; V2→V3
-/// is shape-stable and needs none.
+/// See [`migration::backup`] for the backup-path policy shared with the
+/// async [`Migrator::migrate`] orchestrator.
 fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
     if from == FormatVersion::V1 {
         migrate_v1_to_v2_sync(path)?;
@@ -100,40 +95,31 @@ fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec
         migrate_v2_to_v3_sync(path)?;
     }
 
-    // Backup-and-cleanup wrap around the shape-changing steps
-    // (split_graph_sync and/or v6_to_v7_rename_sync). Identical in shape
-    // to the async orchestrator in `Migrator::migrate`; both call sites
-    // share the source-version → backup-path policy in `migration::backup`.
     let backup_path = crate::migration::pre_v7_backup_path_for(from, path);
     if let Some(backup) = &backup_path {
         std::fs::copy(path, backup)?;
-        tracing::info!("Created pre-V7 backup at {} (sync)", backup.display());
+        tracing::info!("Created pre-V7 backup at {}", backup.display());
     }
 
-    let result: PersistenceResult<Vec<u8>> = (|| {
-        if from < FormatVersion::V6 {
-            split_graph_sync(path)?;
-        }
-        v6_to_v7_rename_sync(path)
-    })();
+    let result = run_split_and_rename_chain_sync(from, path);
 
     match (result, backup_path) {
         (Ok(bytes), Some(backup)) => {
             if let Err(e) = std::fs::remove_file(&backup) {
                 tracing::warn!(
-                    "Sync migration successful but failed to remove backup at {}: {}",
+                    "Migration successful but failed to remove backup at {}: {}",
                     backup.display(),
                     e
                 );
             } else {
-                tracing::info!("Sync migration to V7 verified, backup removed");
+                tracing::info!("Migration to V7 verified, backup removed");
             }
             Ok(bytes)
         }
         (Ok(bytes), None) => Ok(bytes),
         (Err(e), Some(backup)) => {
             tracing::error!(
-                "Sync migration to V7 failed: {}. Backup preserved at {}",
+                "Migration to V7 failed: {}. Backup preserved at {}",
                 e,
                 backup.display()
             );
@@ -141,6 +127,16 @@ fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec
         }
         (Err(e), None) => Err(e),
     }
+}
+
+/// Sync sibling of [`Migrator::run_split_and_rename_chain`]. Runs the V6
+/// split-graph transform (only if the file is pre-V6) and then the v6→v7
+/// spawns-bucket rename, returning the final on-disk bytes.
+fn run_split_and_rename_chain_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
+    if from < FormatVersion::V6 {
+        split_graph_sync(path)?;
+    }
+    v6_to_v7_rename_sync(path)
 }
 
 fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
