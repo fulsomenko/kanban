@@ -77,15 +77,24 @@ pub enum DependencyError {
     SelfReference,
     #[error("edge not found")]
     EdgeNotFound,
+    #[error("edge already exists between the two cards")]
+    DuplicateEdge,
 }
 
 #[derive(Error, Debug)]
 pub enum DomainError {
+    /// `entity` is rendered as a sentence-leading noun (e.g. `"Card"`,
+    /// `"Sprint"`). All call sites of `KanbanError::not_found(entity, id)`
+    /// must pass a capitalized noun so the rendered message reads
+    /// `"Card <uuid> not found"`, matching the sibling `NotFoundByName`
+    /// convention. See KAN-659 for the normalization history.
     #[error("{entity} {id} not found")]
     NotFound { entity: &'static str, id: Uuid },
 
     /// Returned when a name- or identifier-based lookup misses. The `available`
     /// vector is appended to the message so users see what they could have typed.
+    /// `entity` follows the same capitalized-noun convention as
+    /// [`NotFound`](Self::NotFound).
     #[error("{}", DomainError::fmt_not_found_by_name(entity, name, available))]
     NotFoundByName {
         entity: &'static str,
@@ -120,6 +129,15 @@ pub enum DomainError {
 
     #[error("column {column_id} has reached its WIP limit of {limit}")]
     WipLimitExceeded { column_id: Uuid, limit: u32 },
+
+    #[error(
+        "sprint {sprint_id} belongs to board {sprint_board} but card is being created on board {card_board}"
+    )]
+    SprintBoardMismatch {
+        sprint_id: Uuid,
+        sprint_board: Uuid,
+        card_board: Uuid,
+    },
 }
 
 impl DomainError {
@@ -165,36 +183,6 @@ impl DomainError {
         )
     }
 
-    pub fn board_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "board",
-            id,
-        }
-    }
-    pub fn card_not_found(id: Uuid) -> Self {
-        Self::NotFound { entity: "card", id }
-    }
-    pub fn column_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "column",
-            id,
-        }
-    }
-    pub fn sprint_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "sprint",
-            id,
-        }
-    }
-    pub fn archived_card_not_found(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: "archived card",
-            id,
-        }
-    }
-    pub fn tag_not_found(id: Uuid) -> Self {
-        Self::NotFound { entity: "tag", id }
-    }
     pub fn wip_limit_exceeded(column_id: Uuid, limit: u32) -> Self {
         Self::WipLimitExceeded { column_id, limit }
     }
@@ -223,6 +211,12 @@ pub enum KanbanError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error(
+        "file format v{file_version} is newer than this binary's max v{binary_max}; \
+         please upgrade kanban"
+    )]
+    UnsupportedFutureVersion { file_version: u32, binary_max: u32 },
 }
 
 /// Return `noun` (when count is 1) or `noun + "s"` (otherwise).
@@ -329,6 +323,13 @@ impl KanbanError {
         )
     }
 
+    pub fn is_duplicate_edge(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge))
+        )
+    }
+
     pub fn is_conflict_detected(&self) -> bool {
         matches!(self, KanbanError::ConflictDetected { .. })
     }
@@ -338,6 +339,17 @@ impl KanbanError {
             self,
             KanbanError::Domain(DomainError::WipLimitExceeded { .. })
         )
+    }
+
+    pub fn is_sprint_board_mismatch(&self) -> bool {
+        matches!(
+            self,
+            KanbanError::Domain(DomainError::SprintBoardMismatch { .. })
+        )
+    }
+
+    pub fn is_unsupported_future_version(&self) -> bool {
+        matches!(self, KanbanError::UnsupportedFutureVersion { .. })
     }
 
     pub fn serialization(msg: impl Into<String>) -> Self {
@@ -367,7 +379,7 @@ mod tests {
 
     #[test]
     fn test_is_not_found_returns_true_for_card_not_found() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(err.is_not_found());
     }
 
@@ -403,13 +415,13 @@ mod tests {
 
     #[test]
     fn test_is_self_reference_returns_false_for_other_error() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(!err.is_self_reference());
     }
 
     #[test]
     fn test_is_edge_not_found_returns_false_for_other_error() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(!err.is_edge_not_found());
     }
 
@@ -427,6 +439,61 @@ mod tests {
         let id = Uuid::new_v4();
         let err = KanbanError::Domain(DomainError::wip_limit_exceeded(id, 3));
         assert!(err.is_wip_limit_exceeded());
+    }
+
+    #[test]
+    fn test_sprint_board_mismatch_display_includes_all_three_ids() {
+        let sprint_id = Uuid::new_v4();
+        let sprint_board = Uuid::new_v4();
+        let card_board = Uuid::new_v4();
+        let err = KanbanError::Domain(DomainError::SprintBoardMismatch {
+            sprint_id,
+            sprint_board,
+            card_board,
+        });
+        let msg = err.to_string();
+        assert!(msg.contains(&sprint_id.to_string()), "msg: {msg}");
+        assert!(msg.contains(&sprint_board.to_string()), "msg: {msg}");
+        assert!(msg.contains(&card_board.to_string()), "msg: {msg}");
+        assert!(msg.contains("belongs to board"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_is_sprint_board_mismatch_predicate() {
+        let err = KanbanError::Domain(DomainError::SprintBoardMismatch {
+            sprint_id: Uuid::new_v4(),
+            sprint_board: Uuid::new_v4(),
+            card_board: Uuid::new_v4(),
+        });
+        assert!(err.is_sprint_board_mismatch());
+        assert!(!err.is_validation());
+        assert!(!err.is_not_found());
+    }
+
+    #[test]
+    fn test_unsupported_future_version_display_mentions_both_versions() {
+        let err = KanbanError::UnsupportedFutureVersion {
+            file_version: 99,
+            binary_max: 6,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("99"), "msg should mention file version: {msg}");
+        assert!(msg.contains('6'), "msg should mention binary max: {msg}");
+    }
+
+    #[test]
+    fn test_is_unsupported_future_version_returns_true() {
+        let err = KanbanError::UnsupportedFutureVersion {
+            file_version: 99,
+            binary_max: 6,
+        };
+        assert!(err.is_unsupported_future_version());
+    }
+
+    #[test]
+    fn test_is_unsupported_future_version_returns_false_for_other_error() {
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
+        assert!(!err.is_unsupported_future_version());
     }
 
     #[test]
@@ -668,7 +735,7 @@ mod tests {
 
     #[test]
     fn test_is_not_found_true_for_uuid_variant_too() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(err.is_not_found(), "umbrella predicate covers Uuid variant");
         assert!(!err.is_not_found_by_name());
     }
@@ -676,9 +743,9 @@ mod tests {
     #[test]
     fn test_not_found_display_includes_entity_and_id() {
         let id = Uuid::new_v4();
-        let err = KanbanError::not_found("card", id);
+        let err = KanbanError::not_found("Card", id);
         let msg = err.to_string();
-        assert!(msg.contains("card"));
+        assert!(msg.contains("Card"));
         assert!(msg.contains(&id.to_string()));
     }
 

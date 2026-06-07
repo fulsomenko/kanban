@@ -69,7 +69,6 @@ impl StoreState {
 pub struct InMemoryStore {
     state: RwLock<StoreState>,
     command_log: RwLock<Vec<Vec<Command>>>,
-    snapshots: RwLock<HashMap<u64, Snapshot>>,
 }
 
 impl InMemoryStore {
@@ -77,7 +76,6 @@ impl InMemoryStore {
         Self {
             state: RwLock::new(StoreState::new()),
             command_log: RwLock::new(Vec::new()),
-            snapshots: RwLock::new(HashMap::new()),
         }
     }
 
@@ -103,22 +101,6 @@ impl InMemoryStore {
         self.command_log
             .write()
             .map_err(|e| KanbanError::Internal(format!("Command log RwLock poisoned (write): {e}")))
-    }
-
-    fn read_snapshots(
-        &self,
-    ) -> KanbanResult<std::sync::RwLockReadGuard<'_, HashMap<u64, Snapshot>>> {
-        self.snapshots
-            .read()
-            .map_err(|e| KanbanError::Internal(format!("Snapshots RwLock poisoned (read): {e}")))
-    }
-
-    fn write_snapshots(
-        &self,
-    ) -> KanbanResult<std::sync::RwLockWriteGuard<'_, HashMap<u64, Snapshot>>> {
-        self.snapshots
-            .write()
-            .map_err(|e| KanbanError::Internal(format!("Snapshots RwLock poisoned (write): {e}")))
     }
 }
 
@@ -500,49 +482,6 @@ impl CommandStore for InMemoryStore {
         let log = self.read_log()?;
         Ok((log.clone(), log.len() as u64))
     }
-
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        let mut log = self.write_log()?;
-        log.truncate(after as usize);
-
-        let mut snaps = self.write_snapshots()?;
-        snaps.retain(|&idx, _| idx <= after);
-        Ok(())
-    }
-
-    fn supports_indexed_snapshots(&self) -> bool {
-        true
-    }
-
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        let mut snaps = self.write_snapshots()?;
-        snaps.insert(idx, snapshot.clone());
-        Ok(())
-    }
-
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        let snaps = self.read_snapshots()?;
-        Ok(snaps.get(&idx).cloned())
-    }
-
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        let drop = drop_count as usize;
-        let mut log = self.write_log()?;
-        if drop >= log.len() {
-            log.clear();
-        } else {
-            log.drain(..drop);
-        }
-
-        let mut snaps = self.write_snapshots()?;
-        let old_snaps: HashMap<u64, Snapshot> = snaps.drain().collect();
-        for (idx, snap) in old_snaps {
-            if idx > drop_count {
-                snaps.insert(idx - drop_count, snap);
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -551,7 +490,7 @@ mod tests {
     use crate::{Board, Card, Column, Sprint};
 
     fn make_board(name: &str) -> Board {
-        Board::new(name.to_string(), None)
+        Board::new(name.to_string(), None::<String>)
     }
 
     fn make_column(board_id: Uuid, name: &str, pos: i32) -> Column {
@@ -1037,7 +976,7 @@ mod tests {
     fn test_upsert_and_get_sprint() {
         let store = InMemoryStore::new();
         let board = make_board("B");
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         store.upsert_sprint(sprint).unwrap();
 
@@ -1051,9 +990,9 @@ mod tests {
         let store = InMemoryStore::new();
         let board1 = make_board("B1");
         let board2 = make_board("B2");
-        let s1 = Sprint::new(board1.id, 1, None, None);
-        let s2 = Sprint::new(board1.id, 2, None, None);
-        let s3 = Sprint::new(board2.id, 1, None, None);
+        let s1 = Sprint::new(board1.id, 1, None, None::<String>);
+        let s2 = Sprint::new(board1.id, 2, None, None::<String>);
+        let s3 = Sprint::new(board2.id, 1, None, None::<String>);
         store.upsert_sprint(s1).unwrap();
         store.upsert_sprint(s2).unwrap();
         store.upsert_sprint(s3).unwrap();
@@ -1068,8 +1007,8 @@ mod tests {
         let store = InMemoryStore::new();
         let board1 = make_board("B1");
         let board2 = make_board("B2");
-        let s1 = Sprint::new(board1.id, 1, None, None);
-        let s2 = Sprint::new(board2.id, 1, None, None);
+        let s1 = Sprint::new(board1.id, 1, None, None::<String>);
+        let s2 = Sprint::new(board2.id, 1, None, None::<String>);
         let s2_id = s2.id;
         store.upsert_sprint(s1).unwrap();
         store.upsert_sprint(s2).unwrap();
@@ -1189,25 +1128,23 @@ mod tests {
 
     #[test]
     fn test_modify_graph_atomic_on_error_leaves_graph_unchanged() {
-        use crate::dependencies::CardGraphExt;
-
         let store = InMemoryStore::new();
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
 
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(a, b).unwrap();
+        graph.set_block(a, b).unwrap();
         store.set_graph(graph).unwrap();
 
         let result = store.modify_graph(Box::new(move |graph| {
-            graph.cards.remove_card_edges(a);
+            graph.remove_node(a);
             Err(crate::KanbanError::validation("rollback"))
         }));
         assert!(result.is_err());
 
         let graph = store.get_graph().unwrap();
         assert_eq!(
-            graph.cards.edges().len(),
+            graph.len(),
             1,
             "modify_graph should not apply partial changes on error"
         );
@@ -1230,7 +1167,7 @@ mod tests {
         let mut board = make_board("B");
         let col = make_column(board.id, "C", 0);
         let card = make_card(&mut board, col.id, "Card", 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         store.upsert_board(board).unwrap();
         store.upsert_column(col).unwrap();
         store.upsert_card(card).unwrap();
@@ -1269,8 +1206,8 @@ mod tests {
         store.upsert_card(card3).unwrap();
         store.upsert_card(card1).unwrap();
 
-        let s2 = Sprint::new(board_a.id, 2, None, None);
-        let s1 = Sprint::new(board_a.id, 1, None, None);
+        let s2 = Sprint::new(board_a.id, 2, None, None::<String>);
+        let s1 = Sprint::new(board_a.id, 1, None, None::<String>);
         store.upsert_sprint(s2).unwrap();
         store.upsert_sprint(s1).unwrap();
 
@@ -1329,7 +1266,7 @@ mod tests {
         let mut board = make_board("B");
         let col = make_column(board.id, "C", 0);
         let card = make_card(&mut board, col.id, "Card", 0);
-        let sprint = Sprint::new(board.id, 1, None, None);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let ac = ArchivedCard::new(card.clone(), col.id, 0);
 
         assert!(store.upsert_board(board.clone()).is_ok());
@@ -1389,9 +1326,6 @@ mod tests {
 
         assert!(store.load_commands(0, 1).is_ok());
         assert_eq!(store.load_commands(0, 1).unwrap().len(), 1);
-
-        assert!(store.truncate_commands_after(0).is_ok());
-        assert_eq!(store.command_count().unwrap(), 0);
     }
 
     // Concurrency test
@@ -1432,147 +1366,6 @@ mod tests {
 
         let boards = store.list_boards().unwrap();
         assert_eq!(boards.len(), 10);
-    }
-
-    // Indexed snapshot tests (Fix 1)
-
-    #[test]
-    fn test_in_memory_store_supports_indexed_snapshots() {
-        let store = InMemoryStore::new();
-        assert!(
-            store.supports_indexed_snapshots(),
-            "InMemoryStore should support indexed snapshots for O(1) undo"
-        );
-    }
-
-    #[test]
-    fn test_in_memory_store_indexed_snapshot_store_and_load() {
-        let store = InMemoryStore::new();
-        let board = make_board("B");
-        store.upsert_board(board).unwrap();
-
-        let snap = store.snapshot().unwrap();
-        store.store_snapshot_at(1, &snap).unwrap();
-
-        let loaded = store.load_snapshot_at(1).unwrap();
-        assert!(loaded.is_some(), "stored snapshot should be loadable");
-        assert_eq!(loaded.unwrap().boards.len(), 1);
-    }
-
-    #[test]
-    fn test_in_memory_store_load_snapshot_at_missing_returns_none() {
-        let store = InMemoryStore::new();
-        let loaded = store.load_snapshot_at(42).unwrap();
-        assert!(loaded.is_none());
-    }
-
-    #[test]
-    fn test_in_memory_store_truncate_removes_snapshots() {
-        let store = InMemoryStore::new();
-        let snap = Snapshot::new();
-
-        store.store_snapshot_at(1, &snap).unwrap();
-        store.store_snapshot_at(2, &snap).unwrap();
-        store.store_snapshot_at(3, &snap).unwrap();
-
-        store.truncate_commands_after(1).unwrap();
-
-        assert!(
-            store.load_snapshot_at(1).unwrap().is_some(),
-            "snapshot at 1 should survive truncation after 1"
-        );
-        assert!(
-            store.load_snapshot_at(2).unwrap().is_none(),
-            "snapshot at 2 should be removed after truncation"
-        );
-        assert!(
-            store.load_snapshot_at(3).unwrap().is_none(),
-            "snapshot at 3 should be removed after truncation"
-        );
-    }
-
-    // shift_commands tests (Fix 2)
-
-    #[test]
-    fn test_in_memory_store_shift_commands_removes_oldest() {
-        let store = InMemoryStore::new();
-        let cmd1 = crate::commands::Command::Board(crate::commands::BoardCommand::Create(
-            crate::commands::CreateBoard {
-                id: Uuid::new_v4(),
-                name: "B1".into(),
-                card_prefix: None,
-                position: 0,
-            },
-        ));
-        let cmd2 = crate::commands::Command::Board(crate::commands::BoardCommand::Create(
-            crate::commands::CreateBoard {
-                id: Uuid::new_v4(),
-                name: "B2".into(),
-                card_prefix: None,
-                position: 1,
-            },
-        ));
-        let cmd3 = crate::commands::Command::Board(crate::commands::BoardCommand::Create(
-            crate::commands::CreateBoard {
-                id: Uuid::new_v4(),
-                name: "B3".into(),
-                card_prefix: None,
-                position: 2,
-            },
-        ));
-
-        store.append_commands(&[cmd1]).unwrap();
-        store.append_commands(&[cmd2]).unwrap();
-        store.append_commands(&[cmd3]).unwrap();
-        assert_eq!(store.command_count().unwrap(), 3);
-
-        store.shift_commands(2).unwrap();
-        assert_eq!(store.command_count().unwrap(), 1);
-
-        let batches = store.load_commands(0, 1).unwrap();
-        assert_eq!(batches.len(), 1);
-        if let crate::commands::Command::Board(crate::commands::BoardCommand::Create(ref cb)) =
-            batches[0][0]
-        {
-            assert_eq!(cb.name, "B3", "only the last command should remain");
-        } else {
-            panic!("unexpected command variant");
-        }
-    }
-
-    #[test]
-    fn test_in_memory_store_shift_commands_also_removes_snapshots() {
-        let store = InMemoryStore::new();
-        let snap = Snapshot::new();
-
-        let cmd = crate::commands::Command::Board(crate::commands::BoardCommand::Delete(
-            crate::commands::DeleteBoard {
-                board_id: Uuid::new_v4(),
-            },
-        ));
-        store.append_commands(std::slice::from_ref(&cmd)).unwrap();
-        store.append_commands(std::slice::from_ref(&cmd)).unwrap();
-        store.append_commands(&[cmd]).unwrap();
-
-        store.store_snapshot_at(1, &snap).unwrap();
-        store.store_snapshot_at(2, &snap).unwrap();
-        store.store_snapshot_at(3, &snap).unwrap();
-
-        store.shift_commands(2).unwrap();
-
-        // Old snapshot at index 3 should be renumbered to index 1
-        assert!(
-            store.load_snapshot_at(1).unwrap().is_some(),
-            "snapshot formerly at index 3 should now be at index 1"
-        );
-        assert!(
-            store.load_snapshot_at(2).unwrap().is_none(),
-            "no snapshot should exist at index 2 after shift"
-        );
-        assert!(
-            store.load_snapshot_at(3).unwrap().is_none(),
-            "no snapshot should exist at old index 3 after shift"
-        );
     }
 
     #[test]

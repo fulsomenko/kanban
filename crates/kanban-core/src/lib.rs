@@ -1,4 +1,5 @@
 pub mod config;
+pub mod datetime_input;
 pub mod error;
 pub mod graph;
 pub mod input;
@@ -13,8 +14,12 @@ pub use config::{
     validate_branch_prefix, AppConfig, DEFAULT_JSON_FILENAME, DEFAULT_SQLITE_FILENAME,
     DEFAULT_STORAGE_BACKEND,
 };
+pub use datetime_input::parse_datetime_input;
 pub use error::{CoreError, CoreResult};
-pub use graph::{Edge, EdgeDirection, Graph, GraphNode};
+pub use graph::{
+    Cascadable, DagGraph, Directed, Edge, EdgeBase, EdgeSet, EdgeStore, Graph, GraphError,
+    GraphNode, Undirected, UndirectedGraph,
+};
 pub use input::InputState;
 pub use logging::{LogEntry, Loggable};
 pub use paginated_list::{
@@ -23,4 +28,4 @@ pub use paginated_list::{
 pub use pagination::{Page, PageInfo};
 pub use selection::SelectionState;
 pub use traits::Editable;
-pub use version::VERSION;
+pub use version::{CLI_VERSION_DISPLAY, KANBAN_COMMIT, KANBAN_VERSION};

@@ -19,12 +19,12 @@ pub struct Column {
 }
 
 impl Column {
-    pub fn new(board_id: BoardId, name: String, position: i32) -> Self {
+    pub fn new(board_id: BoardId, name: impl Into<String>, position: i32) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             board_id,
-            name,
+            name: name.into(),
             position,
             wip_limit: None,
             created_at: now,
@@ -42,8 +42,8 @@ impl Column {
         self.updated_at = Utc::now();
     }
 
-    pub fn update_name(&mut self, name: String) {
-        self.name = name;
+    pub fn update_name(&mut self, name: impl Into<String>) {
+        self.name = name.into();
         self.updated_at = Utc::now();
     }
 
@@ -57,6 +57,26 @@ impl Column {
         }
         updates.wip_limit.apply_to(&mut self.wip_limit);
         self.updated_at = Utc::now();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_column_new_accepts_str_name_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let column = Column::new(board_id, "To Do", 0);
+        assert_eq!(column.name, "To Do");
+    }
+
+    #[test]
+    fn test_column_update_name_accepts_str_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let mut column = Column::new(board_id, "To Do", 0);
+        column.update_name("In Progress");
+        assert_eq!(column.name, "In Progress");
     }
 }
 

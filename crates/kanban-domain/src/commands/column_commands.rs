@@ -1,6 +1,8 @@
-use super::CommandContext;
+use super::{Command, CommandContext};
+use crate::data_store::DataStore;
+use crate::field_update::FieldUpdate;
 use crate::ColumnUpdate;
-use crate::KanbanResult;
+use crate::{KanbanError, KanbanResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -28,6 +30,14 @@ impl ColumnCommand {
             ColumnCommand::Delete(c) => c.description(),
         }
     }
+
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        match self {
+            ColumnCommand::Create(c) => c.capture_inverse(store),
+            ColumnCommand::Update(c) => c.capture_inverse(store),
+            ColumnCommand::Delete(c) => c.capture_inverse(store),
+        }
+    }
 }
 
 /// Update column properties (name, position, wip_limit)
@@ -47,6 +57,36 @@ impl UpdateColumn {
 
     pub fn description(&self) -> String {
         "Update column".to_string()
+    }
+
+    /// Inverse: read the column's current state and synthesise an
+    /// `UpdateColumn` whose `updates` field-by-field set each touched
+    /// field back to its prior value. Untouched fields stay `None` /
+    /// `NoChange` so the inverse is minimal.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let column = match store.get_column(self.column_id)? {
+            Some(c) => c,
+            // The column doesn't exist — execute() will fail with NotFound
+            // and rollback will take over. No inverse to capture.
+            None => return Err(KanbanError::not_found("Column", self.column_id)),
+        };
+
+        let inverse_updates = ColumnUpdate {
+            name: self.updates.name.as_ref().map(|_| column.name.clone()),
+            position: self.updates.position.map(|_| column.position),
+            wip_limit: match self.updates.wip_limit {
+                FieldUpdate::NoChange => FieldUpdate::NoChange,
+                FieldUpdate::Set(_) | FieldUpdate::Clear => match column.wip_limit {
+                    Some(v) => FieldUpdate::Set(v),
+                    None => FieldUpdate::Clear,
+                },
+            },
+        };
+
+        Ok(vec![Command::Column(ColumnCommand::Update(UpdateColumn {
+            column_id: self.column_id,
+            updates: inverse_updates,
+        }))])
     }
 }
 
@@ -70,6 +110,14 @@ impl CreateColumn {
     pub fn description(&self) -> String {
         format!("Create column: '{}'", self.name)
     }
+
+    /// Inverse: delete the newly-created column. The `id` is in the
+    /// command — no pre-state read needed.
+    pub fn capture_inverse(&self, _store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        Ok(vec![Command::Column(ColumnCommand::Delete(DeleteColumn {
+            column_id: self.id,
+        }))])
+    }
 }
 
 /// Delete a column
@@ -79,6 +127,32 @@ pub struct DeleteColumn {
 }
 
 impl DeleteColumn {
+    /// Inverse: re-create the deleted column with its prior id, board, name,
+    /// and position. If the column had a non-default wip_limit, follow up
+    /// with an UpdateColumn that restores it.
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        let column = match store.get_column(self.column_id)? {
+            Some(c) => c,
+            None => return Err(KanbanError::not_found("Column", self.column_id)),
+        };
+        let mut commands = vec![Command::Column(ColumnCommand::Create(CreateColumn {
+            id: column.id,
+            board_id: column.board_id,
+            name: column.name.clone(),
+            position: column.position,
+        }))];
+        if let Some(wip) = column.wip_limit {
+            commands.push(Command::Column(ColumnCommand::Update(UpdateColumn {
+                column_id: column.id,
+                updates: ColumnUpdate {
+                    wip_limit: FieldUpdate::Set(wip),
+                    ..Default::default()
+                },
+            })));
+        }
+        Ok(commands)
+    }
+
     pub fn execute(&self, context: &CommandContext) -> KanbanResult<()> {
         let has_cards = context.store.count_cards_in_column(self.column_id)? > 0;
         if has_cards {

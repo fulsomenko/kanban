@@ -32,7 +32,7 @@ fn test_card_description_appears_in_detail_view() {
 
     // Setup app state to show the card detail view
     app.selection.active_board_index = Some(0);
-    app.selection.active_card_index = Some(0);
+    app.selection.active_card_id = Some(card.id);
 
     // Verify the card has the description
     app.prepare_frame();
@@ -118,11 +118,11 @@ fn test_markdown_rendering_of_description() {
     use kanban_domain::{Board, Card};
     use kanban_tui::components::*;
 
-    let mut board = Board::new("Test Board".to_string(), None);
+    let mut board = Board::new("Test Board", None::<String>);
     let column_id = uuid::Uuid::new_v4();
 
     // Test rendering of non-empty description
-    let mut card = Card::new(&mut board, column_id, "Test".to_string(), 0);
+    let mut card = Card::new(&mut board, column_id, "Test", 0);
     card.description = Some("# Heading\n\nSome **bold** text".to_string());
 
     let lines = build_description_lines(&card);
@@ -168,7 +168,7 @@ fn test_card_with_empty_string_description_displays_placeholder() {
         .unwrap();
 
     // Create card with empty string description (simulating user clearing a description)
-    let _card = app
+    let card = app
         .ctx
         .create_card(
             board.id,
@@ -183,7 +183,7 @@ fn test_card_with_empty_string_description_displays_placeholder() {
 
     // Setup app state
     app.selection.active_board_index = Some(0);
-    app.selection.active_card_index = Some(0);
+    app.selection.active_card_id = Some(card.id);
 
     // Verify the card has an empty string description (not None)
     app.prepare_frame();

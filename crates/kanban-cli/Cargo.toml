@@ -34,6 +34,7 @@ clap.workspace = true
 clap_complete.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
@@ -42,8 +43,8 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-kanban-persistence-json = { path = "../kanban-persistence-json", version = "^0.6" }
-kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", version = "^0.6" }
+kanban-persistence-json = { path = "../kanban-persistence-json" }
+kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", features = ["test-helpers"] }
 tempfile.workspace = true
 assert_cmd.workspace = true
 predicates.workspace = true

@@ -9,6 +9,7 @@ kanban [FILE] [COMMAND]
 kanban                        # Launch TUI; pick or skip a file from the startup dialog
 kanban boards.json            # Launch TUI with specific file
 kanban boards.json board list # Run a CLI command
+kanban init boards.json --board "Project"  # Create file + first board, exit
 ```
 
 **File selection priority** (TUI launches the choose-storage dialog when none of these is set):
@@ -98,6 +99,50 @@ kanban sprint complete <ID>
 kanban sprint cancel <ID>
 kanban sprint delete <ID>
 kanban sprint carry-over --from <ID> --to <ID>
+```
+
+### `relation`
+
+Manage parent / child relationships between cards. All four subcommands
+accept UUIDs or short identifiers (e.g. `KAN-5`). Cross-board parent /
+child relations are permitted.
+
+```bash
+kanban relation add <PARENT> <CHILD> [<CHILD>...]
+kanban relation remove <PARENT> <CHILD> [<CHILD>...]
+kanban relation parents <CARD> [--sort <KEY>] [--order <DIR>]
+kanban relation children <CARD> [--sort <KEY>] [--order <DIR>]
+```
+
+`add` and `remove` are atomic: the entire multi-child batch is committed
+or rolled back as a single transaction. A mid-list failure (cycle,
+self-reference, duplicate, unknown card) leaves both in-memory and
+on-disk state unchanged. Error messages name the offending parent and
+child via the shared `messages::*` helpers (e.g.
+`"cycle detected: making KAN-5 a parent of KAN-7 would create a cycle"`).
+
+`--sort` accepts `card-number / priority / points / created-at /
+updated-at / status / position`. `--order` accepts `asc / desc`. Default:
+`--sort card-number --order asc`.
+
+### `init`
+
+```bash
+kanban init [FILE] [--board <NAME>]
+```
+
+Create a board file and an initial board, then exit without opening the TUI.
+
+- `FILE` — target file path (default: uses KANBAN_FILE env var, then config storage_location, then boards.json)
+- `--board` — name of the first board to create. Omit to create an empty file.
+
+Examples:
+
+```bash
+kanban init                    # creates boards.json with no entities
+kanban init boards.json        # creates boards.json with no entities
+kanban init boards.json --board "Sprint 1"  # creates boards.json with "Sprint 1"
+KANBAN_FILE=work.json kanban init --board "Team Board"  # uses env var
 ```
 
 ### Top-level commands

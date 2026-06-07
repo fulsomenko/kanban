@@ -37,7 +37,7 @@ impl Sprint {
         board_id: Uuid,
         sprint_number: u32,
         name_index: Option<usize>,
-        prefix: Option<String>,
+        prefix: Option<impl Into<String>>,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -45,7 +45,7 @@ impl Sprint {
             board_id,
             sprint_number,
             name_index,
-            prefix,
+            prefix: prefix.map(Into::into),
             card_prefix: None,
             status: SprintStatus::Planning,
             start_date: None,
@@ -118,13 +118,13 @@ impl Sprint {
         self.updated_at = Utc::now();
     }
 
-    pub fn update_prefix(&mut self, prefix: Option<String>) {
-        self.prefix = prefix;
+    pub fn update_prefix(&mut self, prefix: Option<impl Into<String>>) {
+        self.prefix = prefix.map(Into::into);
         self.updated_at = Utc::now();
     }
 
-    pub fn update_card_prefix(&mut self, card_prefix: Option<String>) {
-        self.card_prefix = card_prefix;
+    pub fn update_card_prefix(&mut self, card_prefix: Option<impl Into<String>>) {
+        self.card_prefix = card_prefix.map(Into::into);
         self.updated_at = Utc::now();
     }
 
@@ -237,6 +237,29 @@ mod tests {
             created_at: ts("2026-01-01T00:00:00Z"),
             updated_at: ts("2026-01-01T00:00:00Z"),
         }
+    }
+
+    #[test]
+    fn test_sprint_new_accepts_str_prefix_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let sprint = Sprint::new(board_id, 1, None, Some("sprint"));
+        assert_eq!(sprint.prefix, Some("sprint".to_string()));
+    }
+
+    #[test]
+    fn test_sprint_update_prefix_accepts_str_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let mut sprint = Sprint::new(board_id, 1, None, None::<String>);
+        sprint.update_prefix(Some("custom"));
+        assert_eq!(sprint.prefix, Some("custom".to_string()));
+    }
+
+    #[test]
+    fn test_sprint_update_card_prefix_accepts_str_without_to_string() {
+        let board_id = uuid::Uuid::new_v4();
+        let mut sprint = Sprint::new(board_id, 1, None, None::<String>);
+        sprint.update_card_prefix(Some("KAN"));
+        assert_eq!(sprint.card_prefix, Some("KAN".to_string()));
     }
 
     #[test]

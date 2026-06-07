@@ -4,23 +4,34 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::commands::Command;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
-    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanResult,
-    Snapshot, Sprint,
+    ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, InMemoryStore, KanbanError,
+    KanbanResult, Snapshot, Sprint,
 };
-use kanban_persistence::PersistenceStore;
+use kanban_persistence::{PersistenceMetadata, PersistenceStore};
 use kanban_persistence_sqlite::SqliteStore;
 use uuid::Uuid;
 
 pub struct SqliteBackend {
     db: SqliteStore,
+    /// In-session command log. The on-disk `command_log` table exists
+    /// in the schema but is not yet wired through this backend.
     mem: InMemoryStore,
+    /// Most-recent metadata observed from the underlying DB. Populated on
+    /// `open()` and refreshed inside `flush()` after the writer-stamp UPDATE.
+    /// Mirrors `JsonDataStore::last_metadata` so `persistence_metadata()` —
+    /// called once per TUI render via the F12 diagnostics panel — is a
+    /// RwLock read instead of a SELECT round-trip.
+    last_metadata: std::sync::RwLock<Option<PersistenceMetadata>>,
 }
 
 impl SqliteBackend {
     pub async fn open(locator: &str) -> KanbanResult<Self> {
+        let db = SqliteStore::open(locator).await?;
+        let initial = db.read_metadata_sync()?;
         Ok(Self {
-            db: SqliteStore::open(locator).await?,
+            db,
             mem: InMemoryStore::new(),
+            last_metadata: std::sync::RwLock::new(initial),
         })
     }
 }
@@ -168,6 +179,8 @@ impl DataStore for SqliteBackend {
 
 // ─── CommandStore ─────────────────────────────────────────────────────────────
 
+// Routes to the in-memory mirror; the on-disk command_log table stays
+// unwritten until a separate piece of work wires it up.
 impl CommandStore for SqliteBackend {
     fn append_commands(&self, cmds: &[Command]) -> KanbanResult<u64> {
         self.mem.append_commands(cmds)
@@ -177,21 +190,6 @@ impl CommandStore for SqliteBackend {
     }
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
         self.mem.load_commands(from, to)
-    }
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        self.mem.truncate_commands_after(after)
-    }
-    fn supports_indexed_snapshots(&self) -> bool {
-        self.mem.supports_indexed_snapshots()
-    }
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.mem.store_snapshot_at(idx, snapshot)
-    }
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        self.mem.load_snapshot_at(idx)
-    }
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        self.mem.shift_commands(drop_count)
     }
 }
 
@@ -204,10 +202,28 @@ impl crate::backend::KanbanBackend for SqliteBackend {
     }
 
     async fn flush(&self) -> KanbanResult<()> {
-        self.db.checkpoint().await
+        // Stamp before truncating the WAL: anything in the WAL is about to
+        // land in the main DB, so the writer attribution should land
+        // alongside it.
+        self.db.stamp_writer().await?;
+        self.db.checkpoint().await?;
+        // Refresh the cached metadata so subsequent persistence_metadata()
+        // calls reflect what was just stamped without re-issuing a SELECT.
+        // Propagate poison errors rather than swallowing — symmetric with
+        // JsonDataStore::do_flush's handling of the same RwLock pattern.
+        let fresh = self.db.read_metadata_sync()?;
+        let mut guard = self.last_metadata.write().map_err(|_| {
+            KanbanError::Internal("sqlite_backend: last_metadata RwLock poisoned".into())
+        })?;
+        *guard = fresh;
+        Ok(())
     }
 
     fn instance_id(&self) -> Uuid {
         <SqliteStore as PersistenceStore>::instance_id(&self.db)
+    }
+
+    fn persistence_metadata(&self) -> Option<PersistenceMetadata> {
+        self.last_metadata.read().ok().and_then(|g| g.clone())
     }
 }

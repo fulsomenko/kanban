@@ -40,11 +40,20 @@ mapfile -t INTERNAL_DEPS <<< "$deps_out"
 # kanban-service which itself depends on kanban-persistence-sqlite optionally).
 for crate in "${CRATES[@]}"; do
   deps_section=$(awk '/^\[dependencies\]/{flag=1; next} /^\[/{flag=0} flag' "$crate/Cargo.toml")
+  dev_deps_section=$(awk '/^\[dev-dependencies\]/{flag=1; next} /^\[/{flag=0} flag' "$crate/Cargo.toml")
   for dep in "${INTERNAL_DEPS[@]}"; do
     if echo "$deps_section" | grep -q "$dep = { path = "; then
       if ! echo "$deps_section" | grep "$dep = { path = " | grep -q 'version = '; then
         echo "❌ Error: $crate is missing version spec for $dep in [dependencies]"
         echo "   Use: $dep = { path = \"../$dep\", version = \"^0.1\" }"
+        exit 1
+      fi
+    fi
+    if echo "$dev_deps_section" | grep -q "$dep = { path = "; then
+      if echo "$dev_deps_section" | grep "$dep = { path = " | grep -q 'version = '; then
+        echo "❌ Error: $crate has version spec for $dep in [dev-dependencies]"
+        echo "   Path-only is required; sibling features added between releases cannot resolve against published versions."
+        echo "   Use: $dep = { path = \"../$dep\" }"
         exit 1
       fi
     fi
@@ -58,21 +67,28 @@ cargo check --workspace --all-features --quiet
 echo "✓ Workspace check passed"
 
 echo ""
-echo "Step 5: Validating individual crate dry-run publishes..."
-# --no-verify skips the per-crate compile during dry-run. This is necessary
-# because `cargo publish --dry-run` resolves path-deps to their crates.io
-# version, but workspace crates with API changes between releases can't
-# compile against their previously-published siblings until each is
-# published in dependency order. Step 4 (`cargo check --workspace`) already
-# verifies compile against the local source. Step 5's value here is the
-# manifest/package-shape check, not the build.
+echo "Step 5: Validating individual crate packages..."
+# `cargo package --no-verify` produces the same .crate tarball that
+# `cargo publish` would upload and runs the manifest/inclusion checks
+# (required fields, license-file / readme resolution, package size, file
+# exclusion rules) without touching the network or compiling. We skip
+# compile because workspace crates with API changes between releases
+# can't always compile against their previously-published siblings
+# until each is published in dependency order. Step 4
+# (`cargo check --workspace`) already verifies compile against the
+# local source.
 for crate in "${CRATES[@]}"; do
   echo "  Validating $crate..."
   cd "$crate"
-  cargo publish --dry-run --no-verify --offline --quiet --allow-dirty 2>&1 | grep -v "warning:" || true
+  if ! output=$(cargo package --no-verify --allow-dirty --quiet 2>&1); then
+    echo "$output"
+    echo "❌ cargo package failed for $crate"
+    exit 1
+  fi
+  echo "$output" | grep -v "^warning:" || true
   cd - > /dev/null
 done
-echo "✓ All crates passed dry-run validation"
+echo "✓ All crates passed package validation"
 
 echo ""
 echo "✅ Release validation complete - ready to publish!"

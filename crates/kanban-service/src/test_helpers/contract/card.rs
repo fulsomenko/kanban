@@ -26,6 +26,7 @@ pub async fn test_card_all_fields_roundtrip(factory: &BackendFactory) {
                 priority: Some(CardPriority::Critical),
                 points: Some(8),
                 due_date: Some(chrono::Utc::now()),
+                ..Default::default()
             },
         )
         .unwrap();

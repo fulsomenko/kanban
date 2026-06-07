@@ -26,11 +26,11 @@ pub struct JsonDataStore {
     file_store: Arc<dyn PersistenceStore + Send + Sync>,
     /// `None` until first access. Populated by `ensure_loaded()`.
     inner: RwLock<Option<InMemoryStore>>,
+    /// Most-recent metadata observed from the underlying file. Updated on
+    /// load (via `ensure_loaded`) and after each save. Backs the F12
+    /// diagnostics panel.
+    last_metadata: RwLock<Option<PersistenceMetadata>>,
     dirty: AtomicBool,
-    /// Set by `reload()` to suppress the dirty flag from the first
-    /// `with_mutate()` call that follows (internal housekeeping, not a user
-    /// mutation). Consumed atomically by `with_mutate()`.
-    suppress_next_dirty: AtomicBool,
 }
 
 impl JsonDataStore {
@@ -38,8 +38,8 @@ impl JsonDataStore {
         Self {
             file_store,
             inner: RwLock::new(None),
+            last_metadata: RwLock::new(None),
             dirty: AtomicBool::new(false),
-            suppress_next_dirty: AtomicBool::new(false),
         }
     }
 
@@ -61,15 +61,21 @@ impl JsonDataStore {
         // Perform all I/O and build the store outside any lock.
         let store = InMemoryStore::new();
 
-        let loaded = self
-            .file_store
-            .load_sync()
-            .map_err(|e| KanbanError::Internal(format!("json_backend: load failed: {e}")))?;
+        // Convert via the From impl rather than stringifying — that way typed
+        // variants such as `UnsupportedFutureVersion` and `ConflictDetected`
+        // survive across the persistence/service boundary and reach the user
+        // surfaces (CLI, MCP, TUI) intact. Stringifying them flattens
+        // everything into KanbanError::Internal and breaks discriminators
+        // like KanbanError::is_unsupported_future_version().
+        let loaded = self.file_store.load_sync().map_err(KanbanError::from)?;
 
-        if let Some((ss, _meta)) = loaded {
-            let snapshot = snapshot_from_json_bytes(&ss.data)
-                .map_err(|e| KanbanError::Internal(format!("json_backend: parse failed: {e}")))?;
+        if let Some((ss, meta)) = loaded {
+            let snapshot = snapshot_from_json_bytes(&ss.data).map_err(KanbanError::from)?;
             store.apply_snapshot(snapshot)?;
+            let mut guard = self.last_metadata.write().map_err(|_| {
+                KanbanError::Internal("json_backend: last_metadata RwLock poisoned".into())
+            })?;
+            *guard = Some(meta);
         }
 
         // Acquire write lock only to swap in the built store.
@@ -117,14 +123,19 @@ impl JsonDataStore {
             store.snapshot()?
         };
 
-        let data = snapshot_to_json_bytes(&snapshot)
-            .map_err(|e| KanbanError::Internal(format!("json_backend: snapshot serialise: {e}")))?;
+        let data = snapshot_to_json_bytes(&snapshot).map_err(KanbanError::from)?;
         let metadata = PersistenceMetadata::new(self.file_store.instance_id());
 
-        self.file_store
+        let returned = self
+            .file_store
             .save(StoreSnapshot { data, metadata })
             .await
             .map_err(KanbanError::from)?;
+
+        let mut guard = self.last_metadata.write().map_err(|_| {
+            KanbanError::Internal("json_backend: last_metadata RwLock poisoned".into())
+        })?;
+        *guard = Some(returned);
 
         Ok(())
     }
@@ -142,12 +153,7 @@ impl JsonDataStore {
             .read()
             .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
         let result = f(guard.as_ref().expect("ensure_loaded guarantees Some"))?;
-        // Consume the suppression flag set by reload(). If it was set, this
-        // is internal housekeeping (e.g. truncate_commands_after(0)) and must
-        // not mark the backend dirty.
-        if !self.suppress_next_dirty.swap(false, Ordering::AcqRel) {
-            self.dirty.store(true, Ordering::Release);
-        }
+        self.dirty.store(true, Ordering::Release);
         Ok(result)
     }
 }
@@ -302,23 +308,8 @@ impl CommandStore for JsonDataStore {
     fn load_commands(&self, from: u64, to: u64) -> KanbanResult<Vec<Vec<Command>>> {
         self.with_read(|s| s.load_commands(from, to))
     }
-    fn truncate_commands_after(&self, after: u64) -> KanbanResult<()> {
-        self.with_mutate(|s| s.truncate_commands_after(after))
-    }
     fn load_all_commands(&self) -> KanbanResult<(Vec<Vec<Command>>, u64)> {
         self.with_read(|s| s.load_all_commands())
-    }
-    fn supports_indexed_snapshots(&self) -> bool {
-        false
-    }
-    fn store_snapshot_at(&self, idx: u64, snapshot: &Snapshot) -> KanbanResult<()> {
-        self.with_mutate(|s| s.store_snapshot_at(idx, snapshot))
-    }
-    fn load_snapshot_at(&self, idx: u64) -> KanbanResult<Option<Snapshot>> {
-        self.with_read(|s| s.load_snapshot_at(idx))
-    }
-    fn shift_commands(&self, drop_count: u64) -> KanbanResult<()> {
-        self.with_mutate(|s| s.shift_commands(drop_count))
     }
 }
 
@@ -350,10 +341,6 @@ impl KanbanBackend for JsonDataStore {
             *guard = None;
         } // inner write lock released — mirrors ensure_loaded's ordering
         self.dirty.store(false, Ordering::Release);
-        // Suppress the dirty flag from the first with_mutate() after reload.
-        // KanbanContext::reload() calls truncate_commands_after(0) for
-        // internal housekeeping; that must not mark the backend dirty.
-        self.suppress_next_dirty.store(true, Ordering::Release);
         Ok(())
     }
 
@@ -368,6 +355,15 @@ impl KanbanBackend for JsonDataStore {
     fn instance_id(&self) -> Uuid {
         self.file_store.instance_id()
     }
+
+    fn persistence_metadata(&self) -> Option<PersistenceMetadata> {
+        // Surface what we've observed; do NOT trigger a load here — the
+        // backend may be queried before any DataStore call (e.g. when the TUI
+        // renders its diagnostics panel on startup), and we don't want
+        // persistence_metadata() to do I/O. ensure_loaded populates the
+        // cache as a side effect of any DataStore call, which is enough.
+        self.last_metadata.read().ok().and_then(|g| g.clone())
+    }
 }
 
 #[cfg(test)]
@@ -379,6 +375,36 @@ mod tests {
 
     fn make_store(path: &std::path::Path) -> JsonDataStore {
         JsonDataStore::new(Arc::new(JsonFileStore::new(path)))
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_json_backend_exposes_metadata_after_flush() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("md.json");
+        let jds = make_store(&path);
+        // Trigger a write so flush has something to persist.
+        jds.upsert_board(Board::new("B", None::<String>)).unwrap();
+        jds.flush().await.unwrap();
+        let meta = jds
+            .persistence_metadata()
+            .expect("flushed JSON backend must expose metadata");
+        assert_eq!(
+            meta.writer_version.as_deref(),
+            Some(kanban_core::KANBAN_VERSION),
+        );
+        assert_eq!(
+            meta.writer_commit.as_deref(),
+            Some(kanban_core::KANBAN_COMMIT),
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_json_backend_metadata_is_none_before_any_load_or_save() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("untouched.json");
+        let jds = make_store(&path);
+        // No DataStore call yet → ensure_loaded never ran → cache empty.
+        assert!(jds.persistence_metadata().is_none());
     }
 
     /// Verifies that `ensure_loaded` no longer relies on `block_in_place`, so
@@ -428,7 +454,7 @@ mod tests {
         }
 
         let jds = JsonDataStore::new(Arc::new(FailingStore));
-        jds.upsert_board(Board::new("B".into(), None)).unwrap();
+        jds.upsert_board(Board::new("B", None::<String>)).unwrap();
         assert!(jds.needs_flush(), "must be dirty before flush attempt");
 
         let result = jds.flush().await;
@@ -456,7 +482,7 @@ mod tests {
         // Pre-create a file with one board.
         let (boards_json, _) = {
             let store = JsonFileStore::new(&path);
-            let board = Board::new("Alpha".into(), None);
+            let board = Board::new("Alpha", None::<String>);
             let snap = Snapshot {
                 boards: vec![board],
                 ..Snapshot::new()
@@ -502,7 +528,7 @@ mod tests {
     async fn test_needs_flush_true_after_upsert() {
         let dir = tempdir().unwrap();
         let jds = make_store(&dir.path().join("t.json"));
-        jds.upsert_board(Board::new("B".into(), None)).unwrap();
+        jds.upsert_board(Board::new("B", None::<String>)).unwrap();
         assert!(jds.needs_flush());
     }
 
@@ -511,7 +537,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("flush.json");
         let jds = make_store(&path);
-        jds.upsert_board(Board::new("Flushed".into(), None))
+        jds.upsert_board(Board::new("Flushed", None::<String>))
             .unwrap();
         jds.flush().await.unwrap();
         assert!(!jds.needs_flush(), "dirty flag cleared after flush");
@@ -530,7 +556,7 @@ mod tests {
         // Write initial data via a separate store.
         let writer = make_store(&path);
         writer
-            .upsert_board(Board::new("Initial".into(), None))
+            .upsert_board(Board::new("Initial", None::<String>))
             .unwrap();
         writer.flush().await.unwrap();
 
@@ -541,7 +567,7 @@ mod tests {
 
         // Externally update the file by flushing a new board through the writer.
         writer
-            .upsert_board(Board::new("Updated".into(), None))
+            .upsert_board(Board::new("Updated", None::<String>))
             .unwrap();
         writer.flush().await.unwrap();
 
@@ -579,7 +605,7 @@ mod tests {
         // Pre-populate the file with one board.
         {
             let store = Arc::new(JsonFileStore::new(&path));
-            let board = Board::new("ConcurrentBoard".into(), None);
+            let board = Board::new("ConcurrentBoard", None::<String>);
             let snap = kanban_domain::Snapshot {
                 boards: vec![board],
                 ..kanban_domain::Snapshot::new()

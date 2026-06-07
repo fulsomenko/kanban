@@ -30,17 +30,59 @@ impl App {
     }
 
     pub fn handle_create_card_dialog(&mut self, key_code: KeyCode) {
-        match handle_dialog_input(&mut self.input, key_code, false) {
-            DialogAction::Confirm => {
+        // Enter always submits and Tab always toggles focus, regardless of
+        // which sub-field currently has focus.
+        match key_code {
+            KeyCode::Enter => {
                 self.create_card();
                 self.pop_mode();
                 self.input.clear();
+                self.dialog_input.create_card_sprint_picker.clear();
+                self.dialog_input.reset_create_card_focus();
+                return;
             }
-            DialogAction::Cancel => {
-                self.pop_mode();
-                self.input.clear();
+            KeyCode::Tab => {
+                self.dialog_input.toggle_create_card_focus();
+                return;
             }
-            DialogAction::None => {}
+            _ => {}
+        }
+
+        if self.dialog_input.create_card_focus_is_title() {
+            // Title focus: Down/Esc drop focus into the sprint picker so the
+            // visual cursor moves out of the text input; all other keys edit
+            // the title.
+            match key_code {
+                KeyCode::Down | KeyCode::Esc => {
+                    self.dialog_input.toggle_create_card_focus();
+                }
+                _ => {
+                    handle_dialog_input(&mut self.input, key_code, false);
+                }
+            }
+            return;
+        }
+
+        // Sprint focus: Esc closes the dialog, Up/Down navigate the picker,
+        // everything else is ignored so a stray keystroke does not modify
+        // the title behind the user's back.
+        if matches!(key_code, KeyCode::Esc) {
+            self.pop_mode();
+            self.input.clear();
+            self.dialog_input.create_card_sprint_picker.clear();
+            self.dialog_input.reset_create_card_focus();
+            return;
+        }
+        if let Some(idx) = self.selection.active_board_index {
+            if let Some(board) = self.model.boards().get(idx) {
+                let now = chrono::Utc::now();
+                self.dialog_input.create_card_sprint_picker.handle_key(
+                    key_code,
+                    self.model.sprints(),
+                    board,
+                    now,
+                );
+            }
         }
     }
 
@@ -134,11 +176,10 @@ impl App {
                     return false;
                 };
 
-                let cards = self.model.cards();
                 let card_id = self
                     .selection
-                    .active_card_index
-                    .and_then(|idx| cards.get(idx))
+                    .active_card_id
+                    .and_then(|id| self.model.card(id))
                     .map(|c| c.id)
                     .or_else(|| self.get_selected_card_in_context().map(|c| c.id));
 
@@ -455,5 +496,35 @@ impl App {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_helpers::setup_reload_resort_fixture;
+    use crate::App;
+    use crossterm::event::KeyCode;
+
+    #[test]
+    fn test_handle_set_card_points_dialog_after_reload_resort_updates_originally_selected_card_points(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.input.set("3".to_string());
+        app.handle_set_card_points_dialog(KeyCode::Enter);
+
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        let a_card = cards.iter().find(|c| c.id == fx.a_id).expect("A exists");
+        let p_card = cards.iter().find(|c| c.id == fx.p_id).expect("P exists");
+        assert_eq!(
+            a_card.points,
+            Some(3),
+            "points dialog must set points on A (the active card by id), not on the wrong card at A's stale index"
+        );
+        assert_eq!(
+            p_card.points, None,
+            "points dialog must leave P's points unchanged when A is active"
+        );
     }
 }

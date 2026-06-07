@@ -41,13 +41,14 @@ pub enum AppMode {
     ArchivedCardsView,
     Settings,
     Help(Box<AppMode>),     // wraps the previous mode for help overlay
+    ErrorLog,               // structured error log viewer
     Dialog(DialogMode),
 }
 ```
 
 ### `DialogMode`
 
-All 26 dialog variants:
+All 29 dialog variants:
 
 | Variant | Description |
 |---------|-------------|
@@ -76,9 +77,10 @@ All 26 dialog variants:
 | `FilterOptions` | Checkboxes: filter options |
 | `ConflictResolution` | Confirm: keep local or reload |
 | `ExternalChangeDetected` | Confirm: external file change |
-| `ManageParents` | Selection: set parent cards |
-| `ManageChildren` | Selection: set child cards |
+| `ManageParents` | Selection: set parent cards (atomic batch via `attach_children`) |
+| `ManageChildren` | Selection: set child cards (atomic batch via `attach_children`) |
 | `CarryOverSprint` | Selection: target sprint for carry-over |
+| `ChooseStorageFile` | Startup file picker: select kanban data file |
 
 ---
 

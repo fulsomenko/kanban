@@ -8,9 +8,11 @@
 pub(crate) mod app;
 pub(crate) mod cli;
 pub(crate) mod context;
+pub(crate) mod error;
 pub(crate) mod handlers;
 pub(crate) mod output;
 
 pub use app::CliApp;
+pub use error::{KanbanCliError, KanbanCliResult};
 pub use kanban_persistence::{StoreFactory, StoreRegistry};
 pub use kanban_service::StoreManager;

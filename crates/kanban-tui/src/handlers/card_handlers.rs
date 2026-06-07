@@ -11,6 +11,15 @@ use std::io;
 impl App {
     pub fn handle_create_card_key(&mut self) {
         if self.focus.active == Focus::Cards && self.selection.active_board_index.is_some() {
+            if let Some(idx) = self.selection.active_board_index {
+                if let Some(board) = self.model.boards().get(idx) {
+                    self.dialog_input.create_card_sprint_picker.reset_for_board(
+                        self.model.sprints(),
+                        board,
+                        chrono::Utc::now(),
+                    );
+                }
+            }
             self.open_dialog(DialogMode::CreateCard);
             self.input.clear();
         }
@@ -86,41 +95,59 @@ impl App {
         }
 
         if !self.multi_select.selected_cards.is_empty() {
-            self.dialog_input.sprint_assign_selection.clear();
-            self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
-        } else if self.get_selected_card_id().is_some() {
             if let Some(board_idx) = self.selection.active_board_index {
-                let boards = self.model.boards();
-                if let Some(board) = boards.get(board_idx) {
-                    let sprints = self.model.sprints();
-                    let entries = crate::components::sprint_assign_list::build_entries(
-                        sprints,
-                        board.id,
-                        chrono::Utc::now(),
-                    );
-                    let has_assignable = entries.iter().any(|e| {
-                        matches!(
-                            e,
-                            crate::components::sprint_assign_list::SprintAssignEntry::ActiveOrPlanned(_)
-                                | crate::components::sprint_assign_list::SprintAssignEntry::Completed(_)
-                                | crate::components::sprint_assign_list::SprintAssignEntry::Ended(_)
-                        )
-                    });
-                    if has_assignable {
-                        if let Some(selected_card) = self.get_selected_card_in_context() {
-                            let card_id = selected_card.id;
-                            let actual_idx =
-                                self.model.cards().iter().position(|c| c.id == card_id);
-                            self.selection.active_card_index = actual_idx;
-                        }
-                        let selection_idx = self.get_current_sprint_selection_index();
-                        self.dialog_input
-                            .sprint_assign_selection
-                            .set(Some(selection_idx));
-                        self.open_dialog(DialogMode::AssignCardToSprint);
-                    }
+                if let Some(board) = self.model.boards().get(board_idx) {
+                    self.dialog_input
+                        .assign_sprint_picker
+                        .reset_for_bulk_card_assignment(
+                            self.model.sprints(),
+                            board,
+                            chrono::Utc::now(),
+                        );
                 }
             }
+            self.open_dialog(DialogMode::AssignMultipleCardsToSprint);
+        } else if self.get_selected_card_id().is_some() {
+            let Some(board_idx) = self.selection.active_board_index else {
+                return;
+            };
+            let board_id = match self.model.boards().get(board_idx) {
+                Some(b) => b.id,
+                None => return,
+            };
+            let now = chrono::Utc::now();
+            let has_assignable = {
+                let sprints = self.model.sprints();
+                let entries =
+                    crate::components::sprint_assign_list::build_entries(sprints, board_id, now);
+                entries.iter().any(|e| {
+                    matches!(
+                        e,
+                        crate::components::sprint_assign_list::SprintAssignEntry::ActiveOrPlanned(
+                            _
+                        ) | crate::components::sprint_assign_list::SprintAssignEntry::Completed(_)
+                            | crate::components::sprint_assign_list::SprintAssignEntry::Ended(_)
+                    )
+                })
+            };
+            if !has_assignable {
+                return;
+            }
+            if let Some(selected_card) = self.get_selected_card_in_context() {
+                self.set_active_card_or_clear(selected_card.id);
+            }
+            let current_sprint_id = self
+                .selection
+                .active_card_id
+                .and_then(|id| self.model.card(id))
+                .and_then(|c| c.sprint_id);
+            // Re-borrow board after the &mut self call above.
+            if let Some(board) = self.model.boards().get(board_idx) {
+                self.dialog_input
+                    .assign_sprint_picker
+                    .reset_for_card_assignment(current_sprint_id, self.model.sprints(), board, now);
+            }
+            self.open_dialog(DialogMode::AssignCardToSprint);
         }
     }
 
@@ -213,9 +240,7 @@ impl App {
         let mut should_restart = false;
         if self.focus.active == Focus::Cards {
             if let Some(selected_card) = self.get_selected_card_in_context() {
-                let card_id = selected_card.id;
-                let actual_idx = self.model.cards().iter().position(|c| c.id == card_id);
-                self.selection.active_card_index = actual_idx;
+                self.set_active_card_or_clear(selected_card.id);
 
                 if let Err(e) =
                     self.edit_card_field(terminal, event_handler, CardField::Description)
@@ -251,6 +276,8 @@ impl App {
                 return;
             }
 
+            // Refresh the view-layer task list before selecting so column lists are current.
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
@@ -296,6 +323,8 @@ impl App {
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
         if let Some(card_id) = first_card_id {
+            // Refresh the view-layer task list before selecting so column lists are current.
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
@@ -353,42 +382,47 @@ impl App {
                     })
                     .unwrap_or(false);
 
+                let now = chrono::Utc::now();
+                let sprint_id = self
+                    .dialog_input
+                    .create_card_sprint_picker
+                    .selected_sprint_id_for(bid);
                 let card_id = uuid::Uuid::new_v4();
-                let create_cmd = Command::Card(CardCommand::Create(CreateCard {
-                    id: card_id,
-                    card_number,
-                    board_id: bid,
-                    column_id: column.id,
-                    title: self.input.as_str().to_string(),
-                    position,
-                    options: kanban_domain::CreateCardOptions::default(),
-                    timestamp: chrono::Utc::now(),
-                }));
-
-                if let Err(e) = self.execute_command(create_cmd) {
-                    tracing::error!("Failed to create card: {}", e);
-                    self.set_error(format!("Failed to create card: {}", e));
-                    return;
-                }
+                let mut commands: Vec<Command> =
+                    vec![Command::Card(CardCommand::Create(CreateCard {
+                        id: card_id,
+                        card_number,
+                        board_id: bid,
+                        column_id: column.id,
+                        title: self.input.as_str().to_string(),
+                        position,
+                        options: kanban_domain::CreateCardOptions {
+                            sprint_id,
+                            ..Default::default()
+                        },
+                        timestamp: now,
+                    }))];
 
                 if mark_as_complete {
-                    let update_cmd = Command::Card(CardCommand::Update(UpdateCard {
+                    commands.push(Command::Card(CardCommand::Update(UpdateCard {
                         card_id,
                         updates: CardUpdate {
                             status: Some(CardStatus::Done),
                             ..Default::default()
                         },
-                    }));
+                    })));
+                }
 
-                    if let Err(e) = self.execute_command(update_cmd) {
-                        tracing::error!("Failed to update card status: {}", e);
-                        self.set_error(format!("Failed to update card status: {}", e));
-                    }
+                // Single batch so a single undo reverses the whole
+                // "create card" action even when auto-complete fires.
+                if let Err(e) = self.execute_commands_batch(commands) {
+                    tracing::error!("Failed to create card: {}", e);
+                    self.set_error(format!("Failed to create card: {}", e));
+                    return;
                 }
 
                 // Refresh the view-layer task list so the new card's ID is
-                // present before we try to select it. Without this the
-                // selection silently stays on the prior card (KAN-403).
+                // present before we try to select it.
                 self.prepare_frame();
                 self.select_card_by_id(card_id);
             }
@@ -450,6 +484,14 @@ impl App {
                 return;
             }
 
+            match direction {
+                kanban_domain::card_lifecycle::MoveDirection::Right => {
+                    self.view.strategy.navigate_right(false);
+                }
+                kanban_domain::card_lifecycle::MoveDirection::Left => {
+                    self.view.strategy.navigate_left(false);
+                }
+            }
             if self.is_kanban_view() {
                 if let Some(current_col_idx) = self.dialog_input.column_selection.get() {
                     match direction {
@@ -479,6 +521,7 @@ impl App {
                 }
             }
 
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
@@ -534,7 +577,16 @@ impl App {
         tracing::info!("Moved {} cards", moved_count);
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
+        match direction {
+            kanban_domain::card_lifecycle::MoveDirection::Right => {
+                self.view.strategy.navigate_right(false);
+            }
+            kanban_domain::card_lifecycle::MoveDirection::Left => {
+                self.view.strategy.navigate_left(false);
+            }
+        }
         if let Some(card_id) = first_card_id {
+            self.prepare_frame();
             self.select_card_by_id(card_id);
         }
     }
@@ -773,8 +825,6 @@ impl App {
     }
 
     pub fn handle_manage_children_from_list(&mut self) {
-        use kanban_domain::dependencies::CardGraphExt;
-
         // Get the currently selected card from the list view
         let card = match self.get_selected_card_in_context() {
             Some(c) => c,
@@ -795,7 +845,7 @@ impl App {
 
         // Get ancestors to exclude (would create cycle)
         let graph = self.model.graph();
-        let ancestors = graph.cards.ancestors(card_id);
+        let ancestors = graph.ancestors(card_id);
 
         // Get cards from current board, excluding self and ancestors
         let columns = self.model.columns();
@@ -817,11 +867,10 @@ impl App {
         // Get current children (for checkbox display)
         let graph = self.model.graph();
         let current_children: std::collections::HashSet<_> =
-            graph.cards.children(card_id).into_iter().collect();
+            graph.children(card_id).into_iter().collect();
 
-        // Store the card index so the popup knows which card we're managing
-        let cards = self.model.cards();
-        self.selection.active_card_index = cards.iter().position(|c| c.id == card_id);
+        // Store the active card so the popup knows which card we're managing
+        self.set_active_card_or_clear(card_id);
 
         // Set up dialog state
         self.relationship.card_ids = eligible_cards;

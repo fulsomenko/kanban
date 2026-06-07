@@ -8,12 +8,90 @@ use ratatui::{
 };
 
 pub(crate) fn render_create_card_popup(app: &App, frame: &mut Frame) {
-    render_input_popup(
+    use crate::components::centered_rect;
+
+    let Some(board_idx) = app.selection.active_board_index else {
+        render_input_popup(
+            frame,
+            "Create New Task",
+            "Task Title:",
+            app.input.as_str(),
+            app.input.cursor_byte_offset(),
+        );
+        return;
+    };
+    let Some(board) = app.model.boards().get(board_idx) else {
+        return;
+    };
+
+    let area = centered_rect(60, 60, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title("Create New Task")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let title_focused = app.dialog_input.create_card_focus_is_title();
+    let unfocused_border = Style::default().fg(Color::DarkGray);
+
+    frame.render_widget(
+        Paragraph::new("Task Title:").style(Style::default().fg(Color::Yellow)),
+        chunks[0],
+    );
+
+    let input = Paragraph::new(app.input.as_str())
+        .style(crate::theme::normal_text())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(if title_focused {
+                    crate::theme::focused_border()
+                } else {
+                    unfocused_border
+                }),
+        );
+    frame.render_widget(input, chunks[1]);
+    if title_focused {
+        let cursor_x = chunks[1].x + app.input.cursor_byte_offset() as u16 + 1;
+        let cursor_y = chunks[1].y + 1;
+        frame.set_cursor_position((cursor_x, cursor_y));
+    }
+
+    frame.render_widget(
+        Paragraph::new("Sprint:").style(Style::default().fg(Color::Yellow)),
+        chunks[2],
+    );
+
+    let picker_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(if title_focused {
+            unfocused_border
+        } else {
+            crate::theme::focused_border()
+        });
+    let picker_inner = picker_block.inner(chunks[3]);
+    frame.render_widget(picker_block, chunks[3]);
+    app.dialog_input.create_card_sprint_picker.render(
         frame,
-        "Create New Task",
-        "Task Title:",
-        app.input.as_str(),
-        app.input.cursor_byte_offset(),
+        picker_inner,
+        app.model.sprints(),
+        board,
+        chrono::Utc::now(),
     );
 }
 
@@ -54,14 +132,7 @@ pub(crate) fn render_assign_sprint_popup(app: &App, frame: &mut Frame) {
 }
 
 pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
-    use crate::components::sprint_assign_list::{
-        build_entries, render_entry_line, scroll_offset_to_show, section_header_for,
-    };
-    use ratatui::style::Modifier;
-    use ratatui::text::{Line, Span};
-
     let area = centered_rect(60, 50, frame.area());
-
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -81,44 +152,22 @@ pub(crate) fn render_assign_multiple_cards_popup(app: &App, frame: &mut Frame) {
         .constraints([Constraint::Length(1), Constraint::Min(0)])
         .split(inner);
 
-    let label = Paragraph::new("Select sprint:").style(Style::default().fg(Color::Yellow));
-    frame.render_widget(label, chunks[0]);
+    frame.render_widget(
+        Paragraph::new("Select sprint:").style(Style::default().fg(Color::Yellow)),
+        chunks[0],
+    );
 
-    let mut lines = vec![];
-    let mut entries_for_header = Vec::new();
-
-    if let Some(board_idx) = app.selection.active_board_index {
-        if let Some(board) = app.model.boards().get(board_idx) {
-            let sprints = app.model.sprints();
-            let entries = build_entries(sprints, board.id, chrono::Utc::now());
-            for (idx, entry) in entries.iter().enumerate() {
-                let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
-                lines.push(render_entry_line(entry, is_selected, None, board));
-            }
-            entries_for_header = entries;
-        }
-    }
-
-    let selected = app.dialog_input.sprint_assign_selection.get().unwrap_or(0);
-    let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
-    let list = Paragraph::new(lines).scroll((scroll as u16, 0));
-    frame.render_widget(list, chunks[1]);
-
-    if let Some((header_idx, label)) = section_header_for(&entries_for_header, selected) {
-        if header_idx < scroll && chunks[1].height > 0 {
-            let overlay = Paragraph::new(Line::from(Span::styled(
-                label.to_string(),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )));
-            let top_row = ratatui::layout::Rect {
-                x: chunks[1].x,
-                y: chunks[1].y,
-                width: chunks[1].width,
-                height: 1,
-            };
-            frame.render_widget(overlay, top_row);
-        }
-    }
+    let Some(board_idx) = app.selection.active_board_index else {
+        return;
+    };
+    let Some(board) = app.model.boards().get(board_idx) else {
+        return;
+    };
+    app.dialog_input.assign_sprint_picker.render(
+        frame,
+        chunks[1],
+        app.model.sprints(),
+        board,
+        chrono::Utc::now(),
+    );
 }

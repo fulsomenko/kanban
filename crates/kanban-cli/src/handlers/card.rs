@@ -1,10 +1,10 @@
 use crate::cli::{CardAction, CardCreateArgs, CardListArgs, CardUpdateArgs};
 use crate::context::CliContext;
 use crate::output;
-use kanban_core::{resolve_page_params, PaginatedList};
+use kanban_core::{parse_datetime_input, resolve_page_params, PaginatedList};
 use kanban_domain::{
     ArchivedCardSummary, CardListFilter, CardPriority, CardStatus, CardUpdate, CreateCardOptions,
-    FieldUpdate, KanbanOperations,
+    FieldUpdate, KanbanOperations, SprintStatus,
 };
 
 use uuid::Uuid;
@@ -20,10 +20,15 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
                 Ok(u) => u,
                 Err(e) => return output::output_error(&e.to_string()),
             };
-            let options = match build_create_options(&args) {
+            let sprint_uuid = match resolve_assign_sprint(ctx, board_uuid, &args.assign_sprint) {
+                Ok(s) => s,
+                Err(e) => return output::output_error(&e),
+            };
+            let mut options = match build_create_options(&args) {
                 Ok(o) => o,
                 Err(e) => return output::output_error(&e),
             };
+            options.sprint_id = sprint_uuid;
             let card = ctx.create_card(board_uuid, column_uuid, args.title, options)?;
             ctx.save().await?;
             output::output_success(&card);
@@ -31,7 +36,19 @@ pub async fn handle(ctx: &mut CliContext, action: CardAction) -> anyhow::Result<
         CardAction::List(args) => {
             let (page, page_size) = resolve_page_params(args.page, args.page_size)?;
             if args.archived {
-                let archived = ctx.list_archived_cards()?;
+                let board_id = match &args.board {
+                    Some(raw) => match ctx.resolve_board_id(raw) {
+                        Ok(u) => Some(u),
+                        Err(e) => return output::output_error(&e.to_string()),
+                    },
+                    None => None,
+                };
+                let archived =
+                    ctx.list_archived_cards_sorted(kanban_domain::ArchivedCardListFilter {
+                        board_id,
+                        sort: args.sort.map(|s| s.to_sort_field()),
+                        sort_order: args.order.map(|o| o.to_sort_order()),
+                    })?;
                 let summaries: Vec<ArchivedCardSummary> =
                     archived.iter().map(ArchivedCardSummary::from).collect();
                 output::output_success(PaginatedList::paginate(summaries, page, page_size)?);
@@ -287,9 +304,43 @@ fn build_filter(ctx: &CliContext, args: &CardListArgs) -> Result<CardListFilter,
     Ok(CardListFilter {
         board_id,
         column_id,
-        sprint_id,
+        sprint_ids: sprint_id.map(|sid| std::iter::once(sid).collect()),
         status,
+        sort: args.sort.map(|s| s.to_sort_field()),
+        sort_order: args.order.map(|o| o.to_sort_order()),
+        ..Default::default()
     })
+}
+
+fn resolve_assign_sprint(
+    ctx: &CliContext,
+    board_id: Uuid,
+    flag: &Option<String>,
+) -> Result<Option<Uuid>, String> {
+    let raw = match flag {
+        None => return Ok(None),
+        Some(s) => s.as_str(),
+    };
+    if raw.is_empty() {
+        let now = chrono::Utc::now();
+        let sprints = ctx.list_sprints(board_id).map_err(|e| e.to_string())?;
+        let active: Vec<_> = sprints
+            .iter()
+            .filter(|s| s.status == SprintStatus::Active && !s.is_ended(now))
+            .collect();
+        match active.as_slice() {
+            [] => Err("--assign with no value requires exactly one active sprint on the board; found none".to_string()),
+            [s] => Ok(Some(s.id)),
+            many => Err(format!(
+                "--assign with no value requires exactly one active sprint; found {}",
+                many.len()
+            )),
+        }
+    } else {
+        ctx.resolve_sprint_id(raw, board_id)
+            .map(Some)
+            .map_err(|e| e.to_string())
+    }
 }
 
 fn build_create_options(args: &CardCreateArgs) -> Result<CreateCardOptions, String> {
@@ -298,7 +349,7 @@ fn build_create_options(args: &CardCreateArgs) -> Result<CreateCardOptions, Stri
         None => None,
     };
     let due_date = match &args.due_date {
-        Some(d) => Some(parse_datetime(d)?),
+        Some(d) => Some(parse_datetime_input(d)?),
         None => None,
     };
     Ok(CreateCardOptions {
@@ -306,6 +357,7 @@ fn build_create_options(args: &CardCreateArgs) -> Result<CreateCardOptions, Stri
         priority,
         points: args.points,
         due_date,
+        ..Default::default()
     })
 }
 
@@ -337,7 +389,7 @@ fn build_card_update(args: &CardUpdateArgs) -> Result<CardUpdate, String> {
             FieldUpdate::Clear
         } else {
             match &args.due_date {
-                Some(d) => FieldUpdate::Set(parse_datetime(d)?),
+                Some(d) => FieldUpdate::Set(parse_datetime_input(d)?),
                 None => FieldUpdate::NoChange,
             }
         },
@@ -369,21 +421,4 @@ fn parse_status(s: &str) -> Result<CardStatus, String> {
             s
         )),
     }
-}
-
-fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|_| {
-            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| ())
-                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
-                .map(|dt| dt.and_utc())
-        })
-        .map_err(|_| {
-            format!(
-                "Invalid date '{}'. Supported formats: YYYY-MM-DD or RFC 3339 (e.g., 2024-01-15T10:30:00Z)",
-                s
-            )
-        })
 }

@@ -13,6 +13,7 @@ pub mod editable;
 pub mod export;
 pub mod field_update;
 pub mod filter;
+pub mod graph_operations;
 pub mod in_memory_store;
 pub mod operations;
 pub mod query;
@@ -34,18 +35,22 @@ pub use card::{
     CreateCardOptions,
 };
 pub use column::{Column, ColumnId, ColumnUpdate};
-pub use dependencies::{CardDependencyGraph, CardEdgeType, CardGraphExt, DependencyGraph};
+pub use dependencies::{
+    BlocksEdge, CardEdgeType, DependencyGraph, RelatesEdge, RelatesKind, Severity, SpawnsEdge,
+};
 pub use editable::{BoardSettingsDto, CardMetadataDto};
 pub use export::{AllBoardsExport, BoardExport, BoardExporter, BoardImporter, ImportedEntities};
 pub use field_update::FieldUpdate;
 pub use filter::CardFilters;
-pub use operations::{CardListFilter, KanbanOperations};
+pub use graph_operations::GraphOperations;
+pub use operations::KanbanOperations;
 pub use query::{
+    count_filtered_cards, filter_and_sort_cards,
     sprint::{
         calculate_points, calculate_points_by_ids, get_sprint_cards, get_sprint_completed_cards,
         get_sprint_uncompleted_cards, partition_sprint_cards, sort_card_ids,
     },
-    CardQueryBuilder,
+    ArchivedCardListFilter, CardListFilter, CardQueryBuilder,
 };
 pub use search::{
     find_boards_by_name, find_cards_by_identifier, find_columns_by_name,
@@ -53,7 +58,7 @@ pub use search::{
     BranchNameSearcher, CardSearcher, CompositeSearcher, SearchBy, TitleSearcher,
 };
 pub use snapshot::Snapshot;
-pub use sort::{get_sorter_for_field, OrderedSorter, SortBy};
+pub use sort::{get_sorter_for_field, resolve_sort, sort_cards_in_place, OrderedSorter, SortBy};
 pub use sprint::{Sprint, SprintId, SprintStatus, SprintUpdate};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};

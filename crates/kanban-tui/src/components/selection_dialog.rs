@@ -1,9 +1,29 @@
 use crate::app::App;
-use crate::components::sprint_assign_list::{
-    build_entries, render_entry_line, scroll_offset_to_show, section_header_for, SprintAssignEntry,
-};
-use kanban_domain::SprintStatus;
+use crate::components::sprint_assign_list::build_entries;
+use kanban_domain::{SortField, SprintStatus};
 use ratatui::Frame;
+
+pub const SORT_FIELD_POPUP_ORDER: &[(SortField, &str)] = &[
+    (SortField::Points, "Points"),
+    (SortField::Priority, "Priority"),
+    (SortField::CreatedAt, "Date Created"),
+    (SortField::UpdatedAt, "Date Updated"),
+    (SortField::Status, "Status"),
+    (SortField::Position, "Position"),
+    (SortField::Default, "Task Number"),
+    (SortField::DueDate, "Due Date"),
+];
+
+pub fn popup_index_of_sort_field(field: SortField) -> usize {
+    SORT_FIELD_POPUP_ORDER
+        .iter()
+        .position(|(f, _)| *f == field)
+        .unwrap_or(0)
+}
+
+pub fn sort_field_at_popup_index(index: usize) -> Option<SortField> {
+    SORT_FIELD_POPUP_ORDER.get(index).map(|(f, _)| *f)
+}
 
 pub trait SelectionDialog {
     fn title(&self) -> &str;
@@ -121,43 +141,22 @@ impl SelectionDialog for SortFieldDialog {
     }
 
     fn options_count(&self, _app: &App) -> usize {
-        7 // Points, Priority, CreatedAt, UpdatedAt, Status, Position, Default
+        SORT_FIELD_POPUP_ORDER.len()
     }
 
     fn render(&self, app: &App, frame: &mut Frame) {
         use crate::components::render_selection_popup_with_lines;
-        use kanban_domain::{SortField, SortOrder};
+        use kanban_domain::SortOrder;
 
-        let sort_fields = [
-            SortField::Points,
-            SortField::Priority,
-            SortField::CreatedAt,
-            SortField::UpdatedAt,
-            SortField::Status,
-            SortField::Position,
-            SortField::Default,
-        ];
-
-        let active_idx = sort_fields
-            .iter()
-            .position(|f| Some(*f) == app.filter.current_sort_field);
+        let active_idx = app.filter.current_sort_field.map(popup_index_of_sort_field);
 
         render_selection_popup_with_lines(
             frame,
             "Order Tasks By",
             Some("Select sort field:"),
-            sort_fields.iter().enumerate(),
-            |_idx, (_, field), _is_selected, is_active| {
-                let field_name = match field {
-                    SortField::Priority => "Priority",
-                    SortField::Points => "Points",
-                    SortField::CreatedAt => "Date Created",
-                    SortField::UpdatedAt => "Date Updated",
-                    SortField::Default => "Task Number",
-                    SortField::Status => "Status",
-                    SortField::Position => "Position",
-                };
-
+            SORT_FIELD_POPUP_ORDER.iter(),
+            |_idx, entry, _is_selected, is_active| {
+                let (_field, label) = **entry;
                 let order_indicator = if is_active {
                     match app.filter.current_sort_order {
                         Some(SortOrder::Ascending) => Some(" (↑)".to_string()),
@@ -168,7 +167,7 @@ impl SelectionDialog for SortFieldDialog {
                     None
                 };
 
-                (field_name.to_string(), order_indicator)
+                (label.to_string(), order_indicator)
             },
             app.filter.sort_field_selection.get(),
             active_idx,
@@ -325,87 +324,69 @@ impl SelectionDialog for SprintAssignDialog {
             .constraints([Constraint::Length(1), Constraint::Min(0)])
             .split(inner);
 
-        let label = Paragraph::new("Select sprint:").style(Style::default().fg(Color::Yellow));
-        frame.render_widget(label, chunks[0]);
+        frame.render_widget(
+            Paragraph::new("Select sprint:").style(Style::default().fg(Color::Yellow)),
+            chunks[0],
+        );
 
-        let mut lines = vec![];
-
-        if let Some(board_idx) = app.selection.active_board_index {
-            let boards = app.model.boards();
-            if let Some(board) = boards.get(board_idx) {
-                let sprints = app.model.sprints();
-                let entries = build_entries(sprints, board.id, chrono::Utc::now());
-
-                let cards = app.model.cards();
-                let current_sprint_id = if let Some(card_idx) = app.selection.active_card_index {
-                    cards.get(card_idx).and_then(|c| c.sprint_id)
-                } else {
-                    None
-                };
-
-                for (idx, entry) in entries.iter().enumerate() {
-                    let is_selected = app.dialog_input.sprint_assign_selection.get() == Some(idx);
-                    lines.push(render_entry_line(
-                        entry,
-                        is_selected,
-                        current_sprint_id,
-                        board,
-                    ));
-                }
-            }
-        }
-
-        let selected = app.dialog_input.sprint_assign_selection.get().unwrap_or(0);
-        let entries_for_header = if let Some(board_idx) = app.selection.active_board_index {
-            app.model
-                .boards()
-                .get(board_idx)
-                .map(|b| build_entries(app.model.sprints(), b.id, chrono::Utc::now()))
-                .unwrap_or_default()
-        } else {
-            Vec::new()
+        let Some(board_idx) = app.selection.active_board_index else {
+            return;
         };
-        let scroll = scroll_offset_to_show(selected, lines.len(), chunks[1].height as usize);
-        let list = Paragraph::new(lines).scroll((scroll as u16, 0));
-        frame.render_widget(list, chunks[1]);
-        render_sticky_section_header(frame, chunks[1], &entries_for_header, selected, scroll);
+        let Some(board) = app.model.boards().get(board_idx) else {
+            return;
+        };
+        app.dialog_input.assign_sprint_picker.render(
+            frame,
+            chunks[1],
+            app.model.sprints(),
+            board,
+            chrono::Utc::now(),
+        );
     }
 }
 
-fn render_sticky_section_header(
-    frame: &mut Frame,
-    list_area: ratatui::layout::Rect,
-    entries: &[SprintAssignEntry<'_>],
-    selected: usize,
-    scroll: usize,
-) {
-    use ratatui::{
-        layout::Rect,
-        style::{Color, Modifier, Style},
-        text::{Line, Span},
-        widgets::Paragraph,
-    };
+#[cfg(test)]
+mod sort_field_popup_tests {
+    use super::*;
 
-    if list_area.height == 0 {
-        return;
+    #[test]
+    fn test_sort_field_popup_order_includes_due_date() {
+        assert!(
+            SORT_FIELD_POPUP_ORDER
+                .iter()
+                .any(|(f, _)| *f == SortField::DueDate),
+            "popup must expose DueDate"
+        );
     }
-    let Some((header_idx, label)) = section_header_for(entries, selected) else {
-        return;
-    };
-    if header_idx >= scroll {
-        return;
+
+    #[test]
+    fn test_popup_index_round_trip_for_every_variant() {
+        let variants = [
+            SortField::Points,
+            SortField::Priority,
+            SortField::CreatedAt,
+            SortField::UpdatedAt,
+            SortField::DueDate,
+            SortField::Status,
+            SortField::Position,
+            SortField::Default,
+        ];
+
+        for v in variants {
+            let idx = popup_index_of_sort_field(v);
+            assert_eq!(
+                sort_field_at_popup_index(idx),
+                Some(v),
+                "round-trip failed for {:?}",
+                v
+            );
+        }
     }
-    let overlay = Paragraph::new(Line::from(Span::styled(
-        label.to_string(),
-        Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
-    )));
-    let top_row = Rect {
-        x: list_area.x,
-        y: list_area.y,
-        width: list_area.width,
-        height: 1,
-    };
-    frame.render_widget(overlay, top_row);
+
+    #[test]
+    fn test_popup_labels_are_non_empty() {
+        for (field, label) in SORT_FIELD_POPUP_ORDER {
+            assert!(!label.is_empty(), "label for {:?} is empty", field);
+        }
+    }
 }

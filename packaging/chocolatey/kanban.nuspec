@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>kanban</id>
+    <title>kanban</title>
+    <version>$version$</version>
+    <authors>Max Emil Yoon Blomstervall</authors>
+    <owners>fulsomenko</owners>
+    <licenseUrl>https://github.com/fulsomenko/kanban/blob/master/LICENSE.md</licenseUrl>
+    <projectUrl>https://github.com/fulsomenko/kanban</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/fulsomenko/kanban/master/assets/icon-bold-transparent-black.png</iconUrl>
+    <copyright>2025 Max Emil Yoon Blomstervall</copyright>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/fulsomenko/kanban</projectSourceUrl>
+    <packageSourceUrl>https://github.com/fulsomenko/kanban/tree/master/packaging/chocolatey</packageSourceUrl>
+    <docsUrl>https://github.com/fulsomenko/kanban#readme</docsUrl>
+    <bugTrackerUrl>https://github.com/fulsomenko/kanban/issues</bugTrackerUrl>
+    <tags>kanban tui terminal productivity rust mcp</tags>
+    <summary>Fast, keyboard-driven terminal kanban board (with MCP server)</summary>
+    <description><![CDATA[
+A terminal-based kanban / project management tool written in Rust,
+inspired by lazygit's interface design. Provides a fast,
+keyboard-driven UI for tracking tasks across boards, columns, and
+sprints. Stores data in a portable JSON or SQLite file.
+
+This package installs two binaries:
+
+  - `kanban`     — the TUI / CLI; run `kanban` for the interactive
+                    interface or `kanban --help` for one-shot commands.
+  - `kanban-mcp` — Model Context Protocol server for LLM integrations
+                    (Claude Desktop, VS Code, etc.). Point your MCP
+                    client at this binary.
+
+Run `kanban --help` to get started.
+    ]]></description>
+    <releaseNotes>https://github.com/fulsomenko/kanban/releases/tag/v$version$</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

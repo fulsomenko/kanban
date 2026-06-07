@@ -1,11 +1,11 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use kanban_core::VERSION;
+use kanban_core::CLI_VERSION_DISPLAY;
 
 #[derive(Parser)]
 #[command(name = "kanban")]
 #[command(about = "A terminal-based kanban board", long_about = None)]
-#[command(version = VERSION, arg_required_else_help = false)]
+#[command(version = CLI_VERSION_DISPLAY, arg_required_else_help = false)]
 pub struct Cli {
     /// Path to kanban data file (or set KANBAN_FILE env var)
     #[arg(value_name = "FILE", env = "KANBAN_FILE")]
@@ -23,6 +23,8 @@ pub enum Commands {
     Column(ColumnCommand),
     /// Card operations
     Card(CardCommand),
+    /// Card-relation operations (parent/child)
+    Relation(RelationCommand),
     /// Sprint operations
     Sprint(SprintCommand),
     /// Export board data
@@ -36,6 +38,12 @@ pub enum Commands {
     },
     /// Migrate data between storage backends
     Migrate(MigrateArgs),
+    /// Initialize a new board file with an optional first board
+    Init {
+        /// Name of the first board to create. If omitted, the file is created with no entities.
+        #[arg(long)]
+        board: Option<String>,
+    },
 }
 
 // Board commands
@@ -87,6 +95,12 @@ pub struct BoardUpdateArgs {
     pub sprint_prefix: Option<String>,
     #[arg(long)]
     pub card_prefix: Option<String>,
+    /// Default sort key for the task list view.
+    #[arg(long, value_enum)]
+    pub sort_field: Option<SortKey>,
+    /// Default sort direction for the task list view.
+    #[arg(long, value_enum)]
+    pub sort_order: Option<SortDir>,
 }
 
 // Column commands
@@ -253,6 +267,135 @@ pub enum CardAction {
     },
 }
 
+// Relation commands
+
+/// Sort key for `kanban relation parents` / `children` output.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum SortKey {
+    CardNumber,
+    Priority,
+    Points,
+    CreatedAt,
+    UpdatedAt,
+    DueDate,
+    Status,
+    Position,
+}
+
+/// Sort direction.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+impl SortKey {
+    pub fn to_sort_by(self) -> kanban_domain::sort::SortBy {
+        use kanban_domain::sort::SortBy;
+        match self {
+            SortKey::CardNumber => SortBy::CardNumber,
+            SortKey::Priority => SortBy::Priority,
+            SortKey::Points => SortBy::Points,
+            SortKey::CreatedAt => SortBy::CreatedAt,
+            SortKey::UpdatedAt => SortBy::UpdatedAt,
+            SortKey::DueDate => SortBy::DueDate,
+            SortKey::Status => SortBy::Status,
+            SortKey::Position => SortBy::Position,
+        }
+    }
+
+    /// Convert a CLI sort flag to the board-level `SortField`. `CardNumber`
+    /// has no `SortField` counterpart, so it falls back to `SortField::Default`
+    /// which `get_sorter_for_field` also resolves via `SortBy::CardNumber`.
+    pub fn to_sort_field(self) -> kanban_domain::SortField {
+        use kanban_domain::SortField;
+        match self {
+            SortKey::CardNumber => SortField::Default,
+            SortKey::Priority => SortField::Priority,
+            SortKey::Points => SortField::Points,
+            SortKey::CreatedAt => SortField::CreatedAt,
+            SortKey::UpdatedAt => SortField::UpdatedAt,
+            SortKey::DueDate => SortField::DueDate,
+            SortKey::Status => SortField::Status,
+            SortKey::Position => SortField::Position,
+        }
+    }
+}
+
+impl SortDir {
+    pub fn to_sort_order(self) -> kanban_domain::SortOrder {
+        match self {
+            SortDir::Asc => kanban_domain::SortOrder::Ascending,
+            SortDir::Desc => kanban_domain::SortOrder::Descending,
+        }
+    }
+}
+
+#[cfg(test)]
+mod sort_key_tests {
+    use super::*;
+    use kanban_domain::sort::SortBy;
+    use kanban_domain::SortField;
+
+    #[test]
+    fn test_sort_key_due_date_maps_to_sort_by_due_date() {
+        assert!(matches!(SortKey::DueDate.to_sort_by(), SortBy::DueDate));
+    }
+
+    #[test]
+    fn test_sort_key_due_date_maps_to_sort_field_due_date() {
+        assert_eq!(SortKey::DueDate.to_sort_field(), SortField::DueDate);
+    }
+}
+
+#[derive(Args)]
+pub struct RelationCommand {
+    #[command(subcommand)]
+    pub action: RelationAction,
+}
+
+#[derive(Subcommand)]
+pub enum RelationAction {
+    /// Add parent → child edges between one parent and one or more children
+    Add {
+        /// Parent card UUID or identifier (e.g. KAN-2)
+        parent: String,
+        /// One or more child cards (UUID or identifier)
+        #[arg(required = true, num_args = 1..)]
+        children: Vec<String>,
+    },
+    /// Remove parent → child edges between one parent and one or more children
+    Remove {
+        /// Parent card UUID or identifier (e.g. KAN-2)
+        parent: String,
+        /// One or more child cards (UUID or identifier)
+        #[arg(required = true, num_args = 1..)]
+        children: Vec<String>,
+    },
+    /// List direct parents of a card
+    Parents {
+        /// Card UUID or identifier
+        card: String,
+        /// Sort key for the returned list
+        #[arg(long, value_enum, default_value_t = SortKey::CardNumber)]
+        sort: SortKey,
+        /// Sort direction
+        #[arg(long, value_enum, default_value_t = SortDir::Asc)]
+        order: SortDir,
+    },
+    /// List direct children of a card
+    Children {
+        /// Card UUID or identifier
+        card: String,
+        /// Sort key for the returned list
+        #[arg(long, value_enum, default_value_t = SortKey::CardNumber)]
+        sort: SortKey,
+        /// Sort direction
+        #[arg(long, value_enum, default_value_t = SortDir::Asc)]
+        order: SortDir,
+    },
+}
+
 #[derive(Args)]
 pub struct CardCreateArgs {
     /// Board UUID or name
@@ -271,6 +414,11 @@ pub struct CardCreateArgs {
     pub points: Option<u8>,
     #[arg(long)]
     pub due_date: Option<String>,
+    /// Assign the new card to a sprint. Pass a UUID, name, or number to pick a
+    /// specific sprint; pass without a value to use the board's sole active
+    /// sprint (errors if zero or more than one active sprint exists).
+    #[arg(long = "assign", short = 'a', num_args = 0..=1, default_missing_value = "")]
+    pub assign_sprint: Option<String>,
 }
 
 #[derive(Args)]
@@ -288,6 +436,14 @@ pub struct CardListArgs {
     pub status: Option<String>,
     #[arg(long)]
     pub archived: bool,
+    /// Sort key. When omitted, falls back to the board's `task_sort_field`
+    /// (requires --board).
+    #[arg(long, value_enum)]
+    pub sort: Option<SortKey>,
+    /// Sort direction. When omitted, falls back to the board's
+    /// `task_sort_order` (requires --board).
+    #[arg(long, value_enum)]
+    pub order: Option<SortDir>,
     #[arg(long)]
     pub page: Option<u32>,
     #[arg(long)]

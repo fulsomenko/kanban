@@ -17,11 +17,38 @@ pub enum SprintAssignEntry<'a> {
     Ended(&'a Sprint),
 }
 
+impl SprintAssignEntry<'_> {
+    /// True for rows the user can land on with arrow keys (i.e. not a
+    /// section header). The single source of truth for this predicate so
+    /// adding a new non-selectable variant only requires updating one place.
+    pub fn is_selectable(&self) -> bool {
+        !matches!(self, SprintAssignEntry::Header(_))
+    }
+}
+
 pub const ACTIVE_PLANNED_HEADER: &str = "Active / Planned";
 pub const COMPLETED_ENDED_HEADER: &str = "Completed / Ended";
 
-fn is_selectable(entry: &SprintAssignEntry) -> bool {
-    !matches!(entry, SprintAssignEntry::Header(_))
+/// Build the entry list for the new-card picker: same as
+/// [`build_entries`], minus the Completed/Ended section. Completed and
+/// Ended sprints aren't valid targets when creating a brand-new card,
+/// so they don't appear at all (no row, no section header).
+pub fn build_entries_active_only<'a>(
+    sprints: &'a [Sprint],
+    board_id: Uuid,
+    now: DateTime<Utc>,
+) -> Vec<SprintAssignEntry<'a>> {
+    build_entries(sprints, board_id, now)
+        .into_iter()
+        .filter(|entry| {
+            !matches!(
+                entry,
+                SprintAssignEntry::Header(COMPLETED_ENDED_HEADER)
+                    | SprintAssignEntry::Completed(_)
+                    | SprintAssignEntry::Ended(_)
+            )
+        })
+        .collect()
 }
 
 /// Build the entry list for the dialog. Headers are emitted only when their
@@ -57,47 +84,22 @@ pub fn build_entries<'a>(
     entries
 }
 
-fn first_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
-    entries.iter().position(|e| is_selectable(e))
-}
-
-fn last_selectable(entries: &[SprintAssignEntry]) -> Option<usize> {
-    entries.iter().rposition(|e| is_selectable(e))
-}
-
-fn cur_if_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
-    cur.filter(|&c| entries.get(c).map(is_selectable).unwrap_or(false))
-}
-
 /// Move selection to the next selectable entry, skipping headers.
 /// Clamps at the last selectable entry. Returns `None` if no selectable
 /// entries exist.
 pub fn next_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
-    let start = cur.map(|i| i + 1).unwrap_or(0);
-    entries
-        .iter()
-        .enumerate()
-        .skip(start)
-        .find(|(_, e)| is_selectable(e))
-        .map(|(i, _)| i)
-        .or_else(|| cur_if_selectable(entries, cur))
-        .or_else(|| last_selectable(entries))
+    crate::components::list_nav::next_selectable_index(cur, entries.len(), |i| {
+        entries[i].is_selectable()
+    })
 }
 
 /// Move selection to the previous selectable entry, skipping headers.
 /// Clamps at the first selectable entry. Returns `None` if no selectable
 /// entries exist.
 pub fn prev_selectable(entries: &[SprintAssignEntry], cur: Option<usize>) -> Option<usize> {
-    let end = cur.unwrap_or(entries.len());
-    entries
-        .iter()
-        .enumerate()
-        .take(end)
-        .rev()
-        .find(|(_, e)| is_selectable(e))
-        .map(|(i, _)| i)
-        .or_else(|| cur_if_selectable(entries, cur))
-        .or_else(|| first_selectable(entries))
+    crate::components::list_nav::prev_selectable_index(cur, entries.len(), |i| {
+        entries[i].is_selectable()
+    })
 }
 
 /// Returns the `(header_index, label)` of the section header that
@@ -136,7 +138,8 @@ pub fn sprint_id_of(entry: &SprintAssignEntry) -> Option<Uuid> {
 /// sprint (e.g. the multi-card variant).
 pub fn render_entry_line(
     entry: &SprintAssignEntry<'_>,
-    is_selected: bool,
+    is_checked: bool,
+    is_focused: bool,
     current_sprint_id: Option<Uuid>,
     board: &Board,
 ) -> Line<'static> {
@@ -149,9 +152,9 @@ pub fn render_entry_line(
         )),
         SprintAssignEntry::None => {
             let is_current = current_sprint_id.is_none();
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else if is_current {
                 Style::default()
@@ -164,9 +167,9 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::ActiveOrPlanned(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else if is_current {
                 Style::default()
@@ -182,14 +185,14 @@ pub fn render_entry_line(
         }
         SprintAssignEntry::Completed(s) | SprintAssignEntry::Ended(s) => {
             let is_current = current_sprint_id == Some(s.id);
-            let prefix = if is_selected { "> " } else { "  " };
+            let prefix = if is_checked { "[x] " } else { "[ ] " };
             let suffix = if is_current { " (current)" } else { "" };
             let status_color = if matches!(entry, SprintAssignEntry::Completed(_)) {
                 Color::Green
             } else {
                 Color::Red
             };
-            let style = if is_selected {
+            let style = if is_focused {
                 Style::default().fg(Color::White).bg(Color::Blue)
             } else {
                 Style::default().fg(status_color)
@@ -200,23 +203,6 @@ pub fn render_entry_line(
             ))
         }
     }
-}
-
-/// Computes the vertical scroll offset (in rows) so that the entry at
-/// `selected` is visible inside a viewport of `height` rows over a list of
-/// `total` rows. Stateless: the offset is fully determined by these inputs.
-///
-/// Behavior:
-/// - When the list fits, no scroll.
-/// - When `selected` is in the first `height` rows, no scroll.
-/// - Otherwise, scroll just enough that `selected` is the last visible row,
-///   clamped so the bottom of the list aligns with the bottom of the viewport.
-pub fn scroll_offset_to_show(selected: usize, total: usize, height: usize) -> usize {
-    if height == 0 || total <= height || selected < height {
-        return 0;
-    }
-    let max_offset = total.saturating_sub(height);
-    (selected + 1).saturating_sub(height).min(max_offset)
 }
 
 #[cfg(test)]
@@ -462,44 +448,6 @@ mod tests {
     }
 
     #[test]
-    fn test_scroll_offset_is_zero_when_list_fits_in_viewport() {
-        assert_eq!(scroll_offset_to_show(0, 3, 5), 0);
-        assert_eq!(scroll_offset_to_show(2, 3, 5), 0);
-        assert_eq!(scroll_offset_to_show(5, 6, 6), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_is_zero_when_selected_is_in_first_viewport() {
-        // selected at any of the first `height` indices keeps offset at 0
-        assert_eq!(scroll_offset_to_show(0, 20, 5), 0);
-        assert_eq!(scroll_offset_to_show(4, 20, 5), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_keeps_selected_visible_when_below_viewport() {
-        // height=5, selected=5 → must scroll by 1 so selected is last visible
-        assert_eq!(scroll_offset_to_show(5, 20, 5), 1);
-        // height=5, selected=10 → scroll by 6
-        assert_eq!(scroll_offset_to_show(10, 20, 5), 6);
-    }
-
-    #[test]
-    fn test_scroll_offset_clamps_at_last_full_viewport() {
-        // total=20, height=5 → max meaningful offset is 15 (showing rows 15-19)
-        assert_eq!(scroll_offset_to_show(19, 20, 5), 15);
-    }
-
-    #[test]
-    fn test_scroll_offset_handles_zero_height() {
-        assert_eq!(scroll_offset_to_show(5, 20, 0), 0);
-    }
-
-    #[test]
-    fn test_scroll_offset_handles_empty_list() {
-        assert_eq!(scroll_offset_to_show(0, 0, 5), 0);
-    }
-
-    #[test]
     fn test_section_header_for_returns_none_for_index_zero() {
         let entries = vec![SprintAssignEntry::None];
         assert_eq!(section_header_for(&entries, 0), None);
@@ -547,5 +495,77 @@ mod tests {
             section_header_for(&entries, 4),
             Some((3, COMPLETED_ENDED_HEADER))
         );
+    }
+
+    fn line_to_string(line: &Line<'_>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    fn make_board_for_render() -> Board {
+        Board::new("B", Some("TST"))
+    }
+
+    #[test]
+    fn test_render_entry_line_marks_checked_with_filled_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::None;
+        let line = render_entry_line(&entry, /*is_checked=*/ true, false, None, &board);
+        assert!(
+            line_to_string(&line).starts_with("[x]"),
+            "checked row should start with [x], got: {:?}",
+            line_to_string(&line)
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_marks_unchecked_with_empty_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::None;
+        let line = render_entry_line(&entry, /*is_checked=*/ false, false, None, &board);
+        assert!(
+            line_to_string(&line).starts_with("[ ]"),
+            "unchecked row should start with [ ], got: {:?}",
+            line_to_string(&line)
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_checkbox_applies_to_sprint_rows() {
+        let board = make_board_for_render();
+        let sprint = make_sprint(1, board.id, SprintStatus::Planning, None);
+        let entry = SprintAssignEntry::ActiveOrPlanned(&sprint);
+
+        let checked = render_entry_line(&entry, true, false, None, &board);
+        let unchecked = render_entry_line(&entry, false, false, None, &board);
+
+        assert!(line_to_string(&checked).starts_with("[x]"));
+        assert!(line_to_string(&unchecked).starts_with("[ ]"));
+    }
+
+    #[test]
+    fn test_render_entry_line_header_has_no_checkbox() {
+        let board = make_board_for_render();
+        let entry = SprintAssignEntry::Header(ACTIVE_PLANNED_HEADER);
+        let line = render_entry_line(&entry, false, false, None, &board);
+        let text = line_to_string(&line);
+        assert!(
+            !text.contains("[x]") && !text.contains("[ ]"),
+            "section headers should not render a checkbox, got: {text:?}"
+        );
+    }
+
+    #[test]
+    fn test_render_entry_line_checked_and_focused_are_independent() {
+        let board = make_board_for_render();
+        let sprint = make_sprint(1, board.id, SprintStatus::Planning, None);
+        let entry = SprintAssignEntry::ActiveOrPlanned(&sprint);
+
+        // Checked but cursor is elsewhere: [x] without blue background.
+        let checked_only = render_entry_line(&entry, true, false, None, &board);
+        // Focused but not checked: [ ] with blue background.
+        let focused_only = render_entry_line(&entry, false, true, None, &board);
+
+        assert!(line_to_string(&checked_only).starts_with("[x]"));
+        assert!(line_to_string(&focused_only).starts_with("[ ]"));
     }
 }

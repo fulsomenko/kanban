@@ -1,0 +1,185 @@
+# Release recovery runbook
+
+When `.github/workflows/release.yml` fails partway through, this runbook
+tells you how to finish the release by hand. Each section is keyed to
+the step that failed.
+
+The workflow is designed to be re-runnable: most steps either skip
+cleanly when the work is already done or carry their own idempotency
+guard. Re-running the failed job from the GitHub Actions UI is almost
+always the right first move. The sections below are for the cases where
+a re-run does not converge or where you need to finish the release
+without GitHub Actions.
+
+## Important: re-run is a no-op after `Push to master`
+
+The `Check for changesets` step at the top of the `release` job exits
+the whole job cleanly when `.changeset/` contains no entries. Once the
+release commit is pushed to master, the changesets are gone from
+origin, so a fresh runner started by "Re-run failed jobs" sees zero
+changesets and **silently skips every downstream step**. This is
+correct behaviour for an unrelated PR merge, but it means a re-run
+after a failure in `Publish to crates.io` (or any later step) does
+not retry the failing step — it returns a green workflow with nothing
+recovered. For those cases, follow the manual fallback in the relevant
+section below. A `workflow_dispatch` recovery trigger is tracked in a
+follow-up card.
+
+## Step: Push to master
+
+**Symptom:** the workflow finished `Bump version`, `Aggregate changelog`,
+and `Commit release` but the push to `master` failed (auth glitch,
+branch protection, force-push race).
+
+**State on origin:** no release commit, no tag, nothing published.
+
+**Recovery:**
+1. Re-run the failed job from the GitHub Actions UI. The runner starts
+   from a fresh checkout, but the changesets in `.changeset/` are still
+   present on origin, so bump-version, aggregate-changelog, and commit
+   re-produce the same release commit; the push retries.
+2. If the re-run still fails, the release is not partially shipped, so
+   it is safe to revert the merged PR, fix the underlying issue, and
+   re-merge.
+
+## Step: Publish to crates.io
+
+**Symptom:** the workflow tagged the release commit on master but
+`nix run .#publish-crates` exited non-zero partway through the crate
+list.
+
+**State on origin:** release commit pushed; tag not yet created; one or
+more crates may have been pushed to crates.io already.
+
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. `scripts/publish-crates.sh` is itself
+idempotent — it checks each crate against crates.io and skips the ones
+already at the target version — so re-invoking it locally converges.
+
+If you must finish by hand:
+```bash
+export CARGO_REGISTRY_TOKEN=<token>
+git fetch origin && git checkout master && git pull --ff-only
+nix run .#publish-crates
+```
+
+## Step: Tag version
+
+**Symptom:** crates.io publishes succeeded but the `git tag` /
+`git push origin <tag>` step failed (network, permissions).
+
+**State on origin:** release commit and crates.io are at the new
+version; tag may or may not be on origin.
+
+**Recovery:** the tag step guards both the local tag creation and the
+push against an existing tag, so it is safe to re-execute whether the
+tag was created locally only, pushed to origin, or both. Note the
+re-run caveat above — in practice you will need the manual fallback
+below.
+
+If you must finish by hand:
+```bash
+git fetch origin
+git checkout master
+git pull --ff-only
+git tag "v<VERSION>"
+git push origin "v<VERSION>"
+```
+
+## Step: Create GitHub Release
+
+**Symptom:** tag exists on origin but the GitHub Release object was
+not created.
+
+**State on origin:** crates.io and the git tag are at the new version;
+no Release object; downstream jobs (`build-windows`,
+`publish-chocolatey`) cannot start because they checkout the tag and
+upload to the Release.
+
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. `softprops/action-gh-release@v2` is
+idempotent — it creates the release if missing and updates it if
+present — so triggering the same operation by hand is safe.
+
+If you must finish by hand:
+```bash
+gh release create "v<VERSION>" --generate-notes
+```
+
+## Step: AUR (PKGBUILD, .SRCINFO, deploy)
+
+**Symptom:** the AUR commit or push failed.
+
+**State on origin:** crates.io, tag, and GitHub Release are at the new
+version; AUR may have a stale `pkgver`.
+
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. The AUR commit step is idempotent against
+the local working copy (empty-commit skip + `allow_empty_commits: false`
+on deploy), so the same operation by hand converges.
+
+If you must finish by hand:
+```bash
+git clone ssh://aur@aur.archlinux.org/kanban.git /tmp/aur-kanban
+cd /tmp/aur-kanban
+# Edit pkgver, pkgrel=1, sha256sums in PKGBUILD
+makepkg --printsrcinfo > .SRCINFO
+git add PKGBUILD .SRCINFO
+git commit -m "Update to <VERSION>"
+git push
+```
+
+## Step: Homebrew tap formula bump
+
+**Symptom:** the Homebrew formula bump or push to
+`fulsomenko/homebrew-tap` failed.
+
+**State on origin:** crates.io, tag, GitHub Release, and AUR are at
+the new version; the tap formula may be stale.
+
+**Recovery:** the workflow re-run is a no-op here (see top caveat); use
+the manual fallback below. The bump step is idempotent (empty-commit
+skip), so the same operation by hand is safe when the formula already
+matches the target.
+
+If you must finish by hand:
+```bash
+git clone git@github.com:fulsomenko/homebrew-tap.git /tmp/homebrew-tap
+cd /tmp/homebrew-tap
+# Edit Formula/kanban.rb: url, sha256, version
+git add Formula/kanban.rb
+git commit -m "Bump kanban to <VERSION>"
+git push
+```
+
+## Job: build-windows
+
+**Symptom:** the Windows build, archive, or asset upload failed.
+
+**State on origin:** crates.io, tag, GitHub Release, AUR, and Homebrew
+are at the new version; the Windows ZIP and SHA256SUMS may be missing
+from the GitHub Release.
+
+**Recovery:** re-run the `build-windows` job from the GitHub Actions
+UI. It re-checks out at the tag, rebuilds, and re-uploads to the same
+Release. `softprops/action-gh-release@v2` updates assets in place, so
+a re-run is safe.
+
+## Job: publish-chocolatey
+
+**Symptom:** the Chocolatey push failed or was held in the moderation
+queue.
+
+**State on origin:** every other surface is at the new version; the
+Chocolatey package may or may not be published.
+
+The job is marked `continue-on-error: true`, so this failure surfaces
+as a warning rather than blocking the workflow.
+
+**Recovery:** see [`packaging/chocolatey/RECOVERY.md`](../packaging/chocolatey/RECOVERY.md)
+for the full Chocolatey-specific flowchart. The short version:
+1. The push step pre-checks the public OData API and skips if the
+   version is already published, so re-running is safe.
+2. If `choco push` itself failed with a hard error, follow the
+   chocolatey runbook to either retry, contact moderation, or
+   ship the next patch with a corrected nupkg.

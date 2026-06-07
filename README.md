@@ -1,6 +1,10 @@
 # Kanban
 
+[![CI](https://github.com/fulsomenko/kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/fulsomenko/kanban/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/kanban-cli.svg)](https://crates.io/crates/kanban-cli)
+[![AUR](https://img.shields.io/aur/version/kanban?label=AUR)](https://aur.archlinux.org/packages/kanban)
+[![nixpkgs](https://repology.org/badge/version-for-repo/nix_unstable/kanban.svg?header=nixpkgs%20unstable)](https://search.nixos.org/packages?show=kanban&channel=unstable)
+[![Homebrew](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffulsomenko%2Fhomebrew-tap%2Fmaster%2FFormula%2Fkanban.rb&search=refs%2Ftags%2Fv%28.%2A%29%5C.tar%5C.gz&replace=%241&label=homebrew)](https://github.com/fulsomenko/homebrew-tap)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
 
 **Keyboard-first kanban for the terminal.**
@@ -16,7 +20,7 @@
 - **Zero latency** — pure keyboard flow — hjkl, never reach for the mouse
 - **Your data is a file on your disk** — private, offline, always yours
 - **Git-native** — generate branch names and `git checkout` commands from any card
-- **LLM-native** — full MCP server (40 tools) works with Claude Code, Cursor, and any MCP client
+- **LLM-native** — full MCP server (44 tools) works with Claude Code, Cursor, and any MCP client
 - **Offline-first** — works anywhere; JSON and SQLite backends, atomic writes, live conflict detection
 
 ---
@@ -45,6 +49,16 @@ kanban card list --board "My Project"
 kanban sprint create --board "My Project"
 kanban sprint activate yarara-release --duration-days 14
 kanban card assign-sprint KAN-5 --sprint yarara-release
+kanban relation add --parent KAN-5 --child KAN-7   # KAN-7 is now a subtask of KAN-5
+kanban relation children KAN-5                     # list direct children of KAN-5
+```
+
+### Init (non-interactive setup)
+
+```bash
+kanban init boards.json --board "My Project"  # create file + first board, exit
+kanban init --board "My Project"              # uses KANBAN_FILE or boards.json
+kanban init                                   # creates the file with no entities
 ```
 
 Every entity argument accepts either a UUID or a human-readable name (sprint
@@ -82,6 +96,11 @@ cargo install kanban-cli
 git clone https://github.com/fulsomenko/kanban
 cd kanban
 cargo install --path crates/kanban-cli
+```
+
+### Homebrew
+```bash
+brew install fulsomenko/tap/kanban
 ```
 
 ### Using Nix
@@ -123,7 +142,7 @@ VS Code is known not to work in the current implementation.
 - Multiple boards, each with custom columns and WIP limits
 - Rich cards: title, description, priority (Low/Medium/High/Critical), status (Todo/InProgress/Blocked/Done), story points, due dates
 - Card numbering with configurable prefix (e.g. `KAN-42`)
-- Card dependencies: parent/child relationships with cycle detection
+- Card relations: parent/child (Spawns), blocking (with severity), and undirected relates (with sub-kind) — each with cycle / self-reference detection and dedicated `kanban relation` CLI + MCP tools
 - Archive and restore cards
 
 ### Sprint Planning
@@ -154,7 +173,7 @@ VS Code is known not to work in the current implementation.
 ### Interfaces
 - **TUI** — full keyboard-driven terminal UI
 - **CLI** — scriptable; all operations, JSON output, pagination
-- **MCP server** — 40 tools for LLM integration
+- **MCP server** — 44 tools for LLM integration
 
 ---
 
@@ -355,7 +374,7 @@ graph LR
 
 - [x] Progressive auto-save
 - [x] Full CLI interface
-- [x] Card dependencies (parent/child)
+- [x] Card relations (parent/child, blocks with severity, relates with sub-kind)
 - [x] Multiple storage backends (JSON + SQLite)
 - [x] MCP server for LLM integration
 - [x] Full undo/redo

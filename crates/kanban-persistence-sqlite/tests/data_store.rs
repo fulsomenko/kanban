@@ -12,7 +12,7 @@ async fn make_store() -> (SqliteStore, TempDir) {
 }
 
 fn make_board(name: &str) -> Board {
-    Board::new(name.to_string(), None)
+    Board::new(name.to_string(), None::<String>)
 }
 
 fn make_column(board_id: Uuid, name: &str, pos: i32) -> Column {
@@ -150,7 +150,7 @@ async fn test_sqlite_list_cards_by_sprint() {
     let (store, _dir) = make_store().await;
     let mut board = make_board("B");
     let col = make_column(board.id, "C", 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     store.upsert_board(board.clone()).unwrap();
     store.upsert_column(col.clone()).unwrap();
     store.upsert_sprint(sprint.clone()).unwrap();
@@ -213,7 +213,7 @@ async fn test_sqlite_clear_sprint_from_cards() {
     let (store, _dir) = make_store().await;
     let mut board = make_board("B");
     let col = make_column(board.id, "C", 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     store.upsert_board(board.clone()).unwrap();
     store.upsert_column(col.clone()).unwrap();
     store.upsert_sprint(sprint.clone()).unwrap();
@@ -242,7 +242,7 @@ async fn test_sqlite_upsert_and_get_sprint() {
     let (store, _dir) = make_store().await;
     let board = make_board("B");
     store.upsert_board(board.clone()).unwrap();
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     let sprint_id = sprint.id;
     store.upsert_sprint(sprint).unwrap();
 
@@ -260,13 +260,13 @@ async fn test_sqlite_list_sprints_by_board() {
     store.upsert_board(board2.clone()).unwrap();
 
     store
-        .upsert_sprint(Sprint::new(board1.id, 1, None, None))
+        .upsert_sprint(Sprint::new(board1.id, 1, None, None::<String>))
         .unwrap();
     store
-        .upsert_sprint(Sprint::new(board1.id, 2, None, None))
+        .upsert_sprint(Sprint::new(board1.id, 2, None, None::<String>))
         .unwrap();
     store
-        .upsert_sprint(Sprint::new(board2.id, 1, None, None))
+        .upsert_sprint(Sprint::new(board2.id, 1, None, None::<String>))
         .unwrap();
 
     let sprints = store.list_sprints_by_board(board1.id).unwrap();
@@ -318,7 +318,7 @@ async fn test_sqlite_snapshot_roundtrip() {
     let (store, _dir) = make_store().await;
     let mut board = make_board("B");
     let col = make_column(board.id, "C", 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     store.upsert_board(board.clone()).unwrap();
     store.upsert_column(col.clone()).unwrap();
     store.upsert_sprint(sprint.clone()).unwrap();
@@ -355,18 +355,18 @@ async fn test_sqlite_apply_snapshot_replaces_existing_data() {
     assert_eq!(boards[0].name, "New");
 }
 
-// --- Legacy table drop migration ---
+// --- KAN-191 command_log migration ---
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_open_drops_legacy_command_log_and_undo_state_tables() {
+async fn test_sqlite_open_recreates_legacy_command_log_with_new_schema() {
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
     let dir = TempDir::new().unwrap();
     let db_path = dir.path().join("legacy.sqlite");
 
-    // Seed the file with the pre-405 legacy tables, populated, before
-    // SqliteStore::open ever runs schema.sql or migrate().
+    // Seed the file with the pre-405 legacy command_log schema (idx/cmd_json
+    // columns) and the legacy undo_state table.
     {
         let options = SqliteConnectOptions::new()
             .filename(&db_path)
@@ -402,14 +402,24 @@ async fn test_sqlite_open_drops_legacy_command_log_and_undo_state_tables() {
     .fetch_one(store.pool())
     .await
     .unwrap();
+    let has_new_col: bool = sqlx::query_scalar(
+        "SELECT COUNT(*) > 0 FROM pragma_table_info('command_log') WHERE name = 'batch_index'",
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
 
     assert!(
-        !has_command_log,
-        "command_log must be dropped when migrating a pre-405 database"
+        has_command_log,
+        "KAN-191 brings the command_log table back — must exist after open"
+    );
+    assert!(
+        has_new_col,
+        "legacy schema (idx/cmd_json) must be replaced by the KAN-191 schema (batch_index/...)"
     );
     assert!(
         !has_undo_state,
-        "undo_state must be dropped when migrating a pre-405 database"
+        "undo_state (the cursor table) is still dropped — cursor stays in-session"
     );
 
     // Confirm the rest of the schema is intact and the DB is usable.
@@ -424,7 +434,7 @@ async fn test_sqlite_open_drops_legacy_command_log_and_undo_state_tables() {
 
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
-async fn test_sqlite_open_succeeds_when_legacy_tables_absent() {
+async fn test_sqlite_open_creates_command_log_on_fresh_database() {
     let (store, _dir) = make_store().await;
     let has_command_log: bool = sqlx::query_scalar(
         "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
@@ -433,8 +443,8 @@ async fn test_sqlite_open_succeeds_when_legacy_tables_absent() {
     .await
     .unwrap();
     assert!(
-        !has_command_log,
-        "fresh database must not contain a command_log table"
+        has_command_log,
+        "fresh database must contain a command_log table for the audit log"
     );
 }
 
@@ -458,7 +468,7 @@ async fn test_sqlite_concurrent_reads_and_writes_no_panic() {
     for i in 0..10 {
         let s = Arc::clone(&store);
         handles.push(tokio::spawn(async move {
-            let board = Board::new(format!("Board-{i}"), None);
+            let board = Board::new(format!("Board-{i}"), None::<String>);
             s.upsert_board(board.clone()).unwrap();
             let col = Column::new(board.id, format!("Col-{i}"), i);
             s.upsert_column(col).unwrap();

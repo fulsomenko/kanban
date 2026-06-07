@@ -1,19 +1,11 @@
+use crate::query::filter_sort::{filter_and_sort_cards, ArchivedCardListFilter, CardListFilter};
 use crate::KanbanResult;
 use crate::{
     AmbiguousMatch, ArchivedCard, BatchResolutionCause, BatchResolutionFailure, Board, BoardUpdate,
-    Card, CardStatus, CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions,
-    KanbanError, Sprint, SprintUpdate,
+    Card, CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, KanbanError, Sprint,
+    SprintUpdate,
 };
 use uuid::Uuid;
-
-/// Filter options for listing cards
-#[derive(Default, Clone)]
-pub struct CardListFilter {
-    pub board_id: Option<Uuid>,
-    pub column_id: Option<Uuid>,
-    pub sprint_id: Option<Uuid>,
-    pub status: Option<CardStatus>,
-}
 
 /// Trait ensuring TUI and CLI implement the same operations.
 /// Adding a method here forces both implementations to add it.
@@ -65,6 +57,34 @@ pub trait KanbanOperations {
     fn restore_card(&mut self, id: Uuid, column_id: Option<Uuid>) -> KanbanResult<Card>;
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()>;
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>>;
+
+    fn list_archived_cards_sorted(
+        &self,
+        filter: ArchivedCardListFilter,
+    ) -> KanbanResult<Vec<ArchivedCard>> {
+        let cards = self.list_archived_cards()?;
+        let board = match filter.board_id {
+            Some(bid) => self.get_board(bid)?,
+            None => None,
+        };
+        let columns = match filter.board_id {
+            Some(bid) => self.list_columns(bid)?,
+            None => Vec::new(),
+        };
+        let card_filter = CardListFilter {
+            board_id: filter.board_id,
+            sort: filter.sort,
+            sort_order: filter.sort_order,
+            ..Default::default()
+        };
+        Ok(filter_and_sort_cards(
+            &cards,
+            &columns,
+            &[],
+            board.as_ref(),
+            &card_filter,
+        ))
+    }
 
     // Card sprint operations
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card>;
@@ -219,7 +239,7 @@ pub trait KanbanOperations {
         let sprints = self.list_sprints(board_id)?;
         let board = self
             .get_board(board_id)?
-            .ok_or_else(|| KanbanError::not_found("board", board_id))?;
+            .ok_or_else(|| KanbanError::not_found("Board", board_id))?;
         let matches = crate::search::find_sprints_by_query_on_board(raw, &sprints, &board);
         match matches.as_slice() {
             [] => {
@@ -389,11 +409,11 @@ pub trait KanbanOperations {
         for cid in card_ids {
             let card = card_index
                 .get(cid)
-                .ok_or_else(|| KanbanError::not_found("card", *cid))?;
+                .ok_or_else(|| KanbanError::not_found("Card", *cid))?;
             let board_id = col_to_board
                 .get(&card.column_id)
                 .copied()
-                .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
+                .ok_or_else(|| KanbanError::not_found("Column", card.column_id))?;
             if seen.insert(board_id) {
                 found_boards.push(board_id);
             }

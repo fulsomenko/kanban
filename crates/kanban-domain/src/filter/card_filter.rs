@@ -97,14 +97,14 @@ mod tests {
     use crate::Board;
 
     fn create_test_card(board: &mut Board, column_id: Uuid) -> Card {
-        Card::new(board, column_id, "Test Card".to_string(), 0)
+        Card::new(board, column_id, "Test Card", 0)
     }
 
     #[test]
     fn test_board_filter() {
-        let board = Board::new("Test Board".to_string(), None);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
-        let other_column = Column::new(Uuid::new_v4(), "Other".to_string(), 0); // Different board
+        let board = Board::new("Test Board", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
+        let other_column = Column::new(Uuid::new_v4(), "Other", 0); // Different board
 
         let mut board_mut = board.clone();
         let card = create_test_card(&mut board_mut, column.id);
@@ -122,9 +122,9 @@ mod tests {
 
     #[test]
     fn test_column_filter() {
-        let board = Board::new("Test Board".to_string(), None);
-        let column1 = Column::new(board.id, "Todo".to_string(), 0);
-        let column2 = Column::new(board.id, "Done".to_string(), 1);
+        let board = Board::new("Test Board", None::<String>);
+        let column1 = Column::new(board.id, "Todo", 0);
+        let column2 = Column::new(board.id, "Done", 1);
 
         let mut board_mut = board.clone();
         let card1 = create_test_card(&mut board_mut, column1.id);
@@ -137,8 +137,8 @@ mod tests {
 
     #[test]
     fn test_sprint_filter() {
-        let board = Board::new("Test Board".to_string(), None);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test Board", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
 
         let mut board_mut = board.clone();
         let mut card = create_test_card(&mut board_mut, column.id);
@@ -160,8 +160,8 @@ mod tests {
 
     #[test]
     fn test_unassigned_only_filter() {
-        let board = Board::new("Test Board".to_string(), None);
-        let column = Column::new(board.id, "Todo".to_string(), 0);
+        let board = Board::new("Test Board", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
 
         let mut board_mut = board.clone();
         let mut assigned_card = create_test_card(&mut board_mut, column.id);

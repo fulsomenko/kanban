@@ -365,33 +365,26 @@ impl App {
 
                 tracing::warn!("Cannot delete the last column");
 
+                // Build the full operation as one batch: move every
+                // card to the first column, then delete the column.
+                // One user action → one undo entry.
+                let mut commands: Vec<Command> = Vec::new();
                 if let Some(target_column_id) = first_column_id {
                     if target_column_id != column_id {
-                        let card_count = cards_to_move.len();
-
-                        // Batch all card moves together to avoid race conditions
-                        let mut move_commands: Vec<Command> = Vec::new();
                         for (card_id, position) in cards_to_move {
-                            let cmd = Command::Card(CardCommand::Move(MoveCard {
+                            commands.push(Command::Card(CardCommand::Move(MoveCard {
                                 card_id,
                                 new_column_id: target_column_id,
                                 new_position: position,
-                            }));
-                            move_commands.push(cmd);
+                            })));
                         }
-
-                        if let Err(e) = self.execute_commands_batch(move_commands) {
-                            tracing::error!("Failed to move cards: {}", e);
-                            self.set_error(format!("Failed to move cards: {}", e));
-                            return;
-                        }
-
-                        tracing::info!("Moved {} cards to first column", card_count);
                     }
                 }
+                commands.push(Command::Column(ColumnCommand::Delete(DeleteColumn {
+                    column_id,
+                })));
 
-                let cmd = Command::Column(ColumnCommand::Delete(DeleteColumn { column_id }));
-                if let Err(e) = self.execute_command(cmd) {
+                if let Err(e) = self.execute_commands_batch(commands) {
                     tracing::error!("Failed to delete column: {}", e);
                     self.set_error(format!("Failed to delete column: {}", e));
                     return;

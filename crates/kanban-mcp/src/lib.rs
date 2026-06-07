@@ -1,13 +1,16 @@
 pub mod context;
+pub mod error;
 pub mod server;
 
+pub use error::{KanbanMcpError, KanbanMcpResult};
 pub use server::McpServer;
 
 use context::McpContext;
-use kanban_core::{resolve_page_params, PaginatedList};
+use kanban_core::{parse_datetime_input, resolve_page_params, PaginatedList};
 use kanban_domain::{
-    ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority, CardStatus, CardUpdate,
-    ColumnUpdate, CreateCardOptions, FieldUpdate, KanbanOperations, SprintUpdate,
+    ArchivedCardListFilter, ArchivedCardSummary, BoardUpdate, CardListFilter, CardPriority,
+    CardStatus, CardSummary, CardUpdate, ColumnUpdate, CreateCardOptions, FieldUpdate,
+    GraphOperations, KanbanOperations, SortField, SortOrder, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_service::StoreManager;
@@ -40,10 +43,89 @@ fn to_call_tool_result_json(value: serde_json::Value) -> Result<CallToolResult, 
     Ok(CallToolResult::success(vec![Content::text(json)]))
 }
 
+fn resolve_summaries(ctx: &McpContext, ids: Vec<Uuid>) -> Vec<CardSummary> {
+    ids.into_iter()
+        .filter_map(|id| match ctx.get_card(id) {
+            Ok(Some(c)) => Some(CardSummary::from(&c)),
+            Ok(None) => {
+                // require_card_exists guards add/remove, so reaching
+                // this branch in production indicates a dangling edge:
+                // the graph references a card that no longer exists.
+                // Log so an operator can see and investigate.
+                tracing::warn!(
+                    "graph references unknown card id {id}; dropping from summary list (possible corruption)"
+                );
+                None
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "failed to resolve card id {id} for summary: {e}; dropping from list"
+                );
+                None
+            }
+        })
+        .collect()
+}
+
 fn kanban_err_to_mcp(e: KanbanError) -> McpError {
-    match &e {
-        KanbanError::Domain(_) => McpError::invalid_params(e.to_string(), None),
-        _ => McpError::internal_error(e.to_string(), None),
+    error::KanbanMcpError::Domain(e).into()
+}
+
+/// Symmetric with the CLI handler's `enrich_add_error`: rewrite an
+/// anonymous DependencyError from a parent-edge add into a message
+/// that names both sides of the edge, using the user's raw
+/// identifiers. Non-dependency errors pass through to Domain.
+///
+/// Enriched messages flow through the `Resolution` variant so the
+/// rendered hint is verbatim (no "invalid parameter: " prefix),
+/// matching the CLI's `KanbanCliError::Resolution` rendering — both
+/// sides share the same `messages::*` helpers, so symmetrical
+/// rendering is the only way the two surfaces stay in step.
+fn mcp_enrich_add_error(
+    e: KanbanError,
+    parent_raw: &str,
+    child_raw: &str,
+) -> error::KanbanMcpError {
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    match e {
+        KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_cycle(parent_raw, child_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_self_reference(parent_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_duplicate(parent_raw, child_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => e.into(),
+        other => other.into(),
+    }
+}
+
+fn mcp_enrich_remove_error(
+    e: KanbanError,
+    parent_raw: &str,
+    child_raw: &str,
+) -> error::KanbanMcpError {
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    match e {
+        KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)) => {
+            error::KanbanMcpError::Resolution {
+                hint: messages::parent_edge_not_found(parent_raw, child_raw),
+            }
+        }
+        KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)) => e.into(),
+        KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)) => e.into(),
+        KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)) => e.into(),
+        other => other.into(),
     }
 }
 
@@ -84,20 +166,38 @@ fn parse_status(s: &str) -> Result<CardStatus, McpError> {
 }
 
 fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|_| {
-            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| ())
-                .and_then(|d| d.and_hms_opt(0, 0, 0).ok_or(()))
-                .map(|dt| dt.and_utc())
-        })
-        .map_err(|_| {
-            McpError::invalid_params(
-                format!("Invalid date '{}'. Use YYYY-MM-DD or RFC 3339", s),
-                None,
-            )
-        })
+    parse_datetime_input(s).map_err(|msg| McpError::invalid_params(msg, None))
+}
+
+fn parse_sort_field(s: &str) -> Result<SortField, McpError> {
+    match s.to_lowercase().replace(['-', '_'], "").as_str() {
+        "points" => Ok(SortField::Points),
+        "priority" => Ok(SortField::Priority),
+        "createdat" => Ok(SortField::CreatedAt),
+        "updatedat" => Ok(SortField::UpdatedAt),
+        "duedate" => Ok(SortField::DueDate),
+        "status" => Ok(SortField::Status),
+        "position" => Ok(SortField::Position),
+        "default" => Ok(SortField::Default),
+        _ => Err(McpError::invalid_params(
+            format!(
+                "Invalid sort field '{}'. Valid: points, priority, created_at, updated_at, due_date, status, position, default",
+                s
+            ),
+            None,
+        )),
+    }
+}
+
+fn parse_sort_order(s: &str) -> Result<SortOrder, McpError> {
+    match s.to_lowercase().as_str() {
+        "asc" | "ascending" => Ok(SortOrder::Ascending),
+        "desc" | "descending" => Ok(SortOrder::Descending),
+        _ => Err(McpError::invalid_params(
+            format!("Invalid sort order '{}'. Valid: asc, desc", s),
+            None,
+        )),
+    }
 }
 
 // ---------- Locked sessions ----------
@@ -127,12 +227,13 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>, McpError> {
 /// intentional perf tradeoff: typical MCP usage is single-process, and the
 /// reload cost (file read + parse) is significant relative to the read
 /// itself.
-async fn locked_read<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
+async fn locked_read<T, E, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
-    F: FnOnce(&McpContext) -> Result<T, McpError>,
+    F: FnOnce(&McpContext) -> Result<T, E>,
+    E: Into<McpError>,
 {
     let guard = ctx.lock().await;
-    f(&guard)
+    f(&guard).map_err(Into::into)
 }
 
 /// Acquire the context lock, reload from disk, run the closure with mutable
@@ -152,13 +253,14 @@ where
 /// metadata (mtime / instance_id) and skips the full reload when no
 /// external write has occurred would let undo history persist across calls
 /// in the same session. Track as `KanbanBackend::reload_if_changed()`.
-async fn locked_write<T, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
+async fn locked_write<T, E, F>(ctx: &Arc<Mutex<McpContext>>, f: F) -> Result<T, McpError>
 where
-    F: FnOnce(&mut McpContext) -> Result<T, McpError>,
+    F: FnOnce(&mut McpContext) -> Result<T, E>,
+    E: Into<McpError>,
 {
     let mut guard = ctx.lock().await;
     guard.reload().await.map_err(kanban_err_to_mcp)?;
-    let result = f(&mut guard)?;
+    let result = f(&mut guard).map_err(Into::into)?;
     guard.save().await.map_err(kanban_err_to_mcp)?;
     Ok(result)
 }
@@ -292,6 +394,12 @@ pub struct UpdateBoardRequest {
     pub sprint_prefix: Option<String>,
     #[schemars(description = "New card prefix (optional)")]
     pub card_prefix: Option<String>,
+    #[schemars(
+        description = "Default sort field for the board's task list. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number. Date fields and points place None values last in ascending order."
+    )]
+    pub task_sort_field: Option<String>,
+    #[schemars(description = "Default sort direction. Valid: asc, desc")]
+    pub task_sort_order: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -372,6 +480,12 @@ pub struct CreateCardRequest {
         description = "Due date in YYYY-MM-DD or RFC 3339 format (e.g. 2024-06-15 or 2024-06-15T10:30:00Z)"
     )]
     pub due_date: Option<String>,
+    #[schemars(
+        description = "UUID, name, or number of the sprint to assign the new card to (optional). \
+            If the board has exactly one Active (non-ended) sprint, prefer passing that \
+            sprint's id here so the card lands in the active sprint in a single call."
+    )]
+    pub sprint_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -388,6 +502,14 @@ pub struct ListCardsRequest {
     pub sprint: Option<String>,
     #[schemars(description = "Filter by status: 'todo', 'in_progress', 'blocked', or 'done'")]
     pub status: Option<String>,
+    #[schemars(
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order. When omitted, falls back to the board's task_sort_field (requires `board`)."
+    )]
+    pub sort: Option<String>,
+    #[schemars(
+        description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order."
+    )]
+    pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -396,6 +518,18 @@ pub struct ListCardsRequest {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListArchivedCardsRequest {
+    #[schemars(
+        description = "Filter archives by board UUID or name (also drives the default sort field)"
+    )]
+    pub board: Option<String>,
+    #[schemars(
+        description = "Sort field. Valid: points, priority, created_at, updated_at, due_date, status, position, default. 'default' orders by card number; date fields and points place None values last in ascending order. Falls back to the board's task_sort_field when omitted."
+    )]
+    pub sort: Option<String>,
+    #[schemars(
+        description = "Sort direction: 'asc' or 'desc'. Defaults to the board's task_sort_order."
+    )]
+    pub order: Option<String>,
     #[schemars(description = "Page number, 1-based (default: 1)")]
     pub page: Option<u32>,
     #[schemars(description = "Items per page (default: 50)")]
@@ -497,6 +631,36 @@ pub struct GetCardBranchNameRequest {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetCardGitCheckoutRequest {
     #[schemars(description = "UUID or identifier of the card (e.g. 'KAN-5' or '5')")]
+    pub card: String,
+}
+
+// Card relations (parent/child)
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SetCardParentRequest {
+    #[schemars(description = "UUID or identifier of the child card (e.g. 'KAN-5')")]
+    pub child: String,
+    #[schemars(description = "UUID or identifier of the parent card (e.g. 'KAN-2')")]
+    pub parent: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RemoveCardParentRequest {
+    #[schemars(description = "UUID or identifier of the child card")]
+    pub child: String,
+    #[schemars(description = "UUID or identifier of the parent card")]
+    pub parent: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListCardParentsRequest {
+    #[schemars(description = "UUID or identifier of the card whose parents to list")]
+    pub card: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListCardChildrenRequest {
+    #[schemars(description = "UUID or identifier of the card whose children to list")]
     pub card: String,
 }
 
@@ -694,12 +858,22 @@ impl KanbanMcpServer {
     }
 
     #[tool(
-        description = "Update a board's properties (name, description, sprint_prefix, card_prefix)"
+        description = "Update a board's properties (name, description, sprint_prefix, card_prefix, task_sort_field, task_sort_order)"
     )]
     pub async fn tool_update_board(
         &self,
         Parameters(req): Parameters<UpdateBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
+        let task_sort_field = req
+            .task_sort_field
+            .as_deref()
+            .map(parse_sort_field)
+            .transpose()?;
+        let task_sort_order = req
+            .task_sort_order
+            .as_deref()
+            .map(parse_sort_order)
+            .transpose()?;
         let updates = BoardUpdate {
             name: req.name,
             description: req
@@ -714,6 +888,8 @@ impl KanbanMcpServer {
                 .card_prefix
                 .map(FieldUpdate::Set)
                 .unwrap_or(FieldUpdate::NoChange),
+            task_sort_field,
+            task_sort_order,
             ..Default::default()
         };
         let board = locked_write(&self.ctx, |ctx| {
@@ -729,7 +905,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteBoardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_board(&req.board)?;
             ctx.delete_board(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -809,7 +985,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_column_global(&req.column)?;
             ctx.delete_column(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -841,15 +1017,21 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let due_date = req.due_date.as_deref().map(parse_datetime).transpose()?;
-        let options = CreateCardOptions {
-            description: req.description,
-            priority,
-            points: req.points,
-            due_date,
-        };
         let card = locked_write(&self.ctx, |ctx| {
             let board_id = ctx.mcp_resolve_board(&req.board)?;
             let column_id = ctx.mcp_resolve_column_in_board(&req.column, board_id)?;
+            let sprint_id = req
+                .sprint_id
+                .as_deref()
+                .map(|raw| ctx.mcp_resolve_sprint_in_board(raw, board_id))
+                .transpose()?;
+            let options = CreateCardOptions {
+                description: req.description,
+                priority,
+                points: req.points,
+                due_date,
+                sprint_id,
+            };
             ctx.create_card(board_id, column_id, req.title, options)
                 .map_err(kanban_err_to_mcp)
         })
@@ -865,6 +1047,8 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ListCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let status = req.status.as_deref().map(parse_status).transpose()?;
+        let sort = req.sort.as_deref().map(parse_sort_field).transpose()?;
+        let sort_order = req.order.as_deref().map(parse_sort_order).transpose()?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
         let result = locked_read(&self.ctx, |ctx| {
@@ -889,8 +1073,11 @@ impl KanbanMcpServer {
             let filter = CardListFilter {
                 board_id,
                 column_id,
-                sprint_id,
+                sprint_ids: sprint_id.map(|sid| std::iter::once(sid).collect()),
                 status,
+                sort,
+                sort_order,
+                ..Default::default()
             };
             ctx.list_cards_paged(filter, page, page_size)
                 .map_err(kanban_err_to_mcp)
@@ -989,7 +1176,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.archive_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1023,7 +1210,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_card(&req.card)?;
             ctx.delete_card(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1039,9 +1226,23 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ListArchivedCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let cards = read_op!(self.ctx, list_archived_cards)?;
+        let sort = req.sort.as_deref().map(parse_sort_field).transpose()?;
+        let sort_order = req.order.as_deref().map(parse_sort_order).transpose()?;
         let (page, page_size) =
             resolve_page_params(req.page, req.page_size).map_err(core_err_to_mcp)?;
+        let cards = locked_read(&self.ctx, |ctx| {
+            let board_id = match &req.board {
+                Some(raw) => Some(ctx.mcp_resolve_board(raw)?),
+                None => None,
+            };
+            ctx.list_archived_cards_sorted(ArchivedCardListFilter {
+                board_id,
+                sort,
+                sort_order,
+            })
+            .map_err(kanban_err_to_mcp)
+        })
+        .await?;
         let summaries: Vec<ArchivedCardSummary> =
             cards.iter().map(ArchivedCardSummary::from).collect();
         to_call_tool_result(
@@ -1107,6 +1308,80 @@ impl KanbanMcpServer {
         })
         .await?;
         to_call_tool_result_json(serde_json::json!({"command": command}))
+    }
+
+    // Card relations (parent/child)
+
+    #[tool(
+        description = "Add a parent -> child edge between two cards. Rejects cycles and self-references."
+    )]
+    pub async fn tool_set_card_parent(
+        &self,
+        Parameters(req): Parameters<SetCardParentRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let parent_raw = req.parent.clone();
+        let child_raw = req.child.clone();
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let child_id = ctx.resolve_card_id(&req.child)?;
+            let parent_id = ctx.resolve_card_id(&req.parent)?;
+            ctx.attach_child(parent_id, child_id)
+                .map_err(|e| mcp_enrich_add_error(e, &parent_raw, &child_raw))?;
+            Ok((child_id, parent_id))
+        })
+        .await?;
+        to_call_tool_result_json(serde_json::json!({
+            "parent": parent_id.to_string(),
+            "child":  child_id.to_string(),
+        }))
+    }
+
+    #[tool(description = "Remove a parent -> child edge between two cards.")]
+    pub async fn tool_remove_card_parent(
+        &self,
+        Parameters(req): Parameters<RemoveCardParentRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let parent_raw = req.parent.clone();
+        let child_raw = req.child.clone();
+        let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let child_id = ctx.resolve_card_id(&req.child)?;
+            let parent_id = ctx.resolve_card_id(&req.parent)?;
+            ctx.detach_child(parent_id, child_id)
+                .map_err(|e| mcp_enrich_remove_error(e, &parent_raw, &child_raw))?;
+            Ok((child_id, parent_id))
+        })
+        .await?;
+        to_call_tool_result_json(serde_json::json!({
+            "parent": parent_id.to_string(),
+            "child":  child_id.to_string(),
+        }))
+    }
+
+    #[tool(description = "List direct parents of a card.")]
+    pub async fn tool_list_card_parents(
+        &self,
+        Parameters(req): Parameters<ListCardParentsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let parents = locked_read(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let id = ctx.resolve_card_id(&req.card)?;
+            let ids = ctx.list_parents_of(id)?;
+            Ok(resolve_summaries(ctx, ids))
+        })
+        .await?;
+        to_call_tool_result(&parents)
+    }
+
+    #[tool(description = "List direct children of a card.")]
+    pub async fn tool_list_card_children(
+        &self,
+        Parameters(req): Parameters<ListCardChildrenRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let children = locked_read(&self.ctx, |ctx| -> KanbanMcpResult<_> {
+            let id = ctx.resolve_card_id(&req.card)?;
+            let ids = ctx.list_children_of(id)?;
+            Ok(resolve_summaries(ctx, ids))
+        })
+        .await?;
+        to_call_tool_result(&children)
     }
 
     // Multi-card operations
@@ -1294,7 +1569,7 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let id = locked_write(&self.ctx, |ctx| {
+        let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let id = ctx.mcp_resolve_sprint_global(&req.sprint)?;
             ctx.delete_sprint(id).map_err(kanban_err_to_mcp)?;
             Ok(id)
@@ -1408,6 +1683,72 @@ impl ServerHandler for KanbanMcpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kanban_domain::dependencies::messages;
+    use kanban_domain::error::{DependencyError, DomainError};
+    use rmcp::model::ErrorCode;
+
+    // ─── Enrich helpers: symmetry with CLI ────────────────────────
+    //
+    // Both the CLI handler's enrich_*_error and the MCP enrich
+    // helpers feed user-facing hints from the same `messages::*`
+    // string-builders. The MCP path renders those hints verbatim
+    // (no "invalid parameter: " prefix) so the two surfaces stay in
+    // step. INVALID_PARAMS on the wire carries the semantic category.
+    //
+    // Pin both: the rendered McpError.message must equal the bare
+    // hint produced by the shared message helper, and the error
+    // code must be INVALID_PARAMS (the resolution category).
+
+    #[test]
+    fn test_mcp_enrich_add_error_cycle_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::CycleDetected)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_cycle("KAN-5", "KAN-7"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_add_error_self_reference_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::SelfReference)),
+            "KAN-5",
+            "KAN-5",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_self_reference("KAN-5"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_add_error_duplicate_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_add_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::DuplicateEdge)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(err.message, messages::parent_duplicate("KAN-5", "KAN-7"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_mcp_enrich_remove_error_edge_not_found_renders_hint_verbatim() {
+        let err: McpError = mcp_enrich_remove_error(
+            KanbanError::Domain(DomainError::Dependency(DependencyError::EdgeNotFound)),
+            "KAN-5",
+            "KAN-7",
+        )
+        .into();
+        assert_eq!(
+            err.message,
+            messages::parent_edge_not_found("KAN-5", "KAN-7")
+        );
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
 
     // parse_priority
 
@@ -1485,6 +1826,97 @@ mod tests {
         assert!(err.message.contains("Invalid status"));
     }
 
+    // parse_sort_field
+
+    #[test]
+    fn parse_sort_field_accepts_due_date_and_kebab_case() {
+        use kanban_domain::SortField;
+        assert_eq!(parse_sort_field("due-date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("due_date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("DueDate").unwrap(), SortField::DueDate);
+    }
+
+    #[test]
+    fn parse_sort_field_covers_every_variant() {
+        use kanban_domain::SortField;
+        assert_eq!(parse_sort_field("points").unwrap(), SortField::Points);
+        assert_eq!(parse_sort_field("priority").unwrap(), SortField::Priority);
+        assert_eq!(
+            parse_sort_field("created-at").unwrap(),
+            SortField::CreatedAt
+        );
+        assert_eq!(
+            parse_sort_field("updated-at").unwrap(),
+            SortField::UpdatedAt
+        );
+        assert_eq!(parse_sort_field("due-date").unwrap(), SortField::DueDate);
+        assert_eq!(parse_sort_field("status").unwrap(), SortField::Status);
+        assert_eq!(parse_sort_field("position").unwrap(), SortField::Position);
+        assert_eq!(parse_sort_field("default").unwrap(), SortField::Default);
+    }
+
+    #[test]
+    fn parse_sort_field_rejects_unknown() {
+        let err = parse_sort_field("magnitude").unwrap_err();
+        assert!(err.message.contains("Invalid sort field"));
+    }
+
+    // parse_sort_order
+
+    #[test]
+    fn parse_sort_order_accepts_asc_and_desc() {
+        use kanban_domain::SortOrder;
+        assert_eq!(parse_sort_order("asc").unwrap(), SortOrder::Ascending);
+        assert_eq!(parse_sort_order("ascending").unwrap(), SortOrder::Ascending);
+        assert_eq!(parse_sort_order("desc").unwrap(), SortOrder::Descending);
+        assert_eq!(
+            parse_sort_order("Descending").unwrap(),
+            SortOrder::Descending
+        );
+    }
+
+    #[test]
+    fn parse_sort_order_rejects_unknown() {
+        let err = parse_sort_order("sideways").unwrap_err();
+        assert!(err.message.contains("Invalid sort order"));
+    }
+
+    // request schema coverage — these are the JSON fields MCP clients send.
+
+    #[test]
+    fn update_board_request_accepts_task_sort_field_and_order() {
+        let json = serde_json::json!({
+            "board": "B",
+            "task_sort_field": "due-date",
+            "task_sort_order": "desc",
+        });
+        let req: UpdateBoardRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.task_sort_field.as_deref(), Some("due-date"));
+        assert_eq!(req.task_sort_order.as_deref(), Some("desc"));
+    }
+
+    #[test]
+    fn list_cards_request_accepts_sort_and_order() {
+        let json = serde_json::json!({
+            "sort": "due-date",
+            "order": "asc",
+        });
+        let req: ListCardsRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.sort.as_deref(), Some("due-date"));
+        assert_eq!(req.order.as_deref(), Some("asc"));
+    }
+
+    #[test]
+    fn list_archived_cards_request_accepts_sort_and_order() {
+        let json = serde_json::json!({
+            "sort": "due-date",
+            "order": "asc",
+        });
+        let req: ListArchivedCardsRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.sort.as_deref(), Some("due-date"));
+        assert_eq!(req.order.as_deref(), Some("asc"));
+    }
+
     // parse_datetime
 
     #[test]
@@ -1540,9 +1972,9 @@ mod tests {
     #[test]
     fn err_not_found_maps_to_invalid_params() {
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::not_found("board", uuid::Uuid::new_v4()));
+        let err = kanban_err_to_mcp(KanbanError::not_found("Board", uuid::Uuid::new_v4()));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("board"));
+        assert!(err.message.contains("Board"));
     }
 
     #[test]
@@ -1589,5 +2021,50 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file gone");
         let err = kanban_err_to_mcp(KanbanError::Io(io_err));
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+    }
+
+    // resolve_summaries: graph-vs-store divergence
+
+    /// `resolve_summaries` silently filters ids whose card no longer
+    /// exists in the store. This documents the behaviour: if the
+    /// graph references a dangling id (e.g. a cascade race or a
+    /// hand-edited file), the list_card_* tools return fewer entries
+    /// than the graph reports rather than erroring. The caller may
+    /// see N parents on a child while only M < N appear in the
+    /// rendered summaries.
+    #[tokio::test]
+    async fn resolve_summaries_silently_drops_ids_not_present_in_store() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = StoreManager::new(kanban_service::default_registry());
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx.create_board("Test".into(), Some("TST".into())).unwrap();
+        let column = ctx.create_column(board.id, "TODO".into(), None).unwrap();
+        let card = ctx
+            .create_card(
+                board.id,
+                column.id,
+                "Real".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+
+        let ghost = Uuid::new_v4();
+        let summaries = resolve_summaries(&ctx, vec![card.id, ghost]);
+
+        assert_eq!(
+            summaries.len(),
+            1,
+            "ghost id with no backing card should be silently filtered; got {summaries:?}"
+        );
+        assert_eq!(summaries[0].id, card.id);
     }
 }

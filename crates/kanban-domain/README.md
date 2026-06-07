@@ -198,27 +198,121 @@ Used throughout all `*Update` structs to distinguish "not provided" from "explic
 
 ### `DependencyGraph`
 
-DAG of card relationships stored alongside the board snapshot.
+Container for all card-relation edges, stored alongside the board snapshot. Three discrete sub-graphs, each with its own structural rules and its own concrete edge kind (carrying any per-kind metadata):
 
 ```rust
 pub struct DependencyGraph {
-    pub edges: Vec<CardEdge>,
-}
-
-pub struct CardEdge {
-    pub from: Uuid,
-    pub to: Uuid,
-    pub edge_type: EdgeType,
-}
-
-pub enum EdgeType {
-    Parent,   // `from` is a parent of `to`
-    Child,    // `from` is a child of `to`
-    Blocks,   // `from` blocks `to`
+    parent_child: DagGraph<SpawnsEdge>,
+    blocks: DagGraph<BlocksEdge>,
+    relates: UndirectedGraph<RelatesEdge>,
 }
 ```
 
-Cycle detection is enforced on every `add_edge` call. Self-references are rejected.
+| Sub-graph | Type | Cycles | Per-kind metadata |
+|-----------|------|--------|-------------------|
+| `parent_child` | `DagGraph<SpawnsEdge>` | rejected | none today |
+| `blocks` | `DagGraph<BlocksEdge>` | rejected | `Severity` |
+| `relates` | `UndirectedGraph<RelatesEdge>` | permitted | `RelatesKind` |
+
+Each per-kind edge struct embeds the shared `EdgeBase` (endpoints, timestamps, archival state) via `#[serde(flatten)]` and adds its own metadata:
+
+```rust
+pub struct SpawnsEdge   { #[serde(flatten)] pub base: EdgeBase }
+pub struct BlocksEdge   { #[serde(flatten)] pub base: EdgeBase, #[serde(default)] pub severity: Severity }
+pub struct RelatesEdge  { #[serde(flatten)] pub base: EdgeBase, #[serde(default)] pub kind: RelatesKind }
+```
+
+All three implement the `Edge` trait from `kanban-core::graph`, so they plug into the generic `DagGraph` / `UndirectedGraph` machinery. The `flatten` plus `default` combination means edges written before the metadata fields existed deserialise cleanly into the new shape.
+
+**`Severity`** (on `BlocksEdge`) — variant order matches conventional escalation, so derived `Ord` reads naturally:
+
+```rust
+pub enum Severity {
+    Low,
+    #[default] Medium,
+    High,
+    Critical,
+}
+```
+
+**`RelatesKind`** (on `RelatesEdge`):
+
+```rust
+pub enum RelatesKind {
+    #[default] General,    // catch-all human-curated link
+    Duplicates,            // one card duplicates the other
+    MentionedIn,           // mentioned in the other's description / comments
+}
+```
+
+**Invariants**: each sub-graph independently rejects self-references and duplicate edges; the two DAG sub-graphs also reject edges that would close a cycle. `UndirectedGraph<RelatesEdge>` matches duplicates in either orientation.
+
+**Cross-cutting cascades**: `archive_node`, `unarchive_node`, and `remove_node` fan out across all three sub-graphs. Read-only aggregates (`len`, `is_empty`, `active_len`, `contains`, `contains_archived`) sum across them.
+
+**Cross-kind discriminator**: `CardEdgeType { Blocks, RelatesTo, Spawns }` exists only for cross-kind tooling (parameterised tests, debugging utilities, `requires_dag` / `allows_cycles` checks). Production code paths are per-kind: per-kind edges, per-kind sub-graphs, per-kind `GraphOperations` verbs, per-kind `DependencyCommand` variants. The enum is never used as a runtime discriminator on edges themselves.
+
+---
+
+### `GraphOperations`
+
+Service-layer interface to the card-relation graph. One canonical method per per-kind operation, with plural batch primitives as the unit of atomicity. The singular variants are default methods that delegate to the plural by wrapping a single id in a `Vec`, which routes every mutation through the same transactional path.
+
+Per-kind methods carry per-kind metadata directly in their signatures — severity for blocks, kind for relates, nothing extra for spawns. No runtime kind discriminator.
+
+```rust
+pub trait GraphOperations {
+    // Spawns (parent / child)
+    fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
+    fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()>;
+    fn attach_child(&mut self, parent: Uuid, child: Uuid) -> KanbanResult<()> { /* default */ }
+    fn detach_child(&mut self, parent: Uuid, child: Uuid) -> KanbanResult<()> { /* default */ }
+    fn list_children_of(&self, parent: Uuid) -> KanbanResult<Vec<Uuid>>;
+    fn list_parents_of(&self, child: Uuid) -> KanbanResult<Vec<Uuid>>;
+
+    // Blocks
+    fn block(&mut self, blocker: Uuid, blocked: Uuid, severity: Severity) -> KanbanResult<()>;
+    fn unblock(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()>;
+    fn list_blocked_by(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>>;
+    fn list_blockers_of(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>>;
+
+    // Relates
+    fn relate(&mut self, a: Uuid, b: Uuid, kind: RelatesKind) -> KanbanResult<()>;
+    fn dissociate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()>;
+    fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>>;
+}
+```
+
+**Design notes**:
+- The trait stands alone from the `KanbanOperations` god-trait — no supertrait bound. Implementers compose both separately when they need card-resolution alongside graph mutation.
+- List queries return `Vec<Uuid>`. Surfaces that need display data resolve ids at their own boundary.
+- Cross-board parent/child is permitted at the domain layer today; board-scoping is a separate decision left to the caller.
+
+---
+
+### `DependencyCommand`
+
+Per-kind dependency commands routed through the command bus. Each variant has a single relation kind baked into its type and carries the kind-specific metadata directly. Replay sees the same metadata the forward saw:
+
+```rust
+pub enum DependencyCommand {
+    AddSpawns(AddSpawns),         // parent -> child; as_archived flag for cascade-undo
+    AddBlocks(AddBlocks),         // blocker -> blocked, with Severity; as_archived flag
+    AddRelates(AddRelates),       // a <-> b, with RelatesKind; as_archived flag
+    RemoveSpawns(RemoveSpawns),   // tolerate_missing flag for inverse replay
+    RemoveBlocks(RemoveBlocks),   // tolerate_missing flag for inverse replay
+    RemoveRelates(RemoveRelates), // tolerate_missing flag for inverse replay
+    CreateSubcard(CreateSubcardCommand),
+}
+```
+
+`CreateSubcard` is atomic create-card-and-link-as-subcard — genuinely different from the edge commands because it touches the board (card counter), the card store (new card), and the graph (parent edge) in one step. Its inverse is `DeleteCard`, which is polymorphic over live / archived and strips incident edges in the same pass.
+
+The previously kind-agnostic `RemoveDependencyCommand` was removed; each `Add*` now captures a per-kind `Remove*` inverse with `tolerate_missing = true`, so a `[AddSpawns(a,b), AddBlocks(a,b)]` batch undoes each kind independently instead of having the first inverse wipe both.
+
+Both `Add*` and `Remove*` carry per-paradigm flags with `#[serde(default)]` so legacy command-log entries replay unchanged:
+
+- **`tolerate_missing: bool`** on `Remove*` — swallows `EdgeNotFound` during inverse replay so undo succeeds against an already-removed edge. User-initiated paths set this `false` (strict); inverse-capture sets it `true`.
+- **`as_archived: bool`** on `Add*` — inserts the edge already in the archived state. Used by cascade-undo (`DeleteCard` / `DeleteCardEdges`) to preserve the active/archived split across delete/undo cycles. User-initiated paths leave this `false` (edges land active); `edges_to_undo_commands` sets it from `!e.is_active()` per restored edge so archived incident edges restore as archived instead of silently reviving to active.
 
 ---
 
@@ -271,9 +365,10 @@ pub enum DomainError {
 
 ```rust
 pub enum DependencyError {
-    CycleDetected,
-    SelfReference,
-    EdgeNotFound,
+    CycleDetected,   // adding this edge would close a cycle in a DAG sub-graph
+    SelfReference,   // endpoints are the same node
+    EdgeNotFound,    // remove targeted an edge that does not exist
+    DuplicateEdge,   // an edge between these endpoints already exists in this sub-graph
 }
 ```
 
@@ -286,6 +381,9 @@ KanbanError::serialization(msg)
 KanbanError::is_not_found(&self) -> bool
 KanbanError::is_validation(&self) -> bool
 KanbanError::is_cycle_detected(&self) -> bool
+KanbanError::is_self_reference(&self) -> bool
+KanbanError::is_edge_not_found(&self) -> bool
+KanbanError::is_duplicate_edge(&self) -> bool
 KanbanError::is_conflict_detected(&self) -> bool
 ```
 

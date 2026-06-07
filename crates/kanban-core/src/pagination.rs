@@ -197,20 +197,6 @@ impl Page {
             scroll_offset_to_keep_visible(self.scroll_offset, item_idx, viewport_height);
     }
 
-    /// Navigate up by one item, returning the new index.
-    pub fn navigate_up(&self, current_idx: usize) -> usize {
-        current_idx.saturating_sub(1)
-    }
-
-    /// Navigate down by one item, returning the new index.
-    pub fn navigate_down(&self, current_idx: usize) -> usize {
-        if current_idx >= self.total_items.saturating_sub(1) {
-            current_idx
-        } else {
-            current_idx + 1
-        }
-    }
-
     /// Check if the list is empty.
     pub fn is_empty(&self) -> bool {
         self.total_items == 0
@@ -325,24 +311,6 @@ mod tests {
         assert_eq!(page.scroll_offset, 11); // 15 - (5 - 1)
         let info = page.get_page_info(5);
         assert!(info.visible_indices.contains(&15));
-    }
-
-    #[test]
-    fn test_navigate_up_down() {
-        let page = Page::new(10);
-
-        let idx = page.navigate_down(0);
-        assert_eq!(idx, 1);
-
-        let idx = page.navigate_up(idx);
-        assert_eq!(idx, 0);
-
-        // At boundary
-        let idx = page.navigate_up(0);
-        assert_eq!(idx, 0);
-
-        let idx = page.navigate_down(9);
-        assert_eq!(idx, 9);
     }
 
     #[test]

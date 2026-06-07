@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 
 use crate::{
     card::{Card, CardSummary},
@@ -40,6 +41,12 @@ impl ArchivedCard {
 impl From<ArchivedCard> for Card {
     fn from(archived_card: ArchivedCard) -> Self {
         archived_card.card
+    }
+}
+
+impl Borrow<Card> for ArchivedCard {
+    fn borrow(&self) -> &Card {
+        &self.card
     }
 }
 

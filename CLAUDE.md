@@ -140,17 +140,18 @@ cargo tarpaulin        # Code coverage
 **Purpose**: JSON file storage backend implementing `StoreFactory`
 
 - `JsonFileStore` - `PersistenceStore` impl with atomic writes (temp file + rename)
-- `JsonStoreFactory` - Matches `*.json` and any non-URI path (catch-all fallback)
-- V2 format with metadata envelope; automatic V1→V2 migration with `.v1.backup`
+- `JsonStoreFactory` - `matches_content` sniffs the first non-whitespace byte (`{` or `[`); no extension matching
+- Envelope: `{ version, metadata, data }`, current version V7; reader accepts V1..V7
+- Migration chain V1 → V2 → V3 → (V4/V5 are shape-stable bumps) → V6 (split-graph) → V7 (spawns-bucket rename); legacy steps write `.v{N}.backup` on the way forward, including `.v6.backup` on the V6→V7 step
 - Debounced saving (500ms minimum interval)
 
 ### kanban-persistence-sqlite
 **Purpose**: SQLite storage backend implementing `StoreFactory`
 
 - `SqliteStore` - `PersistenceStore` impl with WAL mode, foreign keys, max 2 connections
-- `SqliteStoreFactory` - Matches `*.sqlite`, `*.sqlite3`, and `*.db`
-- Relational schema (14 tables: metadata, boards, columns, cards, sprints, etc.)
-- Schema versioning (v1) with migration skeleton
+- `SqliteStoreFactory` - `matches_content` sniffs the SQLite magic bytes (`SQLite format 3\0`); no extension matching
+- Relational schema, 13 tables: metadata, boards, board_sprint_names, board_sprint_counters, columns, sprints, cards, sprint_logs, archived_cards, spawns_edges, blocks_edges, relates_edges, command_log
+- `metadata.schema_version = 1`; legacy-table drops on open for pre-KAN-405 `command_log`, the retired `undo_state`, and the pre-KAN-504 single `card_edges` table
 - Auto-creates database file on first use
 
 ### kanban-tui

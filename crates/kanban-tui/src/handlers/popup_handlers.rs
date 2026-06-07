@@ -1,9 +1,6 @@
 use crate::app::App;
-use crate::components::sprint_assign_list::{
-    build_entries, next_selectable, prev_selectable, sprint_id_of, SprintAssignEntry,
-};
 use crossterm::event::KeyCode;
-use kanban_domain::{KanbanOperations, SortField, SortOrder};
+use kanban_domain::{GraphOperations, KanbanOperations, SortOrder};
 
 const PRIORITY_COUNT: usize = 4;
 
@@ -51,8 +48,8 @@ impl App {
             }
             KeyCode::Enter => {
                 if let Some(priority_idx) = self.dialog_input.priority_selection.get() {
-                    if let Some(card_idx) = self.selection.active_card_index {
-                        if let Some(card) = self.model.cards().get(card_idx) {
+                    if let Some(active_id) = self.selection.active_card_id {
+                        if let Some(card) = self.model.card(active_id) {
                             use kanban_domain::{CardPriority, CardUpdate};
                             let priority = match priority_idx {
                                 0 => CardPriority::Low,
@@ -159,7 +156,9 @@ impl App {
                 false
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.filter.sort_field_selection.next(7);
+                self.filter
+                    .sort_field_selection
+                    .next(crate::components::selection_dialog::SORT_FIELD_POPUP_ORDER.len());
                 false
             }
             KeyCode::Char('k') | KeyCode::Up => {
@@ -168,15 +167,11 @@ impl App {
             }
             KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('d') => {
                 if let Some(field_idx) = self.filter.sort_field_selection.get() {
-                    let field = match field_idx {
-                        0 => SortField::Points,
-                        1 => SortField::Priority,
-                        2 => SortField::CreatedAt,
-                        3 => SortField::UpdatedAt,
-                        4 => SortField::Status,
-                        5 => SortField::Position,
-                        6 => SortField::Default,
-                        _ => return false,
+                    let field = match crate::components::selection_dialog::sort_field_at_popup_index(
+                        field_idx,
+                    ) {
+                        Some(f) => f,
+                        None => return false,
                     };
 
                     let order = if self.filter.current_sort_field == Some(field)
@@ -236,189 +231,150 @@ impl App {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(next) = next_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(next));
-                }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(prev) = prev_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(prev));
-                }
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
-                    if let Some(card_idx) = self.selection.active_card_index {
-                        let card_id = match self.model.cards().get(card_idx) {
-                            Some(card) => card.id,
-                            None => return,
-                        };
-
-                        let entries = self.sprint_assign_entries();
-                        match entries.get(selection_idx) {
-                            Some(SprintAssignEntry::None) => {
-                                let unassign_cmd = kanban_domain::commands::Command::Card(
-                                    kanban_domain::commands::CardCommand::UnassignFromSprint(
-                                        kanban_domain::commands::UnassignCardFromSprint {
-                                            card_id,
-                                            timestamp: chrono::Utc::now(),
-                                        },
-                                    ),
-                                );
-                                if let Err(e) = self.execute_commands_batch(vec![unassign_cmd]) {
-                                    tracing::error!("Failed to unassign card from sprint: {}", e);
-                                    self.set_error(format!(
-                                        "Failed to unassign card from sprint: {}",
-                                        e
-                                    ));
-                                } else {
-                                    tracing::info!("Unassigned card from sprint");
-                                }
-                            }
-                            Some(entry) => {
-                                if let Some(sprint_id) = sprint_id_of(entry) {
-                                    let assign_cmd = kanban_domain::commands::Command::Card(
-                                        kanban_domain::commands::CardCommand::AssignToSprint(
-                                            kanban_domain::commands::AssignCardsToSprint {
-                                                ids: vec![card_id],
-                                                sprint_id,
-                                            },
-                                        ),
-                                    );
-                                    if let Err(e) = self.execute_commands_batch(vec![assign_cmd]) {
-                                        tracing::error!("Failed to assign card to sprint: {}", e);
-                                        self.set_error(format!(
-                                            "Failed to assign card to sprint: {}",
-                                            e
-                                        ));
-                                    } else {
-                                        tracing::info!(
-                                            "Assigned card to sprint with id: {}",
-                                            sprint_id
-                                        );
-                                    }
-                                }
-                            }
-                            None => {}
-                        }
+            KeyCode::Enter => {
+                let active_card_id = match self.selection.active_card_id {
+                    Some(id) => id,
+                    None => {
+                        self.pop_mode();
+                        self.dialog_input.assign_sprint_picker.clear();
+                        return;
+                    }
+                };
+                let card_id = match self.model.card(active_card_id) {
+                    Some(card) => card.id,
+                    None => return,
+                };
+                let active_board_id = self
+                    .selection
+                    .active_board_index
+                    .and_then(|idx| self.model.boards().get(idx))
+                    .map(|b| b.id);
+                let picker = &self.dialog_input.assign_sprint_picker;
+                let board_matches = active_board_id
+                    .map(|bid| picker.bound_board_id() == Some(bid))
+                    .unwrap_or(false);
+                let cmd = if !board_matches {
+                    None
+                } else if let Some(sprint_id) = picker.selected_sprint_id() {
+                    Some(kanban_domain::commands::Command::Card(
+                        kanban_domain::commands::CardCommand::AssignToSprint(
+                            kanban_domain::commands::AssignCardsToSprint {
+                                ids: vec![card_id],
+                                sprint_id,
+                            },
+                        ),
+                    ))
+                } else if picker.explicitly_unassigned() {
+                    Some(kanban_domain::commands::Command::Card(
+                        kanban_domain::commands::CardCommand::UnassignFromSprint(
+                            kanban_domain::commands::UnassignCardFromSprint {
+                                card_id,
+                                timestamp: chrono::Utc::now(),
+                            },
+                        ),
+                    ))
+                } else {
+                    None
+                };
+                if let Some(cmd) = cmd {
+                    if let Err(e) = self.execute_commands_batch(vec![cmd]) {
+                        tracing::error!("Failed to update card sprint: {}", e);
+                        self.set_error(format!("Failed to update card sprint: {}", e));
                     }
                 }
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
             }
-            _ => {}
-        }
-    }
-
-    fn sprint_assign_entries(&self) -> Vec<SprintAssignEntry<'_>> {
-        if let Some(board_idx) = self.selection.active_board_index {
-            let boards = self.model.boards();
-            if let Some(board) = boards.get(board_idx) {
-                let sprints = self.model.sprints();
-                return build_entries(sprints, board.id, chrono::Utc::now());
+            _ => {
+                if let Some(board_idx) = self.selection.active_board_index {
+                    if let Some(board) = self.model.boards().get(board_idx) {
+                        let now = chrono::Utc::now();
+                        self.dialog_input.assign_sprint_picker.handle_key(
+                            key_code,
+                            self.model.sprints(),
+                            board,
+                            now,
+                        );
+                    }
+                }
             }
         }
-        Vec::new()
     }
 
     pub fn handle_assign_multiple_cards_to_sprint_popup(&mut self, key_code: KeyCode) {
         match key_code {
             KeyCode::Esc => {
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
                 self.multi_select.selected_cards.clear();
                 self.multi_select.selection_mode_active = false;
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(next) = next_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(next));
-                }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                let entries = self.sprint_assign_entries();
-                let cur = self.dialog_input.sprint_assign_selection.get();
-                if let Some(prev) = prev_selectable(&entries, cur) {
-                    self.dialog_input.sprint_assign_selection.set(Some(prev));
-                }
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(selection_idx) = self.dialog_input.sprint_assign_selection.get() {
-                    let card_ids: Vec<uuid::Uuid> =
-                        self.multi_select.selected_cards.iter().copied().collect();
-
-                    let entries = self.sprint_assign_entries();
-                    match entries.get(selection_idx) {
-                        Some(SprintAssignEntry::None) => {
-                            let mut unassign_commands: Vec<kanban_domain::commands::Command> =
-                                Vec::new();
-                            for card_id in &card_ids {
-                                let cmd = kanban_domain::commands::Command::Card(
-                                    kanban_domain::commands::CardCommand::UnassignFromSprint(
-                                        kanban_domain::commands::UnassignCardFromSprint {
-                                            card_id: *card_id,
-                                            timestamp: chrono::Utc::now(),
-                                        },
-                                    ),
-                                );
-                                unassign_commands.push(cmd);
-                            }
-                            if let Err(e) = self.execute_commands_batch(unassign_commands) {
-                                tracing::error!("Failed to unassign cards from sprint: {}", e);
-                                self.set_error(format!(
-                                    "Failed to unassign cards from sprint: {}",
-                                    e
-                                ));
-                            } else {
-                                tracing::info!(
-                                    "Unassigned {} cards from sprint",
-                                    self.multi_select.selected_cards.len()
-                                );
-                            }
-                        }
-                        Some(entry) => {
-                            if let Some(sprint_id) = sprint_id_of(entry) {
-                                let assigned_count = self.multi_select.selected_cards.len();
-                                let commands: Vec<kanban_domain::commands::Command> =
-                                    vec![kanban_domain::commands::Command::Card(
-                                        kanban_domain::commands::CardCommand::AssignToSprint(
-                                            kanban_domain::commands::AssignCardsToSprint {
-                                                ids: card_ids.clone(),
-                                                sprint_id,
-                                            },
-                                        ),
-                                    )];
-                                if let Err(e) = self.execute_commands_batch(commands) {
-                                    tracing::error!("Failed to assign cards to sprint: {}", e);
-                                    self.set_error(format!(
-                                        "Failed to assign cards to sprint: {}",
-                                        e
-                                    ));
-                                } else {
-                                    tracing::info!(
-                                        "Assigned {} cards to sprint with id: {}",
-                                        assigned_count,
-                                        sprint_id
-                                    );
-                                }
-                            }
-                        }
-                        None => {}
+            KeyCode::Enter => {
+                let card_ids: Vec<uuid::Uuid> =
+                    self.multi_select.selected_cards.iter().copied().collect();
+                let active_board_id = self
+                    .selection
+                    .active_board_index
+                    .and_then(|idx| self.model.boards().get(idx))
+                    .map(|b| b.id);
+                let picker = &self.dialog_input.assign_sprint_picker;
+                let board_matches = active_board_id
+                    .map(|bid| picker.bound_board_id() == Some(bid))
+                    .unwrap_or(false);
+                let cmds: Vec<kanban_domain::commands::Command> = if !board_matches {
+                    Vec::new()
+                } else if let Some(sprint_id) = picker.selected_sprint_id() {
+                    vec![kanban_domain::commands::Command::Card(
+                        kanban_domain::commands::CardCommand::AssignToSprint(
+                            kanban_domain::commands::AssignCardsToSprint {
+                                ids: card_ids.clone(),
+                                sprint_id,
+                            },
+                        ),
+                    )]
+                } else if picker.explicitly_unassigned() {
+                    card_ids
+                        .iter()
+                        .map(|card_id| {
+                            kanban_domain::commands::Command::Card(
+                                kanban_domain::commands::CardCommand::UnassignFromSprint(
+                                    kanban_domain::commands::UnassignCardFromSprint {
+                                        card_id: *card_id,
+                                        timestamp: chrono::Utc::now(),
+                                    },
+                                ),
+                            )
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                if !cmds.is_empty() {
+                    if let Err(e) = self.execute_commands_batch(cmds) {
+                        tracing::error!("Failed to update cards' sprint: {}", e);
+                        self.set_error(format!("Failed to update cards' sprint: {}", e));
                     }
                 }
                 self.pop_mode();
-                self.dialog_input.sprint_assign_selection.clear();
+                self.dialog_input.assign_sprint_picker.clear();
                 self.multi_select.selected_cards.clear();
                 self.multi_select.selection_mode_active = false;
             }
-            _ => {}
+            _ => {
+                if let Some(board_idx) = self.selection.active_board_index {
+                    if let Some(board) = self.model.boards().get(board_idx) {
+                        let now = chrono::Utc::now();
+                        self.dialog_input.assign_sprint_picker.handle_key(
+                            key_code,
+                            self.model.sprints(),
+                            board,
+                            now,
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -590,45 +546,38 @@ impl App {
                 // Toggle relationship
                 if let Some(idx) = self.relationship.selection.get() {
                     if let Some(selected_card_id) = filtered_cards.get(idx).copied() {
-                        if let Some(card_idx) = self.selection.active_card_index {
-                            if let Some(current_card) = self.model.cards().get(card_idx) {
+                        if let Some(active_id) = self.selection.active_card_id {
+                            if let Some(current_card) = self.model.card(active_id) {
                                 let current_card_id = current_card.id;
 
-                                if self.relationship.selected.contains(&selected_card_id) {
-                                    // Remove relationship
-                                    let (child_id, parent_id) = if is_parent_mode {
-                                        (current_card_id, selected_card_id)
-                                    } else {
-                                        (selected_card_id, current_card_id)
-                                    };
-                                    let cmd = kanban_domain::commands::Command::Dependency(
-                                        kanban_domain::commands::DependencyCommand::RemoveParent(
-                                            kanban_domain::commands::RemoveParentCommand {
-                                                child_id,
-                                                parent_id,
-                                            },
-                                        ),
-                                    );
-                                    if self.execute_command(cmd).is_ok() {
-                                        self.relationship.selected.remove(&selected_card_id);
-                                    }
+                                let (child_id, parent_id) = if is_parent_mode {
+                                    (current_card_id, selected_card_id)
                                 } else {
-                                    // Add relationship
-                                    let (child_id, parent_id) = if is_parent_mode {
-                                        (current_card_id, selected_card_id)
-                                    } else {
-                                        (selected_card_id, current_card_id)
-                                    };
-                                    let cmd = kanban_domain::commands::Command::Dependency(
-                                        kanban_domain::commands::DependencyCommand::SetParent(
-                                            kanban_domain::commands::SetParentCommand {
-                                                child_id,
-                                                parent_id,
-                                            },
-                                        ),
-                                    );
-                                    if self.execute_command(cmd).is_ok() {
-                                        self.relationship.selected.insert(selected_card_id);
+                                    (selected_card_id, current_card_id)
+                                };
+                                let was_selected =
+                                    self.relationship.selected.contains(&selected_card_id);
+                                let result = if was_selected {
+                                    self.ctx.detach_child(parent_id, child_id)
+                                } else {
+                                    self.ctx.attach_child(parent_id, child_id)
+                                };
+                                match result {
+                                    Ok(()) => {
+                                        if was_selected {
+                                            self.relationship.selected.remove(&selected_card_id);
+                                        } else {
+                                            self.relationship.selected.insert(selected_card_id);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        // Surface the rejection to the user
+                                        // (cycle / self-ref / duplicate / unknown
+                                        // card). Without this the popup would
+                                        // look like a silent no-op.
+                                        self.set_error(format!(
+                                            "Failed to toggle relationship: {e}"
+                                        ));
                                     }
                                 }
                             }
@@ -664,5 +613,101 @@ impl App {
         } else {
             self.relationship.selection.clear();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_helpers::{load_with_card_order, setup_reload_resort_fixture};
+    use crate::App;
+    use crossterm::event::KeyCode;
+    use kanban_domain::{CardPriority, KanbanOperations};
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_handle_set_card_priority_popup_after_reload_resort_updates_originally_selected_card_priority(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.dialog_input.priority_selection.set(Some(3));
+        app.handle_set_card_priority_popup(KeyCode::Enter);
+
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        let a_card = cards.iter().find(|c| c.id == fx.a_id).expect("A exists");
+        let p_card = cards.iter().find(|c| c.id == fx.p_id).expect("P exists");
+        assert_eq!(
+            a_card.priority,
+            CardPriority::Critical,
+            "priority popup must update A (the active card by id), not the wrong card at A's stale index"
+        );
+        assert_ne!(
+            p_card.priority,
+            CardPriority::Critical,
+            "priority popup must leave P unchanged when A is active"
+        );
+    }
+
+    #[test]
+    fn test_handle_assign_card_to_sprint_popup_after_reload_resort_acts_on_originally_selected_card(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        let sprint = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
+        load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
+
+        // Prime the picker with the target sprint pre-checked.
+        let sprints = app.model.sprints().to_vec();
+        let board = app
+            .model
+            .boards()
+            .iter()
+            .find(|b| b.id == fx.board_id)
+            .cloned()
+            .expect("board exists");
+        app.dialog_input
+            .assign_sprint_picker
+            .reset_for_card_assignment(Some(sprint.id), &sprints, &board, chrono::Utc::now());
+
+        app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
+
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        let a_card = cards.iter().find(|c| c.id == fx.a_id).expect("A exists");
+        let p_card = cards.iter().find(|c| c.id == fx.p_id).expect("P exists");
+        assert_eq!(
+            a_card.sprint_id,
+            Some(sprint.id),
+            "sprint-assign popup must assign A (the active card by id), not the wrong card at A's stale index"
+        );
+        assert_eq!(
+            p_card.sprint_id, None,
+            "sprint-assign popup must leave P unassigned when A is active"
+        );
+    }
+
+    #[test]
+    fn test_handle_manage_parents_popup_toggle_after_reload_resort_attaches_to_originally_selected_card(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        app.relationship.card_ids = vec![fx.p_id, fx.b_id, fx.c_id];
+        app.relationship.selected = HashSet::from_iter(vec![fx.p_id]);
+        app.relationship.selection.set(Some(1));
+
+        app.handle_manage_parents_popup(KeyCode::Enter);
+
+        let graph = app.ctx.data_store().get_graph().unwrap();
+        let a_parents: HashSet<_> = graph.parents(fx.a_id).into_iter().collect();
+        let p_parents: HashSet<_> = graph.parents(fx.p_id).into_iter().collect();
+        assert!(
+            a_parents.contains(&fx.b_id),
+            "manage_parents toggle must attach B as a parent of A (the active card by id), not as a parent of the wrong card at A's stale index"
+        );
+        assert!(
+            !p_parents.contains(&fx.b_id),
+            "manage_parents toggle must not attach B as a parent of P when A is the active card"
+        );
     }
 }

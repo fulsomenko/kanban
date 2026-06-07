@@ -16,8 +16,8 @@ async fn make_tui_ctx(path: &std::path::Path) -> TuiContext {
     tui_ctx
 }
 
-/// After `reload()`, undo history is cleared and the context is immediately
-/// ready for mutations — no call to `initialize_undo_state` required.
+/// After `reload()`, the UndoStack is cleared and the context is
+/// immediately ready for mutations.
 #[tokio::test]
 async fn test_tui_reload_clears_history_and_re_arms() {
     let dir = TempDir::new().unwrap();
@@ -35,7 +35,6 @@ async fn test_tui_reload_clears_history_and_re_arms() {
         "undo history must be cleared after reload"
     );
 
-    // Context must be immediately usable — no initialize_undo_state needed.
     tui_ctx
         .create_board("After".to_string(), None)
         .expect("context must accept mutations immediately after reload");

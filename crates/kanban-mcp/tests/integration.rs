@@ -37,6 +37,92 @@ async fn board_create_list_get() {
     assert_eq!(fetched.name, "Test Board");
 }
 
+/// Opening a future-format JSON file via the MCP surface must surface as
+/// `McpError::invalid_params`, not `internal_error`. The data file the client
+/// pointed at is the precondition that failed — that's the same category as
+/// any other invalid argument. Without this mapping, an LLM client sees
+/// "internal error" for what is fundamentally "your file is too new for this
+/// binary" and has no way to suggest the right fix.
+#[tokio::test]
+async fn open_future_version_file_returns_invalid_params() {
+    use kanban_mcp::error::KanbanMcpError;
+    use rmcp::model::ErrorCode;
+    use serde_json::json;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("future.json");
+    let v99 = json!({
+        "version": 99,
+        "metadata": {
+            "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+            "saved_at": "2030-01-01T00:00:00Z"
+        },
+        "data": {}
+    });
+    std::fs::write(&path, v99.to_string()).unwrap();
+
+    let store_manager = default_store_manager();
+    let err = McpContext::new(
+        &store_manager,
+        &path.to_string_lossy(),
+        AppConfig::default(),
+    )
+    .await
+    .err()
+    .expect("v99 file must be refused");
+
+    // KanbanError → KanbanMcpError → McpError (rmcp::model::ErrorData) is the
+    // path every MCP tool handler walks via `?`. We follow it here to pin the
+    // wire-level error_code, not just the Rust variant.
+    let mcp_err: rmcp::model::ErrorData = KanbanMcpError::Domain(err).into();
+    assert_eq!(
+        mcp_err.code,
+        ErrorCode::INVALID_PARAMS,
+        "UnsupportedFutureVersion must map to INVALID_PARAMS, got: {mcp_err:?}"
+    );
+    assert!(
+        mcp_err.message.contains("upgrade kanban"),
+        "error message must include the upgrade hint, got: {}",
+        mcp_err.message
+    );
+}
+
+/// SQLite parallel of the JSON future-version MCP test above. Same wire-level
+/// expectation: `ErrorCode::INVALID_PARAMS`, message mentions "upgrade kanban".
+#[tokio::test(flavor = "multi_thread")]
+async fn open_future_version_sqlite_file_returns_invalid_params() {
+    use kanban_mcp::error::KanbanMcpError;
+    use rmcp::model::ErrorCode;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("future.db");
+    kanban_persistence_sqlite::write_test_metadata_with_schema_version(&path, 99)
+        .await
+        .unwrap();
+
+    let store_manager = default_store_manager();
+    let err = McpContext::new(
+        &store_manager,
+        &path.to_string_lossy(),
+        AppConfig::default(),
+    )
+    .await
+    .err()
+    .expect("v99 SQLite DB must be refused");
+
+    let mcp_err: rmcp::model::ErrorData = KanbanMcpError::Domain(err).into();
+    assert_eq!(
+        mcp_err.code,
+        ErrorCode::INVALID_PARAMS,
+        "UnsupportedFutureVersion (sqlite path) must map to INVALID_PARAMS, got: {mcp_err:?}"
+    );
+    assert!(
+        mcp_err.message.contains("upgrade kanban"),
+        "error message must include the upgrade hint, got: {}",
+        mcp_err.message
+    );
+}
+
 #[tokio::test]
 async fn board_get_nonexistent() {
     let (ctx, _tmp) = setup().await;
@@ -710,6 +796,7 @@ async fn tool_move_card_resolves_names_through_locked_session() {
             priority: None,
             points: None,
             due_date: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -762,6 +849,7 @@ async fn tool_move_cards_rejects_cross_board_batch() {
                 priority: None,
                 points: None,
                 due_date: None,
+                sprint_id: None,
             }))
             .await
             .unwrap();
@@ -886,6 +974,7 @@ async fn tool_assign_card_to_sprint_resolves_by_name_then_mutates() {
             priority: None,
             points: None,
             due_date: None,
+            sprint_id: None,
         }))
         .await
         .unwrap();
@@ -908,4 +997,450 @@ async fn tool_assign_card_to_sprint_resolves_by_name_then_mutates() {
         .unwrap();
     let body2 = text_payload(&r2);
     assert!(body2["sprint_id"].is_string());
+}
+
+// ============================================================================
+// Card-relation tool surface (KAN-504).
+// ============================================================================
+
+use kanban_mcp::{
+    ListCardChildrenRequest, ListCardParentsRequest, RemoveCardParentRequest, SetCardParentRequest,
+};
+
+async fn setup_server_with_two_cards() -> (KanbanMcpServer, TempDir, String, String) {
+    let (server, dir) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Parent".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Child".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: None,
+        }))
+        .await
+        .unwrap();
+    (server, dir, "KAN-1".to_string(), "KAN-2".to_string())
+}
+
+#[tokio::test]
+async fn tool_set_card_parent_resolves_identifiers_and_persists() {
+    let (server, _tmp, parent, child) = setup_server_with_two_cards().await;
+
+    let r = server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: child.clone(),
+            parent: parent.clone(),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&r);
+    assert!(body["parent"].is_string());
+    assert!(body["child"].is_string());
+
+    let listed = server
+        .tool_list_card_parents(Parameters(ListCardParentsRequest {
+            card: child.clone(),
+        }))
+        .await
+        .unwrap();
+    let listed_body = text_payload(&listed);
+    let parents = listed_body.as_array().expect("array");
+    assert_eq!(parents.len(), 1);
+    assert_eq!(parents[0]["title"], "Parent");
+}
+
+#[tokio::test]
+async fn tool_set_card_parent_cycle_returns_mcp_error() {
+    use rmcp::model::ErrorCode;
+
+    let (server, _tmp, a, b) = setup_server_with_two_cards().await;
+
+    server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: b.clone(),
+            parent: a.clone(),
+        }))
+        .await
+        .unwrap();
+
+    // Closing the cycle b -> a should fail at the MCP boundary.
+    let err = server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: a.clone(),
+            parent: b.clone(),
+        }))
+        .await
+        .unwrap_err();
+
+    // KanbanMcpError maps domain errors (which DependencyError::CycleDetected
+    // is) to INVALID_PARAMS at the boundary. Pin the JSON-RPC code so the
+    // contract is not just stringly typed, and verify the cycle is the
+    // source by inspecting the (typed) message.
+    assert_eq!(
+        err.code,
+        ErrorCode::INVALID_PARAMS,
+        "domain errors must surface as INVALID_PARAMS at the MCP boundary"
+    );
+    assert!(
+        err.message.contains("cycle"),
+        "message should mention cycle; got: {}",
+        err.message
+    );
+    // The MCP boundary enriches cycle errors with the raw user
+    // identifiers, same as CLI. Pin both sides of the edge so the
+    // shared message formatter stays load-bearing across surfaces.
+    assert!(
+        err.message.contains(&a) && err.message.contains(&b),
+        "cycle message should name both cards; got: {}",
+        err.message
+    );
+}
+
+/// Self-reference at the MCP boundary surfaces as INVALID_PARAMS and
+/// names the offending card, matching the CLI UX. Pins the shared
+/// enrichment path on the self-ref branch (the cycle test pins the
+/// cycle branch).
+#[tokio::test]
+async fn tool_set_card_parent_self_reference_returns_invalid_params_with_card_identifier() {
+    use rmcp::model::ErrorCode;
+
+    let (server, _tmp, a, _b) = setup_server_with_two_cards().await;
+
+    let err = server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: a.clone(),
+            parent: a.clone(),
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    let msg = err.message.to_lowercase();
+    assert!(
+        msg.contains("self"),
+        "self-reference message must name the invariant; got: {}",
+        err.message
+    );
+    assert!(
+        err.message.contains(&a),
+        "self-reference message must name the offending card; got: {}",
+        err.message
+    );
+}
+
+#[tokio::test]
+async fn tool_list_card_parents_returns_summaries() {
+    let (server, _tmp, parent, child) = setup_server_with_two_cards().await;
+
+    server
+        .tool_set_card_parent(Parameters(SetCardParentRequest {
+            child: child.clone(),
+            parent: parent.clone(),
+        }))
+        .await
+        .unwrap();
+
+    let listed = server
+        .tool_list_card_parents(Parameters(ListCardParentsRequest {
+            card: child.clone(),
+        }))
+        .await
+        .unwrap();
+    let arr = text_payload(&listed);
+    let parents = arr.as_array().expect("array");
+    assert_eq!(parents.len(), 1);
+    assert_eq!(parents[0]["title"], "Parent");
+    assert!(parents[0]["id"].is_string());
+
+    let children = server
+        .tool_list_card_children(Parameters(ListCardChildrenRequest {
+            card: parent.clone(),
+        }))
+        .await
+        .unwrap();
+    let arr = text_payload(&children);
+    let cs = arr.as_array().expect("array");
+    assert_eq!(cs.len(), 1);
+    assert_eq!(cs[0]["title"], "Child");
+}
+
+#[tokio::test]
+async fn tool_remove_card_parent_returns_error_when_edge_missing() {
+    use rmcp::model::ErrorCode;
+
+    let (server, _tmp, parent, child) = setup_server_with_two_cards().await;
+
+    let err = server
+        .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+            child: child.clone(),
+            parent: parent.clone(),
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    let msg = err.message.to_lowercase();
+    assert!(
+        msg.contains("not found") || msg.contains("missing") || msg.contains("does not exist"),
+        "expected edge-not-found message, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn tool_create_card_with_sprint_id_assigns_to_sprint() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    let sprint_result = server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "B".into(),
+            prefix: None,
+            name: Some("alpha".into()),
+        }))
+        .await
+        .unwrap();
+    let sprint_body = text_payload(&sprint_result);
+    let sprint_id = sprint_body["id"].as_str().unwrap().to_string();
+
+    let result = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some(sprint_id.clone()),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert_eq!(body["sprint_id"].as_str().unwrap(), sprint_id);
+}
+
+#[tokio::test]
+async fn tool_create_card_with_sprint_name_resolves_and_assigns() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "B".into(),
+            prefix: None,
+            name: Some("alpha".into()),
+        }))
+        .await
+        .unwrap();
+    let result = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some("alpha".into()),
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert!(body["sprint_id"].is_string());
+}
+
+#[tokio::test]
+async fn tool_create_card_without_sprint_id_leaves_card_unassigned() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    let result = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Plain".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: None,
+        }))
+        .await
+        .unwrap();
+    let body = text_payload(&result);
+    assert!(body["sprint_id"].is_null());
+}
+
+/// Negative path: passing a sprint identifier the resolver can't find
+/// surfaces a useful error mentioning both "Sprint" and the offending
+/// name, not a panic or a generic message. Pins the contract that LLM
+/// clients rely on when learning the tool schema by trial.
+#[tokio::test]
+async fn tool_create_card_with_unknown_sprint_name_returns_useful_error() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("KAN".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "B".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+
+    let err = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "B".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some("nonexistent".into()),
+        }))
+        .await
+        .unwrap_err();
+    let msg = format!("{:?}", err);
+    assert!(msg.contains("Sprint"), "err: {msg}");
+    assert!(msg.contains("nonexistent"), "err: {msg}");
+}
+
+/// Negative path: a sprint UUID from another board cannot be used when
+/// creating a card on the current board. The error returned by the tool
+/// path comes from the typed `SprintBoardMismatch` variant via
+/// `kanban_err_to_mcp`, so the message mentions "belongs to board".
+#[tokio::test]
+async fn tool_create_card_with_cross_board_sprint_returns_useful_error() {
+    let (server, _tmp) = setup_server().await;
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "A".into(),
+            card_prefix: Some("A".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_board(Parameters(CreateBoardRequest {
+            name: "B".into(),
+            card_prefix: Some("B".into()),
+        }))
+        .await
+        .unwrap();
+    server
+        .tool_create_column(Parameters(CreateColumnRequest {
+            board: "A".into(),
+            name: "TODO".into(),
+            position: None,
+        }))
+        .await
+        .unwrap();
+    let sprint_b_result = server
+        .tool_create_sprint(Parameters(CreateSprintRequest {
+            board: "B".into(),
+            prefix: None,
+            name: Some("beta".into()),
+        }))
+        .await
+        .unwrap();
+    let sprint_b_id = text_payload(&sprint_b_result)["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Pass sprint B's UUID while creating a card on board A. The
+    // sprint resolver scoped to board A would reject this as a name
+    // miss, so we pass the UUID directly to ensure we exercise the
+    // domain-level cross-board check rather than the resolver miss.
+    let err = server
+        .tool_create_card(Parameters(CreateCardRequest {
+            board: "A".into(),
+            column: "TODO".into(),
+            title: "Sprinted".into(),
+            description: None,
+            priority: None,
+            points: None,
+            due_date: None,
+            sprint_id: Some(sprint_b_id.clone()),
+        }))
+        .await
+        .unwrap_err();
+    let msg = format!("{:?}", err);
+    assert!(msg.contains("belongs to board"), "err: {msg}");
 }

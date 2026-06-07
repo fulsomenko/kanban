@@ -18,6 +18,9 @@ jobs:
     permissions:
       contents: write
     if: github.event.pull_request.merged == true
+    outputs:
+      new: ${{ steps.release.outputs.new }}
+      has_changesets: ${{ steps.check.outputs.has_changesets }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -112,9 +115,19 @@ jobs:
         if: steps.check.outputs.has_changesets == 'true'
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+          TAG: v${{ steps.release.outputs.new }}
         run: |
-          git tag "v${{ steps.release.outputs.new }}"
-          git push origin "v${{ steps.release.outputs.new }}"
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally, skipping git tag"
+          else
+            git tag "$TAG"
+          fi
+          if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin, skipping git push"
+          else
+            git push origin "$TAG"
+          fi
 
       - name: Create GitHub Release
         if: steps.check.outputs.has_changesets == 'true'
@@ -170,6 +183,49 @@ jobs:
           updpkgsums: false
           allow_empty_commits: false
 
+      - name: Compute upstream tarball SHA256 for Homebrew
+        if: steps.check.outputs.has_changesets == 'true'
+        id: brew-sha
+        env:
+          VERSION: ${{ steps.release.outputs.new }}
+        run: |
+          set -euo pipefail
+          URL="https://github.com/fulsomenko/kanban/archive/refs/tags/v${VERSION}.tar.gz"
+          SHA256=$(curl -fsL "$URL" | sha256sum | cut -d' ' -f1)
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Homebrew tap SSH key
+        if: steps.check.outputs.has_changesets == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}" > ~/.ssh/homebrew_tap_key
+          chmod 600 ~/.ssh/homebrew_tap_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Bump formula in homebrew-tap
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GIT_SSH_COMMAND: "ssh -i ~/.ssh/homebrew_tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+          VERSION: ${{ steps.release.outputs.new }}
+          SHA: ${{ steps.brew-sha.outputs.sha256 }}
+          URL: ${{ steps.brew-sha.outputs.url }}
+        run: |
+          set -euo pipefail
+          git clone git@github.com:fulsomenko/homebrew-tap.git /tmp/homebrew-tap
+          sed -i "s|^  url \".*\"|  url \"${URL}\"|" /tmp/homebrew-tap/Formula/kanban.rb
+          sed -i "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" /tmp/homebrew-tap/Formula/kanban.rb
+          cd /tmp/homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/kanban.rb
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "kanban ${VERSION}"
+            git push origin master
+          fi
+
       - name: Sync develop with master
         if: steps.check.outputs.has_changesets == 'true'
         env:
@@ -183,3 +239,201 @@ jobs:
             exit 0
           fi
           git push origin develop
+
+  build-windows:
+    name: Build Windows release archive
+    needs: [release]
+    if: needs.release.outputs.has_changesets == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.new }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build kanban + kanban-mcp (release)
+        shell: pwsh
+        run: |
+          cargo build --release `
+            --package kanban-cli `
+            --package kanban-mcp `
+            --target x86_64-pc-windows-msvc
+
+      - name: Stage archive contents
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $stage = "stage/kanban-v$env:VERSION-x86_64-pc-windows-msvc"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/kanban.exe     $stage/
+          Copy-Item target/x86_64-pc-windows-msvc/release/kanban-mcp.exe $stage/
+          Copy-Item LICENSE.md $stage/
+          Copy-Item README.md  $stage/
+          & "$stage/kanban.exe" --version
+          & "$stage/kanban-mcp.exe" --version
+
+      - name: Compress archive
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $name = "kanban-v$env:VERSION-x86_64-pc-windows-msvc"
+          Compress-Archive -Path "stage/$name/*" -DestinationPath "$name.zip" -Force
+
+      - name: Write SHA256SUMS
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          $name = "kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
+          $sha  = (Get-FileHash -Algorithm SHA256 $name).Hash.ToLower()
+          "$sha  $name" | Out-File -Encoding ascii -FilePath SHA256SUMS
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.release.outputs.new }}
+          files: |
+            kanban-v${{ needs.release.outputs.new }}-x86_64-pc-windows-msvc.zip
+            SHA256SUMS
+          fail_on_unmatched_files: true
+
+  publish-chocolatey:
+    name: Publish to Chocolatey
+    needs: [release, build-windows]
+    if: needs.release.outputs.has_changesets == 'true'
+    runs-on: windows-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.new }}
+
+      - name: Read Windows ZIP digest from GitHub Release
+        id: sha
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          $asset = "kanban-v$env:VERSION-x86_64-pc-windows-msvc.zip"
+          $ok = $false
+          for ($i = 1; $i -le 30; $i++) {
+            $json = gh release view "v$env:VERSION" --repo $env:REPO `
+              --json assets --jq ".assets[] | select(.name == `"$asset`")" 2>$null
+            if ($json) {
+              $obj = $json | ConvertFrom-Json
+              if ($obj.state -eq 'uploaded' -and $obj.digest) {
+                $sha = $obj.digest -replace '^sha256:', ''
+                Write-Output "Found $asset: sha=$sha"
+                "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+                $ok = $true
+                break
+              }
+              Write-Output ("Attempt {0}: state='{1}' digest='{2}'" -f $i, $obj.state, $obj.digest)
+            } else {
+              Write-Output ("Attempt {0}: asset not yet listed" -f $i)
+            }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ok) {
+            Write-Error "Release asset never became ready after 30 attempts (~150s)"
+            exit 1
+          }
+
+      - name: Stage Chocolatey package with substitutions
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          $build = "build/chocolatey"
+          New-Item -ItemType Directory -Path "$build/tools" -Force | Out-Null
+          Copy-Item packaging/chocolatey/kanban.nuspec $build/kanban.nuspec
+          Copy-Item packaging/chocolatey/tools/* $build/tools/ -Recurse
+          Copy-Item LICENSE.md $build/tools/LICENSE.txt -Force
+
+          (Get-Content "$build/kanban.nuspec") `
+            -replace '\$version\$', $env:VERSION `
+            | Set-Content "$build/kanban.nuspec"
+
+          (Get-Content "$build/tools/chocolateyinstall.ps1") `
+            -replace '\$version\$',   $env:VERSION `
+            -replace '\$checksum64\$', $env:SHA `
+            | Set-Content "$build/tools/chocolateyinstall.ps1"
+
+      - name: choco pack
+        shell: pwsh
+        working-directory: build/chocolatey
+        run: choco pack
+
+      - name: Smoke install from local nupkg
+        shell: pwsh
+        working-directory: build/chocolatey
+        run: |
+          choco install kanban -s . -y --force --no-progress
+          kanban --version
+          kanban-mcp --version
+
+      - name: choco push
+        shell: pwsh
+        working-directory: build/chocolatey
+        env:
+          CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          # Pre-check: if this version is already published and approved,
+          # treat as success. This makes the job safe to re-run after a
+          # transient workflow failure that followed a successful push.
+          # NB: Submitted/Waiting-for-Reviewer states are NOT visible via
+          # the public v2 OData API, so a 404 here does not prove the
+          # package is unpublished — see packaging/chocolatey/RECOVERY.md.
+          $checkUrl = "https://community.chocolatey.org/api/v2/Packages(Id='kanban',Version='$env:VERSION')"
+          try {
+            $null = Invoke-RestMethod -Uri $checkUrl -TimeoutSec 30 -ErrorAction Stop
+            Write-Output "kanban $env:VERSION is already published on Chocolatey; nothing to do."
+            exit 0
+          } catch {
+            $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+            if ($status -ne 404) {
+              Write-Output ("Pre-check returned status {0} ({1}); proceeding to push anyway." -f $status, $_.Exception.Message)
+            }
+          }
+
+          try {
+            choco push "kanban.$env:VERSION.nupkg" `
+              --api-key="$env:CHOCO_API_KEY" `
+              --source="https://push.chocolatey.org/"
+            if ($LASTEXITCODE -ne 0) { throw "choco push exited $LASTEXITCODE" }
+          } catch {
+            Write-Output ""
+            Write-Output "=== Chocolatey publish failed ==="
+            Write-Output "Recovery runbook: packaging/chocolatey/RECOVERY.md"
+            Write-Output "Chocolatey rejects re-push of the same id+version permanently."
+            Write-Output "Do NOT simply re-run this job before diagnosing — see the runbook."
+            Write-Output "================================="
+            throw
+          }
+
+      - name: Note moderation expectations
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+        run: |
+          Write-Output "==="
+          Write-Output "Pushed kanban v$env:VERSION to community.chocolatey.org."
+          Write-Output "First-time moderation typically takes 1-7 days."
+          Write-Output "Status:"
+          Write-Output "  https://community.chocolatey.org/packages/kanban/$env:VERSION"
+          Write-Output "==="

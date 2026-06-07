@@ -5,7 +5,6 @@
 
 use kanban_domain::{
     commands::{Command, MoveCard},
-    dependencies::CardGraphExt,
     ArchivedCard, Board, Card, Column, Sprint,
 };
 use kanban_persistence_json::JsonFileStore;
@@ -49,13 +48,13 @@ macro_rules! cascade_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let backend = ctx.backend();
 
-                let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+                let mut board = Board::new("B", Some("TST"));
                 let board_id = board.id;
-                let col1 = Column::new(board_id, "Col1".to_string(), 0);
-                let col2 = Column::new(board_id, "Col2".to_string(), 1);
-                let card1 = Card::new(&mut board, col1.id, "C1".to_string(), 0);
-                let card2 = Card::new(&mut board, col2.id, "C2".to_string(), 0);
-                let sprint = Sprint::new(board_id, 1, None, None);
+                let col1 = Column::new(board_id, "Col1", 0);
+                let col2 = Column::new(board_id, "Col2", 1);
+                let card1 = Card::new(&mut board, col1.id, "C1", 0);
+                let card2 = Card::new(&mut board, col2.id, "C2", 0);
+                let sprint = Sprint::new(board_id, 1, None, None::<String>);
                 backend.upsert_board(board).unwrap();
                 backend.upsert_column(col1).unwrap();
                 backend.upsert_column(col2).unwrap();
@@ -76,11 +75,11 @@ macro_rules! cascade_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let backend = ctx.backend();
 
-                let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+                let mut board = Board::new("B", Some("TST"));
                 let board_id = board.id;
-                let col = Column::new(board_id, "Col".to_string(), 0);
-                let card_a = Card::new(&mut board, col.id, "A".to_string(), 0);
-                let card_b = Card::new(&mut board, col.id, "B".to_string(), 1);
+                let col = Column::new(board_id, "Col", 0);
+                let card_a = Card::new(&mut board, col.id, "A", 0);
+                let card_b = Card::new(&mut board, col.id, "B", 1);
                 let card_a_id = card_a.id;
                 let card_b_id = card_b.id;
                 backend.upsert_board(board).unwrap();
@@ -89,14 +88,14 @@ macro_rules! cascade_tests {
                 backend.upsert_card(card_b).unwrap();
 
                 let mut graph = backend.get_graph().unwrap();
-                graph.cards.add_blocks(card_a_id, card_b_id).unwrap();
+                graph.set_block(card_a_id, card_b_id).unwrap();
                 backend.set_graph(graph).unwrap();
-                assert_eq!(backend.get_graph().unwrap().cards.edges().len(), 1);
+                assert_eq!(backend.get_graph().unwrap().len(), 1);
 
                 ctx.delete_board(board_id).unwrap();
 
                 assert_eq!(
-                    backend.get_graph().unwrap().cards.edges().len(),
+                    backend.get_graph().unwrap().len(),
                     0,
                     "service delete_board must clean dependency-graph edges for all deleted cards"
                 );
@@ -107,11 +106,11 @@ macro_rules! cascade_tests {
                 let (mut ctx, _dir) = $open_ctx.await;
                 let backend = ctx.backend();
 
-                let mut board = Board::new("B".to_string(), Some("TST".to_string()));
+                let mut board = Board::new("B", Some("TST"));
                 let board_id = board.id;
-                let col = Column::new(board_id, "Col".to_string(), 0);
+                let col = Column::new(board_id, "Col", 0);
                 let col_id = col.id;
-                let card = Card::new(&mut board, col_id, "C".to_string(), 0);
+                let card = Card::new(&mut board, col_id, "C", 0);
                 let archived = ArchivedCard::new(card, col_id, 0);
                 backend.upsert_board(board).unwrap();
                 backend.upsert_column(col).unwrap();

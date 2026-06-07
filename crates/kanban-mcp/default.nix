@@ -1,6 +1,7 @@
 { lib
 , rustPlatform
 , src
+, gitRev ? null
 }:
 
 let
@@ -15,6 +16,10 @@ rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = ../../Cargo.lock;
   };
+
+  preBuild = lib.optionalString (gitRev != null) ''
+    export GIT_COMMIT_HASH="${gitRev}"
+  '';
 
   # Only build the kanban-mcp binary
   cargoBuildFlags = [ "--package" "kanban-mcp" ];

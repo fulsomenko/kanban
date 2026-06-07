@@ -12,13 +12,12 @@ pub mod sprint_commands;
 
 pub use board_commands::*;
 pub use card_commands::*;
-pub use cascade_commands::CascadeCommand;
+pub use cascade_commands::{CascadeCommand, SetArchivedCardsSprint};
 pub use column_commands::*;
 pub use dependency_commands::*;
 pub use sprint_commands::*;
 
-/// Serializable command enum that represents all possible domain mutations.
-/// Replaces the former `Command` trait with a concrete, serde-friendly hierarchy.
+/// Every domain mutation flows through this enum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "domain", rename_all = "snake_case")]
 pub enum Command {
@@ -52,6 +51,23 @@ impl Command {
             Command::Cascade(cmd) => cmd.description(),
         }
     }
+
+    /// Build the inverse batch by reading pre-state from `store`.
+    /// Called before the forward `execute` runs.
+    ///
+    /// An empty `Vec` is "this forward is a no-op; nothing to undo."
+    /// `Err` means the inverse cannot be captured (entity missing,
+    /// store error, or the command is synthetic-only).
+    pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
+        match self {
+            Command::Board(cmd) => cmd.capture_inverse(store),
+            Command::Column(cmd) => cmd.capture_inverse(store),
+            Command::Card(cmd) => cmd.capture_inverse(store),
+            Command::Sprint(cmd) => cmd.capture_inverse(store),
+            Command::Dependency(cmd) => cmd.capture_inverse(store),
+            Command::Cascade(cmd) => cmd.capture_inverse(store),
+        }
+    }
 }
 
 /// Context passed to commands for mutation.
@@ -64,25 +80,25 @@ impl<'a> CommandContext<'a> {
     pub fn get_board(&self, id: Uuid) -> KanbanResult<crate::Board> {
         self.store
             .get_board(id)?
-            .ok_or_else(|| KanbanError::not_found("board", id))
+            .ok_or_else(|| KanbanError::not_found("Board", id))
     }
 
     pub fn get_card(&self, id: Uuid) -> KanbanResult<crate::Card> {
         self.store
             .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     pub fn get_column(&self, id: Uuid) -> KanbanResult<crate::Column> {
         self.store
             .get_column(id)?
-            .ok_or_else(|| KanbanError::not_found("column", id))
+            .ok_or_else(|| KanbanError::not_found("Column", id))
     }
 
     pub fn get_sprint(&self, id: Uuid) -> KanbanResult<crate::Sprint> {
         self.store
             .get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     pub fn filter_valid_card_ids(&self, ids: &[Uuid], command_name: &str) -> Vec<Uuid> {
@@ -138,10 +154,10 @@ mod tests {
     #[test]
     fn test_check_wip_limit_no_limit_always_ok() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let col = crate::Column::new(board.id, "Col", 0);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
         let ctx = tc.as_command_context();
@@ -151,11 +167,11 @@ mod tests {
     #[test]
     fn test_check_wip_limit_below_limit_ok() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(2);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
         let ctx = tc.as_command_context();
@@ -165,11 +181,11 @@ mod tests {
     #[test]
     fn test_check_wip_limit_at_limit_returns_error() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
         let ctx = tc.as_command_context();
@@ -180,11 +196,11 @@ mod tests {
     #[test]
     fn test_check_wip_limit_exclude_reduces_count() {
         let tc = TestContext::new();
-        let mut board = crate::Board::new("B".to_string(), None);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let mut board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
-        let card = crate::Card::new(&mut board, col_id, "C".to_string(), 0);
+        let card = crate::Card::new(&mut board, col_id, "C", 0);
         let card_id = card.id;
         tc.store.upsert_column(col).unwrap();
         tc.store.upsert_card(card).unwrap();
@@ -195,8 +211,8 @@ mod tests {
     #[test]
     fn test_check_wip_limit_batch_exceeds_limit_returns_error() {
         let tc = TestContext::new();
-        let board = crate::Board::new("B".to_string(), None);
-        let mut col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("B", None::<String>);
+        let mut col = crate::Column::new(board.id, "Col", 0);
         col.wip_limit = Some(1);
         let col_id = col.id;
         tc.store.upsert_board(board).unwrap();
@@ -276,9 +292,10 @@ mod tests {
                 sprint_id: Uuid::new_v4(),
                 timestamp: chrono::Utc::now(),
             })),
-            Command::Dependency(DependencyCommand::Remove(RemoveDependencyCommand {
-                source_id: Uuid::new_v4(),
-                target_id: Uuid::new_v4(),
+            Command::Dependency(DependencyCommand::RemoveSpawns(RemoveSpawns {
+                source: Uuid::new_v4(),
+                target: Uuid::new_v4(),
+                tolerate_missing: false,
             })),
         ];
         for cmd in commands {
@@ -289,8 +306,8 @@ mod tests {
 
     #[test]
     fn test_command_serde_roundtrip_import_entities() {
-        let board = crate::Board::new("Imported".to_string(), Some("IMP".to_string()));
-        let col = crate::Column::new(board.id, "Col".to_string(), 0);
+        let board = crate::Board::new("Imported", Some("IMP"));
+        let col = crate::Column::new(board.id, "Col", 0);
         let cmd = Command::Board(BoardCommand::Import(ImportEntities {
             boards: vec![board],
             columns: vec![col],

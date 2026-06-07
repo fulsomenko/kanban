@@ -16,6 +16,85 @@ fn extract_id(json: &Value) -> String {
     json["data"]["id"].as_str().unwrap().to_string()
 }
 
+fn kanban_no_config(dir: &std::path::Path) -> Command {
+    let mut cmd = kanban();
+    cmd.current_dir(dir)
+        .env_remove("KANBAN_FILE")
+        .env_remove("XDG_CONFIG_HOME")
+        .env("HOME", dir);
+    cmd
+}
+
+mod future_version_tests {
+    use super::*;
+
+    /// SQLite parallel of the JSON refusal test below. The data preservation
+    /// contract is stronger than byte-equality (SQLite's WAL setup touches
+    /// the file header just by opening) — we instead pin that the on-disk
+    /// schema_version was NOT normalised down from 99, which would prove the
+    /// migrate() bumping ran on a refused file.
+    #[test]
+    fn test_cli_refuses_to_open_v99_sqlite_file_without_normalising_schema_version() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("future.db");
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(kanban_persistence_sqlite::write_test_metadata_with_schema_version(&file, 99))
+            .unwrap();
+
+        kanban_no_config(dir.path())
+            .args([file.to_str().unwrap(), "board", "list"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("v99"))
+            .stderr(predicate::str::contains("upgrade kanban"));
+
+        let post_refusal_version = rt
+            .block_on(kanban_persistence_sqlite::read_test_schema_version(&file))
+            .unwrap();
+        assert_eq!(
+            post_refusal_version,
+            Some(99),
+            "refusal must not bump schema_version — migrate() ran on a refused file"
+        );
+    }
+
+    /// Pointing the CLI at a JSON file written by a future kanban must fail
+    /// loudly: non-zero exit code with the typed UnsupportedFutureVersion
+    /// message on stderr. The data on disk must not be touched. Mirrors what
+    /// the persistence-layer guards already enforce — this test pins the
+    /// end-to-end CLI contract so the typed error doesn't get accidentally
+    /// stringified away again at some boundary upstream.
+    #[test]
+    fn test_cli_refuses_to_open_v99_json_file() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("future.json");
+        let v99 = serde_json::json!({
+            "version": 99,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2030-01-01T00:00:00Z"
+            },
+            "data": {}
+        });
+        fs::write(&file, v99.to_string()).unwrap();
+        let original = fs::read(&file).unwrap();
+
+        kanban_no_config(dir.path())
+            .args([file.to_str().unwrap(), "board", "list"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("v99"))
+            .stderr(predicate::str::contains("upgrade kanban"));
+
+        // Refusal must not mutate the file on disk.
+        let after = fs::read(&file).unwrap();
+        assert_eq!(original, after, "refusal must leave the file untouched");
+    }
+}
+
 mod board_tests {
     use super::*;
 
@@ -225,6 +304,44 @@ mod board_tests {
         let json = parse_json_output(&String::from_utf8_lossy(&output));
         assert!(json["success"].as_bool().unwrap());
         assert_eq!(json["data"]["name"], "Updated");
+    }
+
+    #[test]
+    fn test_board_update_sort_field_and_order_persists() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+
+        kanban().args([file.to_str().unwrap()]).assert().success();
+        let create_output = kanban()
+            .args([file.to_str().unwrap(), "board", "create", "--name", "B"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&create_output)));
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "update",
+                &board_id,
+                "--sort-field",
+                "due-date",
+                "--sort-order",
+                "desc",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["task_sort_field"], "DueDate");
+        assert_eq!(json["data"]["task_sort_order"], "Descending");
     }
 
     #[test]
@@ -659,6 +776,64 @@ mod card_tests {
             .as_object()
             .unwrap()
             .contains_key("description"));
+    }
+
+    #[test]
+    fn test_card_list_sort_due_date_orders_earliest_first() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        // Insert in non-due-date order so the sort proves it ran rather than
+        // the storage order coincidentally matching.
+        let due_dates = [
+            ("Middle", "2026-06-01T00:00:00Z"),
+            ("Latest", "2026-12-01T00:00:00Z"),
+            ("Earliest", "2026-01-01T00:00:00Z"),
+        ];
+        for (title, due) in &due_dates {
+            kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board",
+                    &board_id,
+                    "--column",
+                    &column_id,
+                    "--title",
+                    title,
+                    "--due-date",
+                    due,
+                ])
+                .assert()
+                .success();
+        }
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "list",
+                "--sort",
+                "due-date",
+                "--order",
+                "asc",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        let titles: Vec<String> = json["data"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["title"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(titles, vec!["Earliest", "Middle", "Latest"]);
     }
 
     #[test]
@@ -1479,6 +1654,270 @@ mod card_tests {
             .stderr(predicate::str::contains("ambiguous"))
             .stderr(predicate::str::contains(&card_a_id))
             .stderr(predicate::str::contains(&card_b_id));
+    }
+
+    fn create_sprint(file: &std::path::Path, board_id: &str) -> String {
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "sprint",
+                "create",
+                "--board",
+                board_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        extract_id(&parse_json_output(&String::from_utf8_lossy(&output)))
+    }
+
+    fn activate_sprint(file: &std::path::Path, sprint_id: &str) {
+        kanban()
+            .args([file.to_str().unwrap(), "sprint", "activate", sprint_id])
+            .assert()
+            .success();
+    }
+
+    #[test]
+    fn test_card_create_with_assign_id_assigns_new_card_to_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let sprint_id = create_sprint(&file, &board_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "Sprinted",
+                "--assign",
+                &sprint_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(json["data"]["sprint_id"], sprint_id);
+    }
+
+    #[test]
+    fn test_card_create_with_assign_short_flag_assigns_to_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let sprint_id = create_sprint(&file, &board_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "Sprinted",
+                "-a",
+                &sprint_id,
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["sprint_id"], sprint_id);
+    }
+
+    #[test]
+    fn test_card_create_with_assign_no_value_uses_sole_active_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let sprint_id = create_sprint(&file, &board_id);
+        activate_sprint(&file, &sprint_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "AutoSprinted",
+                "--assign",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["sprint_id"], sprint_id);
+    }
+
+    #[test]
+    fn test_card_create_with_assign_no_value_errors_when_no_active_sprint() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let _ = create_sprint(&file, &board_id); // planning only
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "NoSprint",
+                "--assign",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("found none"));
+    }
+
+    #[test]
+    fn test_card_create_with_assign_no_value_errors_when_multiple_active_sprints() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let s1 = create_sprint(&file, &board_id);
+        let s2 = create_sprint(&file, &board_id);
+        activate_sprint(&file, &s1);
+        activate_sprint(&file, &s2);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "Ambig",
+                "--assign",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("found 2"));
+    }
+
+    #[test]
+    fn test_card_create_without_assign_leaves_card_unassigned() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        let _ = create_sprint(&file, &board_id);
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "NoAssign",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["data"]["sprint_id"].is_null());
+    }
+
+    /// Negative path: `--assign` with a name that doesn't match any sprint
+    /// produces an error mentioning both "sprint" and the offending name,
+    /// not a panic or a generic message. Pins the surface contract that
+    /// MCP/CLI/TUI agents rely on when learning the schema by trial.
+    #[test]
+    fn test_card_create_with_assign_unknown_name_fails_with_useful_error() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+        // No sprint created on purpose.
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "X",
+                "--assign",
+                "nonexistent",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Sprint"))
+            .stderr(predicate::str::contains("nonexistent"));
+    }
+
+    /// Negative path: `--assign <random-uuid>` produces an error mentioning
+    /// both "Sprint" and the offending UUID. Same surface contract as the
+    /// name case above; the resolver accepts UUIDs first, so this exercises
+    /// a different code path inside `resolve_sprint_id`. Post-KAN-659,
+    /// both this test and the name-path sibling assert on the same
+    /// capitalized "Sprint" tag.
+    #[test]
+    fn test_card_create_with_assign_unknown_uuid_fails_with_useful_error() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (board_id, column_id) = setup_board_and_column(&file);
+
+        let bogus = "11111111-2222-3333-4444-555555555555";
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "card",
+                "create",
+                "--board",
+                &board_id,
+                "--column",
+                &column_id,
+                "--title",
+                "X",
+                "--assign",
+                bogus,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Sprint"))
+            .stderr(predicate::str::contains(bogus));
     }
 }
 
@@ -3224,5 +3663,664 @@ mod missing_file_tests {
             file.exists(),
             "kanban <file> must create the file when missing"
         );
+    }
+}
+
+mod init_tests {
+    use super::*;
+
+    #[test]
+    fn test_init_creates_empty_file_when_no_board_flag() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("boards.json");
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        assert!(file.exists());
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        assert_eq!(
+            json["data"]["file"].as_str().unwrap(),
+            file.to_str().unwrap()
+        );
+
+        let list = kanban()
+            .args([file.to_str().unwrap(), "board", "list"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let listed = parse_json_output(&String::from_utf8_lossy(&list));
+        assert_eq!(listed["data"]["total"].as_u64().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_init_is_idempotent_against_existing_file() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("boards.json");
+
+        kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success();
+        let first = std::fs::read(&file).expect("file should exist after first init");
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "init"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        let second = std::fs::read(&file).expect("file should still exist after second init");
+        assert_eq!(
+            first, second,
+            "second `kanban init` must not rewrite an existing file"
+        );
+
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        let returned = json["data"]["file"]
+            .as_str()
+            .expect("data.file should be a string");
+        assert!(
+            std::path::Path::new(returned).exists(),
+            "data.file should reference an existing file, got {returned}"
+        );
+    }
+
+    #[test]
+    fn test_init_creates_file_with_named_board() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("boards.json");
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "init", "--board", "Sprint 1"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+
+        assert!(file.exists());
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"]["name"], "Sprint 1");
+    }
+
+    #[test]
+    fn test_init_via_kanban_file_env() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("env-board.json");
+
+        kanban_no_config(dir.path())
+            .env("KANBAN_FILE", file.to_str().unwrap())
+            .args(["init", "--board", "Env Board"])
+            .assert()
+            .success();
+
+        assert!(file.exists());
+    }
+
+    #[test]
+    fn test_init_fails_cleanly_on_bad_path() {
+        let dir = tempdir().unwrap();
+        let bad = dir
+            .path()
+            .join("no")
+            .join("such")
+            .join("dir")
+            .join("x.json");
+
+        kanban()
+            .args([bad.to_str().unwrap(), "init"])
+            .assert()
+            .failure();
+    }
+}
+
+mod relation_tests {
+    use super::*;
+
+    fn setup_two_cards(file: &std::path::Path) -> (String, String) {
+        kanban().args([file.to_str().unwrap()]).assert().success();
+
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&board_output)));
+
+        let column_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "column",
+                "create",
+                "--board",
+                &board_id,
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let column_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&column_output)));
+
+        let make_card = |title: &str| -> String {
+            let out = kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board",
+                    &board_id,
+                    "--column",
+                    &column_id,
+                    "--title",
+                    title,
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+            extract_id(&parse_json_output(&String::from_utf8_lossy(&out)))
+        };
+        let parent_id = make_card("Parent");
+        let child_id = make_card("Child");
+        (parent_id, child_id)
+    }
+
+    fn setup_three_cards(file: &std::path::Path) -> (String, String, String) {
+        kanban().args([file.to_str().unwrap()]).assert().success();
+
+        let board_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "board",
+                "create",
+                "--name",
+                "Test Board",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let board_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&board_output)));
+
+        let column_output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "column",
+                "create",
+                "--board",
+                &board_id,
+                "--name",
+                "TODO",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let column_id = extract_id(&parse_json_output(&String::from_utf8_lossy(&column_output)));
+
+        let make_card = |title: &str| -> String {
+            let out = kanban()
+                .args([
+                    file.to_str().unwrap(),
+                    "card",
+                    "create",
+                    "--board",
+                    &board_id,
+                    "--column",
+                    &column_id,
+                    "--title",
+                    title,
+                ])
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+            extract_id(&parse_json_output(&String::from_utf8_lossy(&out)))
+        };
+        (
+            make_card("Parent"),
+            make_card("Child1"),
+            make_card("Child2"),
+        )
+    }
+
+    #[test]
+    fn test_relation_add_creates_edge_visible_via_parents() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "parents", &child_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert!(json["success"].as_bool().unwrap());
+        let data = json["data"].as_array().unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0]["id"], parent_id);
+    }
+
+    #[test]
+    fn test_relation_add_cycle_returns_error_exit_code() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (a, b) = setup_two_cards(&file);
+
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &a, &b])
+            .assert()
+            .success();
+
+        // Closing the cycle b -> a should fail. The error must name
+        // both card identifiers so the user can identify which
+        // command produced the failure without re-reading their
+        // scrollback.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &b, &a])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&b))
+            .stderr(predicate::str::contains(&a))
+            .stderr(predicate::str::contains("cycle"))
+            // Must not leak the underlying domain wrapper's prefix —
+            // other CLI commands report errors without 'validation
+            // error:' on the front.
+            .stderr(predicate::str::contains("validation error").not());
+    }
+
+    #[test]
+    fn test_relation_add_self_reference_error_includes_card_identifier() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (a, _) = setup_two_cards(&file);
+
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &a, &a])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&a))
+            .stderr(predicate::str::contains("self-reference"))
+            .stderr(predicate::str::contains("validation error").not());
+    }
+
+    #[test]
+    fn test_relation_remove_nonexistent_error_includes_both_card_identifiers() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (a, b) = setup_two_cards(&file);
+
+        // No edge has been added between a and b.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "remove", &a, &b])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&a))
+            .stderr(predicate::str::contains(&b))
+            .stderr(predicate::str::contains("not found"))
+            .stderr(predicate::str::contains("validation error").not());
+    }
+
+    #[test]
+    fn test_relation_remove_removes_edge() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "remove",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "parents", &child_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_relation_children_returns_summaries() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        let data = json["data"].as_array().unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0]["id"], child_id);
+        assert_eq!(data[0]["title"], "Child");
+    }
+
+    #[test]
+    fn test_relation_add_requires_at_least_one_child() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, _) = setup_two_cards(&file);
+
+        // Parent only; no child argument supplied.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &parent_id])
+            .assert()
+            .failure();
+    }
+
+    /// Multi-child support: a single `relation add P C1 C2 C3` invocation
+    /// must create every parent->child edge. Without this the user has
+    /// to script a per-child loop themselves.
+    #[test]
+    fn test_relation_add_with_multiple_children_creates_all_edges() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &c1,
+                &c2,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        let data = json["data"].as_array().unwrap();
+        assert_eq!(data.len(), 2, "both children should be attached");
+    }
+
+    /// Mid-list failure in a multi-child add is atomic: the entire
+    /// batch is rolled back, and an inspection of the persisted graph
+    /// shows none of the would-be children attached. This pins the
+    /// service-level transactional contract at the CLI boundary so a
+    /// future change that breaks atomicity (e.g. reverts to a loop of
+    /// singles) is caught here.
+    #[test]
+    fn test_relation_add_with_cycle_mid_list_aborts_atomically_and_names_offending_child() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
+        // Set up a chain so closing it causes a cycle:
+        //   parent -> c1 -> c2
+        // Then attempt `relation add c2 c1 parent`. The first child
+        // (c1) becomes a child of c2 cleanly. The second child
+        // (parent) would close the cycle parent -> c1 -> c2 -> parent
+        // and must fail with the parent identifier in the message.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &parent_id, &c1])
+            .assert()
+            .success();
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &c1, &c2])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &c2,
+                &c1,        // would succeed in isolation (c1 already child of c2 after add)
+                &parent_id, // would close the cycle parent -> c1 -> c2 -> parent
+            ])
+            .assert()
+            .failure()
+            .get_output()
+            .stderr
+            .clone();
+        let stderr = String::from_utf8_lossy(&output);
+        assert!(
+            stderr.to_lowercase().contains("cycle"),
+            "expected cycle error, got: {stderr}"
+        );
+        assert!(
+            stderr.contains(&c1) || stderr.contains(&c2) || stderr.contains(&parent_id),
+            "expected one of the listed children or their parent to appear in the message; got: {stderr}"
+        );
+
+        // Atomicity check: c2 must have ZERO children on disk after
+        // the failed batch. If atomicity is ever broken, c1 would be
+        // visible here.
+        let children_output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &c2])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let children_json = parse_json_output(&String::from_utf8_lossy(&children_output));
+        assert_eq!(
+            children_json["data"].as_array().unwrap().len(),
+            0,
+            "batch must have rolled back; c2 should have no children, got: {}",
+            children_json["data"]
+        );
+    }
+
+    /// Duplicate-child rejection: an existing parent->child edge
+    /// cannot be re-added. The error message must name both sides
+    /// so the user can see which entry collided.
+    #[test]
+    fn test_relation_add_duplicate_child_returns_error_naming_both_sides() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, child_id) = setup_two_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .success();
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &child_id,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&parent_id))
+            .stderr(predicate::str::contains(&child_id))
+            .stderr(predicate::str::contains("already"));
+
+        // Atomicity: still exactly one edge on disk after the
+        // rejected duplicate.
+        let out = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&out));
+        assert_eq!(json["data"].as_array().unwrap().len(), 1);
+    }
+
+    /// Atomicity check for `relation remove`: a partial-remove must
+    /// roll back, leaving the originally-attached children attached.
+    #[test]
+    fn test_relation_remove_mid_list_failure_rolls_back_atomically() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
+        // Attach only c1; c2 is never made a child of parent.
+        kanban()
+            .args([file.to_str().unwrap(), "relation", "add", &parent_id, &c1])
+            .assert()
+            .success();
+
+        // Attempting to remove both c1 and c2 must fail (c2 was never
+        // attached) and must NOT detach c1.
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "remove",
+                &parent_id,
+                &c1,
+                &c2,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("not found"));
+
+        // c1 must still be a child of parent on disk.
+        let children_output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let children_json = parse_json_output(&String::from_utf8_lossy(&children_output));
+        let data = children_json["data"].as_array().unwrap();
+        assert_eq!(
+            data.len(),
+            1,
+            "rollback must keep c1 attached; got: {}",
+            children_json["data"]
+        );
+        assert_eq!(data[0]["id"], c1);
+    }
+
+    /// Multi-child remove mirrors the add path.
+    #[test]
+    fn test_relation_remove_with_multiple_children_clears_all_edges() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("test.json");
+        let (parent_id, c1, c2) = setup_three_cards(&file);
+
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "add",
+                &parent_id,
+                &c1,
+                &c2,
+            ])
+            .assert()
+            .success();
+        kanban()
+            .args([
+                file.to_str().unwrap(),
+                "relation",
+                "remove",
+                &parent_id,
+                &c1,
+                &c2,
+            ])
+            .assert()
+            .success();
+
+        let output = kanban()
+            .args([file.to_str().unwrap(), "relation", "children", &parent_id])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json = parse_json_output(&String::from_utf8_lossy(&output));
+        assert_eq!(json["data"].as_array().unwrap().len(), 0);
     }
 }

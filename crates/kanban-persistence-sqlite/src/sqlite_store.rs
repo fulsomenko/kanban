@@ -2,11 +2,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use kanban_core::graph::{Edge, Graph};
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
-    ArchivedCard, Board, Card, CardEdgeType, Column, DependencyGraph, KanbanError, KanbanResult,
-    Snapshot, Sprint, SprintLog,
+    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanError, KanbanResult, Snapshot,
+    Sprint, SprintLog,
 };
 use kanban_persistence::{
     PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore, StoreSnapshot,
@@ -16,6 +15,15 @@ use sqlx::{Pool, Row, Sqlite};
 use uuid::Uuid;
 
 const SCHEMA: &str = include_str!("schema.sql");
+
+/// The highest schema_version this binary understands. Used both to
+/// stamp fresh databases and to refuse files written by a future binary.
+pub const SUPPORTED_SCHEMA_VERSION: u32 = 2;
+
+/// (instance_id, saved_at, writer_version, writer_commit, schema_version).
+/// Tuple shape returned by the metadata-singleton SELECT — extracted to a
+/// type alias to keep clippy's type-complexity lint happy.
+type MetadataRow = (String, String, Option<String>, Option<String>, u32);
 
 /// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
@@ -58,8 +66,31 @@ fn p_enum<T: serde::de::DeserializeOwned>(s: &str, label: &str) -> KanbanResult<
         .map_err(|_| ser_err(format!("unknown {label} variant: {s}")))
 }
 
+/// Render a unit-variant enum to its serde wire name (e.g.
+/// `CardEdgeType::Spawns -> "ParentOf"`). Symmetric with [`p_enum`].
+/// Avoids coupling the on-disk format to `#[derive(Debug)]`, which is
+/// easy to customize and would break the read/write round-trip silently.
+fn ser_enum<T: serde::Serialize + std::fmt::Debug>(v: &T, label: &str) -> KanbanResult<String> {
+    match serde_json::to_value(v).map_err(ser_err)? {
+        serde_json::Value::String(s) => Ok(s),
+        other => Err(ser_err(format!(
+            "{label} did not serialise to a JSON string: {other}"
+        ))),
+    }
+}
+
 fn fmt_dt(dt: &DateTime<Utc>) -> String {
     dt.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
+}
+
+fn required_str<'a>(value: &'a str, field: &str) -> KanbanResult<&'a str> {
+    if value.is_empty() {
+        Err(ser_err(format!(
+            "required field '{field}' must not be empty"
+        )))
+    } else {
+        Ok(value)
+    }
 }
 
 fn opt_dt(dt: &Option<DateTime<Utc>>) -> Option<String> {
@@ -190,28 +221,19 @@ fn row_to_sprint(row: &SqliteRow) -> KanbanResult<Sprint> {
     })
 }
 
-fn rows_to_graph(rows: &[SqliteRow]) -> KanbanResult<DependencyGraph> {
-    let mut graph: Graph<CardEdgeType> = Graph::new();
-    for row in rows {
-        let source_str: String = row.try_get("source_id").map_err(db_err)?;
-        let target_str: String = row.try_get("target_id").map_err(db_err)?;
-        let edge_type_str: String = row.try_get("edge_type").map_err(db_err)?;
-        let direction_str: String = row.try_get("direction").map_err(db_err)?;
-        let weight: Option<f64> = row.try_get("weight").map_err(db_err)?;
-        let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
-        let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
-
-        graph.add_edge(Edge {
-            source: p_uuid(&source_str)?,
-            target: p_uuid(&target_str)?,
-            edge_type: p_enum(&edge_type_str, "edge_type")?,
-            direction: p_enum(&direction_str, "edge direction")?,
-            weight: weight.map(|w| w as f32),
-            created_at: p_dt(&created_at_str)?,
-            archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
-        });
-    }
-    Ok(DependencyGraph { cards: graph })
+/// Parse the four common edge columns (source / target / timestamps)
+/// shared by `spawns_edges`, `blocks_edges`, and `relates_edges`.
+fn row_to_edge_base(row: &SqliteRow) -> KanbanResult<kanban_core::EdgeBase> {
+    let source_str: String = row.try_get("source_id").map_err(db_err)?;
+    let target_str: String = row.try_get("target_id").map_err(db_err)?;
+    let created_at_str: String = row.try_get("created_at").map_err(db_err)?;
+    let archived_at_str: Option<String> = row.try_get("archived_at").map_err(db_err)?;
+    Ok(kanban_core::EdgeBase {
+        source: p_uuid(&source_str)?,
+        target: p_uuid(&target_str)?,
+        created_at: p_dt(&created_at_str)?,
+        archived_at: archived_at_str.as_deref().map(p_dt).transpose()?,
+    })
 }
 
 fn row_to_sprint_log(row: &SqliteRow) -> KanbanResult<SprintLog> {
@@ -257,6 +279,46 @@ impl SqliteStore {
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
 
+        // KAN-522: refuse a future-version DB BEFORE any schema-modifying
+        // step runs. Otherwise the legacy-table drops, the SCHEMA's
+        // CREATE TABLE IF NOT EXISTS for tables the file lacks, and
+        // migrate()'s ALTERs would all mutate a file we're about to refuse.
+        //
+        // Why two round-trips rather than one correlated subquery: SQLite
+        // parses the inner SELECT eagerly at prepare time and errors with
+        // "no such table: metadata" on a fresh DB, even when an outer
+        // `WHERE EXISTS` would short-circuit it at runtime. So we split:
+        // first probe `sqlite_master`, then read `schema_version` only if
+        // the table is there. ~µs overhead, executes once per `open()`.
+        let metadata_table_exists: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='metadata'",
+        )
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| KanbanError::Database(e.to_string()))?;
+        if metadata_table_exists {
+            let pre_migrate_version: Option<u32> =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_optional(&pool)
+                    .await
+                    .map_err(|e| KanbanError::Database(e.to_string()))?;
+            if let Some(v) = pre_migrate_version {
+                if v > SUPPORTED_SCHEMA_VERSION {
+                    return Err(KanbanError::UnsupportedFutureVersion {
+                        file_version: v,
+                        binary_max: SUPPORTED_SCHEMA_VERSION,
+                    });
+                }
+            }
+        }
+
+        // Drop the legacy command_log table (pre-KAN-405 schema with
+        // columns `idx` / `cmd_json`) before SCHEMA runs, so the new
+        // command_log schema (`batch_index` / `commands_json` / `created_at`)
+        // can be created cleanly. Detected by absence of the new
+        // `batch_index` column on an existing command_log table.
+        Self::drop_legacy_command_log_if_present(&pool).await?;
+
         sqlx::raw_sql(SCHEMA)
             .execute(&pool)
             .await
@@ -285,10 +347,11 @@ impl SqliteStore {
                 let id = Uuid::new_v4();
                 let now = Utc::now().to_rfc3339();
                 sqlx::query(
-                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, 1)",
+                    "INSERT INTO metadata (id, instance_id, saved_at, schema_version) VALUES (1, ?, ?, ?)",
                 )
                 .bind(id.to_string())
                 .bind(&now)
+                .bind(SUPPORTED_SCHEMA_VERSION)
                 .execute(pool)
                 .await
                 .map_err(db_err)?;
@@ -297,25 +360,42 @@ impl SqliteStore {
         }
     }
 
-    async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
-        // Drop command_log and undo_state tables if they exist (legacy persistence
-        // of undo history — commands are now in-session only).
+    /// Drops the legacy command_log table if it exists and lacks the new
+    /// `batch_index` column. Called before SCHEMA so the new table can be
+    /// created cleanly via `CREATE TABLE IF NOT EXISTS`.
+    async fn drop_legacy_command_log_if_present(pool: &Pool<Sqlite>) -> KanbanResult<()> {
         let has_command_log: bool = sqlx::query_scalar(
             "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='command_log'",
         )
         .fetch_one(pool)
         .await
         .map_err(db_err)?;
-
-        if has_command_log {
+        if !has_command_log {
+            return Ok(());
+        }
+        let has_batch_index_col: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('command_log') WHERE name = 'batch_index'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+        if !has_batch_index_col {
             tracing::info!(
-                "dropping legacy command_log table: undo history is now in-session only and cannot be carried back to pre-KAN-405 builds"
+                "dropping legacy command_log table (pre-KAN-405 schema) so the KAN-191 schema can be applied"
             );
             sqlx::raw_sql("DROP TABLE IF EXISTS command_log")
                 .execute(pool)
                 .await
                 .map_err(db_err)?;
         }
+        Ok(())
+    }
+
+    async fn migrate(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        // KAN-191 reintroduces command_log persistence (KAN-405 had dropped it).
+        // The dense batch_index → JSON mapping is created by SCHEMA at open
+        // time; no migration of the legacy column-set is needed because the
+        // schema is owned by this crate.
 
         let has_undo_state: bool = sqlx::query_scalar(
             "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='undo_state'",
@@ -326,7 +406,7 @@ impl SqliteStore {
 
         if has_undo_state {
             tracing::info!(
-                "dropping legacy undo_state table: undo cursor is now in-session only and cannot be carried back to pre-KAN-405 builds"
+                "dropping legacy undo_state table: undo cursor stays in-session, only command_log persists"
             );
             sqlx::raw_sql("DROP TABLE IF EXISTS undo_state")
                 .execute(pool)
@@ -362,6 +442,63 @@ impl SqliteStore {
                 .map_err(db_err)?;
         }
 
+        Self::drop_legacy_card_edges_if_present(pool).await?;
+
+        // KAN-522: ALTER in writer-stamp columns on pre-v2 metadata tables.
+        for col in ["writer_version", "writer_commit"] {
+            let has_col: bool = sqlx::query_scalar(&format!(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+            ))
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
+            if !has_col {
+                sqlx::raw_sql(&format!("ALTER TABLE metadata ADD COLUMN {col} TEXT"))
+                    .execute(pool)
+                    .await
+                    .map_err(db_err)?;
+            }
+        }
+        // Once the ALTERs above have caught the schema up, normalise
+        // schema_version. Doing it unconditionally is idempotent and
+        // also self-heals any DBs where the field drifted.
+        sqlx::query("UPDATE metadata SET schema_version = ? WHERE id = 1 AND schema_version < ?")
+            .bind(SUPPORTED_SCHEMA_VERSION)
+            .bind(SUPPORTED_SCHEMA_VERSION)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
+
+        Ok(())
+    }
+
+    /// Drop the pre-KAN-504 `card_edges` table (single table with an
+    /// `edge_type` column) if present. The per-kind `spawns_edges` /
+    /// `blocks_edges` / `relates_edges` tables created by SCHEMA
+    /// replace it; nothing of KAN-504's graph work is live so we
+    /// don't need to copy data forward — any rows in the legacy
+    /// table belong to a development-only database.
+    async fn drop_legacy_card_edges_if_present(pool: &Pool<Sqlite>) -> KanbanResult<()> {
+        let has_card_edges: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='card_edges'",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+        if !has_card_edges {
+            return Ok(());
+        }
+        tracing::info!(
+            "dropping legacy card_edges table (pre per-kind schema); per-kind tables take over"
+        );
+        sqlx::raw_sql(
+            "DROP INDEX IF EXISTS idx_card_edges_source;
+             DROP INDEX IF EXISTS idx_card_edges_target;
+             DROP TABLE IF EXISTS card_edges;",
+        )
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
         Ok(())
     }
 
@@ -369,11 +506,128 @@ impl SqliteStore {
         &self.pool
     }
 
+    /// Read the metadata singleton row from the DB. Cheap (single row, indexed by primary key).
+    /// Returns `Ok(None)` if the row is absent — only possible on a brand-new DB
+    /// before `load_or_create_instance_id` has run, which the public API doesn't expose.
+    pub fn read_metadata_sync(&self) -> KanbanResult<Option<PersistenceMetadata>> {
+        run(async {
+            let row: Option<MetadataRow> = sqlx::query_as(
+                "SELECT instance_id, saved_at, writer_version, writer_commit, schema_version \
+                 FROM metadata WHERE id = 1",
+            )
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_err)?;
+            let Some(row) = row else {
+                return Ok(None);
+            };
+            let instance_id = p_uuid(&row.0)?;
+            let saved_at = p_dt(&row.1)?;
+            Ok(Some(PersistenceMetadata {
+                instance_id,
+                saved_at,
+                writer_version: row.2,
+                writer_commit: row.3,
+                format_version: Some(row.4),
+            }))
+        })
+    }
+
+    /// Record the current binary as the most-recent writer of this DB by
+    /// stamping `saved_at`, `writer_version`, and `writer_commit` into the
+    /// metadata singleton row. Returns the timestamp it wrote so callers can
+    /// echo it back into a `PersistenceMetadata` without re-reading the row.
+    ///
+    /// Separated from [`checkpoint`] so each function does one thing — see
+    /// the post-PR-288 review for the SRP rationale.
+    pub async fn stamp_writer(&self) -> KanbanResult<DateTime<Utc>> {
+        let now = Utc::now();
+        sqlx::query(
+            "UPDATE metadata SET saved_at = ?, writer_version = ?, writer_commit = ? WHERE id = 1",
+        )
+        .bind(now.to_rfc3339())
+        .bind(kanban_core::KANBAN_VERSION)
+        .bind(kanban_core::KANBAN_COMMIT)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| KanbanError::Database(e.to_string()))?;
+        Ok(now)
+    }
+
+    /// Truncate the WAL. Pure I/O step; does not touch the writer-stamp
+    /// columns. Callers that want a durable save with attribution should
+    /// invoke [`stamp_writer`] alongside this.
     pub async fn checkpoint(&self) -> KanbanResult<()> {
         sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&self.pool)
             .await
             .map_err(|e| KanbanError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    // ── Command log (audit foundation; not yet wired through SqliteBackend) ──
+
+    /// Append a single command batch at logical index `batch_index`.
+    /// `commands_json` is the serde-JSON encoding of the `Vec<Command>` batch.
+    pub async fn append_command_batch(
+        &self,
+        batch_index: u64,
+        commands_json: &str,
+    ) -> KanbanResult<()> {
+        sqlx::query(
+            "INSERT INTO command_log (batch_index, commands_json, created_at) VALUES (?, ?, ?)",
+        )
+        .bind(batch_index as i64)
+        .bind(commands_json)
+        .bind(fmt_dt(&Utc::now()))
+        .execute(&self.pool)
+        .await
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    /// Load all persisted command batches in order. Returns the JSON strings
+    /// so callers can deserialise inside the domain layer.
+    pub async fn load_all_command_batches(&self) -> KanbanResult<Vec<String>> {
+        let rows = sqlx::query("SELECT commands_json FROM command_log ORDER BY batch_index ASC")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db_err)?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            out.push(row.try_get::<String, _>("commands_json").map_err(db_err)?);
+        }
+        Ok(out)
+    }
+
+    /// Remove batches with logical index >= `after`. Retains [0, after).
+    pub async fn truncate_command_log_after(&self, after: u64) -> KanbanResult<()> {
+        sqlx::query("DELETE FROM command_log WHERE batch_index >= ?")
+            .bind(after as i64)
+            .execute(&self.pool)
+            .await
+            .map_err(db_err)?;
+        Ok(())
+    }
+
+    /// Remove the oldest `drop_count` batches and renumber the rest so the
+    /// surviving log starts at index 0.
+    pub async fn shift_command_log(&self, drop_count: u64) -> KanbanResult<()> {
+        if drop_count == 0 {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        sqlx::query("DELETE FROM command_log WHERE batch_index < ?")
+            .bind(drop_count as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("UPDATE command_log SET batch_index = batch_index - ?")
+            .bind(drop_count as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        tx.commit().await.map_err(db_err)?;
         Ok(())
     }
 
@@ -435,7 +689,7 @@ impl SqliteStore {
                 updated_at=excluded.updated_at",
         )
         .bind(&id)
-        .bind(&board.name)
+        .bind(required_str(&board.name, "board.name")?)
         .bind(&board.description)
         .bind(&board.sprint_prefix)
         .bind(&board.card_prefix)
@@ -466,7 +720,7 @@ impl SqliteStore {
             )
             .bind(&id)
             .bind(i as i32)
-            .bind(name)
+            .bind(required_str(name, "board.sprint_names[*]")?)
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
@@ -531,7 +785,7 @@ impl SqliteStore {
         )
         .bind(&id)
         .bind(card.column_id.to_string())
-        .bind(&card.title)
+        .bind(required_str(&card.title, "card.title")?)
         .bind(&card.description)
         .bind(format!("{:?}", card.priority))
         .bind(format!("{:?}", card.status))
@@ -564,7 +818,7 @@ impl SqliteStore {
             .bind(&log.sprint_name)
             .bind(fmt_dt(&log.started_at))
             .bind(opt_dt(&log.ended_at))
-            .bind(&log.status)
+            .bind(required_str(&log.status, "sprint_log.status")?)
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
@@ -642,14 +896,53 @@ impl SqliteStore {
     async fn get_graph_with_conn(
         conn: &mut sqlx::SqliteConnection,
     ) -> KanbanResult<DependencyGraph> {
-        let rows = sqlx::query(
-            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
-             FROM card_edges",
+        use kanban_core::EdgeBase;
+        use kanban_domain::{BlocksEdge, RelatesEdge, SpawnsEdge};
+
+        let mut spawns: Vec<SpawnsEdge> = Vec::new();
+        for row in
+            sqlx::query("SELECT source_id, target_id, created_at, archived_at FROM spawns_edges")
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(db_err)?
+        {
+            spawns.push(SpawnsEdge {
+                base: row_to_edge_base(&row)?,
+            });
+        }
+
+        let mut blocks: Vec<BlocksEdge> = Vec::new();
+        for row in sqlx::query(
+            "SELECT source_id, target_id, severity, created_at, archived_at FROM blocks_edges",
         )
         .fetch_all(&mut *conn)
         .await
-        .map_err(db_err)?;
-        rows_to_graph(&rows)
+        .map_err(db_err)?
+        {
+            let severity_str: String = row.try_get("severity").map_err(db_err)?;
+            blocks.push(BlocksEdge {
+                base: row_to_edge_base(&row)?,
+                severity: p_enum(&severity_str, "severity")?,
+            });
+        }
+
+        let mut relates: Vec<RelatesEdge> = Vec::new();
+        for row in sqlx::query(
+            "SELECT source_id, target_id, kind, created_at, archived_at FROM relates_edges",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db_err)?
+        {
+            let kind_str: String = row.try_get("kind").map_err(db_err)?;
+            relates.push(RelatesEdge {
+                base: row_to_edge_base(&row)?,
+                kind: p_enum(&kind_str, "relates kind")?,
+            });
+        }
+
+        let _ = EdgeBase::<uuid::Uuid>::new; // keep import in scope for symmetry; suppress unused
+        DependencyGraph::from_validated_per_kind_edges(spawns, blocks, relates)
     }
 
     async fn modify_graph_async(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
@@ -665,24 +958,61 @@ impl SqliteStore {
         conn: &mut sqlx::SqliteConnection,
         graph: &DependencyGraph,
     ) -> KanbanResult<()> {
-        sqlx::query("DELETE FROM card_edges")
+        use kanban_core::Edge as _;
+
+        sqlx::query("DELETE FROM spawns_edges")
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM blocks_edges")
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM relates_edges")
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
 
-        for edge in graph.cards.edges() {
+        for e in graph.spawns_edges() {
             sqlx::query(
-                "INSERT INTO card_edges
-                    (source_id, target_id, edge_type, direction, weight, created_at, archived_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO spawns_edges
+                    (source_id, target_id, created_at, archived_at)
+                 VALUES (?, ?, ?, ?)",
             )
-            .bind(edge.source.to_string())
-            .bind(edge.target.to_string())
-            .bind(format!("{:?}", edge.edge_type))
-            .bind(format!("{:?}", edge.direction))
-            .bind(edge.weight.map(|w| w as f64))
-            .bind(fmt_dt(&edge.created_at))
-            .bind(opt_dt(&edge.archived_at))
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+        for e in graph.blocks_edges() {
+            sqlx::query(
+                "INSERT INTO blocks_edges
+                    (source_id, target_id, severity, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(ser_enum(&e.severity, "severity")?)
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
+            .execute(&mut *conn)
+            .await
+            .map_err(db_err)?;
+        }
+        for e in graph.relates_edges() {
+            sqlx::query(
+                "INSERT INTO relates_edges
+                    (source_id, target_id, kind, created_at, archived_at)
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(e.source().to_string())
+            .bind(e.target().to_string())
+            .bind(ser_enum(&e.kind, "relates kind")?)
+            .bind(fmt_dt(&e.created_at()))
+            .bind(opt_dt(&e.archived_at()))
             .execute(&mut *conn)
             .await
             .map_err(db_err)?;
@@ -723,7 +1053,15 @@ impl SqliteStore {
             .await
             .map_err(db_err)?;
 
-        sqlx::query("DELETE FROM card_edges")
+        sqlx::query("DELETE FROM spawns_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM blocks_edges")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM relates_edges")
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
@@ -905,14 +1243,15 @@ impl SqliteStore {
     }
 
     async fn get_graph_async(&self) -> KanbanResult<DependencyGraph> {
-        let rows = sqlx::query(
-            "SELECT source_id, target_id, edge_type, direction, weight, created_at, archived_at
-             FROM card_edges",
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(db_err)?;
-        rows_to_graph(&rows)
+        // Wrap the three per-kind edge reads in a single transaction so
+        // a concurrent writer between query 1 (spawns) and query 3
+        // (relates) cannot yield an inconsistent in-memory snapshot.
+        // SQLite under WAL gives the transaction a stable read view; the
+        // tx is read-only and is committed without writes.
+        let mut tx = self.pool.begin().await.map_err(db_err)?;
+        let graph = Self::get_graph_with_conn(&mut tx).await?;
+        tx.commit().await.map_err(db_err)?;
+        Ok(graph)
     }
 
     async fn write_column_with_conn(
@@ -929,7 +1268,7 @@ impl SqliteStore {
         )
         .bind(column.id.to_string())
         .bind(column.board_id.to_string())
-        .bind(&column.name)
+        .bind(required_str(&column.name, "column.name")?)
         .bind(column.position)
         .bind(column.wip_limit)
         .bind(fmt_dt(&column.created_at))
@@ -1494,10 +1833,28 @@ impl PersistenceStore for SqliteStore {
         self.apply_snapshot_async(domain_snapshot)
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
+
+        let saved_at = self
+            .stamp_writer()
+            .await
+            .map_err(|e| PersistenceError::Database(e.to_string()))?;
         self.checkpoint()
             .await
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
-        Ok(PersistenceMetadata::new(self.instance_id))
+
+        // Values are all knowable inline — stamp_writer just wrote them and
+        // returned the timestamp, the writer/commit are compile-time consts.
+        // format_version is SUPPORTED because migrate() on open() normalised
+        // schema_version to SUPPORTED and nothing in the save path touches
+        // it. The read paths (load, read_metadata_sync) re-read from the row
+        // to honour the "DB is the source of truth" contract.
+        Ok(PersistenceMetadata {
+            instance_id: self.instance_id,
+            saved_at,
+            writer_version: Some(kanban_core::KANBAN_VERSION.to_string()),
+            writer_commit: Some(kanban_core::KANBAN_COMMIT.to_string()),
+            format_version: Some(SUPPORTED_SCHEMA_VERSION),
+        })
     }
 
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
@@ -1507,7 +1864,24 @@ impl PersistenceStore for SqliteStore {
             .map_err(|e| PersistenceError::Database(e.to_string()))?;
         let data = serde_json::to_vec(&domain_snapshot)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-        let meta = PersistenceMetadata::new(self.instance_id);
+
+        let row: (String, Option<String>, Option<String>, u32) = sqlx::query_as(
+            "SELECT saved_at, writer_version, writer_commit, schema_version \
+             FROM metadata WHERE id = 1",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| PersistenceError::Database(e.to_string()))?;
+        let saved_at = DateTime::parse_from_rfc3339(&row.0)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?
+            .with_timezone(&Utc);
+        let meta = PersistenceMetadata {
+            instance_id: self.instance_id,
+            saved_at,
+            writer_version: row.1,
+            writer_commit: row.2,
+            format_version: Some(row.3),
+        };
         Ok((
             StoreSnapshot {
                 data,
@@ -1576,7 +1950,7 @@ mod tests {
 
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
-            let board = Board::new("Test Board".to_string(), None);
+            let board = Board::new("Test Board", None::<String>);
             let snapshot = Snapshot::from_data(
                 vec![board],
                 vec![],
@@ -1642,6 +2016,118 @@ mod tests {
         });
     }
 
+    /// Per-kind tables hard-reject metadata outside their respective
+    /// CHECK constraints. Pin the constraint via a direct insert
+    /// attempt so any future schema relaxation has to choose
+    /// whether to drop or update this test.
+    #[test]
+    fn test_blocks_edges_rejects_unknown_severity() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("check.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let insert = sqlx::query(
+                "INSERT INTO blocks_edges
+                    (source_id, target_id, severity, created_at, archived_at)
+                 VALUES (?, ?, 'Catastrophic', ?, NULL)",
+            )
+            .bind(uuid::Uuid::nil().to_string())
+            .bind(uuid::Uuid::from_u128(0x42).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await;
+            assert!(
+                insert.is_err(),
+                "CHECK on severity must reject 'Catastrophic'; got {:?}",
+                insert
+            );
+        });
+    }
+
+    #[test]
+    fn test_relates_edges_rejects_unknown_kind() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("check_relates.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let insert = sqlx::query(
+                "INSERT INTO relates_edges
+                    (source_id, target_id, kind, created_at, archived_at)
+                 VALUES (?, ?, 'Unknown', ?, NULL)",
+            )
+            .bind(uuid::Uuid::nil().to_string())
+            .bind(uuid::Uuid::from_u128(0x42).to_string())
+            .bind(chrono::Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await;
+            assert!(insert.is_err());
+        });
+    }
+
+    /// SqliteStore::open drops the pre-KAN-504 `card_edges` table on
+    /// first encounter so the per-kind tables can take over.
+    /// Pre-KAN-504 graph work is not live anywhere, so the data on
+    /// such a table is dev-only and the drop is safe.
+    #[test]
+    fn test_open_drops_legacy_card_edges_table() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            // Pre-seed the legacy table by direct sqlx access without
+            // going through SqliteStore::open (the open path would
+            // drop it before we could inspect).
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    sqlx::sqlite::SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE card_edges (
+                    source_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    edge_type TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    weight REAL,
+                    created_at TEXT NOT NULL,
+                    archived_at TEXT,
+                    PRIMARY KEY (source_id, target_id, edge_type)
+                )",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            drop(pool);
+
+            // Opening triggers the drop + per-kind table creation.
+            let store = SqliteStore::open(&path).await.unwrap();
+            let has_card_edges: bool = sqlx::query_scalar(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='card_edges'",
+            )
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+            assert!(!has_card_edges, "legacy card_edges table must be dropped");
+
+            for table in ["spawns_edges", "blocks_edges", "relates_edges"] {
+                let has: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='{}'",
+                    table
+                ))
+                .fetch_one(store.pool())
+                .await
+                .unwrap();
+                assert!(has, "{table} must exist after open");
+            }
+        });
+    }
+
     #[test]
     fn test_delete_archived_card_orphaned_cards_row_is_still_cleaned_up() {
         use kanban_domain::data_store::DataStore;
@@ -1651,9 +2137,9 @@ mod tests {
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
 
-            let mut board = kanban_domain::Board::new("B".to_string(), None);
-            let column = kanban_domain::Column::new(board.id, "Col".to_string(), 0);
-            let card = kanban_domain::Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let mut board = kanban_domain::Board::new("B", None::<String>);
+            let column = kanban_domain::Column::new(board.id, "Col", 0);
+            let card = kanban_domain::Card::new(&mut board, column.id, "Task", 0);
             let card_id = card.id;
             let column_id = column.id;
             store.upsert_board(board).unwrap();
@@ -1687,9 +2173,9 @@ mod tests {
         rt.block_on(async {
             let store = SqliteStore::open(&path).await.unwrap();
 
-            let mut board = kanban_domain::Board::new("B".to_string(), None);
-            let column = kanban_domain::Column::new(board.id, "Col".to_string(), 0);
-            let card = kanban_domain::Card::new(&mut board, column.id, "Task".to_string(), 0);
+            let mut board = kanban_domain::Board::new("B", None::<String>);
+            let column = kanban_domain::Column::new(board.id, "Col", 0);
+            let card = kanban_domain::Card::new(&mut board, column.id, "Task", 0);
             let card_id = card.id;
             let column_id = column.id;
             store.upsert_board(board).unwrap();
@@ -1715,6 +2201,499 @@ mod tests {
             assert!(
                 store.get_card(card_id).unwrap().is_none(),
                 "get_card should return None for permanently deleted card"
+            );
+        });
+    }
+
+    #[test]
+    fn test_read_metadata_sync_reflects_actual_schema_version_from_db_row() {
+        // Contract: PersistenceMetadata.format_version is the format the DB
+        // is currently at, not whatever the binary's SUPPORTED happens to be.
+        // After open(), the two coincide (migrate normalises). We manually
+        // UPDATE schema_version below to a value that differs from SUPPORTED
+        // and confirm the read reflects the DB, not the const.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("drift.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            sqlx::query("UPDATE metadata SET schema_version = 1 WHERE id = 1")
+                .execute(&store.pool)
+                .await
+                .unwrap();
+
+            let meta = store
+                .read_metadata_sync()
+                .unwrap()
+                .expect("metadata row should exist");
+            assert_eq!(
+                meta.format_version,
+                Some(1),
+                "format_version must reflect the DB row (1), not the binary's SUPPORTED ({SUPPORTED_SCHEMA_VERSION})"
+            );
+        });
+    }
+
+    #[test]
+    fn test_load_reports_actual_schema_version_in_metadata() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("load_drift.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            // Seed the row so load() has something to read.
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            PersistenceStore::save(
+                &store,
+                StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(store.instance_id()),
+                },
+            )
+            .await
+            .unwrap();
+            sqlx::query("UPDATE metadata SET schema_version = 1 WHERE id = 1")
+                .execute(&store.pool)
+                .await
+                .unwrap();
+
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert_eq!(
+                meta.format_version,
+                Some(1),
+                "load() must report the DB's actual schema_version, not the const"
+            );
+        });
+    }
+
+    #[test]
+    fn test_stamp_writer_updates_metadata_row_and_returns_timestamp() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stamped.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            // Wipe what migrate-on-open already wrote so the assertion is clean.
+            sqlx::query(
+                "UPDATE metadata SET writer_version = NULL, writer_commit = NULL WHERE id = 1",
+            )
+            .execute(&store.pool)
+            .await
+            .unwrap();
+
+            let before = Utc::now();
+            let stamped_at = store.stamp_writer().await.unwrap();
+            let after = Utc::now();
+
+            assert!(
+                stamped_at >= before && stamped_at <= after,
+                "returned timestamp must be in [before, after]: {stamped_at:?}"
+            );
+
+            let (saved_at_str, wv, wc): (String, Option<String>, Option<String>) = sqlx::query_as(
+                "SELECT saved_at, writer_version, writer_commit FROM metadata WHERE id = 1",
+            )
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+            assert_eq!(wv.as_deref(), Some(kanban_core::KANBAN_VERSION));
+            assert_eq!(wc.as_deref(), Some(kanban_core::KANBAN_COMMIT));
+            assert_eq!(saved_at_str, stamped_at.to_rfc3339());
+        });
+    }
+
+    #[test]
+    fn test_checkpoint_alone_does_not_stamp_writer_fields() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("ckpt_only.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            sqlx::query(
+                "UPDATE metadata SET writer_version = NULL, writer_commit = NULL WHERE id = 1",
+            )
+            .execute(&store.pool)
+            .await
+            .unwrap();
+
+            store.checkpoint().await.unwrap();
+
+            let (wv, wc): (Option<String>, Option<String>) =
+                sqlx::query_as("SELECT writer_version, writer_commit FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert!(
+                wv.is_none() && wc.is_none(),
+                "checkpoint() must be WAL-only post-split; got wv={wv:?} wc={wc:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn test_fresh_db_records_schema_version_2() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("fresh.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let version: u32 =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(version, SUPPORTED_SCHEMA_VERSION);
+        });
+    }
+
+    #[test]
+    fn test_fresh_db_has_writer_version_and_writer_commit_columns() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("fresh.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            for col in ["writer_version", "writer_commit"] {
+                let exists: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+                ))
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+                assert!(exists, "metadata.{col} column must exist on fresh DB");
+            }
+        });
+    }
+
+    #[test]
+    fn test_save_stamps_writer_version_and_commit_into_metadata_row() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stamped.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            let store_snap = StoreSnapshot {
+                data,
+                metadata: PersistenceMetadata::new(store.instance_id()),
+            };
+            let returned = PersistenceStore::save(&store, store_snap).await.unwrap();
+
+            assert_eq!(
+                returned.writer_version.as_deref(),
+                Some(kanban_core::KANBAN_VERSION),
+            );
+            assert_eq!(
+                returned.writer_commit.as_deref(),
+                Some(kanban_core::KANBAN_COMMIT),
+            );
+
+            let row: (Option<String>, Option<String>) =
+                sqlx::query_as("SELECT writer_version, writer_commit FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(row.0.as_deref(), Some(kanban_core::KANBAN_VERSION));
+            assert_eq!(row.1.as_deref(), Some(kanban_core::KANBAN_COMMIT));
+        });
+    }
+
+    #[test]
+    fn test_load_returns_writer_stamp_from_metadata_row() {
+        use kanban_domain::DependencyGraph;
+        use kanban_persistence::snapshot_to_json_bytes;
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("loaded.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let snapshot = Snapshot::from_data(
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                DependencyGraph::new(),
+            );
+            let data = snapshot_to_json_bytes(&snapshot).unwrap();
+            PersistenceStore::save(
+                &store,
+                StoreSnapshot {
+                    data,
+                    metadata: PersistenceMetadata::new(store.instance_id()),
+                },
+            )
+            .await
+            .unwrap();
+
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert_eq!(
+                meta.writer_version.as_deref(),
+                Some(kanban_core::KANBAN_VERSION),
+            );
+            assert_eq!(
+                meta.writer_commit.as_deref(),
+                Some(kanban_core::KANBAN_COMMIT),
+            );
+        });
+    }
+
+    #[test]
+    fn test_load_legacy_db_without_stamp_returns_none_writer_fields() {
+        // Pre-KAN-522 DB: metadata row exists, schema_version was bumped to
+        // current by migrate(), but writer_version/writer_commit are still
+        // NULL because no save has happened since the ALTER.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy_load.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2024-01-01T00:00:00Z', 1);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let store = SqliteStore::open(&path).await.unwrap();
+            let (_, meta) = PersistenceStore::load(&store).await.unwrap();
+            assert!(meta.writer_version.is_none());
+            assert!(meta.writer_commit.is_none());
+        });
+    }
+
+    #[test]
+    fn test_open_rejects_future_schema_version() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("future.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 2,
+                    writer_version TEXT,
+                    writer_commit TEXT
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2030-01-01T00:00:00Z', 99);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let err = SqliteStore::open(&path)
+                .await
+                .err()
+                .expect("schema_version 99 must be refused");
+            assert!(
+                matches!(
+                    err,
+                    KanbanError::UnsupportedFutureVersion {
+                        file_version: 99,
+                        binary_max: SUPPORTED_SCHEMA_VERSION
+                    }
+                ),
+                "expected UnsupportedFutureVersion, got: {err:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn test_open_alters_in_writer_columns_on_legacy_v1_db() {
+        // Simulate a pre-KAN-522 SQLite file: metadata table without the
+        // writer_* columns and schema_version = 1. SqliteStore::open must
+        // ALTER in the new columns and bump schema_version to 2.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("legacy.db");
+        let rt = make_rt();
+        rt.block_on(async {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .unwrap();
+            sqlx::raw_sql(
+                "CREATE TABLE metadata (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    instance_id TEXT NOT NULL,
+                    saved_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1
+                );
+                INSERT INTO metadata (id, instance_id, saved_at, schema_version)
+                VALUES (1, '550e8400-e29b-41d4-a716-446655440000', '2024-01-01T00:00:00Z', 1);",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            for col in ["writer_version", "writer_commit"] {
+                let exists: bool = sqlx::query_scalar(&format!(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info('metadata') WHERE name = '{col}'"
+                ))
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+                assert!(exists, "metadata.{col} must be ALTERed in on legacy open");
+            }
+
+            let bumped: u32 =
+                sqlx::query_scalar("SELECT schema_version FROM metadata WHERE id = 1")
+                    .fetch_one(&store.pool)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                bumped, SUPPORTED_SCHEMA_VERSION,
+                "schema_version must be bumped to current on legacy open"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_sprint_log_status_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Card, Column, SprintLog};
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+
+            let mut board = Board::new("B", None::<String>);
+            let column = Column::new(board.id, "Col", 0);
+            let mut card = Card::new(&mut board, column.id, "Task", 0);
+            store.upsert_board(board).unwrap();
+            store.upsert_column(column).unwrap();
+
+            let log = SprintLog::new(uuid::Uuid::new_v4(), 1, None::<String>, "");
+            card.sprint_logs.push(log);
+
+            let result = store.upsert_card(card);
+            assert!(
+                result.is_err(),
+                "upsert_card must reject a SprintLog with empty status"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_board_name_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::Board;
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("", None::<String>);
+            let result = store.upsert_board(board);
+            assert!(
+                result.is_err(),
+                "upsert_board must reject a Board with empty name"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_column_name_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Column};
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let board = Board::new("B", None::<String>);
+            let board_id = board.id;
+            store.upsert_board(board).unwrap();
+            let col = Column::new(board_id, "", 0);
+            let result = store.upsert_column(col);
+            assert!(
+                result.is_err(),
+                "upsert_column must reject a Column with empty name"
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_card_title_returns_error() {
+        use kanban_domain::data_store::DataStore;
+        use kanban_domain::{Board, Card, Column};
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("validation.sqlite3");
+        let rt = make_rt();
+        rt.block_on(async {
+            let store = SqliteStore::open(&path).await.unwrap();
+            let mut board = Board::new("B", None::<String>);
+            let col = Column::new(board.id, "Col", 0);
+            let col_id = col.id;
+            // Card::new borrows &mut board -- call it before upsert_board moves board
+            let card = Card::new(&mut board, col_id, "", 0);
+            store.upsert_board(board).unwrap();
+            store.upsert_column(col).unwrap();
+            let result = store.upsert_card(card);
+            assert!(
+                result.is_err(),
+                "upsert_card must reject a Card with empty title"
             );
         });
     }

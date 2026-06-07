@@ -19,3 +19,4 @@ chrono.workspace = true
 async-trait.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true

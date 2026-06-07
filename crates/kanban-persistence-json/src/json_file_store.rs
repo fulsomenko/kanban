@@ -1,6 +1,8 @@
 use crate::atomic_writer::AtomicWriter;
 use crate::conflict::FileMetadata;
-use crate::migration::{transform_v2_to_v3_value, Migrator};
+use crate::migration::{
+    transform_to_v6_split_graph_value, transform_v2_to_v3_value, transform_v6_to_v7_value, Migrator,
+};
 use kanban_persistence::{
     FormatVersion, PersistenceError, PersistenceMetadata, PersistenceResult, PersistenceStore,
     StoreSnapshot,
@@ -58,10 +60,7 @@ impl JsonEnvelope {
     pub fn new(data: serde_json::Value) -> Self {
         Self {
             version: 2,
-            metadata: PersistenceMetadata {
-                instance_id: Uuid::new_v4(),
-                saved_at: chrono::Utc::now(),
-            },
+            metadata: PersistenceMetadata::new(Uuid::new_v4()),
             data,
         }
     }
@@ -85,28 +84,79 @@ impl JsonEnvelope {
 
 // ─── Sync migration helpers ───────────────────────────────────────────────────
 
-fn migrate_to_v3_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
-    if from == FormatVersion::V1 {
-        migrate_v1_to_v2_sync(path)?;
+/// Synchronous V*→V7 migration chain used by [`JsonFileStore::load_sync`].
+/// See [`migration::backup`] for the backup-path policy shared with the
+/// async [`Migrator::migrate`] orchestrator.
+fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
+    // Take the outer backup BEFORE any per-step migration runs. The chain
+    // (V1→V2, V2→V3, split_graph, v6_to_v7_rename) overwrites the file in
+    // place at each step; without this outer backup a mid-chain failure
+    // would leave the user with a partially-transformed file and no
+    // rollback artifact. The backup is removed only on full V→V7 success.
+    let backup_path = crate::migration::pre_v7_backup_path_for(from, path);
+    if let Some(backup) = &backup_path {
+        std::fs::copy(path, backup)?;
+        tracing::info!("Created pre-V7 backup at {}", backup.display());
     }
-    migrate_v2_to_v3_sync(path)
+
+    let result = (|| -> PersistenceResult<Vec<u8>> {
+        if from == FormatVersion::V1 {
+            migrate_v1_to_v2_sync(path)?;
+        }
+        if from <= FormatVersion::V2 {
+            migrate_v2_to_v3_sync(path)?;
+        }
+        run_split_and_rename_chain_sync(from, path)
+    })();
+
+    match (result, backup_path) {
+        (Ok(bytes), Some(backup)) => {
+            if let Err(e) = std::fs::remove_file(&backup) {
+                tracing::warn!(
+                    "Migration successful but failed to remove backup at {}: {}",
+                    backup.display(),
+                    e
+                );
+            } else {
+                tracing::info!("Migration to V7 verified, backup removed");
+            }
+            Ok(bytes)
+        }
+        (Ok(bytes), None) => Ok(bytes),
+        (Err(e), Some(backup)) => {
+            tracing::error!(
+                "Migration to V7 failed: {}. Backup preserved at {}",
+                e,
+                backup.display()
+            );
+            Err(e)
+        }
+        (Err(e), None) => Err(e),
+    }
+}
+
+/// Sync sibling of [`Migrator::run_split_and_rename_chain`]. Runs the V6
+/// split-graph transform (only if the file is pre-V6) and then the v6→v7
+/// spawns-bucket rename, returning the final on-disk bytes.
+fn run_split_and_rename_chain_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
+    if from < FormatVersion::V6 {
+        split_graph_sync(path)?;
+    }
+    v6_to_v7_rename_sync(path)
 }
 
 fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    // Per-step backup removed: the outer migrate_to_v7_sync wrap owns the
+    // .v1.backup now and keeps it for the entire chain, not just this step.
     let content = std::fs::read_to_string(path)?;
     let v1_data: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-    let backup_path = path.with_extension("v1.backup");
-    std::fs::copy(path, &backup_path)?;
     let v2_envelope = JsonEnvelope::new(v1_data);
     let json_str = v2_envelope
         .to_json_string()
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     let json_bytes = json_str.into_bytes();
-    let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, &json_bytes)?;
-    std::fs::rename(&tmp_path, path)?;
-    let _ = std::fs::remove_file(&backup_path);
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
     tracing::info!("Migrated {} from V1 to V2 (sync)", path.display());
     Ok(json_bytes)
 }
@@ -119,10 +169,37 @@ fn migrate_v2_to_v3_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
     let json_str = serde_json::to_string_pretty(&envelope)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     let json_bytes = json_str.into_bytes();
-    let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, &json_bytes)?;
-    std::fs::rename(&tmp_path, path)?;
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
     tracing::info!("Migrated {} from V2 to V3 (sync)", path.display());
+    Ok(json_bytes)
+}
+
+fn split_graph_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut envelope: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    transform_to_v6_split_graph_value(&mut envelope)?;
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
+    tracing::info!("Applied split-graph migration to {} (sync)", path.display());
+    Ok(json_bytes)
+}
+
+fn v6_to_v7_rename_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut envelope: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    transform_v6_to_v7_value(&mut envelope)?;
+    let json_str = serde_json::to_string_pretty(&envelope)
+        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+    let json_bytes = json_str.into_bytes();
+    AtomicWriter::write_atomic_sync(path, &json_bytes)?;
+    tracing::info!(
+        "Applied v6→v7 spawns-rename migration to {} (sync)",
+        path.display()
+    );
     Ok(json_bytes)
 }
 
@@ -159,20 +236,12 @@ impl JsonFileStore {
             .map_err(|e| PersistenceError::Serialization(format!("Metadata mutex poisoned: {e}")))
     }
 
-    /// Parse file bytes into a [`JsonEnvelope`], validating version fields.
-    /// Pure: no `&self`, no side effects.
+    /// Parse file bytes into a [`JsonEnvelope`]. Version validation is the
+    /// caller's responsibility — `Migrator::detect_version_from_value` is
+    /// called before this in both load paths and refuses future / malformed
+    /// versions. No defence-in-depth duplication here.
     fn parse_envelope(bytes: &[u8]) -> PersistenceResult<JsonEnvelope> {
-        let envelope: JsonEnvelope = serde_json::from_slice(bytes)
-            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-
-        if envelope.version < 2 || envelope.version > 5 {
-            return Err(PersistenceError::Serialization(format!(
-                "Unsupported format version: {}",
-                envelope.version
-            )));
-        }
-
-        Ok(envelope)
+        serde_json::from_slice(bytes).map_err(|e| PersistenceError::Serialization(e.to_string()))
     }
 
     fn serialize_envelope(envelope: &JsonEnvelope) -> PersistenceResult<Vec<u8>> {
@@ -206,9 +275,7 @@ impl JsonFileStore {
             self.path.display()
         );
         let bytes = Self::serialize_envelope(envelope)?;
-        let tmp_path = self.path.with_extension("tmp");
-        std::fs::write(&tmp_path, &bytes)?;
-        std::fs::rename(&tmp_path, &self.path)?;
+        AtomicWriter::write_atomic_sync(&self.path, &bytes)?;
         Ok(())
     }
 }
@@ -233,14 +300,16 @@ impl PersistenceStore for JsonFileStore {
             }
         }
 
-        // Update metadata with current instance and time
+        // Update metadata with current instance, time, and writer identity
         snapshot.metadata.instance_id = self.instance_id;
         snapshot.metadata.saved_at = chrono::Utc::now();
+        snapshot.metadata.writer_version = Some(kanban_core::KANBAN_VERSION.to_string());
+        snapshot.metadata.writer_commit = Some(kanban_core::KANBAN_COMMIT.to_string());
 
         let data_value: serde_json::Value = serde_json::from_slice(&snapshot.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         let envelope = JsonEnvelope {
-            version: 5,
+            version: 7,
             metadata: snapshot.metadata.clone(),
             data: data_value,
         };
@@ -270,14 +339,14 @@ impl PersistenceStore for JsonFileStore {
     async fn load(&self) -> PersistenceResult<(StoreSnapshot, PersistenceMetadata)> {
         let current_version = Migrator::detect_version(&self.path).await?;
 
-        if current_version < FormatVersion::V3 {
+        if current_version < FormatVersion::V7 {
             tracing::info!(
-                "Detected {:?} format at {}. Migrating to V3...",
+                "Detected {:?} format at {}. Migrating to V7...",
                 current_version,
                 self.path.display()
             );
-            Migrator::migrate(current_version, FormatVersion::V3, &self.path).await?;
-            tracing::info!("Migration to V3 completed successfully");
+            Migrator::migrate(current_version, FormatVersion::V7, &self.path).await?;
+            tracing::info!("Migration to V7 completed successfully");
         }
 
         let file_bytes = tokio::fs::read(&self.path).await?;
@@ -298,11 +367,12 @@ impl PersistenceStore for JsonFileStore {
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let mut metadata = envelope.metadata;
+        metadata.format_version = Some(envelope.version);
         let snapshot = StoreSnapshot {
             data,
-            metadata: envelope.metadata.clone(),
+            metadata: metadata.clone(),
         };
-        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -327,15 +397,15 @@ impl PersistenceStore for JsonFileStore {
         let value: serde_json::Value = serde_json::from_slice(&file_bytes)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
 
-        let current_version = Migrator::detect_version_from_value(&value);
+        let current_version = Migrator::detect_version_from_value(&value)?;
 
-        let final_bytes = if current_version < FormatVersion::V3 {
+        let final_bytes = if current_version < FormatVersion::V7 {
             tracing::info!(
-                "Detected {:?} format at {}. Migrating to V3 (sync)...",
+                "Detected {:?} format at {}. Migrating to V7 (sync)...",
                 current_version,
                 self.path.display()
             );
-            migrate_to_v3_sync(current_version, &self.path)?
+            migrate_to_v7_sync(current_version, &self.path)?
         } else {
             file_bytes
         };
@@ -357,11 +427,12 @@ impl PersistenceStore for JsonFileStore {
 
         let data = serde_json::to_vec(&envelope.data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let mut metadata = envelope.metadata;
+        metadata.format_version = Some(envelope.version);
         let snapshot = StoreSnapshot {
             data,
-            metadata: envelope.metadata.clone(),
+            metadata: metadata.clone(),
         };
-        let metadata = envelope.metadata;
 
         if let Ok(file_metadata) = FileMetadata::from_file(&self.path) {
             let mut guard = self.lock_metadata()?;
@@ -458,6 +529,239 @@ mod tests {
         let guard = store.lock_metadata();
         assert!(guard.is_ok());
         assert!(guard.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_load_rejects_future_format_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+        let v99 = json!({
+            "version": 99,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2026-05-23T00:00:00Z"
+            },
+            "data": {}
+        });
+        tokio::fs::write(&file_path, v99.to_string()).await.unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let err = store.load().await.expect_err("v99 must refuse to load");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 7
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_load_sync_rejects_future_format_version() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("future.json");
+        let v99 = json!({
+            "version": 99,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2026-05-23T00:00:00Z"
+            },
+            "data": {}
+        });
+        std::fs::write(&file_path, v99.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let err = store
+            .load_sync()
+            .expect_err("v99 must refuse to load (sync)");
+        assert!(
+            matches!(
+                err,
+                PersistenceError::UnsupportedFutureVersion {
+                    file_version: 99,
+                    binary_max: 7
+                }
+            ),
+            "expected UnsupportedFutureVersion, got: {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_save_stamps_writer_version_and_commit() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("stamped.json");
+        let store = JsonFileStore::new(&file_path);
+
+        let snapshot = StoreSnapshot {
+            data: serde_json::to_vec(&json!({ "boards": [], "columns": [] })).unwrap(),
+            metadata: PersistenceMetadata::new(store.instance_id()),
+        };
+        store.save(snapshot).await.unwrap();
+
+        let bytes = tokio::fs::read(&file_path).await.unwrap();
+        let envelope: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            envelope["metadata"]["writer_version"]
+                .as_str()
+                .map(str::to_string),
+            Some(kanban_core::KANBAN_VERSION.to_string()),
+        );
+        assert_eq!(
+            envelope["metadata"]["writer_commit"]
+                .as_str()
+                .map(str::to_string),
+            Some(kanban_core::KANBAN_COMMIT.to_string()),
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_legacy_file_without_writer_stamp_succeeds() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("legacy_no_stamp.json");
+        let legacy = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        tokio::fs::write(&file_path, legacy.to_string())
+            .await
+            .unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let (_, metadata) = store.load().await.unwrap();
+        assert!(metadata.writer_version.is_none());
+        assert!(metadata.writer_commit.is_none());
+    }
+
+    /// V6 files on disk used `parent_child` as the spawns-graph bucket key.
+    /// V7 renames the bucket to `spawns` so the wire format matches the
+    /// rest of the codebase (`SpawnsEdge`, `spawns_edges()`, SQLite
+    /// `spawns_edges` table). Loading a V6 file must migrate it to V7
+    /// on disk and surface the edges correctly through the deserialised
+    /// `DependencyGraph` (whose field is now `spawns`, not `parent_child`).
+    #[tokio::test]
+    async fn test_load_v6_file_with_parent_child_migrates_to_v7_spawns() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v6_parent_child.json");
+        let parent = "550e8400-e29b-41d4-a716-446655440011";
+        let child = "550e8400-e29b-41d4-a716-446655440012";
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": parent,
+                        "target": child,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        tokio::fs::write(&file_path, v6.to_string()).await.unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let _ = store.load().await.unwrap();
+
+        let after = tokio::fs::read_to_string(&file_path).await.unwrap();
+        let v: serde_json::Value = serde_json::from_str(&after).unwrap();
+        assert_eq!(v["version"], 7, "load must migrate V6 to V7 on disk");
+        let graph = v["data"]["graph"].as_object().expect("graph object");
+        assert!(
+            graph.contains_key("spawns"),
+            "V7 graph bucket key must be `spawns`; got {:?}",
+            graph.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            !graph.contains_key("parent_child"),
+            "legacy `parent_child` key must be gone after V7 migration"
+        );
+        let edges = graph["spawns"]["edges"]
+            .as_array()
+            .expect("spawns edges array");
+        assert_eq!(
+            edges.len(),
+            1,
+            "the original parent_child edge must survive"
+        );
+        assert_eq!(edges[0]["source"], parent);
+        assert_eq!(edges[0]["target"], child);
+    }
+
+    /// Sync analogue of `test_load_v6_file_with_parent_child_migrates_to_v7_spawns`.
+    /// Both entry points (`load` and `load_sync`) must apply the V6 -> V7
+    /// rename with the same observable result, otherwise non-async callers
+    /// silently keep loading the legacy bucket.
+    #[test]
+    fn test_load_sync_v6_file_with_parent_child_migrates_to_v7_spawns() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v6_sync.json");
+        let parent = "550e8400-e29b-41d4-a716-446655440021";
+        let child = "550e8400-e29b-41d4-a716-446655440022";
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440020",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": parent,
+                        "target": child,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        std::fs::write(&file_path, v6.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&file_path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after = std::fs::read_to_string(&file_path).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&after).unwrap();
+        assert_eq!(v["version"], 7, "load_sync must migrate V6 to V7 on disk");
+        let graph = v["data"]["graph"].as_object().expect("graph object");
+        assert!(
+            graph.contains_key("spawns"),
+            "V7 graph bucket key must be `spawns`; got {:?}",
+            graph.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            !graph.contains_key("parent_child"),
+            "legacy `parent_child` key must be gone after V7 migration"
+        );
+        let edges = graph["spawns"]["edges"]
+            .as_array()
+            .expect("spawns edges array");
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0]["source"], parent);
+        assert_eq!(edges[0]["target"], child);
     }
 
     /// Files with stale `commands`/`undo_cursor`/`baseline_data`/
@@ -573,24 +877,30 @@ mod tests {
         }
     }
 
-    /// Loading a file that has no legacy fields must not rewrite it. A
-    /// spurious write would change the file's mtime, trip file-watcher
-    /// notifications, and risk altering byte-for-byte content (which some
-    /// users may track in version control).
+    /// Loading a clean V7 file (current format) that has no legacy fields
+    /// must not rewrite it. A spurious write would change the file's
+    /// mtime, trip file-watcher notifications, and risk altering
+    /// byte-for-byte content (which some users may track in version
+    /// control). Pre-V7 files are migrated on load and *are* rewritten,
+    /// which is covered by the migration-specific tests.
     #[tokio::test]
     async fn test_load_is_a_noop_write_when_no_legacy_fields_present() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("clean.json");
 
         let clean = json!({
-            "version": 5,
+            "version": 7,
             "metadata": {
                 "instance_id": "550e8400-e29b-41d4-a716-446655440000",
                 "saved_at": "2024-01-01T00:00:00Z"
             },
             "data": {
                 "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
-                "graph": { "cards": { "edges": [] } }
+                "graph": {
+                    "spawns": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
             }
         });
         let original_bytes = serde_json::to_vec_pretty(&clean).unwrap();
@@ -604,6 +914,98 @@ mod tests {
             original_bytes, after_bytes,
             "loading a clean file must not rewrite it"
         );
+    }
+
+    /// Regression test for KAN-504 migration round-trip bug.
+    ///
+    /// The V6 split-graph migration removes the `edge_type` key from each
+    /// migrated edge (it lives implicitly in the sub-graph the edge is
+    /// routed to). The post-migration file must still load through the
+    /// `LegacyEdge<()>` deserialiser — otherwise we produce files that can't be
+    /// loaded by the very code that wrote them. Was missed by the unit
+    /// tests on the migration's in-memory output, which never round-
+    /// tripped through `LegacyEdge::deserialize`.
+    #[tokio::test]
+    async fn test_v3_file_with_edges_round_trips_through_migration_and_load() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("v3_with_edges.json");
+
+        let v3_content = json!({
+            "version": 3,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [],
+                "columns": [],
+                "cards": [],
+                "archived_cards": [],
+                "sprints": [],
+                "graph": {
+                    "cards": {
+                        "edges": [
+                            {
+                                "source": "11111111-1111-1111-1111-111111111111",
+                                "target": "22222222-2222-2222-2222-222222222222",
+                                "edge_type": "ParentOf",
+                                "direction": "Directed",
+                                "weight": null,
+                                "created_at": "2024-01-01T00:00:00Z",
+                                "archived_at": null
+                            },
+                            {
+                                "source": "33333333-3333-3333-3333-333333333333",
+                                "target": "44444444-4444-4444-4444-444444444444",
+                                "edge_type": "Blocks",
+                                "direction": "Directed",
+                                "weight": null,
+                                "created_at": "2024-01-01T00:00:00Z",
+                                "archived_at": null
+                            },
+                            {
+                                "source": "55555555-5555-5555-5555-555555555555",
+                                "target": "66666666-6666-6666-6666-666666666666",
+                                "edge_type": "RelatesTo",
+                                "direction": "Bidirectional",
+                                "weight": null,
+                                "created_at": "2024-01-01T00:00:00Z",
+                                "archived_at": null
+                            }
+                        ]
+                    }
+                }
+            }
+        });
+        tokio::fs::write(&file_path, v3_content.to_string())
+            .await
+            .unwrap();
+
+        // Trigger migration on first load.
+        let store = JsonFileStore::new(&file_path);
+        store
+            .load()
+            .await
+            .expect("first load (migration) must succeed");
+
+        // Re-open and load again — this exercises the
+        // `LegacyEdge::deserialize` path on the post-migration file shape.
+        let store2 = JsonFileStore::new(&file_path);
+        let (snapshot, _meta) = store2
+            .load()
+            .await
+            .expect("re-load of migrated file must succeed");
+
+        // Decode the snapshot bytes through the full domain stack —
+        // this is what kanban-service does at startup, and it's where
+        // the bug actually triggers because LegacyEdge<()>::deserialize
+        // requires the `edge_type` field by default.
+        use kanban_persistence::snapshot_from_json_bytes;
+        let domain_snapshot = snapshot_from_json_bytes(&snapshot.data)
+            .expect("snapshot must deserialize through the full domain stack after migration");
+        assert_eq!(domain_snapshot.graph.spawns_edges().len(), 1);
+        assert_eq!(domain_snapshot.graph.blocks_edges().len(), 1);
+        assert_eq!(domain_snapshot.graph.relates_edges().len(), 1);
     }
 
     #[tokio::test]
@@ -665,6 +1067,260 @@ mod tests {
         assert!(
             !tmp_path.exists(),
             ".tmp must not remain after successful migration"
+        );
+    }
+
+    /// KAN-650: the sync migration path must mirror the async orchestrator's
+    /// `.v{N}.backup` behaviour. A V6 file with both `parent_child` AND
+    /// `spawns` buckets is the canonical mid-V6 failure case (the v6→v7
+    /// rename refuses it). Without a pre-chain backup, the user has nothing
+    /// to roll back to. With one, the broken envelope on disk plus the
+    /// `.v6.backup` together reconstruct the original state.
+    #[test]
+    fn test_load_sync_v6_to_v7_preserves_v6_backup_on_failure() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v6_ambiguous_sync.json");
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": "11111111-1111-1111-1111-111111111111",
+                        "target": "22222222-2222-2222-2222-222222222222",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "spawns": { "edges": [{
+                        "source": "33333333-3333-3333-3333-333333333333",
+                        "target": "44444444-4444-4444-4444-444444444444",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v6).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let err = store
+            .load_sync()
+            .expect_err("load_sync must refuse a V6 envelope carrying both bucket keys");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("parent_child") && msg.contains("spawns"),
+            "diagnostic should name both colliding keys; got: {msg}"
+        );
+
+        assert!(
+            path.with_extension("v6.backup").exists(),
+            ".v6.backup must be preserved when the V6→V7 sync step fails so the user can recover"
+        );
+    }
+
+    /// KAN-650: successful V6→V7 sync migration must clean up its
+    /// `.v6.backup` once the chain completes. Mirrors the async
+    /// `test_migrate_v6_to_v7_renames_parent_child_and_writes_backup`
+    /// assertion that the backup is removed on success.
+    #[test]
+    fn test_load_sync_v6_to_v7_cleans_up_v6_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v6_clean_sync.json");
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v6).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v6.backup").exists(),
+            ".v6.backup must be removed after successful V6→V7 sync migration"
+        );
+    }
+
+    /// KAN-650: V5 files go through split_graph then v6→v7. The backup
+    /// keyed to the *source* version is `.v5.backup`, written before
+    /// the destructive chain runs and removed on success.
+    #[test]
+    fn test_load_sync_v5_to_v7_cleans_up_v5_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v5_clean_sync.json");
+        let v5 = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v5).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v5.backup").exists(),
+            ".v5.backup must be removed after successful V5→V7 sync migration"
+        );
+    }
+
+    /// KAN-650: V4 backup keyed to the source version.
+    #[test]
+    fn test_load_sync_v4_to_v7_cleans_up_v4_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v4_clean_sync.json");
+        let v4 = json!({
+            "version": 4,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v4).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v4.backup").exists(),
+            ".v4.backup must be removed after successful V4→V7 sync migration"
+        );
+    }
+
+    /// KAN-650: V3 backup keyed to the source version.
+    #[test]
+    fn test_load_sync_v3_to_v7_cleans_up_v3_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v3_clean_sync.json");
+        let v3 = json!({
+            "version": 3,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v3).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v3.backup").exists(),
+            ".v3.backup must be removed after successful V3→V7 sync migration"
+        );
+    }
+
+    /// KAN-660: V2 sources are now covered by the outer pre-V7 backup wrap.
+    /// The wrap takes the backup BEFORE migrate_v2_to_v3_sync runs, so the
+    /// V2 original is captured. On successful V2→V7 the wrap cleans it up.
+    /// (No paired failure-preservation test for V2: the V2 envelope shape
+    /// can't cleanly inject the V6 both-keys ambiguity that drives the
+    /// existing V6 failure test, and the outer-wrap failure-handling code
+    /// path is the same `match (result, backup_path)` block already
+    /// exercised by `test_load_sync_v6_to_v7_preserves_v6_backup_on_failure`.)
+    #[test]
+    fn test_load_sync_v2_to_v7_cleans_up_v2_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v2_clean_sync.json");
+        let v2 = json!({
+            "version": 2,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": []
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v2).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v2.backup").exists(),
+            ".v2.backup must be removed after successful V2→V7 sync migration"
+        );
+    }
+
+    /// KAN-660: V1 sources are now covered by the outer pre-V7 backup wrap.
+    /// The .v1.backup is taken BEFORE migrate_v1_to_v2_sync runs and only
+    /// cleaned up after the entire V1→V7 chain succeeds — not after the
+    /// V1→V2 step like the pre-KAN-660 per-step mechanism did. This means
+    /// a mid-chain failure (e.g. during split_graph or v6_to_v7_rename)
+    /// preserves the V1 original instead of losing it after V1→V2.
+    #[test]
+    fn test_load_sync_v1_to_v7_cleans_up_v1_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v1_clean_sync.json");
+        let v1 = json!({
+            "boards": [],
+            "columns": [],
+            "cards": []
+        });
+        std::fs::write(&path, v1.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v1.backup").exists(),
+            ".v1.backup must be removed after successful V1→V7 sync migration"
         );
     }
 }

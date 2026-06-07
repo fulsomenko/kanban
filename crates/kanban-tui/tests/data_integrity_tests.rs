@@ -1,12 +1,11 @@
 use kanban_domain::commands::*;
-use kanban_domain::dependencies::CardGraphExt;
 use kanban_domain::*;
 
 #[test]
 fn test_delete_card_cleans_dependencies() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     let board_id = board.id;
     let column_id = column.id;
     store.upsert_board(board).unwrap();
@@ -42,22 +41,22 @@ fn test_delete_card_cleans_dependencies() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(card_a, card_b).unwrap();
+        graph.set_block(card_a, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
 
     let cmd = DeleteCard { card_id: card_a };
     cmd.execute(&ctx).unwrap();
 
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 0);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 0);
 }
 
 #[test]
 fn test_delete_column_with_cards_fails() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     let board_id = board.id;
     let column_id = column.id;
     store.upsert_board(board).unwrap();
@@ -87,8 +86,8 @@ fn test_delete_column_with_cards_fails() {
 #[test]
 fn test_delete_column_with_archived_cards_fails() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     let board_id = board.id;
     let column_id = column.id;
     store.upsert_board(board).unwrap();
@@ -122,9 +121,9 @@ fn test_delete_column_with_archived_cards_fails() {
 #[test]
 fn test_delete_sprint_unassigns_cards() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
-    let sprint = Sprint::new(board.id, 1, None, None);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
     let board_id = board.id;
     let column_id = column.id;
     let sprint_id = sprint.id;
@@ -196,8 +195,8 @@ fn test_delete_sprint_unassigns_cards() {
 #[test]
 fn test_archive_card_preserves_edges() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     let board_id = board.id;
     let column_id = column.id;
     store.upsert_board(board).unwrap();
@@ -233,15 +232,15 @@ fn test_archive_card_preserves_edges() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(card_a, card_b).unwrap();
+        graph.set_block(card_a, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
 
     let cmd = ArchiveCards { ids: vec![card_a] };
     cmd.execute(&ctx).unwrap();
 
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 0);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 0);
 
     let cmd = RestoreCard {
         card_id: card_a,
@@ -251,14 +250,14 @@ fn test_archive_card_preserves_edges() {
     };
     cmd.execute(&ctx).unwrap();
 
-    assert_eq!(store.get_graph().unwrap().cards.blockers(card_b).len(), 1);
+    assert_eq!(store.get_graph().unwrap().blockers(card_b).len(), 1);
 }
 
 #[test]
 fn test_delete_column_succeeds_when_empty() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     let column_id = column.id;
     store.upsert_board(board).unwrap();
     store.upsert_column(column).unwrap();
@@ -275,8 +274,8 @@ fn test_delete_column_succeeds_when_empty() {
 #[test]
 fn test_cycle_detection_parent_child() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     let board_id = board.id;
     let column_id = column.id;
     store.upsert_board(board).unwrap();
@@ -325,14 +324,14 @@ fn test_cycle_detection_parent_child() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.set_parent(card_b, card_a).unwrap();
-        graph.cards.set_parent(card_c, card_b).unwrap();
+        graph.set_parent(card_b, card_a).unwrap();
+        graph.set_parent(card_c, card_b).unwrap();
         store.set_graph(graph).unwrap();
     }
 
     {
         let mut graph = store.get_graph().unwrap();
-        let result = graph.cards.set_parent(card_a, card_c);
+        let result = graph.set_parent(card_a, card_c);
         assert!(result.unwrap_err().is_cycle_detected());
     }
 }
@@ -340,8 +339,8 @@ fn test_cycle_detection_parent_child() {
 #[test]
 fn test_cycle_detection_blocks() {
     let store = InMemoryStore::new();
-    let board = Board::new("Test Board".to_string(), None);
-    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let board = Board::new("Test Board", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     let board_id = board.id;
     let column_id = column.id;
     store.upsert_board(board).unwrap();
@@ -390,14 +389,14 @@ fn test_cycle_detection_blocks() {
 
     {
         let mut graph = store.get_graph().unwrap();
-        graph.cards.add_blocks(card_a, card_b).unwrap();
-        graph.cards.add_blocks(card_b, card_c).unwrap();
+        graph.set_block(card_a, card_b).unwrap();
+        graph.set_block(card_b, card_c).unwrap();
         store.set_graph(graph).unwrap();
     }
 
     {
         let mut graph = store.get_graph().unwrap();
-        let result = graph.cards.add_blocks(card_c, card_a);
+        let result = graph.set_block(card_c, card_a);
         assert!(result.unwrap_err().is_cycle_detected());
     }
 }

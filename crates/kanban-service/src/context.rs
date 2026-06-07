@@ -1,12 +1,13 @@
 use crate::backend::KanbanBackend;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{
-    BoardCommand, CardCommand, ColumnCommand, Command, CommandContext, SprintCommand,
+    AddBlocks, AddRelates, AddSpawns, BoardCommand, CardCommand, ColumnCommand, Command,
+    CommandContext, DependencyCommand, RemoveBlocks, RemoveRelates, RemoveSpawns, SprintCommand,
 };
 use kanban_domain::{
     ArchivedCard, Board, BoardUpdate, Card, CardListFilter, CardStatus, CardSummary, CardUpdate,
-    Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, KanbanOperations, Snapshot,
-    Sprint, SprintUpdate,
+    Column, ColumnUpdate, DataStore, DependencyGraph, FieldUpdate, GraphOperations,
+    KanbanOperations, RelatesKind, Severity, Snapshot, Sprint, SprintUpdate,
 };
 use kanban_domain::{KanbanError, KanbanResult};
 use kanban_persistence::PersistenceError;
@@ -26,51 +27,53 @@ pub struct BatchOperationFailure {
     pub error: String,
 }
 
-pub const MAX_UNDO_DEPTH: usize = 200;
-
 /// Service layer: wraps a pluggable [`KanbanBackend`] with undo/redo history
 /// and a unified async `save()` / `reload()` interface.
 ///
 /// Construction is always zero-I/O — data is fetched lazily on the first
 /// read, either directly (SQLite, reads are always live) or via a one-time
 /// cache-fill on first access (JSON).
+///
+/// # Undo / Redo model
+///
+/// Every undoable command captures an **inverse** at execute time. The
+/// `(forward, inverse)` pair lives on the per-session [`UndoStack`].
+/// Undo executes the inverse against current state through the normal
+/// command-execute path — no snapshot apply, no replay. Redo re-executes
+/// the forward batch.
+///
+/// `execute` also appends the forward batch to the `CommandStore` audit
+/// log (`backend.append_commands`). The audit log is informational — it
+/// records what happened; it does not drive undo. Audit-log UI is KAN-36.
 pub struct KanbanContext {
     backend: Arc<dyn KanbanBackend>,
     app_config: AppConfig,
-    /// `None` until [`initialize_undo_state`][Self::initialize_undo_state] is called.
-    baseline_snapshot: Option<Snapshot>,
-    undo_cursor: usize,
-    command_count: usize,
+    /// Per-session inverse-command undo state.
+    undo_stack: crate::undo_stack::UndoStack,
     dirty: bool,
     conflict_pending: bool,
 }
 
 impl KanbanContext {
     /// Zero-I/O constructor. Wraps `backend` without reading any data.
-    /// Call [`initialize_undo_state`][Self::initialize_undo_state] before the
-    /// first [`execute`][Self::execute], [`undo`][Self::undo], or
-    /// [`redo`][Self::redo], or use [`open`][Self::open]
-    /// which calls it automatically.
+    /// Use [`open`][Self::open] instead when a lazy backend's load
+    /// errors should surface at construction time.
     pub fn open_deferred(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> Self {
         Self {
             backend,
             app_config: config,
-            baseline_snapshot: None,
-            undo_cursor: 0,
-            command_count: 0,
+            undo_stack: crate::undo_stack::UndoStack::new(),
             dirty: false,
             conflict_pending: false,
         }
     }
 
-    /// Wraps `backend` and eagerly initializes the undo cursor so that
-    /// `can_undo()` / `can_redo()` return correct values before the first
-    /// mutation. Use this instead of [`open_deferred`][Self::open_deferred]
-    /// wherever the caller needs undo state to be populated immediately
-    /// (CLI, MCP, TUI startup).
+    /// Wraps `backend` and forces a lazy backend's I/O so any
+    /// deserialization or read failure surfaces here, before the
+    /// caller starts mutating.
     pub async fn open(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> KanbanResult<Self> {
-        let mut ctx = Self::open_deferred(backend, config);
-        ctx.initialize_undo_state()?;
+        let ctx = Self::open_deferred(backend, config);
+        ctx.backend.command_count()?;
         Ok(ctx)
     }
 
@@ -88,17 +91,19 @@ impl KanbanContext {
         Arc::clone(&self.backend)
     }
 
+    /// Metadata for the underlying persistence store: format version, writer
+    /// kanban version, writer commit, last save time. Returns `None` for
+    /// in-memory backends or before the underlying file has been loaded.
+    /// Surfaced by the TUI F12 diagnostics panel.
+    pub fn persistence_metadata(&self) -> Option<kanban_persistence::PersistenceMetadata> {
+        self.backend.persistence_metadata()
+    }
+
     /// Replace the active backend, discarding all undo/redo history.
-    ///
-    /// **Destructive**: resets `baseline_snapshot`, `undo_cursor`, `command_count`,
-    /// and `dirty`. The caller is responsible for re-initialising undo state via
-    /// [`initialize_undo_state`][Self::initialize_undo_state] if needed.
     pub fn replace_backend(&mut self, backend: Arc<dyn KanbanBackend>) {
         tracing::info!("Replacing backend; undo/redo history discarded");
         self.backend = backend;
-        self.baseline_snapshot = None;
-        self.undo_cursor = 0;
-        self.command_count = 0;
+        self.undo_stack.clear();
         self.dirty = false;
     }
 
@@ -157,14 +162,11 @@ impl KanbanContext {
         let count =
             kanban_domain::card_lifecycle::migrate_sprint_logs(&mut cards, &sprints, &boards);
         if count > 0 {
-            // Invalidate any pending redo: a data migration mutates state
-            // outside the command log, so replaying recorded commands against
-            // the post-migration backend could yield incoherent results.
-            if self.undo_cursor < self.command_count {
-                self.backend
-                    .truncate_commands_after(self.undo_cursor as u64)?;
-                self.command_count = self.undo_cursor;
-            }
+            // Invalidate the entire undo history — a data migration
+            // mutates state outside the command pipeline, so any
+            // inverse captured before the migration would now reference
+            // stale entity values.
+            self.undo_stack.clear();
             tracing::info!("Migrated sprint logs for {} card(s)", count);
             for (card, before) in cards.into_iter().zip(before_logs) {
                 if card.sprint_logs != before {
@@ -178,207 +180,100 @@ impl KanbanContext {
 
     // ── Undo / Redo ───────────────────────────────────────────────────────────
 
-    /// Loads the pre-existing command count and baseline snapshot from the backend.
-    /// Must be called once after [`open_deferred`][Self::open_deferred] before any call to
-    /// [`execute`], [`undo`], or [`redo`].  [`open`][Self::open]
-    /// calls this automatically.  Idempotent if called more than once.
-    pub fn initialize_undo_state(&mut self) -> KanbanResult<()> {
-        if self.baseline_snapshot.is_none() {
-            let baseline = self.backend.snapshot()?;
-            // Undo is in-session only — discard commands carried over from previous sessions.
-            if self.backend.command_count()? > 0 {
-                self.backend.truncate_commands_after(0)?;
-            }
-            self.baseline_snapshot = Some(baseline);
-            self.command_count = 0;
-            self.undo_cursor = 0;
-        }
-        Ok(())
-    }
-
-    /// Execute a batch of commands as a single undo unit.
+    /// Execute a batch as one undo unit. Entity mutations, inverse
+    /// capture, and audit-log append run inside one transaction —
+    /// either all commit or all roll back.
+    ///
+    /// Each command's inverse is captured against the state the
+    /// previous command left behind. The composed inverse is the
+    /// per-command inverses in reverse order, so undoing each `Fk_inv`
+    /// runs against the state `Fk` itself saw at capture time.
     pub fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
-        if self.baseline_snapshot.is_none() {
-            return Err(KanbanError::Internal(
-                "undo state not initialized — call initialize_undo_state() or open()".into(),
-            ));
-        }
-
-        if self.undo_cursor < self.command_count {
-            self.backend
-                .truncate_commands_after(self.undo_cursor as u64)?;
-        }
-
-        let before = if self.backend.supports_indexed_snapshots() {
-            None
-        } else {
-            Some(self.backend.snapshot()?)
-        };
-        let result = {
-            let store: &dyn DataStore = self.backend.as_data_store();
+        let backend = Arc::clone(&self.backend);
+        let cmds = &commands;
+        let mut per_cmd_inverses: Vec<Vec<Command>> = Vec::new();
+        self.backend.with_transaction(&mut || {
+            let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
-            commands.iter().try_for_each(|cmd| cmd.execute(&ctx))
-        };
-        if let Err(e) = result {
-            let rollback_snap = if let Some(snap) = before {
-                snap
-            } else if self.undo_cursor > 0 {
-                self.backend
-                    .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| {
-                        debug_assert!(
-                            self.baseline_snapshot.is_some(),
-                            "baseline must be Some after guard"
-                        );
-                        self.baseline_snapshot.clone().unwrap_or_default()
-                    })
-            } else {
-                debug_assert!(
-                    self.baseline_snapshot.is_some(),
-                    "baseline must be Some after guard"
-                );
-                self.baseline_snapshot.clone().unwrap_or_default()
-            };
-            if let Err(rollback_err) = self.backend.apply_snapshot(rollback_snap) {
-                return Err(KanbanError::Internal(format!(
-                    "Command failed ({e}) and rollback also failed ({rollback_err}). State may be inconsistent."
-                )));
+            for cmd in cmds.iter() {
+                per_cmd_inverses.push(cmd.capture_inverse(store)?);
+                cmd.execute(&ctx)?;
             }
-            return Err(e);
-        }
+            backend.append_commands(cmds)?;
+            Ok(())
+        })?;
+        let inverses: Vec<Command> = per_cmd_inverses.into_iter().rev().flatten().collect();
 
-        self.backend.append_commands(&commands)?;
-        self.undo_cursor += 1;
-        self.command_count = self.undo_cursor;
-
-        if self.backend.supports_indexed_snapshots() {
-            let snap = self.backend.snapshot()?;
-            self.backend
-                .store_snapshot_at(self.undo_cursor as u64, &snap)?;
-        }
-
-        if self.undo_cursor > MAX_UNDO_DEPTH {
-            let excess = self.undo_cursor - MAX_UNDO_DEPTH;
-            if let Some(new_baseline) = self.backend.load_snapshot_at(excess as u64)? {
-                self.baseline_snapshot = Some(new_baseline);
-            }
-            self.backend.shift_commands(excess as u64)?;
-            self.undo_cursor = MAX_UNDO_DEPTH;
-            self.command_count = MAX_UNDO_DEPTH;
-        }
+        self.undo_stack.push(crate::undo_stack::UndoEntry {
+            forward: commands,
+            inverse: inverses,
+        });
 
         self.dirty = true;
         Ok(())
     }
 
-    /// Undo the most recent batch.
+    /// Undo the most recent batch via inverse-command execution.
+    /// The cursor advances only if the inverse commits successfully —
+    /// a failed undo leaves the stack ready to retry the same entry.
     pub fn undo(&mut self) -> KanbanResult<bool> {
-        if self.baseline_snapshot.is_none() {
-            return Ok(false); // nothing to undo in an uninitialized context
-        }
-        if self.undo_cursor == 0 {
-            return Ok(false);
-        }
-        self.undo_cursor -= 1;
-
-        if self.backend.supports_indexed_snapshots() {
-            let snap = if self.undo_cursor == 0 {
-                debug_assert!(
-                    self.baseline_snapshot.is_some(),
-                    "baseline must be Some after guard"
-                );
-                self.baseline_snapshot.clone().unwrap_or_default()
-            } else {
-                self.backend
-                    .load_snapshot_at(self.undo_cursor as u64)?
-                    .unwrap_or_else(|| {
-                        debug_assert!(
-                            self.baseline_snapshot.is_some(),
-                            "baseline must be Some after guard"
-                        );
-                        self.baseline_snapshot.clone().unwrap_or_default()
-                    })
-            };
-            self.backend.apply_snapshot(snap)?;
-        } else {
-            debug_assert!(
-                self.baseline_snapshot.is_some(),
-                "baseline must be Some after guard"
-            );
-            self.backend
-                .apply_snapshot(self.baseline_snapshot.clone().unwrap_or_default())?;
-            let batches = self.backend.load_commands(0, self.undo_cursor as u64)?;
-            let store: &dyn DataStore = self.backend.as_data_store();
+        let inverse = match self.undo_stack.peek_undo() {
+            Some(entry) => entry.inverse.clone(),
+            None => return Ok(false),
+        };
+        let backend = Arc::clone(&self.backend);
+        let inv = &inverse;
+        self.backend.with_transaction(&mut || {
+            let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
-            for batch in &batches {
-                for cmd in batch {
-                    cmd.execute(&ctx)?;
-                }
-            }
-        }
-
+            inv.iter().try_for_each(|cmd| cmd.execute(&ctx))
+        })?;
+        self.undo_stack.commit_undo();
         self.dirty = true;
         Ok(true)
     }
 
-    /// Redo the next undone batch.
+    /// Redo the next undone batch via forward-command execution.
+    /// The cursor advances only if the forward batch commits — a failed
+    /// redo leaves the stack ready to retry the same entry.
     pub fn redo(&mut self) -> KanbanResult<bool> {
-        if self.baseline_snapshot.is_none() {
-            return Ok(false); // nothing to redo in an uninitialized context
-        }
-        if self.undo_cursor >= self.command_count {
-            return Ok(false);
-        }
-
-        let mut applied = false;
-        if self.backend.supports_indexed_snapshots() {
-            let target = self.undo_cursor as u64 + 1;
-            if let Some(snap) = self.backend.load_snapshot_at(target)? {
-                self.backend.apply_snapshot(snap)?;
-                applied = true;
-            }
-        }
-
-        if !applied {
-            let batches = self
-                .backend
-                .load_commands(self.undo_cursor as u64, self.undo_cursor as u64 + 1)?;
-            let store: &dyn DataStore = self.backend.as_data_store();
+        let forward = match self.undo_stack.peek_redo() {
+            Some(entry) => entry.forward.clone(),
+            None => return Ok(false),
+        };
+        let backend = Arc::clone(&self.backend);
+        let fwd = &forward;
+        self.backend.with_transaction(&mut || {
+            let store: &dyn DataStore = backend.as_data_store();
             let ctx = CommandContext { store };
-            for batch in &batches {
-                for cmd in batch {
-                    cmd.execute(&ctx)?;
-                }
-            }
-        }
-
-        self.undo_cursor += 1;
+            fwd.iter().try_for_each(|cmd| cmd.execute(&ctx))
+        })?;
+        self.undo_stack.commit_redo();
         self.dirty = true;
         Ok(true)
     }
 
     pub fn can_undo(&self) -> bool {
-        self.baseline_snapshot.is_some() && self.undo_cursor > 0
+        self.undo_stack.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        self.baseline_snapshot.is_some() && self.undo_cursor < self.command_count
+        self.undo_stack.can_redo()
     }
 
+    /// Drop the per-session undo/redo history. The audit log is
+    /// append-only and is not touched.
     pub fn clear_history(&mut self) -> KanbanResult<()> {
-        self.baseline_snapshot = Some(self.backend.snapshot()?);
-        self.backend.truncate_commands_after(0)?;
-        self.undo_cursor = 0;
-        self.command_count = 0;
+        self.undo_stack.clear();
         Ok(())
     }
 
     pub fn undo_depth(&self) -> usize {
-        self.undo_cursor
+        self.undo_stack.undo_depth()
     }
 
     pub fn redo_depth(&self) -> usize {
-        self.command_count.saturating_sub(self.undo_cursor)
+        self.undo_stack.redo_depth()
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -411,22 +306,15 @@ impl KanbanContext {
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
-    /// Reload state from durable storage, discarding any uncommitted data cache.
-    /// After reloading, the context is immediately ready for mutations — the
-    /// baseline snapshot is refreshed from the freshly-loaded data and the
-    /// command log is truncated, so no separate call to
-    /// [`initialize_undo_state`][Self::initialize_undo_state] is required.
+    /// Reload state from durable storage, discarding any uncommitted
+    /// data cache. Drops the per-session `UndoStack` (entity ids from
+    /// before the reload may no longer exist). The audit log is left
+    /// untouched — it records what happened, and a reload does not
+    /// unhappen it.
     pub async fn reload(&mut self) -> KanbanResult<()> {
         self.backend.reload().await?;
-        self.baseline_snapshot = None;
-        self.undo_cursor = 0;
-        self.command_count = 0;
+        self.undo_stack.clear();
         self.dirty = false;
-        // Read the fresh snapshot as the new baseline and discard the command
-        // log so undo cannot reach across the reload boundary.
-        let baseline = self.backend.snapshot()?;
-        self.backend.truncate_commands_after(0)?;
-        self.baseline_snapshot = Some(baseline);
         Ok(())
     }
 
@@ -464,7 +352,7 @@ impl KanbanContext {
             } else {
                 failed.push(BatchOperationFailure {
                     id,
-                    error: KanbanError::not_found("card", id).to_string(),
+                    error: KanbanError::not_found("Card", id).to_string(),
                 });
             }
         }
@@ -508,7 +396,7 @@ impl KanbanContext {
                 Ok(Some(_)) => to_move.push(id),
                 Ok(None) => failed.push(BatchOperationFailure {
                     id,
-                    error: KanbanError::not_found("card", id).to_string(),
+                    error: KanbanError::not_found("Card", id).to_string(),
                 }),
                 Err(e) => failed.push(BatchOperationFailure {
                     id,
@@ -602,7 +490,7 @@ impl KanbanContext {
                     .into_iter()
                     .map(|id| BatchOperationFailure {
                         id,
-                        error: KanbanError::not_found("sprint", sprint_id).to_string(),
+                        error: KanbanError::not_found("Sprint", sprint_id).to_string(),
                     })
                     .collect(),
             };
@@ -631,7 +519,7 @@ impl KanbanContext {
             } else {
                 failed.push(BatchOperationFailure {
                     id,
-                    error: KanbanError::not_found("card", id).to_string(),
+                    error: KanbanError::not_found("Card", id).to_string(),
                 });
             }
         }
@@ -737,7 +625,7 @@ impl KanbanContext {
 
         for &id in ids {
             if self.backend.get_card(id)?.is_none() {
-                return Err(KanbanError::not_found("card", id));
+                return Err(KanbanError::not_found("Card", id));
             }
         }
 
@@ -745,7 +633,7 @@ impl KanbanContext {
         let column = self
             .backend
             .get_column(column_id)?
-            .ok_or_else(|| KanbanError::not_found("column", column_id))?;
+            .ok_or_else(|| KanbanError::not_found("Column", column_id))?;
 
         if let Some(limit) = column.wip_limit {
             // `moving_set.len()` is the post-dedup mover count — `compute_move_positions`
@@ -817,6 +705,31 @@ impl KanbanContext {
     }
 }
 
+impl KanbanContext {
+    fn filter_cards(&self, filter: &CardListFilter) -> KanbanResult<Vec<Card>> {
+        let cards = self.backend.list_all_cards()?;
+        let board = match filter.board_id {
+            Some(bid) => self.backend.get_board(bid)?,
+            None => None,
+        };
+        let columns = match filter.board_id {
+            Some(bid) => self.backend.list_columns_by_board(bid)?,
+            None => Vec::new(),
+        };
+        let sprints = match (board.as_ref(), filter.search.as_deref()) {
+            (Some(b), Some(q)) if !q.is_empty() => self.backend.list_sprints_by_board(b.id)?,
+            _ => Vec::new(),
+        };
+        Ok(kanban_domain::filter_and_sort_cards(
+            &cards,
+            &columns,
+            &sprints,
+            board.as_ref(),
+            filter,
+        ))
+    }
+}
+
 // ── KanbanOperations impl ─────────────────────────────────────────────────────
 
 impl KanbanOperations for KanbanContext {
@@ -852,7 +765,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_board(id)?
-            .ok_or_else(|| KanbanError::not_found("board", id))
+            .ok_or_else(|| KanbanError::not_found("Board", id))
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -900,7 +813,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_column(id)?
-            .ok_or_else(|| KanbanError::not_found("column", id))
+            .ok_or_else(|| KanbanError::not_found("Column", id))
     }
 
     fn delete_column(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -950,30 +863,7 @@ impl KanbanOperations for KanbanContext {
     }
 
     fn list_cards(&self, filter: CardListFilter) -> KanbanResult<Vec<CardSummary>> {
-        let mut cards = self.backend.list_all_cards()?;
-
-        if let Some(board_id) = filter.board_id {
-            let board_columns: Vec<Uuid> = self
-                .backend
-                .list_columns_by_board(board_id)?
-                .iter()
-                .map(|c| c.id)
-                .collect();
-            cards.retain(|c| board_columns.contains(&c.column_id));
-        }
-
-        if let Some(column_id) = filter.column_id {
-            cards.retain(|c| c.column_id == column_id);
-        }
-
-        if let Some(sprint_id) = filter.sprint_id {
-            cards.retain(|c| c.sprint_id == Some(sprint_id));
-        }
-
-        if let Some(status) = filter.status {
-            cards.retain(|c| c.status == status);
-        }
-
+        let cards = self.filter_cards(&filter)?;
         Ok(cards.iter().map(CardSummary::from).collect())
     }
 
@@ -1008,7 +898,7 @@ impl KanbanOperations for KanbanContext {
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         self.update_cards(vec![(id, updates)])?;
         self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     fn move_card(
@@ -1040,13 +930,13 @@ impl KanbanOperations for KanbanContext {
 
         self.execute(batch)?;
         self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
         match self.archive_cards(vec![id]) {
             Ok(0) | Err(KanbanError::Domain(kanban_domain::DomainError::Validation(_))) => {
-                Err(KanbanError::not_found("card", id))
+                Err(KanbanError::not_found("Card", id))
             }
             Ok(_) => Ok(()),
             Err(e) => Err(e),
@@ -1062,7 +952,7 @@ impl KanbanOperations for KanbanContext {
 
         let target_column = if let Some(col_id) = column_id {
             if self.backend.get_column(col_id)?.is_none() {
-                return Err(KanbanError::not_found("column", col_id));
+                return Err(KanbanError::not_found("Column", col_id));
             }
             col_id
         } else if self
@@ -1084,7 +974,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -1100,7 +990,7 @@ impl KanbanOperations for KanbanContext {
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
         self.assign_cards_to_sprint(vec![card_id], sprint_id)?;
         self.get_card(card_id)?
-            .ok_or_else(|| KanbanError::not_found("card", card_id))
+            .ok_or_else(|| KanbanError::not_found("Card", card_id))
     }
 
     fn unassign_card_from_sprint(&mut self, card_id: Uuid) -> KanbanResult<Card> {
@@ -1111,21 +1001,21 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_card(card_id)?
-            .ok_or_else(|| KanbanError::not_found("card", card_id))
+            .ok_or_else(|| KanbanError::not_found("Card", card_id))
     }
 
     fn get_card_branch_name(&self, id: Uuid) -> KanbanResult<String> {
         let card = self
             .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))?;
+            .ok_or_else(|| KanbanError::not_found("Card", id))?;
         let column = self
             .backend
             .get_column(card.column_id)?
-            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
+            .ok_or_else(|| KanbanError::not_found("Column", card.column_id))?;
         let board = self
             .backend
             .get_board(column.board_id)?
-            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
+            .ok_or_else(|| KanbanError::not_found("Board", column.board_id))?;
         let sprints = self.backend.list_all_sprints()?;
         Ok(card.branch_name(
             &board,
@@ -1137,15 +1027,15 @@ impl KanbanOperations for KanbanContext {
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
         let card = self
             .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))?;
+            .ok_or_else(|| KanbanError::not_found("Card", id))?;
         let column = self
             .backend
             .get_column(card.column_id)?
-            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
+            .ok_or_else(|| KanbanError::not_found("Column", card.column_id))?;
         let board = self
             .backend
             .get_board(column.board_id)?
-            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
+            .ok_or_else(|| KanbanError::not_found("Board", column.board_id))?;
         let sprints = self.backend.list_all_sprints()?;
         Ok(card.git_checkout_command(
             &board,
@@ -1256,7 +1146,7 @@ impl KanbanOperations for KanbanContext {
 
         let from_sprint = self
             .get_sprint(from_sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", from_sprint_id))?;
+            .ok_or_else(|| KanbanError::not_found("Sprint", from_sprint_id))?;
         if from_sprint.status != kanban_domain::SprintStatus::Completed
             && from_sprint.status != kanban_domain::SprintStatus::Cancelled
         {
@@ -1267,7 +1157,7 @@ impl KanbanOperations for KanbanContext {
         }
         let to_sprint = self
             .get_sprint(to_sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", to_sprint_id))?;
+            .ok_or_else(|| KanbanError::not_found("Sprint", to_sprint_id))?;
         if to_sprint.status != kanban_domain::SprintStatus::Planning {
             return Err(KanbanError::validation(format!(
                 "Target sprint must be Planning, got {:?}",
@@ -1327,7 +1217,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn activate_sprint(&mut self, id: Uuid, duration_days: Option<i32>) -> KanbanResult<Sprint> {
@@ -1339,7 +1229,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn complete_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
@@ -1347,7 +1237,7 @@ impl KanbanOperations for KanbanContext {
         let cmd = Command::Sprint(SprintCommand::Complete(CompleteSprint { sprint_id: id }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn cancel_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
@@ -1355,7 +1245,7 @@ impl KanbanOperations for KanbanContext {
         let cmd = Command::Sprint(SprintCommand::Cancel(CancelSprint { sprint_id: id }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -1403,6 +1293,7 @@ impl KanbanOperations for KanbanContext {
 
     fn import_board(&mut self, data: &str) -> KanbanResult<Board> {
         use kanban_domain::commands::ImportEntities;
+        use std::collections::HashSet;
 
         let imported: Snapshot = serde_json::from_str(data)
             .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
@@ -1412,6 +1303,24 @@ impl KanbanOperations for KanbanContext {
             .first()
             .cloned()
             .ok_or_else(|| KanbanError::validation("No board in import data"))?;
+
+        let imported_column_ids: HashSet<Uuid> = imported.columns.iter().map(|c| c.id).collect();
+        let existing_column_ids: HashSet<Uuid> = self
+            .backend
+            .list_all_columns()?
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        for card in &imported.cards {
+            if !imported_column_ids.contains(&card.column_id)
+                && !existing_column_ids.contains(&card.column_id)
+            {
+                return Err(KanbanError::validation(format!(
+                    "Card '{}' references column {} which does not exist in the import or the current store",
+                    card.title, card.column_id
+                )));
+            }
+        }
 
         let commands = vec![Command::Board(BoardCommand::Import(ImportEntities {
             boards: imported.boards,
@@ -1430,12 +1339,137 @@ impl KanbanOperations for KanbanContext {
             }
         }
 
-        self.baseline_snapshot = Some(self.backend.snapshot()?);
-        self.backend.truncate_commands_after(0)?;
-        self.undo_cursor = 0;
-        self.command_count = 0;
+        self.undo_stack.clear();
         self.dirty = true;
 
         Ok(board)
+    }
+}
+
+impl KanbanContext {
+    /// Reject edge mutations against unknown card ids before the
+    /// command reaches the graph. Without this guard a stale or
+    /// fabricated UUID would silently land in the graph as a dangling
+    /// edge — the CLI's identifier-resolution layer parses raw UUIDs
+    /// without looking them up, so service-level enforcement is the
+    /// right boundary.
+    fn require_card_exists(&self, id: Uuid) -> KanbanResult<()> {
+        match self.backend.get_card(id)? {
+            Some(_) => Ok(()),
+            None => Err(KanbanError::not_found("Card", id)),
+        }
+    }
+}
+
+impl GraphOperations for KanbanContext {
+    fn attach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.require_card_exists(parent)?;
+        for child in &children {
+            self.require_card_exists(*child)?;
+        }
+        let commands: Vec<Command> = children
+            .into_iter()
+            .map(|child| {
+                Command::Dependency(DependencyCommand::AddSpawns(AddSpawns {
+                    source: parent,
+                    target: child,
+                    as_archived: false,
+                }))
+            })
+            .collect();
+        self.execute(commands)
+    }
+
+    fn detach_children(&mut self, parent: Uuid, children: Vec<Uuid>) -> KanbanResult<()> {
+        self.require_card_exists(parent)?;
+        for child in &children {
+            self.require_card_exists(*child)?;
+        }
+        let commands: Vec<Command> = children
+            .into_iter()
+            .map(|child| {
+                Command::Dependency(DependencyCommand::RemoveSpawns(RemoveSpawns {
+                    source: parent,
+                    target: child,
+                    tolerate_missing: false,
+                }))
+            })
+            .collect();
+        self.execute(commands)
+    }
+
+    fn list_children_of(&self, parent: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(parent)?;
+        Ok(self.backend.get_graph()?.children(parent))
+    }
+
+    fn list_parents_of(&self, child: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(child)?;
+        Ok(self.backend.get_graph()?.parents(child))
+    }
+
+    fn block(&mut self, blocker: Uuid, blocked: Uuid, severity: Severity) -> KanbanResult<()> {
+        self.require_card_exists(blocker)?;
+        self.require_card_exists(blocked)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::AddBlocks(
+            AddBlocks {
+                source: blocker,
+                target: blocked,
+                severity,
+                as_archived: false,
+            },
+        ))])
+    }
+
+    fn unblock(&mut self, blocker: Uuid, blocked: Uuid) -> KanbanResult<()> {
+        self.require_card_exists(blocker)?;
+        self.require_card_exists(blocked)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::RemoveBlocks(
+            RemoveBlocks {
+                source: blocker,
+                target: blocked,
+                tolerate_missing: false,
+            },
+        ))])
+    }
+
+    fn list_blocked_by(&self, blocker: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(blocker)?;
+        Ok(self.backend.get_graph()?.blocked(blocker))
+    }
+
+    fn list_blockers_of(&self, blocked: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(blocked)?;
+        Ok(self.backend.get_graph()?.blockers(blocked))
+    }
+
+    fn relate(&mut self, a: Uuid, b: Uuid, kind: RelatesKind) -> KanbanResult<()> {
+        self.require_card_exists(a)?;
+        self.require_card_exists(b)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::AddRelates(
+            AddRelates {
+                source: a,
+                target: b,
+                kind,
+                as_archived: false,
+            },
+        ))])
+    }
+
+    fn dissociate(&mut self, a: Uuid, b: Uuid) -> KanbanResult<()> {
+        self.require_card_exists(a)?;
+        self.require_card_exists(b)?;
+        self.execute(vec![Command::Dependency(DependencyCommand::RemoveRelates(
+            RemoveRelates {
+                source: a,
+                target: b,
+                tolerate_missing: false,
+            },
+        ))])
+    }
+
+    fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
+        self.require_card_exists(card)?;
+        Ok(self.backend.get_graph()?.related(card))
     }
 }

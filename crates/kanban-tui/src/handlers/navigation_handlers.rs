@@ -488,9 +488,7 @@ impl App {
             Focus::Cards => {
                 if let Some(selected_card) = self.get_selected_card_in_context() {
                     let card_id = selected_card.id;
-                    let actual_idx = self.model.cards().iter().position(|c| c.id == card_id);
-                    self.selection.active_card_index = actual_idx;
-                    self.selection.active_card_id = Some(card_id);
+                    self.set_active_card_or_clear(card_id);
                     // Initialize list components with item counts
                     let parents = self.get_current_card_parents();
                     let children = self.get_current_card_children();
@@ -565,11 +563,7 @@ impl App {
             let column_count = self.view.strategy.get_all_task_lists().len();
 
             if index < column_count {
-                self.view
-                    .strategy
-                    .as_any_mut()
-                    .downcast_mut::<UnifiedViewStrategy>()
-                    .map(|unified| unified.try_set_active_column_index(index));
+                self.view.strategy.try_navigate_to_column(index);
 
                 if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                     if list.is_empty() {
