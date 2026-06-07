@@ -11,6 +11,20 @@ always the right first move. The sections below are for the cases where
 a re-run does not converge or where you need to finish the release
 without GitHub Actions.
 
+## Important: re-run is a no-op after `Push to master`
+
+The `Check for changesets` step at the top of the `release` job exits
+the whole job cleanly when `.changeset/` contains no entries. Once the
+release commit is pushed to master, the changesets are gone from
+origin, so a fresh runner started by "Re-run failed jobs" sees zero
+changesets and **silently skips every downstream step**. This is
+correct behaviour for an unrelated PR merge, but it means a re-run
+after a failure in `Publish to crates.io` (or any later step) does
+not retry the failing step — it returns a green workflow with nothing
+recovered. For those cases, follow the manual fallback in the relevant
+section below. A `workflow_dispatch` recovery trigger is tracked in a
+follow-up card.
+
 ## Step: Push to master
 
 **Symptom:** the workflow finished `Bump version`, `Aggregate changelog`,
@@ -20,9 +34,10 @@ branch protection, force-push race).
 **State on origin:** no release commit, no tag, nothing published.
 
 **Recovery:**
-1. Re-run the failed job from the GitHub Actions UI. The first three
-   steps re-execute against the same workspace and produce the same
-   commit; the push retries.
+1. Re-run the failed job from the GitHub Actions UI. The runner starts
+   from a fresh checkout, but the changesets in `.changeset/` are still
+   present on origin, so bump-version, aggregate-changelog, and commit
+   re-produce the same release commit; the push retries.
 2. If the re-run still fails, the release is not partially shipped, so
    it is safe to revert the merged PR, fix the underlying issue, and
    re-merge.
@@ -50,9 +65,11 @@ hits the same crate twice.
 **State on origin:** release commit and crates.io are at the new
 version; tag may or may not be on origin.
 
-**Recovery:** re-run the failed job. The step guards both the local
-tag creation and the push against an existing tag, so it is safe to
-re-run even if the tag was partially pushed.
+**Recovery:** the tag step guards both the local tag creation and the
+push against an existing tag, so it is safe to re-execute whether the
+tag was created locally only, pushed to origin, or both. Note the
+re-run caveat above — in practice you will need the manual fallback
+below.
 
 If you must finish by hand:
 ```bash
