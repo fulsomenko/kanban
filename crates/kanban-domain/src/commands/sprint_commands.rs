@@ -98,14 +98,14 @@ impl UpdateSprint {
         use crate::field_update::FieldUpdate;
         let sprint = match store.get_sprint(self.sprint_id)? {
             Some(s) => s,
-            None => return Err(KanbanError::not_found("sprint", self.sprint_id)),
+            None => return Err(KanbanError::not_found("Sprint", self.sprint_id)),
         };
 
         // If the forward sets `name`, capture board pool pre-state too.
         let board_restore: Option<Command> = if self.updates.name.is_some() {
             let board = match store.get_board(sprint.board_id)? {
                 Some(b) => b,
-                None => return Err(KanbanError::not_found("board", sprint.board_id)),
+                None => return Err(KanbanError::not_found("Board", sprint.board_id)),
             };
             Some(Command::Board(super::BoardCommand::RestoreSprintPool(
                 super::RestoreSprintPool {
@@ -405,7 +405,7 @@ fn capture_status_revert(store: &dyn DataStore, sprint_id: Uuid) -> KanbanResult
     use crate::field_update::FieldUpdate;
     let sprint = match store.get_sprint(sprint_id)? {
         Some(s) => s,
-        None => return Err(KanbanError::not_found("sprint", sprint_id)),
+        None => return Err(KanbanError::not_found("Sprint", sprint_id)),
     };
     Ok(vec![Command::Sprint(SprintCommand::Update(UpdateSprint {
         sprint_id,
@@ -459,7 +459,7 @@ impl DeleteSprint {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let sprint = match store.get_sprint(self.sprint_id)? {
             Some(s) => s,
-            None => return Err(KanbanError::not_found("sprint", self.sprint_id)),
+            None => return Err(KanbanError::not_found("Sprint", self.sprint_id)),
         };
         let assigned_card_ids: Vec<Uuid> = store
             .list_cards_by_sprint(self.sprint_id)?

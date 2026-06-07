@@ -115,7 +115,7 @@ async fn create_card_with_unknown_sprint_uuid_returns_not_found() {
     assert!(err.is_not_found(), "expected NotFound, got: {err:?}");
     match &err {
         KanbanError::Domain(DomainError::NotFound { entity, id }) => {
-            assert_eq!(*entity, "sprint", "wrong entity tag: {err:?}");
+            assert_eq!(*entity, "Sprint", "wrong entity tag: {err:?}");
             assert_eq!(*id, bogus, "wrong id in NotFound: {err:?}");
         }
         other => panic!("expected NotFound, got: {other:?}"),

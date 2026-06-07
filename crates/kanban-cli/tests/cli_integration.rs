@@ -1888,9 +1888,11 @@ mod card_tests {
     }
 
     /// Negative path: `--assign <random-uuid>` produces an error mentioning
-    /// both "sprint" and the offending UUID. Same surface contract as the
+    /// both "Sprint" and the offending UUID. Same surface contract as the
     /// name case above; the resolver accepts UUIDs first, so this exercises
-    /// a different code path inside `resolve_sprint_id`.
+    /// a different code path inside `resolve_sprint_id`. Post-KAN-659,
+    /// both this test and the name-path sibling assert on the same
+    /// capitalized "Sprint" tag.
     #[test]
     fn test_card_create_with_assign_unknown_uuid_fails_with_useful_error() {
         let dir = tempdir().unwrap();
@@ -1914,7 +1916,7 @@ mod card_tests {
             ])
             .assert()
             .failure()
-            .stderr(predicate::str::contains("sprint"))
+            .stderr(predicate::str::contains("Sprint"))
             .stderr(predicate::str::contains(bogus));
     }
 }

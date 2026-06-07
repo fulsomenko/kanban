@@ -1972,9 +1972,9 @@ mod tests {
     #[test]
     fn err_not_found_maps_to_invalid_params() {
         use rmcp::model::ErrorCode;
-        let err = kanban_err_to_mcp(KanbanError::not_found("board", uuid::Uuid::new_v4()));
+        let err = kanban_err_to_mcp(KanbanError::not_found("Board", uuid::Uuid::new_v4()));
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("board"));
+        assert!(err.message.contains("Board"));
     }
 
     #[test]

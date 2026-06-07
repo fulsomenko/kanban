@@ -83,11 +83,18 @@ pub enum DependencyError {
 
 #[derive(Error, Debug)]
 pub enum DomainError {
+    /// `entity` is rendered as a sentence-leading noun (e.g. `"Card"`,
+    /// `"Sprint"`). All call sites of `KanbanError::not_found(entity, id)`
+    /// must pass a capitalized noun so the rendered message reads
+    /// `"Card <uuid> not found"`, matching the sibling `NotFoundByName`
+    /// convention. See KAN-659 for the normalization history.
     #[error("{entity} {id} not found")]
     NotFound { entity: &'static str, id: Uuid },
 
     /// Returned when a name- or identifier-based lookup misses. The `available`
     /// vector is appended to the message so users see what they could have typed.
+    /// `entity` follows the same capitalized-noun convention as
+    /// [`NotFound`](Self::NotFound).
     #[error("{}", DomainError::fmt_not_found_by_name(entity, name, available))]
     NotFoundByName {
         entity: &'static str,
@@ -372,7 +379,7 @@ mod tests {
 
     #[test]
     fn test_is_not_found_returns_true_for_card_not_found() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(err.is_not_found());
     }
 
@@ -408,13 +415,13 @@ mod tests {
 
     #[test]
     fn test_is_self_reference_returns_false_for_other_error() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(!err.is_self_reference());
     }
 
     #[test]
     fn test_is_edge_not_found_returns_false_for_other_error() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(!err.is_edge_not_found());
     }
 
@@ -485,7 +492,7 @@ mod tests {
 
     #[test]
     fn test_is_unsupported_future_version_returns_false_for_other_error() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(!err.is_unsupported_future_version());
     }
 
@@ -728,7 +735,7 @@ mod tests {
 
     #[test]
     fn test_is_not_found_true_for_uuid_variant_too() {
-        let err = KanbanError::not_found("card", Uuid::new_v4());
+        let err = KanbanError::not_found("Card", Uuid::new_v4());
         assert!(err.is_not_found(), "umbrella predicate covers Uuid variant");
         assert!(!err.is_not_found_by_name());
     }
@@ -736,9 +743,9 @@ mod tests {
     #[test]
     fn test_not_found_display_includes_entity_and_id() {
         let id = Uuid::new_v4();
-        let err = KanbanError::not_found("card", id);
+        let err = KanbanError::not_found("Card", id);
         let msg = err.to_string();
-        assert!(msg.contains("card"));
+        assert!(msg.contains("Card"));
         assert!(msg.contains(&id.to_string()));
     }
 

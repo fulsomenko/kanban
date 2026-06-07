@@ -161,7 +161,7 @@ impl UpdateBoard {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Err(KanbanError::not_found("board", self.board_id)),
+            None => return Err(KanbanError::not_found("Board", self.board_id)),
         };
         let upd = &self.updates;
         let inverse = crate::BoardUpdate {
@@ -244,7 +244,7 @@ impl SetBoardTaskSort {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Err(KanbanError::not_found("board", self.board_id)),
+            None => return Err(KanbanError::not_found("Board", self.board_id)),
         };
         Ok(vec![Command::Board(BoardCommand::SetTaskSort(
             SetBoardTaskSort {
@@ -279,7 +279,7 @@ impl SetBoardTaskListView {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Err(KanbanError::not_found("board", self.board_id)),
+            None => return Err(KanbanError::not_found("Board", self.board_id)),
         };
         Ok(vec![Command::Board(BoardCommand::SetTaskListView(
             SetBoardTaskListView {
@@ -316,7 +316,7 @@ impl DeleteBoard {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Err(KanbanError::not_found("board", self.board_id)),
+            None => return Err(KanbanError::not_found("Board", self.board_id)),
         };
         Ok(vec![Command::Board(BoardCommand::Import(ImportEntities {
             boards: vec![board],
@@ -351,7 +351,7 @@ impl ApplyBoardSettings {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let board = match store.get_board(self.board_id)? {
             Some(b) => b,
-            None => return Err(KanbanError::not_found("board", self.board_id)),
+            None => return Err(KanbanError::not_found("Board", self.board_id)),
         };
         let prior_dto = crate::editable::BoardSettingsDto::from_entity(&board);
         Ok(vec![Command::Board(BoardCommand::ApplySettings(
