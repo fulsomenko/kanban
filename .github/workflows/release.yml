@@ -115,9 +115,19 @@ jobs:
         if: steps.check.outputs.has_changesets == 'true'
         env:
           GIT_SSH_COMMAND: "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+          TAG: v${{ steps.release.outputs.new }}
         run: |
-          git tag "v${{ steps.release.outputs.new }}"
-          git push origin "v${{ steps.release.outputs.new }}"
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally, skipping git tag"
+          else
+            git tag "$TAG"
+          fi
+          if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin, skipping git push"
+          else
+            git push origin "$TAG"
+          fi
 
       - name: Create GitHub Release
         if: steps.check.outputs.has_changesets == 'true'
