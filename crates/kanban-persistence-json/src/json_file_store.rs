@@ -86,17 +86,12 @@ impl JsonEnvelope {
 
 /// Synchronous V*→V7 migration chain used by [`JsonFileStore::load_sync`].
 ///
-/// Asymmetry vs the async `Migrator::migrate` orchestrator: this chain does
-/// **not** create a `.v{N}.backup` around the shape-changing steps
-/// (`split_graph_sync`, `v6_to_v7_rename_sync`). Only the V1→V2 step writes
-/// a backup (in `migrate_v1_to_v2_sync`); the later steps overwrite the
-/// file atomically without one. A mid-chain crash therefore leaves the
-/// file in whatever intermediate state the last successful step produced,
-/// and the user would need an external backup to roll back.
-///
-/// Closing this gap requires a shared backup helper that both the sync
-/// and async chains can call; it's deferred rather than open-coded here
-/// to avoid duplicating the orchestrator logic.
+/// Mirrors the async `Migrator::migrate` orchestrator's `.v{N}.backup`
+/// behaviour: for V3/V4/V5/V6 sources a backup of the original file is
+/// written before the shape-changing chain runs. On success the backup
+/// is removed; on failure it is preserved so the user can roll back.
+/// V1→V2 manages its own backup inside `migrate_v1_to_v2_sync`; V2→V3
+/// is shape-stable and needs none.
 fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
     if from == FormatVersion::V1 {
         migrate_v1_to_v2_sync(path)?;
@@ -104,10 +99,64 @@ fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec
     if from <= FormatVersion::V2 {
         migrate_v2_to_v3_sync(path)?;
     }
-    if from < FormatVersion::V6 {
-        split_graph_sync(path)?;
+
+    // Backup-and-cleanup wrap around the shape-changing steps
+    // (split_graph_sync and/or v6_to_v7_rename_sync). Identical in shape
+    // to the async orchestrator in `Migrator::migrate`.
+    let backup_path = pre_v7_backup_path_for_sync(from, path);
+    if let Some(backup) = &backup_path {
+        std::fs::copy(path, backup)?;
+        tracing::info!("Created pre-V7 backup at {} (sync)", backup.display());
     }
-    v6_to_v7_rename_sync(path)
+
+    let result: PersistenceResult<Vec<u8>> = (|| {
+        if from < FormatVersion::V6 {
+            split_graph_sync(path)?;
+        }
+        v6_to_v7_rename_sync(path)
+    })();
+
+    match (result, backup_path) {
+        (Ok(bytes), Some(backup)) => {
+            if let Err(e) = std::fs::remove_file(&backup) {
+                tracing::warn!(
+                    "Sync migration successful but failed to remove backup at {}: {}",
+                    backup.display(),
+                    e
+                );
+            } else {
+                tracing::info!("Sync migration to V7 verified, backup removed");
+            }
+            Ok(bytes)
+        }
+        (Ok(bytes), None) => Ok(bytes),
+        (Err(e), Some(backup)) => {
+            tracing::error!(
+                "Sync migration to V7 failed: {}. Backup preserved at {}",
+                e,
+                backup.display()
+            );
+            Err(e)
+        }
+        (Err(e), None) => Err(e),
+    }
+}
+
+/// Sync sibling of the async backup-path policy. Returns
+/// `Some(path.vN.backup)` for V3/V4/V5/V6 source versions where the
+/// shape-changing chain runs; `None` for V1/V2 which manage their own
+/// backups inside their per-step functions.
+///
+/// Temporary inline duplicate — the refactor in the next commit
+/// extracts this and its async equivalent to `migration/backup.rs`.
+fn pre_v7_backup_path_for_sync(from: FormatVersion, path: &Path) -> Option<PathBuf> {
+    match from {
+        FormatVersion::V3 => Some(path.with_extension("v3.backup")),
+        FormatVersion::V4 => Some(path.with_extension("v4.backup")),
+        FormatVersion::V5 => Some(path.with_extension("v5.backup")),
+        FormatVersion::V6 => Some(path.with_extension("v6.backup")),
+        _ => None,
+    }
 }
 
 fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
@@ -1033,6 +1082,193 @@ mod tests {
         assert!(
             !tmp_path.exists(),
             ".tmp must not remain after successful migration"
+        );
+    }
+
+    /// KAN-650: the sync migration path must mirror the async orchestrator's
+    /// `.v{N}.backup` behaviour. A V6 file with both `parent_child` AND
+    /// `spawns` buckets is the canonical mid-V6 failure case (the v6→v7
+    /// rename refuses it). Without a pre-chain backup, the user has nothing
+    /// to roll back to. With one, the broken envelope on disk plus the
+    /// `.v6.backup` together reconstruct the original state.
+    #[test]
+    fn test_load_sync_v6_to_v7_preserves_v6_backup_on_failure() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v6_ambiguous_sync.json");
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [{
+                        "source": "11111111-1111-1111-1111-111111111111",
+                        "target": "22222222-2222-2222-2222-222222222222",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "spawns": { "edges": [{
+                        "source": "33333333-3333-3333-3333-333333333333",
+                        "target": "44444444-4444-4444-4444-444444444444",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "archived_at": null
+                    }]},
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v6).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let err = store
+            .load_sync()
+            .expect_err("load_sync must refuse a V6 envelope carrying both bucket keys");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("parent_child") && msg.contains("spawns"),
+            "diagnostic should name both colliding keys; got: {msg}"
+        );
+
+        assert!(
+            path.with_extension("v6.backup").exists(),
+            ".v6.backup must be preserved when the V6→V7 sync step fails so the user can recover"
+        );
+    }
+
+    /// KAN-650: successful V6→V7 sync migration must clean up its
+    /// `.v6.backup` once the chain completes. Mirrors the async
+    /// `test_migrate_v6_to_v7_renames_parent_child_and_writes_backup`
+    /// assertion that the backup is removed on success.
+    #[test]
+    fn test_load_sync_v6_to_v7_cleans_up_v6_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v6_clean_sync.json");
+        let v6 = json!({
+            "version": 6,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": {
+                    "parent_child": { "edges": [] },
+                    "blocks": { "edges": [] },
+                    "relates": { "edges": [] }
+                }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v6).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v6.backup").exists(),
+            ".v6.backup must be removed after successful V6→V7 sync migration"
+        );
+    }
+
+    /// KAN-650: V5 files go through split_graph then v6→v7. The backup
+    /// keyed to the *source* version is `.v5.backup`, written before
+    /// the destructive chain runs and removed on success.
+    #[test]
+    fn test_load_sync_v5_to_v7_cleans_up_v5_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v5_clean_sync.json");
+        let v5 = json!({
+            "version": 5,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v5).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v5.backup").exists(),
+            ".v5.backup must be removed after successful V5→V7 sync migration"
+        );
+    }
+
+    /// KAN-650: V4 backup keyed to the source version.
+    #[test]
+    fn test_load_sync_v4_to_v7_cleans_up_v4_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v4_clean_sync.json");
+        let v4 = json!({
+            "version": 4,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v4).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v4.backup").exists(),
+            ".v4.backup must be removed after successful V4→V7 sync migration"
+        );
+    }
+
+    /// KAN-650: V3 backup keyed to the source version.
+    #[test]
+    fn test_load_sync_v3_to_v7_cleans_up_v3_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v3_clean_sync.json");
+        let v3 = json!({
+            "version": 3,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": [],
+                "graph": { "cards": { "edges": [] } }
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v3).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v3.backup").exists(),
+            ".v3.backup must be removed after successful V3→V7 sync migration"
         );
     }
 }
