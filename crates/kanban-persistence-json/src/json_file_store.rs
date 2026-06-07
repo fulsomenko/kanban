@@ -102,8 +102,9 @@ fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec
 
     // Backup-and-cleanup wrap around the shape-changing steps
     // (split_graph_sync and/or v6_to_v7_rename_sync). Identical in shape
-    // to the async orchestrator in `Migrator::migrate`.
-    let backup_path = pre_v7_backup_path_for_sync(from, path);
+    // to the async orchestrator in `Migrator::migrate`; both call sites
+    // share the source-version → backup-path policy in `migration::backup`.
+    let backup_path = crate::migration::pre_v7_backup_path_for(from, path);
     if let Some(backup) = &backup_path {
         std::fs::copy(path, backup)?;
         tracing::info!("Created pre-V7 backup at {} (sync)", backup.display());
@@ -139,23 +140,6 @@ fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec
             Err(e)
         }
         (Err(e), None) => Err(e),
-    }
-}
-
-/// Sync sibling of the async backup-path policy. Returns
-/// `Some(path.vN.backup)` for V3/V4/V5/V6 source versions where the
-/// shape-changing chain runs; `None` for V1/V2 which manage their own
-/// backups inside their per-step functions.
-///
-/// Temporary inline duplicate — the refactor in the next commit
-/// extracts this and its async equivalent to `migration/backup.rs`.
-fn pre_v7_backup_path_for_sync(from: FormatVersion, path: &Path) -> Option<PathBuf> {
-    match from {
-        FormatVersion::V3 => Some(path.with_extension("v3.backup")),
-        FormatVersion::V4 => Some(path.with_extension("v4.backup")),
-        FormatVersion::V5 => Some(path.with_extension("v5.backup")),
-        FormatVersion::V6 => Some(path.with_extension("v6.backup")),
-        _ => None,
     }
 }
 

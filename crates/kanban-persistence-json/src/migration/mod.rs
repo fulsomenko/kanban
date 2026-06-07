@@ -1,9 +1,11 @@
+pub(crate) mod backup;
 pub mod migrator;
 pub mod split_graph;
 pub mod v1_to_v2;
 pub mod v2_to_v3;
 pub mod v6_to_v7_rename;
 
+pub(crate) use backup::pre_v7_backup_path_for;
 pub use migrator::Migrator;
 pub(crate) use split_graph::transform_to_v6_split_graph_value;
 pub use v1_to_v2::V1ToV2Migration;

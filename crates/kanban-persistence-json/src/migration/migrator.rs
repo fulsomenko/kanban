@@ -82,14 +82,10 @@ impl Migrator {
                 // A `.v{N}.backup` is created before the shape-changing step
                 // and removed on successful migration. V7 files cannot be
                 // opened by pre-V7 binaries, so this is the user's escape
-                // hatch if the upgrade has to be rolled back.
-                let backup_path = match from {
-                    FormatVersion::V3 => Some(path.with_extension("v3.backup")),
-                    FormatVersion::V4 => Some(path.with_extension("v4.backup")),
-                    FormatVersion::V5 => Some(path.with_extension("v5.backup")),
-                    FormatVersion::V6 => Some(path.with_extension("v6.backup")),
-                    _ => None,
-                };
+                // hatch if the upgrade has to be rolled back. The
+                // source-version → backup-path policy is shared with the
+                // sync orchestrator in `json_file_store::migrate_to_v7_sync`.
+                let backup_path = super::pre_v7_backup_path_for(from, path);
                 if let Some(backup) = &backup_path {
                     tokio::fs::copy(path, backup).await?;
                     tracing::info!("Created pre-V7 backup at {}", backup.display());
