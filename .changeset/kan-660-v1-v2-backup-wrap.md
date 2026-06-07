@@ -15,7 +15,17 @@ V2 files had no backup at all. Both gaps are now closed: the outer
 backup is taken before the first per-step migration runs and is removed
 only after the full V→V7 chain succeeds.
 
-No API or message changes for library consumers. Users opening a V1 or
-V2 file with kanban 0.7.x+ will now see a `.v1.backup` or `.v2.backup`
-preserved on disk if a mid-chain step fails, mirroring the V3..V6
-behaviour.
+Users opening a V1 or V2 file with kanban 0.7.x+ via any normal entry
+point (CLI command, MCP tool call, TUI startup) will now see a
+`.v1.backup` or `.v2.backup` preserved on disk if a mid-chain step
+fails, mirroring the V3..V6 behaviour.
+
+One subtle behaviour change for direct library consumers of the
+`kanban-persistence-json` crate: invoking `Migrator::migrate(V1, V2,
+path)` or the `V1ToV2Migration` strategy wrapper as a standalone
+*V1→V2* step (not chained through to V7) no longer writes its own
+`.v1.backup`. The per-step backup mechanism was removed in favour of
+the outer V→V7 wrap, which doesn't fire for the standalone case.
+Library consumers wanting backup protection should use
+`Migrator::migrate(V1, V7, path)` instead, which provides the outer
+wrap that covers the entire chain. No in-repo callers were affected.
