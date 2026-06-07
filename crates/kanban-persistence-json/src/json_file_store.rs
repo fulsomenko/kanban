@@ -88,20 +88,26 @@ impl JsonEnvelope {
 /// See [`migration::backup`] for the backup-path policy shared with the
 /// async [`Migrator::migrate`] orchestrator.
 fn migrate_to_v7_sync(from: FormatVersion, path: &Path) -> PersistenceResult<Vec<u8>> {
-    if from == FormatVersion::V1 {
-        migrate_v1_to_v2_sync(path)?;
-    }
-    if from <= FormatVersion::V2 {
-        migrate_v2_to_v3_sync(path)?;
-    }
-
+    // Take the outer backup BEFORE any per-step migration runs. The chain
+    // (V1→V2, V2→V3, split_graph, v6_to_v7_rename) overwrites the file in
+    // place at each step; without this outer backup a mid-chain failure
+    // would leave the user with a partially-transformed file and no
+    // rollback artifact. The backup is removed only on full V→V7 success.
     let backup_path = crate::migration::pre_v7_backup_path_for(from, path);
     if let Some(backup) = &backup_path {
         std::fs::copy(path, backup)?;
         tracing::info!("Created pre-V7 backup at {}", backup.display());
     }
 
-    let result = run_split_and_rename_chain_sync(from, path);
+    let result = (|| -> PersistenceResult<Vec<u8>> {
+        if from == FormatVersion::V1 {
+            migrate_v1_to_v2_sync(path)?;
+        }
+        if from <= FormatVersion::V2 {
+            migrate_v2_to_v3_sync(path)?;
+        }
+        run_split_and_rename_chain_sync(from, path)
+    })();
 
     match (result, backup_path) {
         (Ok(bytes), Some(backup)) => {
@@ -140,18 +146,17 @@ fn run_split_and_rename_chain_sync(from: FormatVersion, path: &Path) -> Persiste
 }
 
 fn migrate_v1_to_v2_sync(path: &Path) -> PersistenceResult<Vec<u8>> {
+    // Per-step backup removed: the outer migrate_to_v7_sync wrap owns the
+    // .v1.backup now and keeps it for the entire chain, not just this step.
     let content = std::fs::read_to_string(path)?;
     let v1_data: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
-    let backup_path = path.with_extension("v1.backup");
-    std::fs::copy(path, &backup_path)?;
     let v2_envelope = JsonEnvelope::new(v1_data);
     let json_str = v2_envelope
         .to_json_string()
         .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
     let json_bytes = json_str.into_bytes();
     AtomicWriter::write_atomic_sync(path, &json_bytes)?;
-    let _ = std::fs::remove_file(&backup_path);
     tracing::info!("Migrated {} from V1 to V2 (sync)", path.display());
     Ok(json_bytes)
 }
@@ -1249,6 +1254,73 @@ mod tests {
         assert!(
             !path.with_extension("v3.backup").exists(),
             ".v3.backup must be removed after successful V3→V7 sync migration"
+        );
+    }
+
+    /// KAN-660: V2 sources are now covered by the outer pre-V7 backup wrap.
+    /// The wrap takes the backup BEFORE migrate_v2_to_v3_sync runs, so the
+    /// V2 original is captured. On successful V2→V7 the wrap cleans it up.
+    /// (No paired failure-preservation test for V2: the V2 envelope shape
+    /// can't cleanly inject the V6 both-keys ambiguity that drives the
+    /// existing V6 failure test, and the outer-wrap failure-handling code
+    /// path is the same `match (result, backup_path)` block already
+    /// exercised by `test_load_sync_v6_to_v7_preserves_v6_backup_on_failure`.)
+    #[test]
+    fn test_load_sync_v2_to_v7_cleans_up_v2_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v2_clean_sync.json");
+        let v2 = json!({
+            "version": 2,
+            "metadata": {
+                "instance_id": "550e8400-e29b-41d4-a716-446655440000",
+                "saved_at": "2024-01-01T00:00:00Z"
+            },
+            "data": {
+                "boards": [], "columns": [], "cards": [], "archived_cards": [], "sprints": []
+            }
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&v2).unwrap()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v2.backup").exists(),
+            ".v2.backup must be removed after successful V2→V7 sync migration"
+        );
+    }
+
+    /// KAN-660: V1 sources are now covered by the outer pre-V7 backup wrap.
+    /// The .v1.backup is taken BEFORE migrate_v1_to_v2_sync runs and only
+    /// cleaned up after the entire V1→V7 chain succeeds — not after the
+    /// V1→V2 step like the pre-KAN-660 per-step mechanism did. This means
+    /// a mid-chain failure (e.g. during split_graph or v6_to_v7_rename)
+    /// preserves the V1 original instead of losing it after V1→V2.
+    #[test]
+    fn test_load_sync_v1_to_v7_cleans_up_v1_backup_on_success() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("v1_clean_sync.json");
+        let v1 = json!({
+            "boards": [],
+            "columns": [],
+            "cards": []
+        });
+        std::fs::write(&path, v1.to_string()).unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let _ = store.load_sync().unwrap().expect("file exists");
+
+        let after: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(after["version"], 7);
+
+        assert!(
+            !path.with_extension("v1.backup").exists(),
+            ".v1.backup must be removed after successful V1→V7 sync migration"
         );
     }
 }
