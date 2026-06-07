@@ -137,7 +137,7 @@ impl UpdateCard {
         use crate::field_update::FieldUpdate;
         let card = match store.get_card(self.card_id)? {
             Some(c) => c,
-            None => return Err(KanbanError::not_found("card", self.card_id)),
+            None => return Err(KanbanError::not_found("Card", self.card_id)),
         };
 
         let upd = &self.updates;
@@ -319,7 +319,7 @@ impl MoveCard {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let card = match store.get_card(self.card_id)? {
             Some(c) => c,
-            None => return Err(KanbanError::not_found("card", self.card_id)),
+            None => return Err(KanbanError::not_found("Card", self.card_id)),
         };
         Ok(vec![Command::Card(CardCommand::Move(MoveCard {
             card_id: self.card_id,
@@ -410,7 +410,7 @@ impl DeleteCard {
         let live = store.get_card(self.card_id)?;
         let archived = store.get_archived_card(self.card_id)?;
         if live.is_none() && archived.is_none() {
-            return Err(KanbanError::not_found("card", self.card_id));
+            return Err(KanbanError::not_found("Card", self.card_id));
         }
         let mut commands: Vec<Command> = vec![Command::Board(super::BoardCommand::Import(
             super::ImportEntities {
@@ -467,7 +467,7 @@ impl ArchiveCards {
             let card = context
                 .store
                 .get_card(*id)?
-                .ok_or_else(|| KanbanError::not_found("card", *id))?;
+                .ok_or_else(|| KanbanError::not_found("Card", *id))?;
             let original_column_id = card.column_id;
             let original_position = card.position;
             let archived = crate::ArchivedCard::new(card, original_column_id, original_position);
@@ -594,7 +594,7 @@ impl UnassignCardFromSprint {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let card = match store.get_card(self.card_id)? {
             Some(c) => c,
-            None => return Err(KanbanError::not_found("card", self.card_id)),
+            None => return Err(KanbanError::not_found("Card", self.card_id)),
         };
         if card.sprint_id.is_none() {
             return Ok(vec![]);
@@ -638,7 +638,7 @@ impl ApplyCardMetadata {
         use crate::field_update::FieldUpdate;
         let card = match store.get_card(self.card_id)? {
             Some(c) => c,
-            None => return Err(KanbanError::not_found("card", self.card_id)),
+            None => return Err(KanbanError::not_found("Card", self.card_id)),
         };
         let updates = CardUpdate {
             // priority / status are always written by apply_to (when the

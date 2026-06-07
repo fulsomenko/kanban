@@ -80,25 +80,25 @@ impl<'a> CommandContext<'a> {
     pub fn get_board(&self, id: Uuid) -> KanbanResult<crate::Board> {
         self.store
             .get_board(id)?
-            .ok_or_else(|| KanbanError::not_found("board", id))
+            .ok_or_else(|| KanbanError::not_found("Board", id))
     }
 
     pub fn get_card(&self, id: Uuid) -> KanbanResult<crate::Card> {
         self.store
             .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     pub fn get_column(&self, id: Uuid) -> KanbanResult<crate::Column> {
         self.store
             .get_column(id)?
-            .ok_or_else(|| KanbanError::not_found("column", id))
+            .ok_or_else(|| KanbanError::not_found("Column", id))
     }
 
     pub fn get_sprint(&self, id: Uuid) -> KanbanResult<crate::Sprint> {
         self.store
             .get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     pub fn filter_valid_card_ids(&self, ids: &[Uuid], command_name: &str) -> Vec<Uuid> {

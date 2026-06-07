@@ -68,7 +68,7 @@ impl UpdateColumn {
             Some(c) => c,
             // The column doesn't exist — execute() will fail with NotFound
             // and rollback will take over. No inverse to capture.
-            None => return Err(KanbanError::not_found("column", self.column_id)),
+            None => return Err(KanbanError::not_found("Column", self.column_id)),
         };
 
         let inverse_updates = ColumnUpdate {
@@ -133,7 +133,7 @@ impl DeleteColumn {
     pub fn capture_inverse(&self, store: &dyn DataStore) -> KanbanResult<Vec<Command>> {
         let column = match store.get_column(self.column_id)? {
             Some(c) => c,
-            None => return Err(KanbanError::not_found("column", self.column_id)),
+            None => return Err(KanbanError::not_found("Column", self.column_id)),
         };
         let mut commands = vec![Command::Column(ColumnCommand::Create(CreateColumn {
             id: column.id,

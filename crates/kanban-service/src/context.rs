@@ -352,7 +352,7 @@ impl KanbanContext {
             } else {
                 failed.push(BatchOperationFailure {
                     id,
-                    error: KanbanError::not_found("card", id).to_string(),
+                    error: KanbanError::not_found("Card", id).to_string(),
                 });
             }
         }
@@ -396,7 +396,7 @@ impl KanbanContext {
                 Ok(Some(_)) => to_move.push(id),
                 Ok(None) => failed.push(BatchOperationFailure {
                     id,
-                    error: KanbanError::not_found("card", id).to_string(),
+                    error: KanbanError::not_found("Card", id).to_string(),
                 }),
                 Err(e) => failed.push(BatchOperationFailure {
                     id,
@@ -490,7 +490,7 @@ impl KanbanContext {
                     .into_iter()
                     .map(|id| BatchOperationFailure {
                         id,
-                        error: KanbanError::not_found("sprint", sprint_id).to_string(),
+                        error: KanbanError::not_found("Sprint", sprint_id).to_string(),
                     })
                     .collect(),
             };
@@ -519,7 +519,7 @@ impl KanbanContext {
             } else {
                 failed.push(BatchOperationFailure {
                     id,
-                    error: KanbanError::not_found("card", id).to_string(),
+                    error: KanbanError::not_found("Card", id).to_string(),
                 });
             }
         }
@@ -625,7 +625,7 @@ impl KanbanContext {
 
         for &id in ids {
             if self.backend.get_card(id)?.is_none() {
-                return Err(KanbanError::not_found("card", id));
+                return Err(KanbanError::not_found("Card", id));
             }
         }
 
@@ -633,7 +633,7 @@ impl KanbanContext {
         let column = self
             .backend
             .get_column(column_id)?
-            .ok_or_else(|| KanbanError::not_found("column", column_id))?;
+            .ok_or_else(|| KanbanError::not_found("Column", column_id))?;
 
         if let Some(limit) = column.wip_limit {
             // `moving_set.len()` is the post-dedup mover count — `compute_move_positions`
@@ -765,7 +765,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_board(id)?
-            .ok_or_else(|| KanbanError::not_found("board", id))
+            .ok_or_else(|| KanbanError::not_found("Board", id))
     }
 
     fn delete_board(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -813,7 +813,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_column(id)?
-            .ok_or_else(|| KanbanError::not_found("column", id))
+            .ok_or_else(|| KanbanError::not_found("Column", id))
     }
 
     fn delete_column(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -898,7 +898,7 @@ impl KanbanOperations for KanbanContext {
     fn update_card(&mut self, id: Uuid, updates: CardUpdate) -> KanbanResult<Card> {
         self.update_cards(vec![(id, updates)])?;
         self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     fn move_card(
@@ -930,13 +930,13 @@ impl KanbanOperations for KanbanContext {
 
         self.execute(batch)?;
         self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     fn archive_card(&mut self, id: Uuid) -> KanbanResult<()> {
         match self.archive_cards(vec![id]) {
             Ok(0) | Err(KanbanError::Domain(kanban_domain::DomainError::Validation(_))) => {
-                Err(KanbanError::not_found("card", id))
+                Err(KanbanError::not_found("Card", id))
             }
             Ok(_) => Ok(()),
             Err(e) => Err(e),
@@ -952,7 +952,7 @@ impl KanbanOperations for KanbanContext {
 
         let target_column = if let Some(col_id) = column_id {
             if self.backend.get_column(col_id)?.is_none() {
-                return Err(KanbanError::not_found("column", col_id));
+                return Err(KanbanError::not_found("Column", col_id));
             }
             col_id
         } else if self
@@ -974,7 +974,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))
+            .ok_or_else(|| KanbanError::not_found("Card", id))
     }
 
     fn delete_card(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -990,7 +990,7 @@ impl KanbanOperations for KanbanContext {
     fn assign_card_to_sprint(&mut self, card_id: Uuid, sprint_id: Uuid) -> KanbanResult<Card> {
         self.assign_cards_to_sprint(vec![card_id], sprint_id)?;
         self.get_card(card_id)?
-            .ok_or_else(|| KanbanError::not_found("card", card_id))
+            .ok_or_else(|| KanbanError::not_found("Card", card_id))
     }
 
     fn unassign_card_from_sprint(&mut self, card_id: Uuid) -> KanbanResult<Card> {
@@ -1001,21 +1001,21 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_card(card_id)?
-            .ok_or_else(|| KanbanError::not_found("card", card_id))
+            .ok_or_else(|| KanbanError::not_found("Card", card_id))
     }
 
     fn get_card_branch_name(&self, id: Uuid) -> KanbanResult<String> {
         let card = self
             .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))?;
+            .ok_or_else(|| KanbanError::not_found("Card", id))?;
         let column = self
             .backend
             .get_column(card.column_id)?
-            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
+            .ok_or_else(|| KanbanError::not_found("Column", card.column_id))?;
         let board = self
             .backend
             .get_board(column.board_id)?
-            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
+            .ok_or_else(|| KanbanError::not_found("Board", column.board_id))?;
         let sprints = self.backend.list_all_sprints()?;
         Ok(card.branch_name(
             &board,
@@ -1027,15 +1027,15 @@ impl KanbanOperations for KanbanContext {
     fn get_card_git_checkout(&self, id: Uuid) -> KanbanResult<String> {
         let card = self
             .get_card(id)?
-            .ok_or_else(|| KanbanError::not_found("card", id))?;
+            .ok_or_else(|| KanbanError::not_found("Card", id))?;
         let column = self
             .backend
             .get_column(card.column_id)?
-            .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
+            .ok_or_else(|| KanbanError::not_found("Column", card.column_id))?;
         let board = self
             .backend
             .get_board(column.board_id)?
-            .ok_or_else(|| KanbanError::not_found("board", column.board_id))?;
+            .ok_or_else(|| KanbanError::not_found("Board", column.board_id))?;
         let sprints = self.backend.list_all_sprints()?;
         Ok(card.git_checkout_command(
             &board,
@@ -1146,7 +1146,7 @@ impl KanbanOperations for KanbanContext {
 
         let from_sprint = self
             .get_sprint(from_sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", from_sprint_id))?;
+            .ok_or_else(|| KanbanError::not_found("Sprint", from_sprint_id))?;
         if from_sprint.status != kanban_domain::SprintStatus::Completed
             && from_sprint.status != kanban_domain::SprintStatus::Cancelled
         {
@@ -1157,7 +1157,7 @@ impl KanbanOperations for KanbanContext {
         }
         let to_sprint = self
             .get_sprint(to_sprint_id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", to_sprint_id))?;
+            .ok_or_else(|| KanbanError::not_found("Sprint", to_sprint_id))?;
         if to_sprint.status != kanban_domain::SprintStatus::Planning {
             return Err(KanbanError::validation(format!(
                 "Target sprint must be Planning, got {:?}",
@@ -1217,7 +1217,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn activate_sprint(&mut self, id: Uuid, duration_days: Option<i32>) -> KanbanResult<Sprint> {
@@ -1229,7 +1229,7 @@ impl KanbanOperations for KanbanContext {
         }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn complete_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
@@ -1237,7 +1237,7 @@ impl KanbanOperations for KanbanContext {
         let cmd = Command::Sprint(SprintCommand::Complete(CompleteSprint { sprint_id: id }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn cancel_sprint(&mut self, id: Uuid) -> KanbanResult<Sprint> {
@@ -1245,7 +1245,7 @@ impl KanbanOperations for KanbanContext {
         let cmd = Command::Sprint(SprintCommand::Cancel(CancelSprint { sprint_id: id }));
         self.execute(vec![cmd])?;
         self.get_sprint(id)?
-            .ok_or_else(|| KanbanError::not_found("sprint", id))
+            .ok_or_else(|| KanbanError::not_found("Sprint", id))
     }
 
     fn delete_sprint(&mut self, id: Uuid) -> KanbanResult<()> {
@@ -1356,7 +1356,7 @@ impl KanbanContext {
     fn require_card_exists(&self, id: Uuid) -> KanbanResult<()> {
         match self.backend.get_card(id)? {
             Some(_) => Ok(()),
-            None => Err(KanbanError::not_found("card", id)),
+            None => Err(KanbanError::not_found("Card", id)),
         }
     }
 }

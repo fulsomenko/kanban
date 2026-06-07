@@ -239,7 +239,7 @@ pub trait KanbanOperations {
         let sprints = self.list_sprints(board_id)?;
         let board = self
             .get_board(board_id)?
-            .ok_or_else(|| KanbanError::not_found("board", board_id))?;
+            .ok_or_else(|| KanbanError::not_found("Board", board_id))?;
         let matches = crate::search::find_sprints_by_query_on_board(raw, &sprints, &board);
         match matches.as_slice() {
             [] => {
@@ -409,11 +409,11 @@ pub trait KanbanOperations {
         for cid in card_ids {
             let card = card_index
                 .get(cid)
-                .ok_or_else(|| KanbanError::not_found("card", *cid))?;
+                .ok_or_else(|| KanbanError::not_found("Card", *cid))?;
             let board_id = col_to_board
                 .get(&card.column_id)
                 .copied()
-                .ok_or_else(|| KanbanError::not_found("column", card.column_id))?;
+                .ok_or_else(|| KanbanError::not_found("Column", card.column_id))?;
             if seen.insert(board_id) {
                 found_boards.push(board_id);
             }
