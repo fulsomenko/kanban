@@ -1,3 +1,681 @@
+## [0.7.0] - 2026-06-07 ([#327](https://github.com/fulsomenko/kanban/pull/327))
+
+### KAN-174 Save Error Banner (2026-06-07)
+
+Save errors are now shown to the user in the TUI instead of being
+silently logged. A persistent red banner with a warning icon appears
+between the main view and the footer whenever the save worker fails to
+flush changes to disk (e.g. disk full, permission denied, conflict
+detected). The banner clears automatically once a subsequent save
+succeeds.
+
+### KAN-175 Data Integrity Tests (2026-06-07)
+
+Importing a board now validates that every card references a column
+that exists in either the imported snapshot or the current store.
+Previously a snapshot with dangling column references would import
+partially and leave the board in a broken state. The import now returns
+a validation error and writes nothing if any card has an invalid
+`column_id`.
+
+### KAN-191 Pure Command Replay Undo Redo (2026-06-07)
+
+Undo and redo are now implemented as **inverse-command CRUD operations**
+against current state — no more whole-board snapshot clones held in
+RAM, no more wipe-and-replay when you press `u`.
+**Unlimited undo within a session.** The previous 200-step cap is gone.
+Undo can rewind through every change you've made since opening the
+file, whether that's 5 edits or 5,000.
+**Lower memory and CPU during heavy editing.** Each undo step now costs
+the size of the commands that produced it (a few hundred bytes) instead
+of a full clone of the entire board state. Sessions no longer
+accumulate snapshot copies in RAM. The pre-execute snapshot that used
+to run before every command — even for safe operations — is gone too.
+Snapshots are only used as a rollback fallback if a batch fails
+partway through.
+**Failed undos and redos can be retried.** If an undo or redo encounters
+an error (e.g. a validation rule fires on an inverse), the operation
+rolls back cleanly and the undo stack stays where it was — the next
+attempt sees the same entry, instead of skipping over it.
+**Sprint history is no longer bloated by undo cycles.** Previously,
+undoing a "card assigned to sprint" would push a *new* sprint-log
+entry instead of removing the one the forward action added. A user
+repeatedly toggling a sprint assignment could grow a card's
+`sprint_logs` vec indefinitely. Inverses now restore the card's full
+prior state, so sprint history round-trips cleanly.
+**Two stories, properly separated.** The previous design conflated two
+concerns under a single "command store":
+- **UndoStack** lives in memory for the duration of a session and
+  drives `u` / `Ctrl+R`. Closing the app discards it.
+- **CommandLog** is the audit history of every action — what happened,
+  when, by which forward command. Foundation for the upcoming
+  audit-log UI (KAN-36). Currently session-scoped on both backends;
+  the on-disk SQLite table is in the schema but is wired up in a
+  separate follow-up.
+**Cross-session undo is deferred.** The previous attempt at making undo
+survive `close → reopen` shipped an `apply_snapshot(empty) + replay`
+flow that conflicted with treating SQLite as a CRUD store. Cross-
+session undo needs a separate design with conflict invalidation — it
+will return as its own feature once that design lands.
+
+### KAN-249 Audit Domainerror Helpers (2026-06-07)
+
+Removes six public convenience constructors from
+`kanban-domain::DomainError`: `board_not_found`, `card_not_found`,
+`column_not_found`, `sprint_not_found`, `archived_card_not_found`,
+and `tag_not_found`. End-user behaviour, error messages, error
+variants, and matching behaviour (`is_not_found`) are unchanged, but
+direct library consumers of the `kanban-domain` crate must switch to
+`KanbanError::not_found(entity, id)`, which has been the standard
+construction path in the rest of the workspace for some time.
+The still-used `DomainError::wip_limit_exceeded` helper is retained.
+
+### KAN-250 Required Str Sqlite Upserts (2026-06-07)
+
+SQLite upserts for boards, columns, cards, sprint logs, and sprint name
+lists now reject empty strings for `TEXT NOT NULL` fields instead of
+silently writing them. A new `required_str` helper returns an error if
+a required field is blank, preventing corrupted rows that would fail to
+load on next open.
+
+### KAN-402 Add Package Version Badges To Readme (2026-06-07)
+
+The README now shows live version badges for the AUR, nixpkgs, and Homebrew tap packages alongside the existing crates.io and license badges, plus a CI status badge linking to the GitHub Actions workflow. Each badge tracks its package source directly so the README always reflects what is currently available to install.
+
+### KAN-414 Welcome Bug Fixes In Contributing (2026-06-07)
+
+`CONTRIBUTING.md` now lists bug fixes as an explicit area for contribution. Small targeted fixes, crash and regression fixes, and cross-platform fixes for Windows, macOS, and Linux are called out as especially welcome. The previous list only enumerated feature-shaped work, which implicitly framed bug fixes as out of scope.
+
+### KAN-437 Selector Follows Card On Column Move (2026-06-07)
+
+In the kanban (column) view, pressing `h` or `l` to move a card to an
+adjacent column now keeps the card selected after the move. Previously
+the selector stayed on whatever card was previously focused in the
+target column, silently dropping focus on the moved card.
+The same fix applies to the multi-select move path: after moving a
+group of cards with `h`/`l`, the selector follows the first moved card
+into the target column.
+
+### KAN-451 Add Cli Init Subcommand To Decouple Storage Bootstrapping From Board Create (2026-06-07)
+
+Add `kanban init` command for non-interactive board file initialization. Creates a new board file with an optional first board and exits cleanly without opening the TUI. Decouples storage bootstrapping from board creation, enabling scriptable first-time setup and fixing Homebrew formula tests that were hanging in non-TTY environments.
+**Usage:**
+```bash
+kanban init boards.json --board "My Project"  # create file + first board, exit
+kanban init --board "My Project"              # uses KANBAN_FILE or boards.json
+kanban init                                   # creates boards.json with "My Board"
+```
+File path resolution follows the standard chain: positional argument > `KANBAN_FILE` env var > config file `storage_location` > compiled-in default (`boards.json`).
+
+### KAN-457 Mcp Readme Schema Labels And Descriptions (2026-06-07)
+
+The MCP server's README now matches the actual tool schemas. Tool reference tables previously listed `board: UUID`, `column: UUID`, `sprint: UUID`, and a comma-separated `cards: String` for bulk operations, but the implementation has accepted entity names (and sprint numbers, and card identifiers like `KAN-5`) for some time. Param types are now shown as `String` / `Vec<String>`, the three `Get a specific X by ID` rows now read "by UUID or name" or "by UUID, name, or number", and the formerly card-specific "Card Identifiers" section has been generalized to cover boards, columns, sprints, and bulk-cards inputs.
+
+### KAN-465 Publish To Homebrew Via Personal Tap Fulsomenko Homebrew Kanban (2026-06-07)
+
+Release workflow now auto-bumps the Homebrew tap formula on each version bump. The `release.yml` CI job computes the tarball SHA256, clones the `fulsomenko/homebrew-tap` repository, updates the formula's `url` and `sha256` fields, and pushes the changes — no manual intervention required. Updated README and web landing page with Homebrew install instructions.
+
+### KAN-466 Kanban Mcp V Should Include Git Commit Hash (2026-06-07)
+
+`kanban-mcp -V` now includes the git commit hash, matching the output of `kanban -V`:
+```
+kanban-mcp 0.6.0
+commit: 1e2200b91bf854ca7dac456923fb38d903b67d28
+```
+Previously the commit line was missing because the `kanban-mcp` Nix build did not forward the `gitRev` parameter to the compiler environment. The nixpkgs package was already correct.
+
+### KAN-469 Refactor Web Installation (2026-06-07)
+
+Web landing page installation section refactored to collapse five separate install method blocks into a single unified code block. All methods (Cargo, Homebrew, Nix, AUR, from source) are now presented together with inline comments for clarity. Nix installation simplified from multi-step instructions to a single command: `nix run nixpkgs/nixpkgs-unstable#kanban`.
+
+### KAN-480 Remove Redundant Git Mcp Server (2026-06-07)
+
+Remove the `mcp-server-git` Nix package output and its `.mcp.json` entry. MCP-aware editors already provide git through their built-in shell tool, so the wrapper added no capability and only contributed permission-prompt noise plus a `nix run` startup cost per session. The `fulsomenko/servers` flake input, which existed solely to provide this package, is dropped as well.
+
+### KAN-482 Kanban Init No Implicit My Board (2026-06-07)
+
+`kanban init` (no flag) now creates only the storage file, with no boards, columns, sprints, or cards. The implicit "My Board" board that was previously created is gone.
+Use `kanban init --board "<name>"` for the one-shot file + first board. Anyone who scripted the old default behavior can restore it with `kanban init --board "My Board"`.
+
+### KAN-504 Expose Card Parent Child Via Graph Operations (2026-06-07)
+
+Card parent/child relations are now reachable from the CLI and the MCP server, not only the TUI. A new top-level `kanban relation` subcommand exposes `add`, `remove`, `parents`, and `children`; four matching MCP tools (`tool_set_card_parent`, `tool_remove_card_parent`, `tool_list_card_parents`, `tool_list_card_children`) cover the same surface for LLM clients.
+```
+kanban relation add KAN-5 KAN-7              # KAN-7 is now a subtask of KAN-5
+kanban relation add KAN-5 KAN-7 KAN-8 KAN-9  # attach several children in one atomic batch
+kanban relation children KAN-5               # list direct children
+kanban relation parents KAN-7                # list direct parents
+kanban relation remove KAN-5 KAN-7
+```
+Multi-child invocations are atomic: a mid-list failure (cycle, self-reference, unknown card) rolls the whole batch back so neither the in-memory graph nor the on-disk file ever holds a partial state.
+Under the hood this lands a substantial rework of the graph model. The graph machinery in `kanban-core` is generic in shape; the concrete edge kinds live in `kanban-domain` and carry per-kind metadata directly in their types.
+- **Generic graph machinery.** `EdgeStore<E>`, `DagGraph<E: Edge>`, `UndirectedGraph<E: Edge>` are parameterised over any type that implements the `Edge` trait (`source`, `target`, `created_at`, `archived_at`, `archive`, `unarchive`, plus the `from_endpoints` constructor for cross-kind synthesis). External crates can instantiate the graph types with their own edge structs without modifying `kanban-core`. A small trait taxonomy keeps each capability orthogonal: `Graph` (minimal direction-agnostic edge contract), `Directed: Graph` (outgoing/incoming), `Undirected: Graph` (neighbors), `Cascadable: Graph` (archive/unarchive/remove node), `EdgeSet: Graph` (read-only edge counts and membership). All five are generic over `Graph::NodeId` — the kanban domain uses `Uuid` today, but the algorithms themselves can serve a heterogeneous-entity graph keyed on any `Copy + Eq + Hash` type without touching `kanban-core`. Direction is encoded by the sub-graph type. `EdgeStore::add_edge` is crate-private; the public entry points (`Graph::add_edge`, `DagGraph::add_edge_with_metadata`, `UndirectedGraph::add_edge_with_metadata`) run the relevant invariants before delegating to the storage push. Cycle / self-reference validation also runs at load time on `Deserialize`, so a corrupted file fails to load rather than silently rehydrating an invariant-violating graph.
+- **Per-kind edge structs.** Three concrete types in `kanban_domain::dependencies::edges` each embed an `EdgeBase` (endpoints + timestamps) and add their own metadata:
+  - `SpawnsEdge { base }` — parent/child hierarchy. No metadata today.
+  - `BlocksEdge { base, severity: Severity }` — blocker→blocked. `Severity` is `Low / Medium / High / Critical` with `Default = Medium`, derived `Ord` so algorithms can rank blockers without translating.
+  - `RelatesEdge { base, kind: RelatesKind }` — undirected. `RelatesKind` is `General / Duplicates / MentionedIn` with `Default = General`.
+  Adding a new edge kind means adding a new struct that implements `Edge` and a new sub-graph instantiation — no changes to existing types. The on-disk shape per kind is exactly what the kind needs: no `edge_type` / `direction` / `weight` catch-all fields.
+- **`DependencyGraph` holds three typed sub-graphs.**
+  - `parent_child: DagGraph<SpawnsEdge>` (cycle + self-ref rejected)
+  - `blocks: DagGraph<BlocksEdge>` (cycle + self-ref rejected)
+  - `relates: UndirectedGraph<RelatesEdge>` (self-ref rejected, cycles permitted)
+  Cross-cutting cascades (`archive_node`, `unarchive_node`, `remove_node`) iterate over `[&mut dyn Cascadable; 3]`; cross-cutting reads (`len`, `active_len`, `contains`) iterate over `[&dyn EdgeSet; 3]`. Per-kind convenience methods live on `DependencyGraph`: `set_parent` / `parents` / `children` / `ancestors` / `descendants` (Spawns), `set_block` / `set_block_with_severity` / `unblock` / `blocked` / `blockers` / `can_start` (Blocks), `relate` / `relate_with_kind` / `dissociate` / `related` (Relates). Persistence backends and tests use per-kind accessors (`spawns_edges()` / `blocks_edges()` / `relates_edges()`) and the validating constructor `from_validated_per_kind_edges`. There is no kind-agnostic edge removal; per-kind methods are the only user-facing remove surface so a single-kind handler cannot accidentally sever a multi-kind pair.
+- **Per-kind commands.** `DependencyCommand` has variants `AddSpawns` / `AddBlocks(severity)` / `AddRelates(kind)` / `RemoveSpawns` / `RemoveBlocks` / `RemoveRelates` / `CreateSubcard`. Each carries its kind-specific metadata; undo replay sees the same severity / kind the forward saw. The `Remove*` structs carry a `tolerate_missing: bool` flag (default `false` via `#[serde(default)]`): user-initiated removes surface `EdgeNotFound`, while inverse-replay constructions set the flag so undo succeeds against an already-removed edge. Each `Add*::capture_inverse` emits the matching per-kind tolerant `Remove*` so a `[AddSpawns(a,b), AddBlocks(a,b)]` batch's reverse-order undo handles each forward independently, not as a single kind-agnostic wipe. `RemoveBlocks` / `RemoveRelates` capture metadata at inverse-capture time by reading the pre-remove graph, so undoing a remove restores the original severity/kind. The `Add*` structs symmetrically carry an `as_archived: bool` flag with `#[serde(default)]`: user-initiated paths leave it false (edges land active), while cascade-undo (`DeleteCardEdges` / `DeleteCard`) sets it from `!e.is_active()` per incident edge so archived edges restore as archived instead of silently reviving to active. Three new helpers on `DependencyGraph` (`add_archived_spawns` / `add_archived_blocks` / `add_archived_relates`) provide the typed insertion path; `add_edge_with_metadata` already skips duplicate / cycle checks for archived edges, so these helpers route through the existing infrastructure. A small `edges_to_undo_commands` helper centralises the kind→`Add*` mapping used by the two cross-cutting capture-inverse sites (`DeleteCardEdges`, `DeleteCard`).
+- **`GraphOperations` consolidated on plural primitives.** One canonical method per per-kind operation, using directed-graph verbs for the parent/child surface: `attach_children` / `attach_child` and `detach_children` / `detach_child` (Spawns), `block(severity)` / `unblock` (Blocks), `relate(kind)` / `dissociate` (Relates), plus `list_children_of` / `list_parents_of` / `list_blocked_by` / `list_blockers_of` / `list_related_to`. The plural is the atomic primitive — singular methods are default-impl forwards that wrap a single id in `vec![]` and call the plural, so every mutation routes through the same `KanbanContext::execute(Vec<Command>)` transactional path (this matches the project precedent set by `archive_card` calling `archive_cards(vec![id])`). The earlier shape exposed four near-duplicate ways to add a parent edge with three different argument orderings; the consolidated trait is one shape per operation. No `kind: CardEdgeType` parameter anywhere — the type system expresses what's being mutated. Existence guards on add/remove and the list paths reject unknown card UUIDs symmetrically before the command reaches the graph.
+- **App alignment.** All three apps (TUI / CLI / MCP) route every graph mutation through `GraphOperations` on their respective context wrappers. The TUI's relationship popup now goes through `attach_child` / `detach_child` like the other two apps; the direct `Command::Dependency(...)` construction in `popup_handlers.rs` is gone. No app reaches into `.graph.parent_child` / `.graph.blocks` / `.graph.relates` directly — the service layer is the only mutation gate.
+- **SQLite per-kind tables.** The single `card_edges` table is replaced by `spawns_edges` / `blocks_edges` / `relates_edges`. Each table has just the columns its kind needs: `blocks_edges.severity` with `CHECK (severity IN ('Low','Medium','High','Critical'))`, `relates_edges.kind` with `CHECK (kind IN ('General','Duplicates','MentionedIn'))`. No `edge_type` / `direction` / `weight` catch-all columns. `SqliteStore::open` drops the pre-KAN-504 `card_edges` table on first encounter; nothing of this graph work is live yet on `develop` so there is no installed-base of data to preserve.
+- **JSON V5→V6 split-graph migration.** Old shape: `graph.cards.edges: [{ edge_type, direction, weight, ... }]`. New shape: `graph.{ parent_child, blocks, relates }.edges: [{ source, target, created_at, archived_at, severity? / kind? }]`. The migration strips `edge_type` / `direction` / `weight` from each migrated edge and populates per-kind defaults (`Medium` severity for migrated Blocks rows, `General` kind for migrated Relates rows). Files at V1..V5 are auto-migrated on load through the appropriate legacy chain followed by the split-graph step; the chain writes `.v{N}.backup` before the split-graph step for V3/V4/V5 starting points so an upgrade can be rolled back. The split-graph transform is idempotent: invoking it on an already-V6 envelope returns immediately without overwriting the sub-graphs. Migration and sync paths use `AtomicWriter::write_atomic_sync` with a unique random temp file. The new post-migration shape matches what a freshly saved file produces byte-for-byte.
+- **Typed error boundaries.** `KanbanCliError` (`Domain` / `Resolution` / `Io` / `Serialization`) and `KanbanMcpError` (`Domain` / `Resolution`) wrap `KanbanError` so handlers thread every failure through `?` uniformly. Both surfaces use the same `Resolution { hint }` variant for handler-built enrichment of anonymous domain errors, and both render the hint verbatim with no wrapper prefix — the MCP enrich helpers route exclusively through `Resolution`, so a `messages::parent_cycle(...)` hint produces byte-identical user-facing messages on both surfaces. The wire-level MCP error code stays `INVALID_PARAMS` because the `From<KanbanMcpError> for McpError` conversion maps `Resolution` to it. Identifier-resolution failures flow through `Domain` directly so the structured `DomainError::NotFoundByName` / `Ambiguous` variants stay introspectable. The MCP `locked_read` / `locked_write` helpers are generic over `E: Into<McpError>` so typed closures plug in without per-handler conversion boilerplate.
+- **Correctness hardening.** Graph mutations got four review-driven fixes that close real edge cases:
+  - **Duplicate-edge rejection.** `GraphError::Duplicate` (mapped to `DependencyError::DuplicateEdge`) is returned when an active edge with the same endpoints already exists. DAG checks the directed orientation; undirected checks either ordering. Archived edges don't count, so re-add after archive still works. Closes a silent bug where `set_parent` twice would put `child` in `parents()` / `children()` twice and bias future cycle decisions via a duplicated adjacency entry.
+  - **`EdgeSet::contains` aligned to active-only.** Previously `EdgeSet::contains` reported true for archived edges while `Graph::contains_edge` (similar name) reported only active — silent divergence between two near-identical methods. Both now mean "is this here right now?". The any-state lookup remains available via the new `EdgeSet::contains_archived` / `DependencyGraph::contains_archived` for callers that genuinely need to consult history.
+  - **`remove_edge` preserves archived records.** `EdgeStore::remove_directed_edge` / `remove_undirected_edge` used to retain over the full list, sweeping archived edges alongside the active one — so `Graph::remove_edge` and the per-kind `remove_parent` / `unblock` / `dissociate` all silently destroyed history. They now filter on `is_active()`, so archive records survive a remove.
+  - **Load errors carry context.** `from_validated_per_kind_edges` wraps each per-kind add error with the kind tag and offending source/target endpoints (e.g. `"load failed on blocks edge <s> -> <t>: cycle detected"`), so a user inspecting a corrupt-file diagnostic can grep the source for the named UUIDs. The bare `DependencyError` variants only said "cycle detected" with no clue which kind or which edge.
+  - **`DependencyGraph` sub-graph fields private.** `parent_child` / `blocks` / `relates` were `pub(crate)`; now fully private. No call site reaches in, but the visibility allowed future regression of the validation gate. External access stays via `*_edges()` accessors and `from_validated_per_kind_edges`.
+- **Shared parent-relation messages.** `kanban_domain::dependencies::messages` holds the formatters CLI and MCP both consume — cycle / self-reference / edge-not-found messages name both sides of the offending edge using the user's raw identifiers. The two surfaces produce identical wording for the same failure. Both `enrich_*` helpers in CLI/MCP match exhaustively on `DependencyError` so a new variant fails to compile until the maintainer handles it. The CLI batch-mode enrichment widens the wording to name all children in the batch when the variant alone doesn't pinpoint the offender.
+- **Service-level card-existence validation.** `KanbanContext`'s per-kind edge methods reject unknown card ids up front via `require_card_exists`, returning `NotFound { entity: "card", id }` before the command reaches the graph. Closes a data-integrity hole: the CLI's identifier resolver parses raw UUIDs but does not look them up, so a stale or fabricated UUID would silently land in the graph as a dangling edge whose endpoints reference no card.
+`CardEdgeType` remains as a discriminator for parameterised tests and cross-kind utilities; production code is per-kind throughout. The transitive `LegacyEdge` struct used during the refactor is gone. Cross-board parent/child is permitted, matching the prior TUI behavior. Cross-kind algorithms can take `&impl Edge` or `&dyn Edge` for uniform read access without knowing concrete metadata; per-kind algorithms take `&DagGraph<BlocksEdge>` directly and see severity as a typed field.
+
+### KAN-520 Card Detail Enter On Parent Child Does Not Navigate To That Card Active Card Id Stale (2026-06-07)
+
+Pressing Enter on a card in the Parents or Children box of the card detail view now reloads the detail view against that card, as it always should have. The same fix applies at the other entry points into the detail view (Enter and 'e' on a sprint-detail card row) and to Backspace returning through the navigation history. Previously the detail view appeared to stay on the original card while the parents box silently emptied out.
+The underlying drift between the active-card index and the active-card UUID is now prevented at the type level: the two fields have been collapsed into a single struct whose constructor requires both values, so future handlers cannot reintroduce this bug class.
+
+### KAN-522 Refuse On Version Mismatch In Persistence Backends Writer Stamp Metadata Startup Banner (2026-06-07)
+
+Kanban now refuses to silently mishandle data files written by a newer
+version of itself, and surfaces enough information for you to diagnose
+version mismatches at a glance.
+**Refuse-on-future-version.** Opening a JSON file whose `version` is higher
+than the binary supports, or a SQLite database whose `schema_version`
+exceeds the binary's, now returns a typed error rather than silently
+coercing the file to a lower format (which previously dropped fields the
+old reader did not understand). The error message tells you the file's
+version, the binary's maximum, and asks you to upgrade. Refused files are
+left untouched on disk — no schema bump, no column ALTER, nothing rewritten
+before the refusal fires.
+**MCP error category.** Pointing the `kanban-mcp` server at a future-format
+file now surfaces as `INVALID_PARAMS` to the MCP client (was
+`INTERNAL_ERROR`). That category change tells the LLM the input is
+unusable, not that the server is broken — so the client can suggest
+pointing at a different file or upgrading kanban instead of treating it
+as a server bug.
+**Writer stamp on save.** Every save now records which kanban produced the
+file: a semver version string and the build's git commit. Old files that
+lack the stamp continue to load cleanly; the new fields show up the first
+time the file is rewritten.
+**F12 diagnostics popup.** The "Error Log" popup that already lived behind
+F12 has been renamed to **Diagnostics** and now shows:
+- File path
+- Format version (read live from the file, not assumed from the binary)
+- Writer (the kanban that last wrote this file)
+- Binary (the kanban you're running right now)
+- Last saved timestamp
+- Log entries in a separate, titled section below
+When the file's writer is a newer semver than the running binary, the
+Writer line is highlighted in yellow with a `(newer than this binary)`
+suffix, so a mismatch is one keystroke away from being diagnosed instead
+of buried in tracing output.
+**SQLite schema bump.** The SQLite metadata table gains `writer_version`
+and `writer_commit` columns and the on-disk `schema_version` is bumped to
+2. Existing databases are upgraded transparently on open via the same
+idempotent `ALTER TABLE ADD COLUMN` mechanism used for previous SQLite
+schema additions — no manual migration required.
+**Renamed const.** Internal API: `kanban_core::VERSION` is renamed to
+`kanban_core::CLI_VERSION_DISPLAY` to distinguish the multi-line clap
+display string from the new raw `KANBAN_VERSION` / `KANBAN_COMMIT`
+components used by the writer stamp. This is only relevant to anyone
+embedding kanban-core as a library.
+Library consumers exhaustively matching on `kanban_domain::KanbanError`
+will need to add an arm for the new `UnsupportedFutureVersion` variant.
+
+### KAN-530 Rename Json Parent Child Graph Field To Spawns To Match Domain Naming (2026-06-07)
+
+The JSON storage backend now uses `spawns` as the key for the parent/child
+dependency-graph bucket, matching the name used everywhere else in the app
+(the `SpawnsEdge` type, the `spawns_edges` SQLite table). Previously the
+JSON file alone exposed this bucket as `parent_child`, a leftover from an
+older field name.
+Existing kanban files written in the older format are upgraded
+automatically on the next load. A `.v6.backup` copy of the original file
+is written before the upgrade and removed once it completes successfully,
+so a failed upgrade leaves a recoverable file in place. No manual action
+is needed.
+The on-disk envelope version advances from 6 to 7. Older builds of the
+app will refuse to open V7 files (the existing future-version guard) to
+prevent silently dropping data they don't understand. SQLite storage is
+unaffected, since it already used the `spawns_edges` name internally.
+
+### KAN-534 Fix Detail View Card Lookup To Use Id Not Index After External File Reload (2026-06-07)
+
+Actions you take on the currently-open card right after an external write (a CLI update, an MCP tool call, another TUI saving) now operate on the card you are actually viewing, instead of silently operating on whichever card happens to occupy that slot in the freshly reloaded list.
+Affected interactions include pressing `e` on the card detail Metadata section, opening the Manage Parents and Manage Children dialogs, the parent and child counts shown in the detail sidebar, the priority popup, the sprint-assign popup, the points dialog, editing the card title or description, copying the branch name or git checkout command, and the current-priority and current-sprint indicators in their respective dialogs. Pressing Backspace to return through the detail-view navigation history also now resolves the previous card by identity rather than by position, so back-navigation lands on the originally visited card even after the cards list has been re-sorted underneath it.
+The underlying bug was that the TUI tracked the active card by both its stable UUID and its position in the cards list. After an external write the file watcher reloaded the list sorted by most recently updated, but the stored position pointed at a now-different card. Every action that resolved the active card by position silently operated on the wrong target. All such call sites now resolve the active card through the model's UUID-keyed lookup, the navigation history stores UUIDs instead of positions, and the active-card type no longer carries a position at all, so this class of bug can no longer be reintroduced by future handlers.
+
+### KAN-538 Author Packaging Chocolatey Skeleton Nuspec Install Scripts License Verification (2026-06-07)
+
+Internal: added the Chocolatey package source files under
+`packaging/chocolatey/` (nuspec, install/uninstall scripts, LICENSE
+placeholder, VERIFICATION). No user-visible change in this release —
+the files sit unused until the Chocolatey publish workflow lands in
+a follow-up commit, at which point `choco install kanban` becomes
+available on Windows.
+
+### KAN-539 Release Yml Build And Upload Windows Release Archive On Tag Push (2026-06-07)
+
+GitHub releases now include a Windows release archive built directly
+by CI. Each release page surfaces
+`kanban-v$VERSION-x86_64-pc-windows-msvc.zip` containing prebuilt
+`kanban.exe` and `kanban-mcp.exe` binaries (alongside `LICENSE.md`
+and `README.md`), plus a `SHA256SUMS` file for integrity verification.
+Windows users can download and run the binaries directly from the
+GitHub release page without compiling from source. The same archive
+is the substrate for the upcoming Chocolatey publish workflow.
+
+### KAN-541 Release Yml Add Chocolatey Publish Step (2026-06-07)
+
+`kanban` is now available on Chocolatey. After this release reaches
+moderation approval on community.chocolatey.org (typically 1-7 days
+for a first version), Windows users can install via:
+    choco install kanban
+The package installs both `kanban` (TUI/CLI) and `kanban-mcp` (MCP
+server) and adds shims for both onto PATH. Release CI handles
+packaging and publishing automatically on every release with
+changesets; the `CHOCO_API_KEY` repo secret authenticates the push.
+A smoke install on the Windows runner gates the push, so a broken
+package never reaches the registry.
+
+### KAN-545 Choco Cosmetic Polish Iconurl Verification Wording Readme Clarity (2026-06-07)
+
+The Chocolatey package page now displays a `kanban` brand icon
+instead of the generic placeholder. The full bold-icon family
+(PNG + SVG, three transparency variants each) is also committed
+to `assets/` for use by other registries, docs, and downstream
+distributors.
+Two small documentation tweaks ship alongside: the
+`VERIFICATION.txt` step that points users at the chocolatey.org
+package page is reworded to be less circular, and the
+`packaging/chocolatey/README.md` developer example now sets `$VERSION`
+and `$SHA` as real PowerShell variables so the snippet is
+copy-paste-runnable on Windows without ambiguity.
+
+### KAN-550 Add Claude To Gitignore Cli Tool Scratch Per Machine Settings (2026-06-07)
+
+Internal: `.claude/` is now gitignored. Contributors using the
+Claude Code CLI will no longer risk accidentally committing
+per-machine settings (`.claude/settings.local.json`) or
+agent scratch worktrees (`.claude/worktrees/`, which can grow
+to tens of MB during parallel agent runs). No user-visible
+change.
+
+### KAN-551 Retain Card Selection After Toggle Completion (2026-06-07)
+
+In the kanban (column) view, toggling a card's completion status now keeps the card
+selected after the toggle. Previously, the card would be moved to the Done column
+by the service layer, but the selection would silently drop on the next render frame
+because the view was not refreshed before the selection was updated.
+`select_card_by_id` has also been made robust for any view: if the card is not found
+in the currently active column list it now searches all column lists, navigates to the
+column that holds the card, and selects it there. This prevents silent selection drops
+whenever a card moves between columns as a side effect of an operation.
+
+### KAN-556 Add Optional Sprint Assignment To Card Creation (2026-06-07)
+
+Cards can now be assigned to a sprint at creation time, in a single
+action, across all three surfaces.
+In the TUI, the Create Task dialog gains a sprint picker below the
+title input. If the board has exactly one active (non-ended) sprint,
+that sprint is pre-selected, so pressing Enter creates the card already
+attached to the active sprint. With no active sprint or with multiple,
+the picker defaults to "None" and the user can pick deliberately. Tab
+toggles focus between the title input and the sprint picker; Down or
+Esc on the title focus drops focus into the picker (Esc on the picker
+focus closes the dialog); Up/Down or j/k navigate the picker; Enter
+confirms from either side. The focused side is signalled with a bright
+border on the title input or the picker block.
+From the CLI, `kanban card create` accepts a new `--assign` / `-a`
+flag. Pass a sprint UUID, name, or number to assign the new card to a
+specific sprint, or pass the flag with no value to use the board's
+sole active sprint. The flag fails with a clear message when there
+are zero or multiple active sprints on the board.
+The MCP `create_card` tool gains an optional `sprint_id` parameter
+that accepts a UUID, sprint name, or sprint number and resolves it via
+the same in-board sprint resolution used by `assign_card_to_sprint`.
+The schema description hints to LLM callers that when a board has a
+single active sprint, passing its id at create time avoids the extra
+assign round-trip.
+The on-disk format is unchanged. Existing scripts and integrations
+keep working with no migration required; omitting the new flag/field
+preserves the previous "create then assign separately" workflow.
+
+### KAN-557 Extract Radiolist Sprintpicker (2026-06-07)
+
+Internal refactor with no user-visible behaviour change. The two sprint-assignment
+dialogs (single-card and bulk) and the existing list-component navigation now
+share a single set of reusable building blocks, making future selection dialogs
+quicker and safer to add.
+The sprint-assignment dialogs render the same Active / Planned and Completed /
+Ended sections, the same green-bold "(current)" indicator, the same sticky
+section header when scrolling past it, and the same colour coding for Completed
+(green) versus Ended (red) sprints. Keyboard navigation, dialog framing, and
+selection persistence are unchanged.
+Under the hood the rendering and navigation pieces are now factored as:
+- `RadioList<T>` — a domain-agnostic single-select list with optional sticky
+  section-header overlay, used by both sprint-assignment dialogs.
+- `SprintPicker` — a thin adapter on top of `RadioList<Option<Uuid>>` that
+  knows about sprint sections, the "(current)" suffix, and the pre-selection
+  rule for the create-card flow that's coming next.
+- `list_nav` — pure selectable-skipping navigation helpers shared by
+  `RadioList`, `sprint_assign_list`, and `ListComponent`. The duplicate
+  index-step helpers on `Page` in `kanban-core` have been removed.
+The refactor unlocks two upcoming changes: sprint selection at card creation
+time (KAN-556) reuses `RadioList` + `SprintPicker` directly, and the planned
+multi-select picker (KAN-558) will share the same `ListItem<T>` shape and
+`list_nav` primitives rather than duplicating them.
+
+### KAN-580 Refactor Domain Apply Nuanced String Str Impl Into String Rule To Domain Params (2026-06-07)
+
+Internal: domain constructors and mutators that always store their string
+input now accept `impl Into<String>` instead of `String`. This means
+callers can pass `"foo"` or `String::from("foo")` interchangeably without
+a trailing `.to_string()`, and ownership decisions stay at the call site
+rather than being forced at the domain boundary.
+There is no behaviour change for users. Saved files, the CLI surface,
+the MCP tool schemas, and the TUI all work exactly as before. The
+refactor is API-source-compatible for any external caller already
+passing `String` or `Some("...".to_string())`, and only loosens what
+those APIs accept. One ergonomic note: parameters that became
+`Option<impl Into<String>>` can no longer infer the type of a bare
+`None`, so external callers that previously wrote `update_prefix(None)`
+must now write `update_prefix(None::<String>)` (or any concrete
+`Option::<T>::None`). This only affects the `None` case; `Some("...")`
+callers are unchanged.
+Call sites across the service, persistence-sqlite, and TUI test suites
+were updated to drop the now-redundant `.to_string()` allocations, which
+removes a small amount of test setup noise. The contributor guide gains
+a short note describing the "unconditional store rule" so future domain
+APIs follow the same convention.
+
+### KAN-643 Fix Domain Accept Yyyy Mm Dd In External Editor Due Date Field (2026-06-07)
+
+Editing a card's metadata through the external editor (`e` on the
+Metadata section of Card Detail) now accepts plain `YYYY-MM-DD` dates
+in addition to full RFC 3339 timestamps. Previously the editor
+silently dropped any value that wasn't full RFC 3339, leaving the
+field unchanged with no feedback. This matches what the CLI and MCP
+already accepted and what the TUI already displays.
+A date like `2024-01-15` is stored as midnight UTC on that day. A
+full timestamp like `2024-01-15T14:30:00Z` is stored at the exact
+instant the user supplied. When you re-open the editor, midnight-UTC
+values are written back as `2024-01-15` (so the format you typed is
+the format you see), and any non-midnight value is written back as
+RFC 3339.
+Malformed dates such as `"yesterday"` no longer disappear silently:
+the editor now surfaces a clear error banner explaining the supported
+formats. ISO 8601 zero-padding is required (`2024-1-5` is rejected
+with the same banner), keeping behaviour predictable.
+No file-format changes. Existing kanban files load unchanged and
+existing RFC 3339 values continue to round-trip exactly as before.
+
+### KAN-644 Add Due Date Sort Field For Cards (2026-06-07)
+
+Cards can now be sorted by their due date in every view across all three
+frontends.
+**New features:**
+- The TUI's "Order Tasks By" popup gains a **Due Date** option alongside
+  the existing Points / Priority / Status / etc. Cards without a due date
+  sort last in ascending order (matching the existing behaviour for
+  cards without points).
+- `kanban card list` accepts `--sort` and `--order` flags. When omitted,
+  the listing falls back to the board's persisted default sort. The
+  flags also apply to `kanban card list --archived`.
+- `kanban board update` accepts `--sort-field` and `--sort-order` to set
+  the board's default task sort from the CLI. Previously this was only
+  reachable through the TUI popup.
+- The MCP `update_board` tool exposes `task_sort_field` and
+  `task_sort_order` so agents can persist a board's default sort.
+- The MCP `list_cards` and `list_archived_cards` tools accept `sort` and
+  `order` parameters; when omitted they inherit the board's default.
+  `list_archived_cards` also gains a `board` parameter so archives can be
+  scoped to one board.
+- `kanban relation parents` and `kanban relation children` accept
+  `--sort due-date` to order related cards by due date.
+**Supporting improvements:**
+- Filtering and sorting now share one pure domain helper,
+  `filter_and_sort_cards`, generic over `T: Borrow<Card> + Clone` so
+  archived cards flow through the same predicate via the existing
+  `Borrow<Card> for ArchivedCard` impl. `KanbanContext::list_cards`,
+  `KanbanOperations::list_archived_cards_sorted` (default impl),
+  `CardQueryBuilder::execute`, and the TUI render path all delegate to
+  it. CLI, MCP and the TUI inherit consistent ordering and filtering
+  from one source instead of each re-implementing them.
+- `CardListFilter` carries the three filters the TUI used to apply
+  client-side: any-of sprint membership (`sprint_ids`), `hide_assigned`,
+  and full-text `search`. The TUI's `get_sorted_board_cards`,
+  `get_board_card_count`, and the layout-strategy `CardQueryBuilder`
+  delegate to the domain helper directly on the model snapshot, so the
+  render path no longer touches the backend on every redraw.
+- A new `count_filtered_cards` shares the same predicate without
+  allocating a result vector or sorting; the TUI badge/count path uses
+  it. A regression test pins parity between
+  `count_filtered_cards(filter)` and `list_cards(filter).len()` across
+  every non-trivial filter combination.
+- The (override → board default → none) sort-resolution rule and the
+  `OrderedSorter` / `get_sorter_for_field` plumbing have been collapsed
+  into two pure helpers, `resolve_sort` and `sort_cards_in_place`. The
+  duplicated resolution logic in `KanbanContext` and the
+  `KanbanOperations` trait default is gone.
+- The TUI sort-field popup is now driven by a single
+  `SORT_FIELD_POPUP_ORDER` table; adding a future sort field only
+  requires editing one slice instead of three separate index matches.
+- MCP descriptions for `task_sort_field`, `sort` and the archived-card
+  `sort` now explain that `default` orders by card number and that date
+  fields and points place None values last in ascending order.
+Library consumers exhaustively matching on `kanban_domain::SortField` or
+`kanban_domain::SortBy` will need to add an arm for the new `DueDate`
+variant.
+
+### KAN-646 Split Operations Into Trait And Filter Sort (2026-06-07)
+
+Internal cleanup with no user-visible change. The filter+sort engine that
+backs `kanban card list`, the TUI's board view, and the MCP `list_cards` /
+`list_archived_cards` tools moved into its own module
+(`kanban_domain::query::filter_sort`), separated from the
+`KanbanOperations` service-contract trait it used to share a file with.
+Every public name a downstream user might depend on (`CardListFilter`,
+`ArchivedCardListFilter`, `filter_and_sort_cards`, `count_filtered_cards`,
+`KanbanOperations`) is still importable from the `kanban_domain` crate
+root.
+**Supporting improvements:**
+- The filter+sort engine is now in a single-purpose module instead of
+  buried under the trait surface. Future work in this area (e.g. KAN-645
+  generalising sort across listable entities) has a smaller, focused
+  file to edit.
+- The `KanbanOperations` trait file shrinks from 586 to 442 lines,
+  bringing it closer to the project's per-file size guideline. The full
+  trait split is tracked separately (KAN-645).
+
+### KAN-649 Make Release Yml Idempotent On Partial Failure Re Runs (2026-06-07)
+
+Hardened the release workflow against partial-failure re-runs. The Tag
+version step now guards both the local tag and the push so re-running
+after a half-completed prior run no longer crashes on tag collision.
+The Publish to Chocolatey job is now marked continue-on-error so a
+stuck moderation queue or transient API failure surfaces as a warning
+rather than turning the entire workflow red after crates.io, GitHub
+Release, AUR, and Homebrew have already succeeded.
+A new docs/release-recovery.md runbook enumerates the per-step recovery
+procedure: which steps are safe to re-run from the GitHub Actions UI,
+what state to expect on origin after each failure mode, and the manual
+fallback commands for the cases where a re-run is not enough.
+No user-visible runtime behaviour changes; this only affects how the
+release pipeline recovers when something goes wrong.
+
+### KAN-650 Sync Migration Backups (2026-06-07)
+
+The synchronous JSON migration path used by `kanban` (CLI), the TUI
+startup, and `kanban-mcp` now writes a `.v{N}.backup` file before
+running the shape-changing V→V7 migration chain, removes it on
+success, and preserves it on failure. Previously only the asynchronous
+load path produced these rollback artefacts; the sync path would
+overwrite files in place with no recourse if a step failed
+mid-chain.
+End users upgrading a V3/V4/V5/V6 JSON file to V7 via any sync entry
+point now see the same backup-and-cleanup behaviour as users who go
+through the async path: a successful migration leaves no extra files
+on disk, and a failed migration leaves a `.v3.backup` / `.v4.backup`
+/ `.v5.backup` / `.v6.backup` alongside the original file with the
+path surfaced in the error log.
+V1→V2 keeps its existing in-step `.v1.backup`; V2→V3 is shape-stable
+and continues to need no backup.
+No API or message changes for library consumers. The
+source-version-to-backup-path policy is now shared by both
+orchestrators in a single `migration::backup::pre_v7_backup_path_for`
+helper so future migration additions only need to update one site.
+
+### KAN-655 Card Create Assign Negative Tests (2026-06-07)
+
+The cross-board sprint check on `card create --assign` now returns a
+typed `DomainError::SprintBoardMismatch { sprint_id, sprint_board,
+card_board }` error variant instead of an untyped `Validation`
+message. End-user error text is unchanged across the CLI, MCP, and
+TUI (the message format is preserved verbatim by the new variant's
+`Display` impl), but library consumers can now match on the variant
+structurally and get the three relevant UUIDs without parsing a
+string.
+A new `KanbanError::is_sprint_board_mismatch()` predicate follows
+the same shape as the other `is_*` helpers.
+Negative-path test coverage has been added for `card create
+--assign` across all three surfaces:
+- `kanban-service` integration tests cover the unknown-sprint-UUID
+  case (returns `NotFound { entity: "sprint" }`) and the
+  cross-board-sprint case (returns the new typed variant).
+- `kanban-cli` integration tests invoke the real binary and assert
+  that stderr surfaces "Sprint" and the offending name or UUID when
+  `--assign` is given an identifier the resolver cannot find.
+- `kanban-mcp` integration tests exercise the same negative paths
+  through the actual `tool_create_card` handler so the wire-level
+  error message is pinned for LLM clients.
+No behavioural change for end users; this fills a coverage gap and
+strengthens the error contract for library and MCP consumers.
+Library consumers exhaustively matching on `kanban_domain::DomainError`
+will need to add an arm for `SprintBoardMismatch`.
+
+### KAN-656 Chocolatey Asset Poll Via Gh Api (2026-06-07)
+
+The release workflow's Chocolatey publish job now reads the Windows
+ZIP's SHA256 directly from the GitHub Release API's `digest` field
+(exposed since June 2025) and uses `state == "uploaded"` as the
+asset-readiness signal. Two release.yml steps collapse into one:
+the previous `HEAD`-based poll and the separate download-and-hash
+step both go away. The `publish-chocolatey` job also gains an
+explicit `permissions: contents: read` scope so a future tightening
+of org-default token permissions cannot silently break the digest
+lookup, and per-iteration `gh release view` stderr is suppressed so
+the action log stays clean while the release tag is still being
+created upstream.
+The `HEAD` poll was latently broken. GitHub release-download URLs
+302-redirect to S3-style presigned URLs that are cryptographically
+signed for a specific HTTP method; `Invoke-WebRequest -Method Head`
+auto-follows the redirect and gets a 403 even when `GET` on the same
+URL would succeed. The bug would have surfaced on the first 0.7.x
+release attempt that produced Windows artifacts.
+No behavioural change for users. The chocolatey nupkg is templated
+with the same `$checksum64$` value as before; the change is only in
+how the workflow obtains that value.
+
+### KAN-657 Chocolatey Recovery Runbook (2026-06-07)
+
+The release workflow's `publish-chocolatey` job is now safe to
+re-run after a transient post-push failure, and surfaces an
+actionable error message that points at a recovery runbook on
+real failures.
+Chocolatey rejects re-pushing the same `id + version`
+permanently, which means a workflow re-run after the underlying
+push has already succeeded would silently surface a fresh red
+"failure" that obscures the previous success. The job now does a
+pre-check against
+`community.chocolatey.org/api/v2/Packages(Id='kanban',Version=...)`
+and exits 0 with an explanatory message when the version is
+already published. On a genuine push failure, the job prints a
+pointer to `packaging/chocolatey/RECOVERY.md` along with a clear
+"do not simply re-run this job" warning.
+The new `packaging/chocolatey/RECOVERY.md` runbook documents the
+four real failure scenarios (push-succeeded-but-reported-failure,
+malformed nupkg, rejected API key, moderation backlog) with
+diagnosis steps for each, an anti-patterns section, and a
+"reading this in a hurry" table at the bottom.
+`packaging/chocolatey/README.md` cross-links to it.
+No behavioural change for end users installing the package.
+
+### KAN-659 Capitalize Not Found Entity Tags (2026-06-07)
+
+Error messages for "not found" lookups now use consistent capitalization
+across all code paths. Previously the same error category rendered
+differently depending on whether the lookup was by UUID
+(`"sprint <uuid> not found"`, lowercase) or by name
+(`"Sprint 'foo' not found"`, capitalized). Both forms now read with the
+sentence-leading capitalized noun.
+User-visible impact: error messages for unknown card / column / sprint
+/ board UUIDs now start with a capital letter to match the existing
+name-lookup messages. No structural change to error types or
+diagnostics; only the first letter of the entity name in the rendered
+message changes.
+Library consumers exhaustively matching on `DomainError::NotFound`
+should note that the `entity` field is now always a capitalized noun
+(`"Card"`, `"Column"`, `"Sprint"`, `"Board"`) rather than the previous
+lowercase form. The `NotFoundByName` variant's casing is unchanged. A
+doc comment on both variants now documents the convention so future
+not-found additions inherit the same casing.
+
+### KAN-660 V1 V2 Backup Wrap (2026-06-07)
+
+The synchronous and asynchronous JSON migration paths now also write a
+`.v{N}.backup` for V1 and V2 source files before running the V→V7
+chain, extending the rollback coverage that KAN-650 added for
+V3/V4/V5/V6 sources.
+Pre-fix, a V1 file going through the V1→V2→V3→V6→V7 chain only had
+a transient `.v1.backup` written by the V1→V2 step itself, and that
+backup was removed on V1→V2 success — leaving no rollback artifact if
+the subsequent destructive steps (split-graph or v6→v7 rename) failed.
+V2 files had no backup at all. Both gaps are now closed: the outer
+backup is taken before the first per-step migration runs and is removed
+only after the full V→V7 chain succeeds.
+Users opening a V1 or V2 file with kanban 0.7.x+ via any normal entry
+point (CLI command, MCP tool call, TUI startup) will now see a
+`.v1.backup` or `.v2.backup` preserved on disk if a mid-chain step
+fails, mirroring the V3..V6 behaviour.
+One subtle behaviour change for direct library consumers of the
+`kanban-persistence-json` crate: invoking `Migrator::migrate(V1, V2,
+path)` or the `V1ToV2Migration` strategy wrapper as a standalone
+*V1→V2* step (not chained through to V7) no longer writes its own
+`.v1.backup`. The per-step backup mechanism was removed in favour of
+the outer V→V7 wrap, which doesn't fire for the standalone case.
+Library consumers wanting backup protection should use
+`Migrator::migrate(V1, V7, path)` instead, which provides the outer
+wrap that covers the entire chain. No in-repo callers were affected.
+
+### KAN-668 Fix Validate Release Sh Step 5 Silently Passing When Every Dry Run Fails (2026-06-07)
+
+The release-tooling pre-publish validation now actually catches packaging
+defects. Step 5 of `validate-release` previously ran `cargo publish --dry-run`
+in offline mode and swallowed the resulting failure, so every release reported
+"All crates passed dry-run validation" regardless of manifest state. Step 5
+now runs `cargo package --no-verify` and fails the release on any non-zero
+exit, so packaging defects (missing required fields, broken readme/license
+file references, file-exclusion regressions) are caught before crates.io
+publish rather than mid-publish where some sibling crates have already
+shipped.
+Internal dev-dependencies on sibling workspace crates are now path-only
+(no version constraint), per the existing project convention. The previous
+version constraints made `cargo package` fail to resolve sibling features
+added between releases against the published version. Step 3 of
+`validate-release` now enforces this convention so the regression cannot
+recur.
+No user-visible runtime change; this only affects the release pipeline's
+ability to detect manifest defects before publishing.
+
+
 ## [0.6.0] - 2026-05-15 ([#276](https://github.com/fulsomenko/kanban/pull/276))
 
 ### CAT-323 Fix Misleading Card Not Found Error When Board File Does Not Exist (2026-05-15)

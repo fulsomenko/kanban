@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-cli"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1229,7 +1229,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-core"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1242,7 +1242,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-domain"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-mcp"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1284,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-persistence"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1304,7 +1304,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-persistence-json"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1322,7 +1322,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-persistence-sqlite"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1342,7 +1342,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-service"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "kanban-tui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "arboard",
