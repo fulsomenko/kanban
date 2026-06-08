@@ -437,3 +437,26 @@ jobs:
           Write-Output "Status:"
           Write-Output "  https://community.chocolatey.org/packages/kanban/$env:VERSION"
           Write-Output "==="
+
+      - name: Surface chocolatey failure
+        if: failure()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.new }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUNBOOK_URL: ${{ github.server_url }}/${{ github.repository }}/blob/v${{ needs.release.outputs.new }}/packaging/chocolatey/RECOVERY.md
+        run: |
+          Write-Output "::warning title=Chocolatey publish failed::v$env:VERSION did not publish to Chocolatey. See packaging/chocolatey/RECOVERY.md for recovery steps."
+          $lines = @(
+            "## Chocolatey publish failed for v$env:VERSION",
+            "",
+            "The ``publish-chocolatey`` job exited non-zero. The rest of the",
+            "release (crates.io, GitHub Release, AUR, Homebrew) is unaffected",
+            "because this job is ``continue-on-error: true``.",
+            "",
+            "**Workflow run:** $env:RUN_URL",
+            "",
+            "**Next step:** follow [``packaging/chocolatey/RECOVERY.md``]($env:RUNBOOK_URL)."
+          )
+          $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
