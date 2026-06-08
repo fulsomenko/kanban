@@ -336,7 +336,7 @@ jobs:
               $obj = $json | ConvertFrom-Json
               if ($obj.state -eq 'uploaded' -and $obj.digest) {
                 $sha = $obj.digest -replace '^sha256:', ''
-                Write-Output "Found $asset: sha=$sha"
+                Write-Output "Found ${asset}: sha=$sha"
                 "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
                 $ok = $true
                 break
