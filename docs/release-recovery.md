@@ -174,7 +174,11 @@ queue.
 Chocolatey package may or may not be published.
 
 The job is marked `continue-on-error: true`, so this failure surfaces
-as a warning rather than blocking the workflow.
+as a warning rather than blocking the workflow. To keep the failure
+visible despite that, the job ends with a `Surface chocolatey failure`
+step that fires `if: failure()` and writes a `::warning::` annotation
+plus a `$GITHUB_STEP_SUMMARY` block linking back to this runbook. Look
+for the yellow warning banner at the top of the workflow run page.
 
 **Recovery:** see [`packaging/chocolatey/RECOVERY.md`](../packaging/chocolatey/RECOVERY.md)
 for the full Chocolatey-specific flowchart. The short version:
