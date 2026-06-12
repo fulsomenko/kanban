@@ -38,7 +38,8 @@ jobs:
         run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
 
   test:
-    name: Test
+    name: Test (hermetic)
+    if: github.base_ref == 'develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,8 +50,10 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Run tests
-        run: nix develop --command cargo test --all-features --workspace
+      # Build the workspace and run the full test suite inside the Nix sandbox.
+      # PRs into master get this on both linux and darwin via the `hermetic` job.
+      - name: Run test suite hermetically
+        run: nix build .#checks.x86_64-linux.tests -L
 
   test-windows:
     name: Test (Windows)
@@ -64,6 +67,35 @@ jobs:
 
       - name: Run tests
         run: cargo test --all-features --workspace
+
+  hermetic:
+    name: Hermetic Build & Test (${{ matrix.system }})
+    if: github.base_ref == 'master'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: x86_64-linux
+          - os: macos-latest
+            system: aarch64-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Build the release artifact the way nixpkgs would, inside the sandbox.
+      - name: Build package hermetically
+        run: nix build .#default -L
+
+      # Build the workspace and run the full test suite inside the sandbox.
+      - name: Run test suite hermetically
+        run: nix build .#checks.${{ matrix.system }}.tests -L
 
   build:
     name: Build
