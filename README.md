@@ -114,7 +114,7 @@ nix run github:fulsomenko/kanban
 yay -S kanban
 ```
 
-### Windows (Chocolatey)
+### Chocolatey
 ```powershell
 choco install kanban
 ```
