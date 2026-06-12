@@ -74,6 +74,8 @@
 
         devShells.demo = import ./demo/shell.nix { inherit pkgs kanban; };
 
+        checks.tests = pkgs.callPackage ./nix/workspace-tests.nix { src = self; };
+
         packages = let
           kanban-cli = pkgs.callPackage ./default.nix { src = self; gitRev = self.rev or null; withTui = false; };
         in {
