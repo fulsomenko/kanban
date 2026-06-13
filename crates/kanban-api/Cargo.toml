@@ -11,6 +11,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
-kanban-domain = { path = "../kanban-domain" }
+kanban-domain = { path = "../kanban-domain", version = "^0.7" }
 
 [dev-dependencies]
