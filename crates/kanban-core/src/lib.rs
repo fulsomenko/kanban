@@ -1,4 +1,5 @@
 pub mod config;
+pub mod health;
 pub mod datetime_input;
 pub mod error;
 pub mod graph;
@@ -28,4 +29,5 @@ pub use paginated_list::{
 pub use pagination::{Page, PageInfo};
 pub use selection::SelectionState;
 pub use traits::Editable;
+pub use health::{HealthChecker, HealthStatus};
 pub use version::{CLI_VERSION_DISPLAY, KANBAN_COMMIT, KANBAN_VERSION};

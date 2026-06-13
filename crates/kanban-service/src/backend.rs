@@ -60,6 +60,13 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         None
     }
 
+    /// Returns a health checker for this backend, if supported.
+    /// The default returns `None`; backends that can self-diagnose
+    /// (file readable, connection pool alive) override this.
+    fn health_checker(&self) -> Option<Box<dyn kanban_core::HealthChecker>> {
+        None
+    }
+
     /// Run `f` as an atomic batch: every mutation commits or rolls
     /// back together. The default impl snapshots state before `f`
     /// runs and restores it on failure — cheap for in-memory backends,
@@ -138,6 +145,13 @@ mod tests {
         let store = InMemoryStore::new();
         let backend: &dyn KanbanBackend = &store;
         assert!(backend.persistence_metadata().is_none());
+    }
+
+    #[test]
+    fn test_in_memory_backend_health_checker_returns_none() {
+        let store = InMemoryStore::new();
+        let backend: &dyn KanbanBackend = &store;
+        assert!(backend.health_checker().is_none());
     }
 
     // SQLite KanbanBackend lifecycle tests
