@@ -4,7 +4,7 @@ use uuid::Uuid;
 /// Typed identity for a connected client. Every mutation issued over HTTP
 /// carries this ID so the audit log and ChangeEventFrame can attribute changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ClientId(pub Uuid);
+pub struct ClientId(Uuid);
 
 impl ClientId {
     pub fn new() -> Self {
@@ -18,7 +18,7 @@ impl ClientId {
 
 impl Default for ClientId {
     fn default() -> Self {
-        Self::new()
+        Self::nil()
     }
 }
 
@@ -34,10 +34,15 @@ impl From<Uuid> for ClientId {
     }
 }
 
+impl From<ClientId> for Uuid {
+    fn from(id: ClientId) -> Self {
+        id.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     #[test]
     fn test_client_id_new_generates_non_nil_id() {
@@ -47,15 +52,14 @@ mod tests {
 
     #[test]
     fn test_client_id_nil_is_zero_uuid() {
-        let id = ClientId::nil();
-        assert_eq!(id.0, uuid::Uuid::nil());
+        assert_eq!(Uuid::from(ClientId::nil()), Uuid::nil());
     }
 
     #[test]
     fn test_client_id_from_uuid_round_trips() {
-        let uuid = uuid::Uuid::new_v4();
+        let uuid = Uuid::new_v4();
         let client_id = ClientId::from(uuid);
-        assert_eq!(client_id.0, uuid);
+        assert_eq!(Uuid::from(client_id), uuid);
     }
 
     #[test]
@@ -68,8 +72,8 @@ mod tests {
 
     #[test]
     fn test_client_id_display_matches_inner_uuid() {
-        let uuid = uuid::Uuid::nil();
-        let id = ClientId(uuid);
+        let uuid = Uuid::nil();
+        let id = ClientId::from(uuid);
         assert_eq!(id.to_string(), uuid.to_string());
     }
 
@@ -83,9 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn test_client_id_default_generates_non_nil_id() {
-        // Default calls new() which generates a fresh UUID
-        let id = ClientId::default();
-        assert_ne!(id, ClientId::nil());
+    fn test_client_id_default_is_nil() {
+        assert_eq!(ClientId::default(), ClientId::nil());
     }
 }
