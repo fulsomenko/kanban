@@ -244,6 +244,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_suppress_next_write_default_is_noop() {
+        struct NoopDetector;
+        #[async_trait::async_trait]
+        impl ChangeDetector for NoopDetector {
+            async fn start_watching(&self, _: std::path::PathBuf) -> crate::PersistenceResult<()> {
+                Ok(())
+            }
+            async fn stop_watching(&self) -> crate::PersistenceResult<()> {
+                Ok(())
+            }
+            fn subscribe(&self) -> tokio::sync::broadcast::Receiver<ChangeEvent> {
+                let (_tx, rx) = tokio::sync::broadcast::channel(1);
+                rx
+            }
+            fn is_watching(&self) -> bool {
+                false
+            }
+            // suppress_next_write intentionally NOT overridden -- tests the default
+        }
+        let d = NoopDetector;
+        d.suppress_next_write(); // must compile and not panic
+    }
+
+    #[test]
+    fn test_file_watcher_satisfies_change_detector_with_new_method() {
+        use crate::watch::file_watcher::FileWatcher;
+        let w = FileWatcher::new();
+        let _: &dyn ChangeDetector = &w;
+        // calling the default no-op on the concrete type via the trait
+        w.suppress_next_write();
+    }
+
+    #[test]
     fn test_format_version_max_equals_v7() {
         assert_eq!(FormatVersion::MAX, FormatVersion::V7);
     }
