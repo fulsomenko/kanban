@@ -14,6 +14,10 @@ impl HealthStatus {
     pub fn is_degraded(&self) -> bool {
         matches!(self, Self::Degraded(_))
     }
+
+    pub fn is_unhealthy(&self) -> bool {
+        matches!(self, Self::Unhealthy(_))
+    }
 }
 
 impl std::fmt::Display for HealthStatus {
@@ -49,10 +53,17 @@ mod tests {
     }
 
     #[test]
-    fn test_unhealthy_is_neither_healthy_nor_degraded() {
+    fn test_unhealthy_status_is_unhealthy() {
         let s = HealthStatus::Unhealthy("connection lost".into());
+        assert!(s.is_unhealthy());
         assert!(!s.is_healthy());
         assert!(!s.is_degraded());
+    }
+
+    #[test]
+    fn test_healthy_and_degraded_are_not_unhealthy() {
+        assert!(!HealthStatus::Healthy.is_unhealthy());
+        assert!(!HealthStatus::Degraded("slow".into()).is_unhealthy());
     }
 
     #[test]
