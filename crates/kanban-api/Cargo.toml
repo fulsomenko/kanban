@@ -14,4 +14,3 @@ chrono = { workspace = true }
 kanban-domain = { path = "../kanban-domain" }
 
 [dev-dependencies]
-serde_json = { workspace = true }
