@@ -1,3 +1,39 @@
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Typed identity for a connected client. Every mutation issued over HTTP
+/// carries this ID so the audit log and ChangeEventFrame can attribute changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ClientId(pub Uuid);
+
+impl ClientId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    pub fn nil() -> Self {
+        Self(Uuid::nil())
+    }
+}
+
+impl Default for ClientId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for ClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<Uuid> for ClientId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
