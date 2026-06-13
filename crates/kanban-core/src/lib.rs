@@ -1,8 +1,8 @@
 pub mod config;
-pub mod health;
 pub mod datetime_input;
 pub mod error;
 pub mod graph;
+pub mod health;
 pub mod input;
 pub mod logging;
 pub mod paginated_list;
@@ -21,6 +21,7 @@ pub use graph::{
     Cascadable, DagGraph, Directed, Edge, EdgeBase, EdgeSet, EdgeStore, Graph, GraphError,
     GraphNode, Undirected, UndirectedGraph,
 };
+pub use health::{HealthChecker, HealthStatus};
 pub use input::InputState;
 pub use logging::{LogEntry, Loggable};
 pub use paginated_list::{
@@ -29,5 +30,4 @@ pub use paginated_list::{
 pub use pagination::{Page, PageInfo};
 pub use selection::SelectionState;
 pub use traits::Editable;
-pub use health::{HealthChecker, HealthStatus};
 pub use version::{CLI_VERSION_DISPLAY, KANBAN_COMMIT, KANBAN_VERSION};
