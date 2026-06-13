@@ -1,3 +1,36 @@
+/// The health state of a backend or server component.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HealthStatus {
+    Healthy,
+    Degraded(String),
+    Unhealthy(String),
+}
+
+impl HealthStatus {
+    pub fn is_healthy(&self) -> bool {
+        matches!(self, Self::Healthy)
+    }
+
+    pub fn is_degraded(&self) -> bool {
+        matches!(self, Self::Degraded(_))
+    }
+}
+
+impl std::fmt::Display for HealthStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Healthy => write!(f, "healthy"),
+            Self::Degraded(reason) => write!(f, "degraded: {reason}"),
+            Self::Unhealthy(reason) => write!(f, "unhealthy: {reason}"),
+        }
+    }
+}
+
+/// Implemented by backends that can report their own health.
+pub trait HealthChecker: Send + Sync {
+    fn check(&self) -> HealthStatus;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
