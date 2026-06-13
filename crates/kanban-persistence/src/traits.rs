@@ -135,6 +135,12 @@ pub trait ChangeDetector: Send + Sync {
 
     /// Check if currently watching
     fn is_watching(&self) -> bool;
+
+    /// Suppress the next own-write event. Called immediately before an atomic
+    /// rename so backends that track write suppression can ignore the resulting
+    /// filesystem notification. The default no-op is correct for backends (e.g.
+    /// WebSocketChangeDetector) that do not need suppression.
+    fn suppress_next_write(&self) {}
 }
 
 /// Event indicating a change to the watched file
