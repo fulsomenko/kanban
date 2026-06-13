@@ -1,0 +1,27 @@
+[package]
+name = "kanban-http-backend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+reqwest = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+kanban-api = { path = "../kanban-api" }
+kanban-core = { path = "../kanban-core" }
+kanban-domain = { path = "../kanban-domain" }
+kanban-service = { path = "../kanban-service" }
+kanban-persistence = { path = "../kanban-persistence" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }

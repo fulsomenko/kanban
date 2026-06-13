@@ -10,6 +10,9 @@ members = [
     "crates/kanban-tui",
     "crates/kanban-cli",
     "crates/kanban-mcp",
+    "crates/kanban-api",
+    "crates/kanban-server",
+    "crates/kanban-http-backend",
 ]
 
 [workspace.package]
@@ -64,6 +67,18 @@ tempfile = "3.8"
 
 # Windows path normalisation (strip `\\?\` UNC prefix)
 dunce = "1.0"
+
+# HTTP server
+axum = { version = "0.8", features = ["ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+tokio-tungstenite = "0.26"
+
+# Observability
+prometheus = "0.13"
 
 [profile.release]
 opt-level = 3
