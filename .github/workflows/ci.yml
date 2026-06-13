@@ -37,37 +37,6 @@ jobs:
       - name: Run clippy
         run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
 
-  test:
-    name: Test (hermetic)
-    if: github.base_ref == 'develop'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: cachix/install-nix-action@v27
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      # Persist /nix/store across runs so crane's cargoArtifacts (the compiled
-      # dependency closure, keyed on Cargo.lock) is restored and only the
-      # first-party crates recompile per PR.
-      - uses: nix-community/cache-nix-action@v7
-        with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', '**/Cargo.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-
-          gc-max-store-size-linux: 5G
-          purge: true
-          purge-prefixes: nix-${{ runner.os }}-
-          purge-created: 0
-          purge-primary-key: never
-
-      # Build the workspace and run the full test suite inside the Nix sandbox.
-      # PRs into master get this on both linux and darwin via the `hermetic` job.
-      - name: Run test suite hermetically
-        run: nix build .#checks.x86_64-linux.tests -L
-
   test-windows:
     name: Test (Windows)
     runs-on: windows-latest
@@ -102,8 +71,8 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      # Persist /nix/store across runs so crane's cargoArtifacts and the package
-      # dependency closure are restored instead of recompiled on each PR.
+      # Persist /nix/store across runs so crane's cargoArtifacts and the package closure
+      # are restored instead of recompiled on each PR.
       - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', '**/Cargo.lock') }}
