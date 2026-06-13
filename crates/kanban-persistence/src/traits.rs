@@ -250,7 +250,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_suppress_next_write_default_is_noop() {
+    fn test_suppress_next_write_default_noop_does_not_require_override() {
         struct NoopDetector;
         #[async_trait::async_trait]
         impl ChangeDetector for NoopDetector {
@@ -267,19 +267,17 @@ mod tests {
             fn is_watching(&self) -> bool {
                 false
             }
-            // suppress_next_write intentionally NOT overridden -- tests the default
         }
         let d = NoopDetector;
-        d.suppress_next_write(); // must compile and not panic
+        d.suppress_next_write();
     }
 
     #[test]
     fn test_file_watcher_satisfies_change_detector_with_new_method() {
         use crate::watch::file_watcher::FileWatcher;
         let w = FileWatcher::new();
-        let _: &dyn ChangeDetector = &w;
-        // calling the default no-op on the concrete type via the trait
-        w.suppress_next_write();
+        let d: &dyn ChangeDetector = &w;
+        d.suppress_next_write();
     }
 
     #[test]
