@@ -1,3 +1,6 @@
+pub mod client_id;
+pub use client_id::ClientId;
+
 pub mod config;
 pub mod datetime_input;
 pub mod error;
