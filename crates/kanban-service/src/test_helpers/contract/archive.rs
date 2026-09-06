@@ -71,6 +71,37 @@ pub async fn test_archive_card_roundtrip(factory: &BackendFactory) {
     assert_card_eq(&live, &pre_archive);
 }
 
+pub async fn test_list_archived_cards_by_missing_board_returns_empty(factory: &BackendFactory) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
+
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
+    let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
+    let card = ctx
+        .create_card(
+            board.id,
+            col.id,
+            "Archived".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    ctx.archive_card(card.id).unwrap();
+
+    assert_eq!(
+        ctx.list_archived_cards_by_board(board.id).unwrap().len(),
+        1
+    );
+    assert!(
+        ctx.list_archived_cards_by_board(Uuid::new_v4())
+            .unwrap()
+            .is_empty(),
+        "an unknown board must resolve to an empty archived-card list, not an error"
+    );
+}
+
 pub async fn test_archive_card_with_sprint_logs_roundtrip(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
