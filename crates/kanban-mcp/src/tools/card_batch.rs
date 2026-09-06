@@ -1,6 +1,7 @@
 use crate::helpers::model_read::{resolve_cards, resolve_column_in_board, resolve_sprint_in_board};
 use crate::helpers::{
-    card_board, kanban_err_to_mcp, locked_write, to_call_tool_result, to_call_tool_result_json,
+    board_head, card_board, kanban_err_to_mcp, locked_write, to_call_tool_result,
+    to_call_tool_result_json,
 };
 use crate::requests::card::{
     ArchiveCardsRequest, AssignCardToSprintRequest, AssignCardsToSprintRequest, MoveCardsRequest,
@@ -72,7 +73,8 @@ impl KanbanMcpServer {
             let card_id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let board_id = card_board(ctx, card_id)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
-            let sprint_id = resolve_sprint_in_board(&model, &req.sprint, board_id)?;
+            let board = board_head(ctx, &model, board_id)?;
+            let sprint_id = resolve_sprint_in_board(&model, &req.sprint, &board)?;
             ctx.mutate(|c| c.assign_card_to_sprint_impl(card_id, sprint_id))
                 .map(|(card, _inv)| card)
                 .map_err(kanban_err_to_mcp)
@@ -152,7 +154,8 @@ impl KanbanMcpServer {
             let ids = resolve_cards(&model, &req.cards)?;
             let board_id = ctx.require_same_board(&ids).map_err(kanban_err_to_mcp)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
-            let sprint_id = resolve_sprint_in_board(&model, &req.sprint, board_id)?;
+            let board = board_head(ctx, &model, board_id)?;
+            let sprint_id = resolve_sprint_in_board(&model, &req.sprint, &board)?;
             ctx.mutate(|c| c.assign_cards_to_sprint_impl(ids, sprint_id))
                 .map(|(count, _inv)| count)
                 .map_err(kanban_err_to_mcp)

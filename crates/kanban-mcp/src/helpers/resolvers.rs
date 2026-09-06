@@ -1,6 +1,6 @@
 use crate::context::McpContext;
 use crate::helpers::error_mapping::kanban_err_to_mcp;
-use kanban_domain::{CardSummary, KanbanOperations, Sprint};
+use kanban_domain::{Board, CardSummary, KanbanError, KanbanOperations, LoadState, Model, Sprint};
 use kanban_service::api::SprintResponse;
 use kanban_service::resolve_sprint_name;
 use rmcp::model::ErrorData as McpError;
@@ -45,6 +45,22 @@ pub(crate) fn card_board(ctx: &McpContext, card_id: Uuid) -> Result<Uuid, McpErr
             McpError::invalid_params(format!("Column not found: {}", card.column_id), None)
         })?;
     Ok(column.board_id)
+}
+
+/// The board head for `board_id`: the model's loaded head when the call's
+/// fetch plan supplied one, otherwise the unfiltered `get_board` point read,
+/// which resolves an archived board as well as a live one.
+pub(crate) fn board_head(
+    ctx: &McpContext,
+    model: &Model,
+    board_id: Uuid,
+) -> Result<Board, McpError> {
+    if let LoadState::Loaded(board) = model.board_by_id_state(board_id) {
+        return Ok(board.clone());
+    }
+    ctx.get_board(board_id)
+        .map_err(kanban_err_to_mcp)?
+        .ok_or_else(|| kanban_err_to_mcp(KanbanError::not_found("Board", board_id)))
 }
 
 /// Project a domain `Sprint` into its v1 `SprintResponse`, resolving the wire

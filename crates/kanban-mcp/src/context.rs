@@ -629,11 +629,12 @@ mod tests {
             crate::helpers::model_read::resolve_column_in_board(&model, "TODO", board_id).unwrap(),
             column.id
         );
+        let board = crate::helpers::board_head(&ctx, &model, board_id).unwrap();
         assert_eq!(
             crate::helpers::model_read::resolve_sprint_in_board(
                 &model,
                 &sprint.sprint_number.to_string(),
-                board_id
+                &board
             )
             .unwrap(),
             sprint.id

@@ -1,7 +1,7 @@
 use crate::helpers::model_read::{resolve_board, resolve_sprint_global, resolve_sprint_in_board};
 use crate::helpers::{
-    core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write, parse_datetime, project_sprint,
-    to_call_tool_result, to_call_tool_result_json,
+    board_head, core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write, parse_datetime,
+    project_sprint, to_call_tool_result, to_call_tool_result_json,
 };
 use crate::requests::sprint::{
     ActivateSprintRequest, CancelSprintRequest, CarryOverSprintCardsRequest, CompleteSprintRequest,
@@ -327,7 +327,8 @@ impl KanbanMcpServer {
             }
             .for_board(from_sprint.board_id);
             ctx.sync_into(&to_scope, &mut model);
-            let to_id = resolve_sprint_in_board(&model, &req.to_sprint, from_sprint.board_id)?;
+            let board = board_head(ctx, &model, from_sprint.board_id)?;
+            let to_id = resolve_sprint_in_board(&model, &req.to_sprint, &board)?;
             ctx.mutate(|c| c.carry_over_sprint_cards_impl(from_id, to_id))
                 .map(|(count, _inv)| count)
                 .map_err(kanban_err_to_mcp)

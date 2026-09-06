@@ -3,7 +3,7 @@ use crate::helpers::model_read::{
     resolve_sprint_global, resolve_sprint_in_board,
 };
 use crate::helpers::{
-    card_board, core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write,
+    board_head, card_board, core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write,
     parse_archived_selector, parse_datetime, parse_priority, parse_sort_field, parse_sort_order,
     parse_status, to_call_tool_result, to_call_tool_result_json,
 };
@@ -148,7 +148,8 @@ impl KanbanMcpServer {
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
             let column_id = resolve_column_in_board(&model, &req.column, board_id)?;
             if let Some(raw) = req.sprint.as_deref() {
-                req.content.sprint_id = Some(resolve_sprint_in_board(&model, raw, board_id)?);
+                let board = board_head(ctx, &model, board_id)?;
+                req.content.sprint_id = Some(resolve_sprint_in_board(&model, raw, &board)?);
             }
             let (id, spec) = req
                 .content
@@ -199,7 +200,10 @@ impl KanbanMcpServer {
             };
             let sprint_id = match &req.sprint {
                 Some(raw) => Some(match board_id {
-                    Some(bid) => resolve_sprint_in_board(&model, raw, bid)?,
+                    Some(bid) => {
+                        let board = board_head(ctx, &model, bid)?;
+                        resolve_sprint_in_board(&model, raw, &board)?
+                    }
                     None => resolve_sprint_global(&model, raw)?,
                 }),
                 None => None,

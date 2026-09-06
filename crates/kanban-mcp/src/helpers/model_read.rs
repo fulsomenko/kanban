@@ -2,7 +2,7 @@ use crate::helpers::error_mapping::kanban_err_to_mcp;
 use kanban_domain::{
     find_boards_by_name, find_columns_by_name, find_sprints_by_query_global,
     find_sprints_by_query_on_board, parse_identifier, AmbiguousMatch, BatchResolutionCause,
-    BatchResolutionFailure, Card, KanbanError, LoadState, Model, ParsedIdentifier, Prefix,
+    BatchResolutionFailure, Board, Card, KanbanError, LoadState, Model, ParsedIdentifier, Prefix,
 };
 use rmcp::model::ErrorData as McpError;
 use std::collections::HashSet;
@@ -130,13 +130,12 @@ pub(crate) fn resolve_column_global(model: &Model, raw: &str) -> Result<Uuid, Mc
 pub(crate) fn resolve_sprint_in_board(
     model: &Model,
     raw: &str,
-    board_id: Uuid,
+    board: &Board,
 ) -> Result<Uuid, McpError> {
     if let Ok(uuid) = Uuid::parse_str(raw) {
         return Ok(uuid);
     }
-    let sprints = require_loaded(model.board_sprints_state(board_id), "sprints of the board")?;
-    let board = require_loaded(model.board_by_id_state(board_id), "board")?;
+    let sprints = require_loaded(model.board_sprints_state(board.id), "sprints of the board")?;
     let matches = find_sprints_by_query_on_board(raw, sprints, board);
     match matches.as_slice() {
         [] => {
@@ -470,7 +469,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_sprint_in_board_reads_the_scoped_tier_and_the_board() {
+    fn test_resolve_sprint_in_board_reads_the_scoped_tier_with_the_supplied_head() {
         let board = Board::new("Kanban", None::<String>);
         let board_id = board.id;
         let sprint = Sprint::new(board_id, 1, None, None::<String>);
@@ -478,10 +477,6 @@ mod tests {
 
         let mut model = Model::default();
         let _ = model.apply_resolved(Resolved {
-            boards: Collection {
-                all: LoadState::Loaded(vec![board]),
-                ..Default::default()
-            },
             sprints: Collection {
                 by_parent: [(board_id, LoadState::Loaded(vec![sprint]))].into(),
                 ..Default::default()
@@ -490,11 +485,11 @@ mod tests {
         });
 
         assert_eq!(
-            resolve_sprint_in_board(&model, "1", board_id).unwrap(),
+            resolve_sprint_in_board(&model, "1", &board).unwrap(),
             sprint_id
         );
 
-        let err = resolve_sprint_in_board(&Model::default(), "1", board_id).unwrap_err();
+        let err = resolve_sprint_in_board(&Model::default(), "1", &board).unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
         assert!(!err.message.contains("not found"));
     }
