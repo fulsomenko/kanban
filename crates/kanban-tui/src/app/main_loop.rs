@@ -207,17 +207,18 @@ impl App {
                                 }
 
                                 // Check if help menu pending action should execute
-                                if let Some((start_time, action)) = &self.ui_state.help_pending_action {
+                                if let Some((start_time, action)) = self.ui_state.help_pending_action {
                                     if start_time.elapsed().as_millis() >= 100 {
                                         self.needs_redraw = true;
-                                        if let AppMode::Help(previous_mode) = &self.mode {
-                                            self.mode = (**previous_mode).clone();
-                                        } else {
-                                            self.mode = AppMode::Normal;
-                                        }
+                                        let restored = match &self.mode {
+                                            AppMode::Help(previous_mode) => {
+                                                (**previous_mode).clone()
+                                            }
+                                            _ => AppMode::Normal,
+                                        };
+                                        self.set_mode(restored);
                                         self.ui_state.help_list.reset();
 
-                                        let action = *action;
                                         self.ui_state.help_pending_action = None;
                                         let should_restart =
                                             self.dispatch_help_action(action, &mut terminal, &events);

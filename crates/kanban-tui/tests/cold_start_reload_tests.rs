@@ -2,6 +2,8 @@ mod helpers;
 
 use helpers::{create_test_json_file, CountingBackend};
 use kanban_domain::{Column, Snapshot, Sprint};
+use kanban_tui::app::mode::{AppMode, DialogMode};
+use kanban_tui::app::Focus;
 use kanban_tui::App;
 
 #[tokio::test]
@@ -83,4 +85,49 @@ async fn test_cold_start_after_a_sprint_log_migration_loads_the_migrated_state()
         migrated_log_present,
         "cold start must serve the migrated sprint log, not the stale pre-migration probe snapshot"
     );
+}
+
+#[tokio::test]
+async fn test_delete_board_key_after_cold_start_opens_delete_confirm() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("delete_after_cold_start.json");
+    let path_str = path.to_str().unwrap().to_string();
+
+    let store = kanban_persistence_json::JsonFileStore::new(&path_str);
+    let board = kanban_domain::Board::new("Board".to_string(), None::<String>);
+    let column = Column::new(board.id, "Todo".to_string(), 0);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
+    let card = kanban_domain::Card::new(board.id, column.id, "Card".to_string(), 0);
+
+    let snapshot = Snapshot {
+        archived_boards: Vec::new(),
+        boards: vec![board.clone()],
+        columns: vec![column.clone()],
+        cards: vec![card.clone()],
+        archived_cards: vec![],
+        sprints: vec![sprint.clone()],
+        graph: Default::default(),
+        prefixes: Vec::new(),
+    };
+
+    use kanban_persistence::{PersistenceMetadata, PersistenceStore, StoreSnapshot};
+    let store_snapshot = StoreSnapshot {
+        data: serde_json::to_vec(&snapshot).unwrap(),
+        metadata: PersistenceMetadata::new(store.instance_id()),
+    };
+    store.save(store_snapshot).await.unwrap();
+
+    let (mut app, _rx) = App::new(Some(path_str)).await.unwrap();
+    app.load_initial_state().await;
+
+    assert!(
+        !app.model.board_sprints_state(board.id).is_loaded(),
+        "precondition: cold start must not have absorbed the sprints tier"
+    );
+
+    app.focus.active = Focus::Boards;
+    app.board_list.inner_mut().set_selected_index(Some(0));
+    app.handle_delete_board_key();
+
+    assert_eq!(app.mode, AppMode::Dialog(DialogMode::DeleteBoardConfirm));
 }

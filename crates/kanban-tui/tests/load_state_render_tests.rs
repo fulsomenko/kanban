@@ -220,7 +220,7 @@ fn test_a_not_loaded_sprint_tier_does_not_render_no_sprints_available() {
     use kanban_domain::CardFilters;
     use kanban_view::filters::FilterDialogState;
     let (mut app, _board) = app_with_board_and_sprint_state(LoadState::NotLoaded);
-    app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
+    app.mode = AppMode::Dialog(DialogMode::FilterOptions);
     app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
@@ -234,7 +234,7 @@ fn test_a_loaded_but_empty_sprint_tier_still_renders_no_sprints_available() {
     use kanban_domain::CardFilters;
     use kanban_view::filters::FilterDialogState;
     let (mut app, _board) = app_with_board_and_sprint_state(LoadState::Loaded(vec![]));
-    app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
+    app.mode = AppMode::Dialog(DialogMode::FilterOptions);
     app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::components::render_filter_options_popup(&app, frame);
@@ -253,7 +253,7 @@ fn test_render_filter_sprints_section_always_draws_its_panel() {
         LoadState::Loaded(vec![]),
     ] {
         let (mut app, _board) = app_with_board_and_sprint_state(state);
-        app.push_mode(AppMode::Dialog(DialogMode::FilterOptions));
+        app.mode = AppMode::Dialog(DialogMode::FilterOptions);
         app.filter.dialog_state = Some(FilterDialogState::new(CardFilters::default()));
         let output = helpers::render_widget_to_string(120, 40, |frame| {
             kanban_tui::components::render_filter_options_popup(&app, frame);
@@ -269,7 +269,7 @@ fn test_render_filter_sprints_section_always_draws_its_panel() {
 fn test_sprint_detail_with_an_unloaded_sprint_renders_an_unavailable_panel() {
     let mut app = App::test_default();
     app.selection.active_sprint_id = Some(uuid::Uuid::new_v4());
-    app.push_mode(AppMode::SprintDetail);
+    app.mode = AppMode::SprintDetail;
     let output = helpers::render_widget_to_string(120, 30, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -281,7 +281,7 @@ fn test_sprint_detail_with_an_unloaded_sprint_renders_an_unavailable_panel() {
 fn test_sprint_detail_with_no_sprint_selected_still_draws_nothing() {
     let mut app = App::test_default();
     app.selection.active_sprint_id = None;
-    app.push_mode(AppMode::SprintDetail);
+    app.mode = AppMode::SprintDetail;
     let output = helpers::render_widget_to_string(120, 30, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -295,7 +295,7 @@ fn test_sprint_detail_with_no_sprint_selected_still_draws_nothing() {
 #[test]
 fn test_card_detail_with_an_unloaded_sprint_tier_does_not_render_no_sprint() {
     let (mut app, _board, _card) = app_with_card_and_sprint_state(LoadState::NotLoaded);
-    app.push_mode(AppMode::CardDetail);
+    app.mode = AppMode::CardDetail;
     let output = helpers::render_widget_to_string(120, 30, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -305,7 +305,7 @@ fn test_card_detail_with_an_unloaded_sprint_tier_does_not_render_no_sprint() {
 #[test]
 fn test_card_detail_with_a_loaded_sprint_tier_renders_metadata_normally() {
     let (mut app, _board, _card) = app_with_card_and_sprint_state(LoadState::Loaded(vec![]));
-    app.push_mode(AppMode::CardDetail);
+    app.mode = AppMode::CardDetail;
     let output = helpers::render_widget_to_string(120, 30, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -316,7 +316,7 @@ fn test_card_detail_with_a_loaded_sprint_tier_renders_metadata_normally() {
 #[test]
 fn test_board_detail_columns_section_distinguishes_not_loaded_from_empty() {
     let (mut app, _board) = app_with_board_and_column_state(LoadState::NotLoaded);
-    app.push_mode(AppMode::BoardDetail);
+    app.mode = AppMode::BoardDetail;
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -327,7 +327,7 @@ fn test_board_detail_columns_section_distinguishes_not_loaded_from_empty() {
 #[test]
 fn test_board_detail_columns_section_still_renders_no_columns_message_when_loaded_empty() {
     let (mut app, _board) = app_with_board_and_column_state(LoadState::Loaded(vec![]));
-    app.push_mode(AppMode::BoardDetail);
+    app.mode = AppMode::BoardDetail;
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -337,7 +337,7 @@ fn test_board_detail_columns_section_still_renders_no_columns_message_when_loade
 #[test]
 fn test_the_create_card_dialog_sprint_field_distinguishes_not_loaded_from_empty() {
     let (mut app, _board) = app_with_board_and_sprint_state(LoadState::NotLoaded);
-    app.push_mode(AppMode::Dialog(DialogMode::CreateCard));
+    app.mode = AppMode::Dialog(DialogMode::CreateCard);
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -348,7 +348,7 @@ fn test_the_create_card_dialog_sprint_field_distinguishes_not_loaded_from_empty(
 #[test]
 fn test_the_sprint_picker_distinguishes_not_loaded_from_empty() {
     let (mut app, _board) = app_with_board_and_sprint_state(LoadState::NotLoaded);
-    app.push_mode(AppMode::Dialog(DialogMode::AssignMultipleCardsToSprint));
+    app.mode = AppMode::Dialog(DialogMode::AssignMultipleCardsToSprint);
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -365,7 +365,7 @@ fn test_carry_over_sprint_dialog_distinguishes_not_loaded_from_empty() {
     let dialog = CarryOverSprintDialog { card_count: 0 };
     assert_eq!(dialog.options_count(&app), 0);
 
-    app.push_mode(AppMode::Dialog(DialogMode::CarryOverSprint));
+    app.mode = AppMode::Dialog(DialogMode::CarryOverSprint);
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -381,7 +381,7 @@ fn test_carry_over_sprint_dialog_still_renders_when_loaded_empty() {
     let dialog = CarryOverSprintDialog { card_count: 0 };
     assert_eq!(dialog.options_count(&app), 0);
 
-    app.push_mode(AppMode::Dialog(DialogMode::CarryOverSprint));
+    app.mode = AppMode::Dialog(DialogMode::CarryOverSprint);
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -398,7 +398,7 @@ fn test_sprint_assign_dialog_distinguishes_not_loaded_from_empty() {
     let dialog = SprintAssignDialog;
     assert_eq!(dialog.options_count(&app), 1);
 
-    app.push_mode(AppMode::Dialog(DialogMode::AssignCardToSprint));
+    app.mode = AppMode::Dialog(DialogMode::AssignCardToSprint);
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -409,7 +409,7 @@ fn test_sprint_assign_dialog_distinguishes_not_loaded_from_empty() {
 #[test]
 fn test_board_detail_sprints_section_distinguishes_not_loaded_from_empty() {
     let (mut app, _board) = app_with_board_and_sprint_state(LoadState::NotLoaded);
-    app.push_mode(AppMode::BoardDetail);
+    app.mode = AppMode::BoardDetail;
     let output = helpers::render_widget_to_string(120, 40, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -457,7 +457,7 @@ fn test_multi_panel_column_name_lookup_renders_failed_distinctly() {
 #[test]
 fn test_a_not_loaded_graph_tier_does_not_render_no_parents_or_no_children() {
     let (mut app, _board, _card) = app_with_card_and_graph_state(LoadState::NotLoaded);
-    app.push_mode(AppMode::CardDetail);
+    app.mode = AppMode::CardDetail;
     let output = helpers::render_widget_to_string(120, 30, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -472,7 +472,7 @@ fn test_a_failed_graph_tier_renders_the_error_inline_in_the_relationship_panel()
     let (mut app, _board, _card) = app_with_card_and_graph_state(LoadState::Failed(Arc::new(
         KanbanError::unsupported("boom"),
     )));
-    app.push_mode(AppMode::CardDetail);
+    app.mode = AppMode::CardDetail;
     let output = helpers::render_widget_to_string(120, 30, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
@@ -485,7 +485,7 @@ fn test_a_failed_graph_tier_renders_the_error_inline_in_the_relationship_panel()
 fn test_a_loaded_but_genuinely_empty_graph_still_renders_no_parents_and_no_children() {
     let (mut app, _board, _card) =
         app_with_card_and_graph_state(LoadState::Loaded(DependencyGraph::default()));
-    app.push_mode(AppMode::CardDetail);
+    app.mode = AppMode::CardDetail;
     let output = helpers::render_widget_to_string(120, 30, |frame| {
         kanban_tui::ui::render(&mut app, frame);
     });
