@@ -3,7 +3,9 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, Command, CompactColumnPositions, CreateBoard, ImportEntities,
     UpdateBoard,
 };
-use kanban_domain::{BoardUpdate, CardUpdate, EntityIds, Invalidation, KanbanOperations, KanbanResult};
+use kanban_domain::{
+    BoardUpdate, CardUpdate, EntityIds, Invalidation, KanbanOperations, KanbanResult,
+};
 use kanban_service::undo_stack::UndoStack;
 use kanban_service::{read_full_snapshot, write_full_snapshot, KanbanContext};
 use std::sync::Arc;
@@ -613,7 +615,7 @@ async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() -> Ka
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.archive_cards_detailed(vec![c1.id, c2.id]);
+    let (result, _) = ctx.archive_cards_detailed(vec![c1.id, c2.id]);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
@@ -633,7 +635,7 @@ async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() -> Ka
 async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
-    let result = ctx.archive_cards_detailed(vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()]);
+    let (result, _) = ctx.archive_cards_detailed(vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()]);
     assert!(result.succeeded.is_empty());
     assert_eq!(result.failed.len(), 2);
     assert!(
@@ -655,7 +657,7 @@ async fn test_detailed_archive_partial_success_is_undoable() -> KanbanResult<()>
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.archive_cards_detailed(vec![card.id, uuid::Uuid::new_v4()]);
+    let (result, _) = ctx.archive_cards_detailed(vec![card.id, uuid::Uuid::new_v4()]);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
     assert!(ctx.is_dirty());
@@ -678,7 +680,7 @@ async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() -> Kanba
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.move_cards_detailed(vec![c1.id, c2.id], col_b.id);
+    let (result, _) = ctx.move_cards_detailed(vec![c1.id, c2.id], col_b.id);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
@@ -697,7 +699,7 @@ async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() -> Kanba
 async fn test_move_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
-    let result = ctx.move_cards_detailed(
+    let (result, _) = ctx.move_cards_detailed(
         vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
         uuid::Uuid::new_v4(),
     );
@@ -723,7 +725,7 @@ async fn test_move_cards_detailed_partial_success_is_undoable() -> KanbanResult<
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.move_cards_detailed(vec![card.id, uuid::Uuid::new_v4()], col_b.id);
+    let (result, _) = ctx.move_cards_detailed(vec![card.id, uuid::Uuid::new_v4()], col_b.id);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
     assert!(ctx.is_dirty());
@@ -746,7 +748,7 @@ async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entr
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.assign_cards_to_sprint_detailed(vec![c1.id, c2.id], sprint.id);
+    let (result, _) = ctx.assign_cards_to_sprint_detailed(vec![c1.id, c2.id], sprint.id);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
@@ -767,7 +769,7 @@ async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entr
 async fn test_assign_cards_to_sprint_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
-    let result = ctx.assign_cards_to_sprint_detailed(
+    let (result, _) = ctx.assign_cards_to_sprint_detailed(
         vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
         uuid::Uuid::new_v4(),
     );
@@ -793,7 +795,7 @@ async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() -> K
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result =
+    let (result, _) =
         ctx.assign_cards_to_sprint_detailed(vec![card.id, uuid::Uuid::new_v4()], sprint.id);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
