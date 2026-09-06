@@ -549,6 +549,151 @@ mod tests {
         assert_eq!(reads_before_write, vec!["list_boards"]);
     }
 
+    async fn create_board(server: &KanbanMcpServer, name: &str) -> serde_json::Value {
+        text_payload(
+            &server
+                .tool_create_board(Parameters(crate::requests::board::CreateBoardParams {
+                    content: CreateBoardRequest {
+                        id: None,
+                        name: name.to_string(),
+                        description: None,
+                        sprint_prefix: None,
+                        card_prefix: None,
+                        task_sort_field: None,
+                        task_sort_order: None,
+                        sprint_duration_days: None,
+                        task_list_view: None,
+                    },
+                    with_default_columns: None,
+                }))
+                .await
+                .unwrap(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_get_column_by_name_ignores_archived_board_duplicates_on_json() {
+        test_get_column_by_name_ignores_archived_board_duplicates("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_get_column_by_name_ignores_archived_board_duplicates_on_sqlite() {
+        test_get_column_by_name_ignores_archived_board_duplicates("test.sqlite").await;
+    }
+
+    async fn test_get_column_by_name_ignores_archived_board_duplicates(file_name: &str) {
+        let (server, _dir, _handle) = seeded_server(file_name).await;
+
+        let alpha_todo = text_payload(
+            &server
+                .tool_get_column(Parameters(GetColumnRequest {
+                    column: "TODO".into(),
+                }))
+                .await
+                .unwrap(),
+        );
+        let alpha_todo_id = alpha_todo["id"].as_str().unwrap().to_string();
+
+        create_board(&server, "Beta").await;
+        server
+            .tool_create_column(Parameters(CreateColumnParams {
+                board: "Beta".into(),
+                content: kanban_service::api::CreateColumnRequest {
+                    id: None,
+                    name: "TODO".into(),
+                    wip_limit: None,
+                    default_status: None,
+                },
+            }))
+            .await
+            .unwrap();
+        server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: "Beta".into(),
+            }))
+            .await
+            .unwrap();
+
+        let result = text_payload(
+            &server
+                .tool_get_column(Parameters(GetColumnRequest {
+                    column: "TODO".into(),
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(result["id"], alpha_todo_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_column_named_only_on_archived_board_returns_not_found_on_json() {
+        test_get_column_named_only_on_archived_board_returns_not_found("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_get_column_named_only_on_archived_board_returns_not_found_on_sqlite() {
+        test_get_column_named_only_on_archived_board_returns_not_found("test.sqlite").await;
+    }
+
+    async fn test_get_column_named_only_on_archived_board_returns_not_found(file_name: &str) {
+        let (server, _dir, _handle) = seeded_server(file_name).await;
+
+        create_board(&server, "Beta").await;
+        let icebox = text_payload(
+            &server
+                .tool_create_column(Parameters(CreateColumnParams {
+                    board: "Beta".into(),
+                    content: kanban_service::api::CreateColumnRequest {
+                        id: None,
+                        name: "Icebox".into(),
+                        wip_limit: None,
+                        default_status: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let icebox_id = icebox["id"].as_str().unwrap().to_string();
+
+        server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: "Beta".into(),
+            }))
+            .await
+            .unwrap();
+
+        let get_err = server
+            .tool_get_column(Parameters(GetColumnRequest {
+                column: "Icebox".into(),
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(get_err.code, ErrorCode::INVALID_PARAMS);
+        assert!(get_err.message.to_lowercase().contains("not found"));
+
+        let update_err = server
+            .tool_update_column(Parameters(UpdateColumnRequest {
+                column: "Icebox".into(),
+                name: Some("Hijacked".into()),
+                position: None,
+                wip_limit: None,
+                clear_wip_limit: None,
+                default_status: None,
+                clear_default_status: None,
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(update_err.code, ErrorCode::INVALID_PARAMS);
+
+        let still_live = text_payload(
+            &server
+                .tool_get_column(Parameters(GetColumnRequest { column: icebox_id }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(still_live["name"], "Icebox");
+    }
+
     #[tokio::test]
     async fn test_get_column_result_json_is_unchanged() {
         let (server, _dir, _handle) = seeded_server("test.json").await;

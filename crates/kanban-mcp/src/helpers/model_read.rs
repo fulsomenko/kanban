@@ -5,6 +5,7 @@ use kanban_domain::{
     BatchResolutionFailure, Card, KanbanError, LoadState, Model, ParsedIdentifier, Prefix,
 };
 use rmcp::model::ErrorData as McpError;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 pub(crate) fn require_loaded<T>(state: LoadState<T>, what: &str) -> Result<T, McpError> {
@@ -78,17 +79,30 @@ pub(crate) fn resolve_column_in_board(
     }
 }
 
+fn require_archived_board_ids(model: &Model) -> Result<&HashSet<Uuid>, McpError> {
+    require_loaded(model.archived_boards_state(), "archived board markers")?;
+    Ok(model.archived_board_ids())
+}
+
 pub(crate) fn resolve_column_global(model: &Model, raw: &str) -> Result<Uuid, McpError> {
     if let Ok(uuid) = Uuid::parse_str(raw) {
         return Ok(uuid);
     }
     let columns = require_loaded(model.columns_state().as_ref(), "column list")?;
-    let matches = find_columns_by_name(raw, columns);
+    let archived = require_archived_board_ids(model)?;
+    let matches = find_columns_by_name(raw, columns)
+        .into_iter()
+        .filter(|c| !archived.contains(&c.board_id))
+        .collect::<Vec<_>>();
     match matches.as_slice() {
         [] => Err(kanban_err_to_mcp(KanbanError::not_found_by_name(
             "Column",
             raw,
-            columns.iter().map(|c| c.name.clone()).collect(),
+            columns
+                .iter()
+                .filter(|c| !archived.contains(&c.board_id))
+                .map(|c| c.name.clone())
+                .collect(),
         ))),
         [c] => Ok(c.id),
         many => {
@@ -160,11 +174,16 @@ pub(crate) fn resolve_sprint_global(model: &Model, raw: &str) -> Result<Uuid, Mc
     }
     let all_sprints = require_loaded(model.sprints_state().as_ref(), "sprint list")?;
     let boards = require_loaded(model.boards_state().as_ref(), "board list")?;
-    let matches = find_sprints_by_query_global(raw, all_sprints, boards);
+    let archived = require_archived_board_ids(model)?;
+    let matches = find_sprints_by_query_global(raw, all_sprints, boards)
+        .into_iter()
+        .filter(|s| !archived.contains(&s.board_id))
+        .collect::<Vec<_>>();
     match matches.as_slice() {
         [] => {
             let available = all_sprints
                 .iter()
+                .filter(|s| !archived.contains(&s.board_id))
                 .map(|s| {
                     let label = boards
                         .iter()
@@ -247,21 +266,25 @@ pub(crate) fn resolve_card(model: &Model, raw: &str) -> Result<Uuid, McpError> {
 pub(crate) fn resolve_cards(model: &Model, raws: &[String]) -> Result<Vec<Uuid>, McpError> {
     let mut resolved = Vec::with_capacity(raws.len());
     let mut failures = Vec::new();
-    let mut cards: Option<&Vec<Card>> = None;
+    let mut loaded: Option<(&Vec<Card>, &HashSet<Uuid>)> = None;
     for raw in raws {
         if let Ok(uuid) = Uuid::parse_str(raw) {
             resolved.push(uuid);
             continue;
         }
-        let cards = match cards {
-            Some(cards) => cards,
+        let (cards, archived) = match loaded {
+            Some(pair) => pair,
             None => {
-                let loaded = require_loaded(model.cards_state().as_ref(), "card list")?;
-                cards = Some(loaded);
-                loaded
+                let cards = require_loaded(model.cards_state().as_ref(), "card list")?;
+                let archived = require_archived_board_ids(model)?;
+                loaded = Some((cards, archived));
+                (cards, archived)
             }
         };
-        let matches = find_card_matches(cards, raw);
+        let matches = find_card_matches(cards, raw)
+            .into_iter()
+            .filter(|c| !archived.contains(&c.board_id))
+            .collect::<Vec<_>>();
         match matches.as_slice() {
             [] => failures.push(BatchResolutionFailure {
                 raw_input: raw.clone(),
@@ -393,6 +416,10 @@ mod tests {
                 all: LoadState::Loaded(vec![column]),
                 ..Default::default()
             },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -413,9 +440,33 @@ mod tests {
                 ]),
                 ..Default::default()
             },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
             ..Default::default()
         });
         assert!(resolve_column_global(&dup_model, "TODO").is_err());
+    }
+
+    #[test]
+    fn test_resolve_column_global_requires_the_archived_marker_tier() {
+        let board_id = Uuid::new_v4();
+        let column = Column::new(board_id, "TODO", 0);
+
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            columns: Collection {
+                all: LoadState::Loaded(vec![column]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let err = resolve_column_global(&model, "TODO").unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("archived board markers"));
+        assert!(!err.message.contains("not found"));
     }
 
     #[test]
@@ -464,6 +515,10 @@ mod tests {
                 all: LoadState::Loaded(vec![sprint]),
                 ..Default::default()
             },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -510,6 +565,10 @@ mod tests {
         let _ = model.apply_resolved(Resolved {
             cards: Collection {
                 all: LoadState::Loaded(vec![card]),
+                ..Default::default()
+            },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
                 ..Default::default()
             },
             ..Default::default()

@@ -423,6 +423,119 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_archive_cards_by_identifier_only_on_archived_board_reports_not_found_on_json() {
+        test_archive_cards_by_identifier_only_on_archived_board_reports_not_found("test.json")
+            .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_archive_cards_by_identifier_only_on_archived_board_reports_not_found_on_sqlite() {
+        test_archive_cards_by_identifier_only_on_archived_board_reports_not_found("test.sqlite")
+            .await;
+    }
+
+    async fn test_archive_cards_by_identifier_only_on_archived_board_reports_not_found(
+        file_name: &str,
+    ) {
+        let seeded = seeded_server(file_name).await;
+
+        let beta = text_payload(
+            &seeded
+                .server
+                .tool_create_board(Parameters(crate::requests::board::CreateBoardParams {
+                    content: CreateBoardRequest {
+                        id: None,
+                        name: "Beta".to_string(),
+                        description: None,
+                        sprint_prefix: None,
+                        card_prefix: None,
+                        task_sort_field: None,
+                        task_sort_order: None,
+                        sprint_duration_days: None,
+                        task_list_view: None,
+                    },
+                    with_default_columns: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let beta_id = beta["id"].as_str().unwrap().to_string();
+
+        let beta_column = text_payload(
+            &seeded
+                .server
+                .tool_create_column(Parameters(CreateColumnParams {
+                    board: beta_id.clone(),
+                    content: kanban_service::api::CreateColumnRequest {
+                        id: None,
+                        name: "TODO".to_string(),
+                        wip_limit: None,
+                        default_status: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let beta_column_id = beta_column["id"].as_str().unwrap().to_string();
+
+        let beta_card = text_payload(
+            &seeded
+                .server
+                .tool_create_card(Parameters(CreateCardParams {
+                    board: beta_id.clone(),
+                    column: beta_column_id,
+                    sprint: None,
+                    content: kanban_service::api::CreateCardRequest {
+                        id: None,
+                        title: "Only on Beta".to_string(),
+                        description: None,
+                        priority: None,
+                        due_date: None,
+                        points: None,
+                        sprint_id: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let beta_card_id = beta_card["id"].as_str().unwrap().to_string();
+        let beta_card_identifier = format!(
+            "{}-{}",
+            beta_card["prefix"].as_str().unwrap(),
+            beta_card["card_number"].as_u64().unwrap()
+        );
+
+        seeded
+            .server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: "Beta".into(),
+            }))
+            .await
+            .unwrap();
+
+        let err = seeded
+            .server
+            .tool_archive_cards(Parameters(ArchiveCardsRequest {
+                cards: vec![beta_card_identifier.clone()],
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains(&beta_card_identifier));
+
+        let still_live = text_payload(
+            &seeded
+                .server
+                .tool_get_card(Parameters(crate::requests::card::GetCardRequest {
+                    card: beta_card_id,
+                }))
+                .await
+                .unwrap(),
+        );
+        assert!(still_live["archived_at"].is_null());
+    }
+
+    #[tokio::test]
     async fn test_move_cards_with_an_unloadable_column_collection_errors_naming_the_collection_on_json(
     ) {
         let seeded = seeded_server("test.json").await;
