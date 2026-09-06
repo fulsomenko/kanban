@@ -666,4 +666,104 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_execute_commands_applies_the_returned_invalidation() -> KanbanResult<()> {
+        use crate::cli::{BoardAction, BoardCommand as CliBoardCommand, Commands};
+        use crate::scope::CommandScope;
+        use kanban_domain::commands::{BoardCommand as DomainBoardCommand, Command, CreateBoard};
+
+        let mut ctx = seam_context();
+        ctx.mutate(|c| c.create_board_impl("First".to_string(), None))?;
+
+        ctx.set_scope(CommandScope::from_command(&Commands::Board(CliBoardCommand {
+            action: BoardAction::Get {
+                board: "First".to_string(),
+            },
+        })));
+        ctx.sync();
+        assert_eq!(ctx.model().boards_state().loaded().unwrap().len(), 1);
+
+        ctx.execute_commands(vec![Command::Board(DomainBoardCommand::Create(CreateBoard {
+            id: Uuid::new_v4(),
+            name: "Second".to_string(),
+            card_prefix: None,
+            position: 1,
+        }))])?;
+
+        assert_eq!(ctx.model().boards_state().loaded().unwrap().len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_archive_cards_detailed_applies_the_returned_invalidation() -> KanbanResult<()> {
+        use crate::cli::{Commands, RelationAction, RelationCommand, SortDir, SortKey};
+        use crate::scope::CommandScope;
+
+        let mut ctx = seam_context();
+        let board = ctx.mutate(|c| c.create_board_impl("Board".to_string(), None))?;
+        let column = ctx.mutate(|c| c.create_column_impl(board.id, "Col".to_string(), None))?;
+        let parent = ctx.mutate(|c| {
+            c.create_card_impl(
+                board.id,
+                column.id,
+                "Parent".to_string(),
+                kanban_domain::CreateCardOptions::default(),
+            )
+        })?;
+        let child = ctx.mutate(|c| {
+            c.create_card_impl(
+                board.id,
+                column.id,
+                "Child".to_string(),
+                kanban_domain::CreateCardOptions::default(),
+            )
+        })?;
+        ctx.mutate_unit(|c| c.attach_children_impl(parent.id, vec![child.id]))?;
+
+        ctx.set_scope(CommandScope::from_command(&Commands::Relation(
+            RelationCommand {
+                action: RelationAction::Children {
+                    card: parent.id.to_string(),
+                    sort: SortKey::CardNumber,
+                    order: SortDir::Asc,
+                },
+            },
+        )));
+        ctx.sync();
+        assert_eq!(ctx.list_children_of(parent.id)?, vec![child.id]);
+
+        let result = ctx.archive_cards_detailed(vec![child.id]);
+        assert_eq!(result.succeeded, vec![child.id]);
+        assert!(ctx.list_children_of(parent.id)?.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_column_with_default_status_and_position_creates_one_undo_entry(
+    ) -> KanbanResult<()> {
+        let mut ctx = seam_context();
+        let board = ctx.mutate(|c| c.create_board_impl("Board".to_string(), None))?;
+
+        let before = ctx.inner.undo_depth();
+        let column = ctx.create_column_with_default_status(
+            board.id,
+            "Mid".to_string(),
+            Some(1),
+            Some(CardStatus::InProgress),
+        )?;
+        assert_eq!(ctx.inner.undo_depth() - before, 1);
+        assert_eq!(column.position, 1);
+        assert_eq!(column.default_status, Some(CardStatus::InProgress));
+        assert_eq!(
+            KanbanOperations::get_column(&ctx, column.id)?
+                .unwrap()
+                .default_status,
+            Some(CardStatus::InProgress)
+        );
+
+        Ok(())
+    }
 }
