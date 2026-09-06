@@ -340,6 +340,10 @@ macro_rules! context_contract_tests {
         async fn test_list_boards_liveonly_does_not_fetch_archived_markers() {
             $crate::test_helpers::contract::archive::test_list_boards_liveonly_does_not_fetch_archived_markers(&$factory_fn()).await;
         }
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_list_archived_cards_by_missing_board_returns_empty() {
+            $crate::test_helpers::contract::archive::test_list_archived_cards_by_missing_board_returns_empty(&$factory_fn()).await;
+        }
 
         // LegacyEdge tests
         #[tokio::test(flavor = "multi_thread")]

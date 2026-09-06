@@ -89,6 +89,27 @@ async fn test_list_archived_cards_by_board_excludes_other_boards() {
     server.shutdown().await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_archived_cards_by_missing_board_returns_empty() {
+    let server = TestServer::start_with(|ctx| {
+        seed_archived_card(ctx);
+    })
+    .await;
+    let backend = HttpBackend::new(&server.base_url()).unwrap();
+
+    let result: Result<Vec<ArchivedCard>, String> = blocking(move || {
+        backend
+            .list_archived_cards_by_board(Uuid::new_v4())
+            .map_err(|e| e.to_string())
+    })
+    .await;
+
+    let markers = result.expect("unknown board must resolve to an empty list, not an error");
+    assert!(markers.is_empty());
+
+    server.shutdown().await;
+}
+
 struct ArchivedCardsByBoardPlan {
     board_id: Uuid,
 }

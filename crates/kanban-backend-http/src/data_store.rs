@@ -200,6 +200,11 @@ impl DataStore for HttpBackend {
 
     fn list_archived_cards_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<ArchivedCard>> {
         self.block_on(async {
+            let board: Option<BoardResponse> =
+                self.get_json(&format!("/v1/boards/{board_id}")).await?;
+            let Some(_) = board else {
+                return Ok(Vec::new());
+            };
             let resp: Vec<ArchivedCardResponse> = self
                 .get_json_list(&format!("/v1/boards/{board_id}/archived-cards"))
                 .await?;
