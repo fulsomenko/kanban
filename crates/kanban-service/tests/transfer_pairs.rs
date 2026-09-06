@@ -358,7 +358,7 @@ async fn test_transfer_state_to_is_lossless_for_every_backend_pair() {
             let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
 
             src_ctx
-                .transfer_state_to(dst_ctx.data_store())
+                .transfer_state_to(&*dst_ctx.backend())
                 .unwrap_or_else(|e| {
                     panic!("transfer {src_name} -> {dst_name} failed: {e}");
                 });
@@ -591,7 +591,7 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
         let fixture = seed_rich(src_ctx.data_store()).unwrap();
 
         src_ctx
-            .transfer_state_to(dst_ctx.data_store())
+            .transfer_state_to(&*dst_ctx.backend())
             .unwrap_or_else(|e| panic!("transfer into populated {dst_name} failed: {e}"));
         dst_ctx.save().await.unwrap();
 
@@ -642,7 +642,7 @@ async fn test_transfer_state_to_leaves_the_source_untouched() {
         let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
 
         src_ctx
-            .transfer_state_to(dst_ctx.data_store())
+            .transfer_state_to(&*dst_ctx.backend())
             .unwrap_or_else(|e| panic!("transfer from {src_name} failed: {e}"));
 
         assert_transfer_matches(&fixture, src_ctx.data_store());
@@ -786,6 +786,27 @@ impl DataStore for UnsupportedArchivedBoards {
     }
 }
 
+impl CommandStore for UnsupportedArchivedBoards {
+    fn append_batch(&self, batch: &CommandBatch) -> KanbanResult<u64> {
+        self.0.append_batch(batch)
+    }
+    fn batch_count(&self) -> KanbanResult<u64> {
+        self.0.batch_count()
+    }
+    fn load_batches(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
+        self.0.load_batches(from, to)
+    }
+}
+
+impl KanbanBackend for UnsupportedArchivedBoards {
+    fn as_data_store(&self) -> &dyn DataStore {
+        self
+    }
+    fn with_transaction(&self, f: TransactionFn<'_>) -> KanbanResult<()> {
+        self.0.with_transaction(f)
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_transfer_state_to_a_backend_that_cannot_accept_it_fails_loud() {
     let dir = TempDir::new().unwrap();
@@ -837,7 +858,7 @@ async fn test_transfer_with_dangling_sprint_id_onto_sqlite_fails_atomically_then
     let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
 
     assert!(
-        src_ctx.transfer_state_to(dst_ctx.data_store()).is_err(),
+        src_ctx.transfer_state_to(&*dst_ctx.backend()).is_err(),
         "transfer with a dangling sprint_id onto an FK-enforcing target must fail"
     );
 
@@ -863,7 +884,7 @@ async fn test_transfer_with_dangling_sprint_id_onto_sqlite_fails_atomically_then
     src_ctx.data_store().upsert_card(card.clone()).unwrap();
 
     src_ctx
-        .transfer_state_to(dst_ctx.data_store())
+        .transfer_state_to(&*dst_ctx.backend())
         .expect("transfer must succeed once the dangling sprint_id is repaired");
     dst_ctx.save().await.unwrap();
 

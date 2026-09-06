@@ -281,7 +281,7 @@ impl App {
 
         match backend_result {
             Ok(backend) => {
-                if let Err(e) = self.ctx.transfer_state_to(backend.as_data_store()) {
+                if let Err(e) = self.ctx.transfer_state_to(&*backend) {
                     self.set_error(format!("Could not seed \"{}\": {}", filename, e));
                     return false;
                 }
