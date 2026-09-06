@@ -993,9 +993,7 @@ mod tests {
         test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves("test.sqlite").await;
     }
 
-    async fn test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves(
-        file_name: &str,
-    ) {
+    async fn test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves(file_name: &str) {
         let seeded = seeded_server(file_name).await;
 
         let in_sprint = text_payload(
