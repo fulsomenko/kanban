@@ -22,9 +22,13 @@ impl Model {
     /// clear of that tier here clears the matching index entries too, so
     /// `set_cards_of_column` remains its only writer.
     ///
-    /// The snapshot-derived archival markers are left untouched on the
-    /// `Entities` path: only `load_from_snapshot` recomputes them, and
-    /// blanking them here would reclassify every archived entity as live.
+    /// The flat archival-marker tiers (`archived_cards`/`archived_boards` and
+    /// their id sets) are dropped by the arm of the entity kind they mark: a
+    /// `cards` id drops the card markers, a `boards` id or a `prefixes` bump
+    /// drops the board markers. `EntityIds` cannot name a marker directly, so
+    /// this is conservative in the same way a card id already drops the whole
+    /// `cards_by_column`/`archived_cards_by_board` scoped tiers. Both
+    /// `apply_resolved` and `load_from_snapshot` repopulate the dropped tier.
     pub fn invalidate(&mut self, invalidation: Invalidation) -> ModelChanged {
         let ids = match invalidation {
             Invalidation::All => {
@@ -39,6 +43,9 @@ impl Model {
             self.boards = LoadState::NotLoaded;
             self.boards_by_id.clear();
             self.board_index.clear();
+            self.archived_boards = None;
+            self.archived_boards_error = None;
+            self.archived_board_ids.clear();
         }
         for id in &ids.boards {
             self.columns_by_board.remove(id);
@@ -65,6 +72,9 @@ impl Model {
             self.cards_by_column.clear();
             self.scoped_card_index.clear();
             self.archived_cards_by_board.clear();
+            self.archived_cards = None;
+            self.archived_cards_error = None;
+            self.archived_card_ids.clear();
         }
 
         if !ids.sprints.is_empty() {

@@ -94,11 +94,10 @@ fn build_entities_round(ids: &EntityIds, loaded: &dyn LoadedState) -> FetchRound
         columns_by_board: Vec::new(),
         cards_by_column: Vec::new(),
         sprints_by_board: Vec::new(),
-        // `Model::invalidate`'s `Entities` path never blanks either flat
-        // archival tier; only `load_from_snapshot` recomputes them.
-        archived_card_list: false,
+        archived_card_list: !ids.cards.is_empty() && was_read(loaded.archived_card_list()),
         archived_cards_by_board: Vec::new(),
-        archived_board_list: false,
+        archived_board_list: (!ids.boards.is_empty() || ids.prefixes)
+            && was_read(loaded.archived_board_list()),
     }
 }
 
