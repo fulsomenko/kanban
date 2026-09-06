@@ -117,7 +117,9 @@ ctx.clear_history() -> KanbanResult<()>
 
 Every undoable command captures an inverse at `execute` time; the
 `(forward, inverse)` pair is pushed onto the per-session `UndoStack` — an
-in-memory, unbounded `Vec` with a cursor, never persisted, never capped.
+in-memory `Vec` with a cursor, never persisted, capped at
+`UndoStack::MAX_ENTRIES` (100) entries; pushing past the cap drops the
+oldest batch.
 `undo`/`redo` re-run the captured inverse/forward batch through the same
 command-execute path (no snapshot apply, no replay); the cursor only
 advances once the batch commits, so a failed undo/redo leaves the stack
