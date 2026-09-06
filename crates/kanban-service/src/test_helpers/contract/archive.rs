@@ -90,10 +90,7 @@ pub async fn test_list_archived_cards_by_missing_board_returns_empty(factory: &B
         .unwrap();
     ctx.archive_card(card.id).unwrap();
 
-    assert_eq!(
-        ctx.list_archived_cards_by_board(board.id).unwrap().len(),
-        1
-    );
+    assert_eq!(ctx.list_archived_cards_by_board(board.id).unwrap().len(), 1);
     assert!(
         ctx.list_archived_cards_by_board(Uuid::new_v4())
             .unwrap()
