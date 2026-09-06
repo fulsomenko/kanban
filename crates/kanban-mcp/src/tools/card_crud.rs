@@ -980,6 +980,102 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves_on_json() {
+        test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves_on_sqlite() {
+        test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves("test.sqlite").await;
+    }
+
+    async fn test_list_cards_on_archived_board_by_uuid_with_named_sprint_resolves(
+        file_name: &str,
+    ) {
+        let seeded = seeded_server(file_name).await;
+
+        let in_sprint = text_payload(
+            &seeded
+                .server
+                .tool_create_card(Parameters(CreateCardParams {
+                    board: seeded.board_id.clone(),
+                    column: seeded.column_id.clone(),
+                    sprint: Some(seeded.sprint_id.clone()),
+                    content: kanban_service::api::CreateCardRequest {
+                        id: None,
+                        title: "In the sprint".to_string(),
+                        description: None,
+                        priority: None,
+                        due_date: None,
+                        points: None,
+                        sprint_id: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let in_sprint_id = in_sprint["id"].as_str().unwrap().to_string();
+
+        seeded
+            .server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: seeded.board_id.clone(),
+            }))
+            .await
+            .unwrap();
+
+        let result = text_payload(
+            &seeded
+                .server
+                .tool_list_cards(Parameters(ListCardsRequest {
+                    board: Some(seeded.board_id.clone()),
+                    column: None,
+                    sprint: Some(seeded.sprint_identifier.clone()),
+                    status: None,
+                    archived: None,
+                    sort: None,
+                    order: None,
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let ids: Vec<&str> = result["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec![in_sprint_id.as_str()]);
+
+        let result_by_number = text_payload(
+            &seeded
+                .server
+                .tool_list_cards(Parameters(ListCardsRequest {
+                    board: Some(seeded.board_id.clone()),
+                    column: None,
+                    sprint: Some("1".to_string()),
+                    status: None,
+                    archived: None,
+                    sort: None,
+                    order: None,
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let ids_by_number: Vec<&str> = result_by_number["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids_by_number, vec![in_sprint_id.as_str()]);
+    }
+
+    #[tokio::test]
     async fn test_list_cards_by_global_sprint_name_with_an_unloadable_sprint_list_errors_on_json() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();

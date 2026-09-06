@@ -536,6 +536,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_assign_card_to_sprint_on_archived_board_resolves_by_name_on_json() {
+        test_assign_card_to_sprint_on_archived_board_resolves_by_name("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_assign_card_to_sprint_on_archived_board_resolves_by_name_on_sqlite() {
+        test_assign_card_to_sprint_on_archived_board_resolves_by_name("test.sqlite").await;
+    }
+
+    async fn test_assign_card_to_sprint_on_archived_board_resolves_by_name(file_name: &str) {
+        let seeded = seeded_server(file_name).await;
+
+        seeded
+            .server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: "Alpha".into(),
+            }))
+            .await
+            .unwrap();
+
+        let card = text_payload(
+            &seeded
+                .server
+                .tool_assign_card_to_sprint(Parameters(AssignCardToSprintRequest {
+                    card: seeded.card_id.clone(),
+                    sprint: "Sprint 1".to_string(),
+                }))
+                .await
+                .unwrap(),
+        );
+
+        assert_eq!(
+            card["sprint_id"].as_str().unwrap(),
+            seeded.sprint_id.as_str()
+        );
+    }
+
+    #[tokio::test]
     async fn test_move_cards_with_an_unloadable_column_collection_errors_naming_the_collection_on_json(
     ) {
         let seeded = seeded_server("test.json").await;
