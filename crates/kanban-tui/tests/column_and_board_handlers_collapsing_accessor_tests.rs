@@ -4,7 +4,10 @@
 //! "board has zero columns/sprints" instead of declining. These tests pin
 //! the decline behaviour.
 
+mod helpers;
+
 use crossterm::event::KeyCode;
+use helpers::CountingBackend;
 use kanban_domain::{EntityIds, Invalidation, KanbanOperations};
 use kanban_tui::app::mode::{AppMode, DialogMode};
 use kanban_tui::app::{BoardFocus, Focus};
@@ -291,6 +294,8 @@ fn test_handle_delete_board_key_declines_when_board_delete_counts_is_not_loaded(
     app.board_list.inner_mut().set_selected_index(Some(0));
 
     invalidate_columns_tier(&mut app);
+    let failing = CountingBackend::wrap_failing(app.ctx.backend(), "list_columns_by_board");
+    app.ctx.replace_backend(failing);
 
     app.handle_delete_board_key();
 

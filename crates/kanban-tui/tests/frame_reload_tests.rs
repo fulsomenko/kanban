@@ -58,8 +58,16 @@ fn test_navigation_performs_no_store_reads() {
     app.reload_model();
     app.prepare_frame();
 
+    navigate(&mut app);
+
     let ops = wrap_backend_with_ops(&mut app);
 
+    navigate(&mut app);
+
+    assert_ops(&ops, &[]);
+}
+
+fn navigate(app: &mut App) {
     app.focus.active = Focus::Boards;
     app.handle_selection_activate();
     app.handle_navigation_down();
@@ -83,8 +91,6 @@ fn test_navigation_performs_no_store_reads() {
     app.handle_card_selection_toggle();
     app.handle_clear_card_selection();
     app.handle_select_all_cards_in_view();
-
-    assert_ops(&ops, &[]);
 }
 
 #[test]

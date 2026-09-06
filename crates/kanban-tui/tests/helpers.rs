@@ -124,6 +124,7 @@ impl DataStore for CountingBackend {
     }
     fn list_columns_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<Column>> {
         self.record("list_columns_by_board", vec![board_id]);
+        self.fault("list_columns_by_board")?;
         self.inner.list_columns_by_board(board_id)
     }
     fn list_all_columns(&self) -> KanbanResult<Vec<Column>> {

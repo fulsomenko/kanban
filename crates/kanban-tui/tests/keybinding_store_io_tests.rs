@@ -110,6 +110,17 @@ fn seeded_app() -> App {
     app.reload_model();
     app.prepare_frame();
     app.selection.active_board_id = Some(board.id);
+    // `reload_model` clears the per-column card tier without refilling it, so
+    // warm it here before the counting backend is installed per-action below.
+    app.populate(kanban_tui::app::ViewScope {
+        board_list: true,
+        board: Some(board.id),
+        board_columns: true,
+        board_cards: true,
+        board_sprints: true,
+        graph: true,
+        ..Default::default()
+    });
     app
 }
 
