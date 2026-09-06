@@ -127,11 +127,25 @@ impl App {
             _ => {}
         }
 
-        match &self.mode {
+        let mut current = &self.mode;
+        while let AppMode::Help(inner) = current {
+            current = inner.as_ref();
+        }
+
+        match current {
             AppMode::Dialog(DialogMode::ManageParents | DialogMode::ManageChildren) => {
                 scope.graph = true;
             }
-            AppMode::Dialog(DialogMode::CarryOverSprint) => {
+            AppMode::Dialog(
+                DialogMode::CarryOverSprint
+                | DialogMode::AssignCardToSprint
+                | DialogMode::AssignMultipleCardsToSprint
+                | DialogMode::CreateCard
+                | DialogMode::CreateSprint
+                | DialogMode::FilterOptions
+                | DialogMode::SetSprintPrefix
+                | DialogMode::DeleteBoardConfirm,
+            ) => {
                 scope.board_sprints = true;
             }
             _ => {}

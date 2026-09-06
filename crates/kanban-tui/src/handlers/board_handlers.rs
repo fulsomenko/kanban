@@ -134,14 +134,15 @@ impl App {
     pub fn handle_delete_board_key(&mut self) {
         if self.focus.active == Focus::Boards {
             if let Some(board_id) = self.board_list.get_selected_board_id() {
+                self.open_dialog(DialogMode::DeleteBoardConfirm);
                 // Snapshot the counts once, here, rather than re-scanning the
                 // model on every frame the modal is open.
                 let Some(counts) = self.board_delete_counts(board_id) else {
+                    self.pop_mode();
                     self.set_error("Board contents are not loaded yet".to_string());
                     return;
                 };
                 self.dialog_input.board_delete_counts = Some(counts);
-                self.open_dialog(DialogMode::DeleteBoardConfirm);
             }
         }
     }
@@ -299,9 +300,10 @@ impl App {
     /// `handle_toggle_archived_cards_view`). Only meaningful when the Boards panel
     /// is the context; a no-op from unrelated modes.
     pub fn handle_toggle_archived_boards_view(&mut self) {
-        match self.mode {
+        let mode = self.mode.clone();
+        match mode {
             AppMode::Normal if self.focus.active == Focus::Boards => {
-                self.mode = AppMode::ArchivedBoardsView;
+                self.set_mode(AppMode::ArchivedBoardsView);
                 // Toggling the displayed set returns to the projects list; any
                 // board that was open is no longer active.
                 self.selection.active_board_id = None;
@@ -316,7 +318,7 @@ impl App {
                 self.needs_redraw = true;
             }
             AppMode::ArchivedBoardsView => {
-                self.mode = AppMode::Normal;
+                self.set_mode(AppMode::Normal);
                 self.selection.active_board_id = None;
                 self.prepare_frame();
                 self.needs_redraw = true;
