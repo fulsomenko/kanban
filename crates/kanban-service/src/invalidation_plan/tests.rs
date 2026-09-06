@@ -451,7 +451,7 @@ fn test_all_repairs_every_read_tier_including_the_archival_markers() {
 }
 
 #[test]
-fn test_an_invalidated_archived_card_list_is_not_requested_because_invalidate_does_not_blank_it() {
+fn test_entities_plan_rerequests_archived_card_list_when_model_had_read_it() {
     let a = Uuid::new_v4();
     let world = StubWorld {
         cards: HashMap::from([(a, FetchStatus::Loaded)]),
@@ -464,12 +464,12 @@ fn test_an_invalidated_archived_card_list_is_not_requested_because_invalidate_do
             .expect("card a was loaded");
 
     assert_eq!(plan.round().cards, vec![a]);
-    assert!(!plan.round().archived_card_list);
+    assert!(plan.round().archived_card_list);
+    assert!(!plan.round().archived_board_list);
 }
 
 #[test]
-fn test_an_invalidated_board_never_repairs_the_archived_board_list_because_invalidate_does_not_blank_it(
-) {
+fn test_entities_plan_rerequests_archived_board_list_when_model_had_read_it() {
     let b = Uuid::new_v4();
     let world = StubWorld {
         board_list: FetchStatus::Loaded,
@@ -482,6 +482,54 @@ fn test_an_invalidated_board_never_repairs_the_archived_board_list_because_inval
             .expect("board_list was loaded");
 
     assert!(plan.round().board_list);
+    assert!(plan.round().archived_board_list);
+    assert!(!plan.round().archived_card_list);
+}
+
+#[test]
+fn test_entities_plan_rerequests_archived_board_list_on_a_prefix_only_invalidation() {
+    let world = StubWorld {
+        board_list: FetchStatus::Loaded,
+        archived_board_list: FetchStatus::Loaded,
+        ..Default::default()
+    };
+
+    let plan = InvalidationPlan::for_invalidation(
+        &Invalidation::Entities(EntityIds::default().with_prefixes()),
+        &world,
+    )
+    .expect("board_list was loaded");
+
+    assert!(plan.round().archived_board_list);
+}
+
+#[test]
+fn test_entities_plan_skips_archived_card_list_when_never_read() {
+    let a = Uuid::new_v4();
+    let world = StubWorld {
+        cards: HashMap::from([(a, FetchStatus::Loaded)]),
+        ..Default::default()
+    };
+
+    let plan =
+        InvalidationPlan::for_invalidation(&Invalidation::Entities(EntityIds::cards([a])), &world)
+            .expect("card a was loaded");
+
+    assert!(!plan.round().archived_card_list);
+}
+
+#[test]
+fn test_entities_plan_skips_archived_board_list_when_never_read() {
+    let b = Uuid::new_v4();
+    let world = StubWorld {
+        board_list: FetchStatus::Loaded,
+        ..Default::default()
+    };
+
+    let plan =
+        InvalidationPlan::for_invalidation(&Invalidation::Entities(EntityIds::boards([b])), &world)
+            .expect("board_list was loaded");
+
     assert!(!plan.round().archived_board_list);
 }
 
