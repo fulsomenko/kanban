@@ -3,8 +3,10 @@ use crate::Invalidation;
 
 impl Model {
     /// Drops every tier that could hold a stale view of the entities named by
-    /// `invalidation`. `Invalidation::All` and an `Entities` with an empty
-    /// `EntityIds` both reset the whole `Model`.
+    /// `invalidation`. `Invalidation::All` resets the whole `Model`; an
+    /// `Entities` with an empty `EntityIds` names nothing and touches
+    /// nothing, matching `InvalidationPlan::for_invalidation` returning
+    /// `None` for the same value.
     ///
     /// `EntityIds` names child ids, not the parent key a scoped tier is keyed
     /// on, so a `cards`, `columns` or `sprints` id drops the WHOLE affected
@@ -29,10 +31,7 @@ impl Model {
                 *self = Self::default();
                 return ModelChanged::new();
             }
-            Invalidation::Entities(ids) if ids.is_empty() => {
-                *self = Self::default();
-                return ModelChanged::new();
-            }
+            Invalidation::Entities(ids) if ids.is_empty() => return ModelChanged::new(),
             Invalidation::Entities(ids) => ids,
         };
 
