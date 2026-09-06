@@ -792,9 +792,7 @@ mod tests {
         let result = text_payload(
             &seeded
                 .server
-                .tool_get_sprint(Parameters(GetSprintRequest {
-                    sprint: "1".into(),
-                }))
+                .tool_get_sprint(Parameters(GetSprintRequest { sprint: "1".into() }))
                 .await
                 .unwrap(),
         );

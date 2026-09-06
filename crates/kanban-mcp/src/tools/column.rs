@@ -687,9 +687,7 @@ mod tests {
 
         let still_live = text_payload(
             &server
-                .tool_get_column(Parameters(GetColumnRequest {
-                    column: icebox_id,
-                }))
+                .tool_get_column(Parameters(GetColumnRequest { column: icebox_id }))
                 .await
                 .unwrap(),
         );
