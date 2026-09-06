@@ -178,3 +178,45 @@ fn test_search_mode_needs_no_scope_beyond_the_board_it_filters() {
         }
     );
 }
+
+#[test]
+fn test_every_dialog_that_renders_sprints_scopes_the_board_sprints_tier() {
+    let variants = [
+        DialogMode::CarryOverSprint,
+        DialogMode::AssignCardToSprint,
+        DialogMode::AssignMultipleCardsToSprint,
+        DialogMode::CreateCard,
+        DialogMode::CreateSprint,
+        DialogMode::FilterOptions,
+        DialogMode::SetSprintPrefix,
+        DialogMode::DeleteBoardConfirm,
+    ];
+
+    for variant in variants {
+        let mut app = App::test_default();
+        let (board_id, ..) = seed_board_column_sprint_card(&mut app);
+        app.reload_model();
+        app.selection.active_board_id = Some(board_id);
+        app.mode = AppMode::Dialog(variant.clone());
+
+        let scope = app.view_scope();
+
+        assert!(
+            scope.board_sprints,
+            "expected board_sprints to be scoped for {variant:?}"
+        );
+    }
+}
+
+#[test]
+fn test_help_over_a_sprint_dialog_still_scopes_the_board_sprints_tier() {
+    let mut app = App::test_default();
+    let (board_id, ..) = seed_board_column_sprint_card(&mut app);
+    app.reload_model();
+    app.selection.active_board_id = Some(board_id);
+    app.mode = AppMode::Help(Box::new(AppMode::Dialog(DialogMode::FilterOptions)));
+
+    let scope = app.view_scope();
+
+    assert!(scope.board_sprints);
+}
