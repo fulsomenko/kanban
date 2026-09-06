@@ -4,6 +4,7 @@ use kanban_domain::commands::{
     UpdateBoard,
 };
 use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, KanbanResult};
+use kanban_service::undo_stack::UndoStack;
 use kanban_service::{read_full_snapshot, write_full_snapshot, KanbanContext};
 use std::sync::Arc;
 
@@ -1004,10 +1005,7 @@ async fn test_undo_history_is_not_preserved_across_sessions() -> KanbanResult<()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_undo_extends_past_old_200_step_cap() -> KanbanResult<()> {
-    // KAN-191 dropped the MAX_UNDO_DEPTH=200 cap. With pure command-replay
-    // every undo step is `Vec<Command>` (a few hundred bytes), so the cap
-    // that protected RAM from 200 full Snapshot clones is no longer needed.
+async fn test_undo_depth_saturates_at_undo_stack_cap() -> KanbanResult<()> {
     let mut ctx = make_ctx().await;
 
     let total = 250usize;
@@ -1022,22 +1020,23 @@ async fn test_undo_extends_past_old_200_step_cap() -> KanbanResult<()> {
 
     assert_eq!(
         ctx.undo_depth(),
-        total,
-        "undo depth must equal total commands executed (no cap)"
-    );
-    assert_eq!(ctx.boards()?.len(), total);
-
-    for _ in 0..total {
-        assert!(ctx.undo()?.is_some());
-    }
-    assert!(
-        !ctx.can_undo(),
-        "after undoing every step, can_undo is false"
+        UndoStack::MAX_ENTRIES,
+        "undo depth saturates at the stack cap; older entries are evicted"
     );
     assert_eq!(
         ctx.boards()?.len(),
-        0,
-        "after undoing every step, state is the initial baseline"
+        total,
+        "eviction drops undo history only, never committed state"
+    );
+
+    for _ in 0..UndoStack::MAX_ENTRIES {
+        assert!(ctx.undo()?.is_some());
+    }
+    assert!(!ctx.can_undo());
+    assert_eq!(
+        ctx.boards()?.len(),
+        total - UndoStack::MAX_ENTRIES,
+        "only the retained batches are undoable; evicted ones stay applied"
     );
     Ok(())
 }

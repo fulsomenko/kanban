@@ -209,6 +209,69 @@ mod tests {
     }
 
     #[test]
+    fn test_push_past_cap_drops_oldest_and_keeps_newest_in_order() {
+        let mut stack = UndoStack::new();
+        let total = UndoStack::MAX_ENTRIES + 3;
+        for i in 0..total {
+            stack.push(make_pair(&format!("E{i}")));
+        }
+        assert_eq!(stack.undo_depth(), UndoStack::MAX_ENTRIES);
+        assert_eq!(stack.redo_depth(), 0);
+
+        let dbg = format!("{stack:?}");
+        for name in ["E0", "E1", "E2"] {
+            assert!(!dbg.contains(&format!("\"{name}\"")));
+        }
+
+        for i in (3..total).rev() {
+            let e = stack.peek_undo().expect("entry present");
+            assert!(
+                format!("{e:?}").contains(&format!("\"E{i}\"")),
+                "expected E{i} at this depth, got {e:?}"
+            );
+            assert!(stack.commit_undo());
+        }
+        assert!(stack.peek_undo().is_none());
+    }
+
+    #[test]
+    fn test_undo_after_overflow_replays_newest_entry() {
+        let mut stack = UndoStack::new();
+        let total = UndoStack::MAX_ENTRIES + 1;
+        for i in 0..total {
+            stack.push(make_pair(&format!("E{i}")));
+        }
+        assert_eq!(stack.undo_depth(), UndoStack::MAX_ENTRIES);
+
+        let e = stack.peek_undo().expect("entry present");
+        assert!(format!("{e:?}").contains(&format!("\"E{}\"", total - 1)));
+        assert!(stack.commit_undo());
+        assert_eq!(stack.redo_depth(), 1);
+    }
+
+    #[test]
+    fn test_push_at_cap_after_undo_truncates_redo_without_evicting() {
+        let mut stack = UndoStack::new();
+        for i in 0..UndoStack::MAX_ENTRIES {
+            stack.push(make_pair(&format!("E{i}")));
+        }
+        assert!(stack.commit_undo());
+        assert_eq!(stack.redo_depth(), 1);
+
+        stack.push(make_pair("X"));
+        assert_eq!(stack.undo_depth(), UndoStack::MAX_ENTRIES);
+        assert_eq!(stack.redo_depth(), 0);
+
+        for _ in 1..UndoStack::MAX_ENTRIES {
+            assert!(stack.commit_undo());
+        }
+        let bottom = stack.peek_undo().expect("bottom entry present");
+        assert!(format!("{bottom:?}").contains("\"E0\""));
+        assert!(stack.commit_undo());
+        assert!(!stack.commit_undo());
+    }
+
+    #[test]
     fn test_clear_resets_state() {
         let mut stack = UndoStack::new();
         stack.push(make_pair("A"));
