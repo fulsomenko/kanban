@@ -22,13 +22,22 @@ pub struct UndoStack {
 }
 
 impl UndoStack {
+    /// Upper bound on retained entries. Pushing past it evicts the oldest,
+    /// so a long-running process retains a constant amount of undo state.
+    pub const MAX_ENTRIES: usize = 100;
+
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Append a new entry. Truncates the redo tail first.
+    /// Append a new entry. Truncates the redo tail first; at capacity the
+    /// oldest entry is dropped so the stack holds the newest
+    /// [`MAX_ENTRIES`](Self::MAX_ENTRIES) batches.
     pub fn push(&mut self, entry: UndoEntry) {
         self.entries.truncate(self.cursor);
+        if self.entries.len() >= Self::MAX_ENTRIES {
+            self.entries.remove(0);
+        }
         self.entries.push(entry);
         self.cursor = self.entries.len();
     }
