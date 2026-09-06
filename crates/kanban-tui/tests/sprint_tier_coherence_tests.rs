@@ -17,8 +17,8 @@ fn seed_board_with_divergent_sprint_tiers(
     let mut app = App::test_default();
     let board = Board::new("TestBoard", None::<String>);
     let scoped = build_scoped(board.id);
-    let mut all_sprints = scoped.clone();
-    all_sprints.extend(build_flat_extra(board.id));
+    let mut all_sprints = build_flat_extra(board.id);
+    all_sprints.extend(scoped.clone());
 
     let resolved = Resolved {
         boards: Collection {
