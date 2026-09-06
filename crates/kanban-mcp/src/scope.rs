@@ -46,19 +46,19 @@ pub(crate) trait ToolScoped {
 
 impl FetchPlan for ToolScope {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
+        let global_column = matches!(self.column, Some(Ref::Name)) && !self.wants_board_columns;
+        let global_sprint = matches!(self.sprint, Some(Ref::Name)) && !self.wants_board_sprints;
+        let named_cards = self.cards.iter().any(|r| matches!(r, Ref::Name));
         let wants_board_list = matches!(self.board, Some(Ref::Name))
             || (self.resolved_board.is_some() && self.wants_board_sprints)
             || matches!(self.sprint, Some(Ref::Name));
         FetchRound {
             board_list: wants_board_list && requestable(loaded.board_list()),
-            column_list: matches!(self.column, Some(Ref::Name))
-                && !self.wants_board_columns
-                && requestable(loaded.column_list()),
-            card_list: self.cards.iter().any(|r| matches!(r, Ref::Name))
-                && requestable(loaded.card_list()),
-            sprint_list: matches!(self.sprint, Some(Ref::Name))
-                && !self.wants_board_sprints
-                && requestable(loaded.sprint_list()),
+            column_list: global_column && requestable(loaded.column_list()),
+            card_list: named_cards && requestable(loaded.card_list()),
+            sprint_list: global_sprint && requestable(loaded.sprint_list()),
+            archived_board_list: (global_column || global_sprint || named_cards)
+                && requestable(loaded.archived_board_list()),
             graph: self.wants_graph && requestable(loaded.graph()),
             columns_by_board: self
                 .resolved_board
@@ -347,19 +347,31 @@ mod tests {
             column: Some(Ref::Name),
             ..Default::default()
         };
-        assert!(column_scope.next_round(&Model::default()).archived_board_list);
+        assert!(
+            column_scope
+                .next_round(&Model::default())
+                .archived_board_list
+        );
 
         let sprint_scope = ToolScope {
             sprint: Some(Ref::Name),
             ..Default::default()
         };
-        assert!(sprint_scope.next_round(&Model::default()).archived_board_list);
+        assert!(
+            sprint_scope
+                .next_round(&Model::default())
+                .archived_board_list
+        );
 
         let cards_scope = ToolScope {
             cards: vec![Ref::Name],
             ..Default::default()
         };
-        assert!(cards_scope.next_round(&Model::default()).archived_board_list);
+        assert!(
+            cards_scope
+                .next_round(&Model::default())
+                .archived_board_list
+        );
     }
 
     #[test]
@@ -372,7 +384,11 @@ mod tests {
             ..Default::default()
         }
         .for_board(board_id);
-        assert!(!column_in_board.next_round(&Model::default()).archived_board_list);
+        assert!(
+            !column_in_board
+                .next_round(&Model::default())
+                .archived_board_list
+        );
 
         let sprint_in_board = ToolScope {
             sprint: Some(Ref::Name),
@@ -380,19 +396,31 @@ mod tests {
             ..Default::default()
         }
         .for_board(board_id);
-        assert!(!sprint_in_board.next_round(&Model::default()).archived_board_list);
+        assert!(
+            !sprint_in_board
+                .next_round(&Model::default())
+                .archived_board_list
+        );
 
         let cards_by_id = ToolScope {
             cards: vec![Ref::Id],
             ..Default::default()
         };
-        assert!(!cards_by_id.next_round(&Model::default()).archived_board_list);
+        assert!(
+            !cards_by_id
+                .next_round(&Model::default())
+                .archived_board_list
+        );
 
         let board_by_id = ToolScope {
             board: Some(Ref::Id),
             ..Default::default()
         };
-        assert!(!board_by_id.next_round(&Model::default()).archived_board_list);
+        assert!(
+            !board_by_id
+                .next_round(&Model::default())
+                .archived_board_list
+        );
     }
 
     /// Mirrors crates/kanban-cli/src/scope.rs:86-95: a `Some(Ref::Name)`
