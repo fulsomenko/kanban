@@ -98,7 +98,7 @@ impl TuiContext {
         self.inner.snapshot()
     }
 
-    pub fn transfer_state_to(&self, target: &dyn kanban_domain::DataStore) -> KanbanResult<()> {
+    pub fn transfer_state_to(&self, target: &dyn KanbanBackend) -> KanbanResult<()> {
         self.inner.transfer_state_to(target)
     }
 

@@ -358,7 +358,7 @@ async fn test_transfer_state_to_is_lossless_for_every_backend_pair() {
             let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
 
             src_ctx
-                .transfer_state_to(dst_ctx.data_store())
+                .transfer_state_to(&*dst_ctx.backend())
                 .unwrap_or_else(|e| {
                     panic!("transfer {src_name} -> {dst_name} failed: {e}");
                 });
@@ -591,7 +591,7 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
         let fixture = seed_rich(src_ctx.data_store()).unwrap();
 
         src_ctx
-            .transfer_state_to(dst_ctx.data_store())
+            .transfer_state_to(&*dst_ctx.backend())
             .unwrap_or_else(|e| panic!("transfer into populated {dst_name} failed: {e}"));
         dst_ctx.save().await.unwrap();
 
@@ -642,7 +642,7 @@ async fn test_transfer_state_to_leaves_the_source_untouched() {
         let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
 
         src_ctx
-            .transfer_state_to(dst_ctx.data_store())
+            .transfer_state_to(&*dst_ctx.backend())
             .unwrap_or_else(|e| panic!("transfer from {src_name} failed: {e}"));
 
         assert_transfer_matches(&fixture, src_ctx.data_store());
@@ -786,6 +786,27 @@ impl DataStore for UnsupportedArchivedBoards {
     }
 }
 
+impl CommandStore for UnsupportedArchivedBoards {
+    fn append_batch(&self, batch: &CommandBatch) -> KanbanResult<u64> {
+        self.0.append_batch(batch)
+    }
+    fn batch_count(&self) -> KanbanResult<u64> {
+        self.0.batch_count()
+    }
+    fn load_batches(&self, from: u64, to: u64) -> KanbanResult<Vec<CommandBatch>> {
+        self.0.load_batches(from, to)
+    }
+}
+
+impl KanbanBackend for UnsupportedArchivedBoards {
+    fn as_data_store(&self) -> &dyn DataStore {
+        self
+    }
+    fn with_transaction(&self, f: TransactionFn<'_>) -> KanbanResult<()> {
+        self.0.with_transaction(f)
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_transfer_state_to_a_backend_that_cannot_accept_it_fails_loud() {
     let dir = TempDir::new().unwrap();
@@ -806,4 +827,81 @@ async fn test_transfer_state_to_a_backend_that_cannot_accept_it_fails_loud() {
         ),
         "expected the archived-board default (Unsupported {{ operation: \"insert_archived_board\" }}) to surface, got {err}"
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_transfer_with_dangling_sprint_id_onto_sqlite_fails_atomically_then_repaired_source_succeeds(
+) {
+    let dir = TempDir::new().unwrap();
+
+    let src_path = dir.path().join("src.store");
+    let src_ctx = open_ctx(&in_memory_backend_factory(), &src_path).await;
+    let src_store = src_ctx.data_store();
+
+    src_store
+        .upsert_prefix(Prefix {
+            name: "tst".into(),
+            card_counter: 1,
+            sprint_counter: 0,
+        })
+        .unwrap();
+    let board = Board::new("Src", Some("tst"));
+    src_store.upsert_board(board.clone()).unwrap();
+    let column = Column::new(board.id, "Todo", 0);
+    src_store.upsert_column(column.clone()).unwrap();
+    let mut card = Card::new(board.id, column.id, "Orphan", 0);
+    card.sprint_id = Some(Uuid::new_v4());
+    src_store.upsert_card(card.clone()).unwrap();
+
+    let dst_path = dir.path().join("dst.store");
+    let dst_factory = sqlite_backend_factory();
+    let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
+
+    assert!(
+        src_ctx.transfer_state_to(&*dst_ctx.backend()).is_err(),
+        "transfer with a dangling sprint_id onto an FK-enforcing target must fail"
+    );
+
+    let dst_store = dst_ctx.data_store();
+    assert!(
+        dst_store.list_prefixes().unwrap().is_empty(),
+        "a failed transfer must roll the target back atomically: prefixes leaked onto the target"
+    );
+    assert!(
+        dst_store.list_boards().unwrap().is_empty(),
+        "a failed transfer must roll the target back atomically: boards leaked onto the target"
+    );
+    assert!(
+        dst_store.list_all_columns().unwrap().is_empty(),
+        "a failed transfer must roll the target back atomically: columns leaked onto the target"
+    );
+    assert!(
+        dst_store.list_all_cards().unwrap().is_empty(),
+        "a failed transfer must roll the target back atomically: cards leaked onto the target"
+    );
+
+    card.sprint_id = None;
+    src_ctx.data_store().upsert_card(card.clone()).unwrap();
+
+    src_ctx
+        .transfer_state_to(&*dst_ctx.backend())
+        .expect("transfer must succeed once the dangling sprint_id is repaired");
+    dst_ctx.save().await.unwrap();
+
+    let reopened = open_ctx(&dst_factory, &dst_path).await;
+    let reopened_store = reopened.data_store();
+    assert!(
+        reopened_store.get_prefix("tst").unwrap().is_some(),
+        "prefix must survive the retried transfer"
+    );
+    let boards = reopened_store.list_boards().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].id, board.id);
+    let columns = reopened_store.list_all_columns().unwrap();
+    assert_eq!(columns.len(), 1);
+    assert_eq!(columns[0].id, column.id);
+    let cards = reopened_store.list_all_cards().unwrap();
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, card.id);
+    assert_eq!(cards[0].sprint_id, None);
 }

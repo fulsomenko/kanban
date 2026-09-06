@@ -1,4 +1,5 @@
 use super::KanbanContext;
+use crate::backend::KanbanBackend;
 use kanban_core::{ClientId, KANBAN_VERSION};
 use kanban_domain::commands::{Command, SprintCommand};
 use kanban_domain::export::{AllBoardsExport, BoardImporter};
@@ -360,11 +361,20 @@ impl KanbanContext {
     }
 
     /// Copies this context's whole workspace onto `target`, upserting into
-    /// whatever is already there rather than clearing it first. No FK repair
-    /// runs; a dangling reference in the source lands dangling on `target` too.
-    pub fn transfer_state_to(&self, target: &dyn DataStore) -> KanbanResult<()> {
+    /// whatever is already there rather than clearing it first, all inside
+    /// `target`'s own transaction so the copy is all-or-nothing. No FK repair
+    /// runs: on a target that enforces referential integrity (SQLite's
+    /// foreign keys on `cards.sprint_id` and card prefixes, or the JSON
+    /// backend's card-prefix check) a dangling reference in the source fails
+    /// the whole transfer and leaves `target` unchanged; on a target that
+    /// enforces nothing the dangling reference lands as-is. Only the
+    /// `Snapshot` is copied; the source's `CommandBatch` history is not.
+    pub fn transfer_state_to(&self, target: &dyn KanbanBackend) -> KanbanResult<()> {
         let snapshot = crate::store_adapter::read_full_snapshot(self.backend.as_data_store())?;
-        crate::store_adapter::write_full_snapshot(target, snapshot)
+        let store = target.as_data_store();
+        target.with_transaction(Box::new(move || {
+            crate::store_adapter::write_full_snapshot(store, snapshot)
+        }))
     }
 
     pub fn import_board_impl(&mut self, data: &str) -> KanbanResult<(Board, Invalidation)> {
