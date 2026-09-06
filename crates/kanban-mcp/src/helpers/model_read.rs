@@ -393,6 +393,10 @@ mod tests {
                 all: LoadState::Loaded(vec![column]),
                 ..Default::default()
             },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -413,9 +417,33 @@ mod tests {
                 ]),
                 ..Default::default()
             },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
             ..Default::default()
         });
         assert!(resolve_column_global(&dup_model, "TODO").is_err());
+    }
+
+    #[test]
+    fn test_resolve_column_global_requires_the_archived_marker_tier() {
+        let board_id = Uuid::new_v4();
+        let column = Column::new(board_id, "TODO", 0);
+
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            columns: Collection {
+                all: LoadState::Loaded(vec![column]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let err = resolve_column_global(&model, "TODO").unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("archived board markers"));
+        assert!(!err.message.contains("not found"));
     }
 
     #[test]
@@ -464,6 +492,10 @@ mod tests {
                 all: LoadState::Loaded(vec![sprint]),
                 ..Default::default()
             },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -510,6 +542,10 @@ mod tests {
         let _ = model.apply_resolved(Resolved {
             cards: Collection {
                 all: LoadState::Loaded(vec![card]),
+                ..Default::default()
+            },
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
                 ..Default::default()
             },
             ..Default::default()

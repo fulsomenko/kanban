@@ -293,6 +293,10 @@ mod tests {
                 all: LoadState::Loaded(vec![]),
                 ..Default::default()
             },
+            archived_boards: kanban_domain::resolved::Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
             graph: LoadState::Loaded(Default::default()),
             ..Default::default()
         });
@@ -335,6 +339,60 @@ mod tests {
         let round = scope.next_round(&Model::default());
         assert!(round.board_list);
         assert!(round.sprint_list);
+    }
+
+    #[test]
+    fn test_a_global_named_reference_requests_the_archived_board_markers() {
+        let column_scope = ToolScope {
+            column: Some(Ref::Name),
+            ..Default::default()
+        };
+        assert!(column_scope.next_round(&Model::default()).archived_board_list);
+
+        let sprint_scope = ToolScope {
+            sprint: Some(Ref::Name),
+            ..Default::default()
+        };
+        assert!(sprint_scope.next_round(&Model::default()).archived_board_list);
+
+        let cards_scope = ToolScope {
+            cards: vec![Ref::Name],
+            ..Default::default()
+        };
+        assert!(cards_scope.next_round(&Model::default()).archived_board_list);
+    }
+
+    #[test]
+    fn test_a_board_scoped_reference_requests_no_archived_marker_tier() {
+        let board_id = Uuid::new_v4();
+
+        let column_in_board = ToolScope {
+            column: Some(Ref::Name),
+            wants_board_columns: true,
+            ..Default::default()
+        }
+        .for_board(board_id);
+        assert!(!column_in_board.next_round(&Model::default()).archived_board_list);
+
+        let sprint_in_board = ToolScope {
+            sprint: Some(Ref::Name),
+            wants_board_sprints: true,
+            ..Default::default()
+        }
+        .for_board(board_id);
+        assert!(!sprint_in_board.next_round(&Model::default()).archived_board_list);
+
+        let cards_by_id = ToolScope {
+            cards: vec![Ref::Id],
+            ..Default::default()
+        };
+        assert!(!cards_by_id.next_round(&Model::default()).archived_board_list);
+
+        let board_by_id = ToolScope {
+            board: Some(Ref::Id),
+            ..Default::default()
+        };
+        assert!(!board_by_id.next_round(&Model::default()).archived_board_list);
     }
 
     /// Mirrors crates/kanban-cli/src/scope.rs:86-95: a `Some(Ref::Name)`

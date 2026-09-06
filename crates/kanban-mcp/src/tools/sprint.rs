@@ -733,6 +733,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_sprint_by_number_ignores_archived_board_sprints_on_json() {
+        test_get_sprint_by_number_ignores_archived_board_sprints("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_get_sprint_by_number_ignores_archived_board_sprints_on_sqlite() {
+        test_get_sprint_by_number_ignores_archived_board_sprints("test.sqlite").await;
+    }
+
+    async fn test_get_sprint_by_number_ignores_archived_board_sprints(file_name: &str) {
+        let seeded = seeded_server(file_name).await;
+
+        seeded
+            .server
+            .tool_create_board(Parameters(crate::requests::board::CreateBoardParams {
+                content: CreateBoardRequest {
+                    id: None,
+                    name: "Beta".to_string(),
+                    description: None,
+                    sprint_prefix: Some("ZED".into()),
+                    card_prefix: None,
+                    task_sort_field: None,
+                    task_sort_order: None,
+                    sprint_duration_days: None,
+                    task_list_view: None,
+                },
+                with_default_columns: None,
+            }))
+            .await
+            .unwrap();
+
+        let beta_sprint = text_payload(
+            &seeded
+                .server
+                .tool_create_sprint(Parameters(CreateSprintParams {
+                    board: "Beta".into(),
+                    content: kanban_service::api::CreateSprintRequest {
+                        id: None,
+                        name: Some("Collides".into()),
+                        prefix: None,
+                        card_prefix: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(beta_sprint["sprint_number"], 1);
+
+        seeded
+            .server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: "Beta".into(),
+            }))
+            .await
+            .unwrap();
+
+        let result = text_payload(
+            &seeded
+                .server
+                .tool_get_sprint(Parameters(GetSprintRequest {
+                    sprint: "1".into(),
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(result["name"], "From");
+    }
+
+    #[tokio::test]
     async fn test_get_sprint_result_json_is_unchanged() {
         let seeded = seeded_server("test.json").await;
 
