@@ -131,4 +131,59 @@ mod tests {
         );
         assert_eq!(summaries[0].id, card.id);
     }
+
+    #[tokio::test]
+    async fn test_board_head_on_nonexistent_board_returns_not_found() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = test_store_manager();
+        let ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let err = board_head(&ctx, &Model::default(), Uuid::new_v4()).unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+        assert!(!err.message.to_lowercase().contains("board is unavailable"));
+    }
+
+    #[tokio::test]
+    async fn test_board_head_falls_back_to_the_point_read_for_an_archived_board() {
+        use kanban_core::AppConfig;
+        use kanban_domain::{resolved::Collection, Resolved};
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = test_store_manager();
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx
+            .create_board("Kanban".into(), Some("KAN".into()))
+            .unwrap();
+        ctx.archive_board(board.id).unwrap();
+
+        let head = board_head(&ctx, &Model::default(), board.id).unwrap();
+        assert_eq!(head.id, board.id);
+        assert_eq!(head.name, "Kanban");
+
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![board.clone()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let head_from_model = board_head(&ctx, &model, board.id).unwrap();
+        assert_eq!(head_from_model.id, board.id);
+    }
 }
