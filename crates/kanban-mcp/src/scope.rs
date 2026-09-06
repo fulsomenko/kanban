@@ -342,6 +342,35 @@ mod tests {
     }
 
     #[test]
+    fn test_a_named_global_column_reference_also_requests_the_board_list() {
+        let scope = ToolScope {
+            column: Some(Ref::Name),
+            ..Default::default()
+        };
+
+        let round = scope.next_round(&Model::default());
+        assert!(round.board_list);
+        assert!(round.column_list);
+    }
+
+    #[test]
+    fn test_a_board_scoped_column_reference_requests_no_board_list() {
+        let scoped = ToolScope {
+            column: Some(Ref::Name),
+            wants_board_columns: true,
+            ..Default::default()
+        }
+        .for_board(Uuid::new_v4());
+        assert!(!scoped.next_round(&Model::default()).board_list);
+
+        let by_id = ToolScope {
+            column: Some(Ref::Id),
+            ..Default::default()
+        };
+        assert!(by_id.next_round(&Model::default()).is_empty());
+    }
+
+    #[test]
     fn test_a_global_named_reference_requests_the_archived_board_markers() {
         let column_scope = ToolScope {
             column: Some(Ref::Name),
