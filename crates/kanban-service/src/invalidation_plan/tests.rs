@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use kanban_domain::{Column, EntityIds};
+use kanban_domain::resolved::Collection;
+use kanban_domain::{
+    Board, Card, Column, DependencyGraph, DerivedProjections, EntityIds, LoadState, Model,
+    NoProjections, Resolved, Sprint,
+};
 use uuid::Uuid;
 
 use super::*;
@@ -366,6 +370,51 @@ fn test_an_empty_entities_invalidation_yields_no_plan() {
         InvalidationPlan::for_invalidation(&Invalidation::Entities(EntityIds::default()), &world);
 
     assert!(plan.is_none());
+}
+
+#[test]
+fn test_empty_entities_invalidation_plans_nothing_and_wipes_nothing() {
+    let board = Board::new("B", None::<String>);
+    let column = Column::new(board.id, "A", 0);
+    let card = Card::new(board.id, column.id, "task", 0);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
+
+    let mut model = Model::default();
+    let changed = model.apply_resolved(Resolved {
+        boards: Collection {
+            all: LoadState::Loaded(vec![board.clone()]),
+            ..Default::default()
+        },
+        columns: Collection {
+            all: LoadState::Loaded(vec![column.clone()]),
+            by_id: [(column.id, LoadState::Loaded(column.clone()))].into(),
+            ..Default::default()
+        },
+        cards: Collection {
+            all: LoadState::Loaded(vec![card.clone()]),
+            ..Default::default()
+        },
+        sprints: Collection {
+            all: LoadState::Loaded(vec![sprint.clone()]),
+            ..Default::default()
+        },
+        graph: LoadState::Loaded(DependencyGraph::default()),
+        ..Default::default()
+    });
+    NoProjections.resync(&model, changed);
+
+    let inv = Invalidation::Entities(EntityIds::default());
+    let plan_is_none = InvalidationPlan::for_invalidation(&inv, &model).is_none();
+    assert!(plan_is_none);
+
+    let _ = model.invalidate(inv);
+
+    assert_eq!(LoadedState::board_list(&model), FetchStatus::Loaded);
+    assert_eq!(LoadedState::column_list(&model), FetchStatus::Loaded);
+    assert_eq!(LoadedState::card_list(&model), FetchStatus::Loaded);
+    assert_eq!(LoadedState::sprint_list(&model), FetchStatus::Loaded);
+    assert_eq!(LoadedState::graph(&model), FetchStatus::Loaded);
+    assert_eq!(LoadedState::column(&model, column.id), FetchStatus::Loaded);
 }
 
 #[test]

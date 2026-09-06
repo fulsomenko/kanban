@@ -3,8 +3,10 @@ use crate::Invalidation;
 
 impl Model {
     /// Drops every tier that could hold a stale view of the entities named by
-    /// `invalidation`. `Invalidation::All` and an `Entities` with an empty
-    /// `EntityIds` both reset the whole `Model`.
+    /// `invalidation`. `Invalidation::All` resets the whole `Model`; an
+    /// `Entities` with an empty `EntityIds` names nothing and touches
+    /// nothing, matching `InvalidationPlan::for_invalidation` returning
+    /// `None` for the same value.
     ///
     /// `EntityIds` names child ids, not the parent key a scoped tier is keyed
     /// on, so a `cards`, `columns` or `sprints` id drops the WHOLE affected
@@ -29,10 +31,7 @@ impl Model {
                 *self = Self::default();
                 return ModelChanged::new();
             }
-            Invalidation::Entities(ids) if ids.is_empty() => {
-                *self = Self::default();
-                return ModelChanged::new();
-            }
+            Invalidation::Entities(ids) if ids.is_empty() => return ModelChanged::new(),
             Invalidation::Entities(ids) => ids,
         };
 
@@ -188,6 +187,33 @@ mod tests {
         assert!(m.card_index.is_empty());
         assert!(m.board_index.is_empty());
         assert!(m.board_archived_cards_state(board.id).is_not_loaded());
+    }
+
+    fn assert_every_tier_loaded(
+        m: &Model,
+        board: &Board,
+        col_a: &Column,
+        _col_b: &Column,
+        c1: &Card,
+        _c2: &Card,
+        sprint: &Sprint,
+    ) {
+        assert!(m.boards_state().is_loaded());
+        assert!(m.columns_state().is_loaded());
+        assert!(m.cards_state().is_loaded());
+        assert!(m.sprints_state().is_loaded());
+        assert!(m.graph_state().is_loaded());
+        assert!(m.board_by_id_state(board.id).is_loaded());
+        assert!(m.column_id_status(col_a.id).is_loaded());
+        assert!(m.card_id_status(c1.id).is_loaded());
+        assert!(m.sprint_id_status(sprint.id).is_loaded());
+        assert!(m.column_cards_state(col_a.id).is_loaded());
+        assert!(m.board_columns_state(board.id).is_loaded());
+        assert!(m.board_sprints_state(board.id).is_loaded());
+        assert!(m.board_archived_cards_state(board.id).is_loaded());
+        assert!(!m.scoped_card_index.is_empty());
+        assert!(!m.card_index.is_empty());
+        assert!(!m.board_index.is_empty());
     }
 
     #[test]
@@ -516,13 +542,13 @@ mod tests {
     }
 
     #[test]
-    fn test_an_empty_entity_ids_clears_every_tier() {
+    fn test_invalidate_empty_entity_ids_leaves_every_tier_loaded() {
         let (mut m, board, col_a, col_b, c1, c2, sprint) = seeded();
         load_every_tier(&mut m, &board, &col_a, &col_b, &c1, &c2, &sprint);
 
         let _ = m.invalidate(Invalidation::Entities(EntityIds::default()));
 
-        assert_every_tier_not_loaded(&m, &board, &col_a, &col_b, &c1, &c2, &sprint);
+        assert_every_tier_loaded(&m, &board, &col_a, &col_b, &c1, &c2, &sprint);
     }
 
     #[test]
@@ -545,6 +571,29 @@ mod tests {
 
         assert!(m.archived_card_markers().is_empty());
         assert!(m.archived_card_ids().is_empty());
+    }
+
+    #[test]
+    fn test_invalidate_empty_entity_ids_keeps_the_snapshot_derived_archived_markers() {
+        let board = Board::new("B", None::<String>);
+        let card = Card::new(board.id, Uuid::new_v4(), "task", 0);
+        let marker = ArchivedCard::new(card.id, board.id);
+
+        let mut m = Model::default();
+        let changed = m.load_from_snapshot(Snapshot {
+            boards: vec![board],
+            cards: vec![card],
+            archived_cards: vec![marker],
+            ..Default::default()
+        });
+        NoProjections.resync(&m, changed);
+        assert!(!m.archived_card_ids().is_empty());
+
+        let _ = m.invalidate(Invalidation::Entities(EntityIds::default()));
+
+        assert!(!m.archived_card_markers().is_empty());
+        assert!(!m.archived_card_ids().is_empty());
+        assert!(m.cards_state().is_loaded());
     }
 
     #[test]
@@ -790,16 +839,6 @@ mod tests {
         assert!(m.columns_state().is_loaded());
         assert!(m.cards_state().is_loaded());
         assert!(m.sprints_state().is_loaded());
-    }
-
-    #[test]
-    fn test_invalidate_entities_with_no_ids_clears_everything() {
-        let (mut m, board, col_a, col_b, c1, c2, sprint) = seeded();
-        load_every_tier(&mut m, &board, &col_a, &col_b, &c1, &c2, &sprint);
-
-        let _ = m.invalidate(Invalidation::Entities(EntityIds::default()));
-
-        assert_every_tier_not_loaded(&m, &board, &col_a, &col_b, &c1, &c2, &sprint);
     }
 
     #[test]
