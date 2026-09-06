@@ -467,10 +467,9 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => match self.focus.board_focus {
                 BoardFocus::Sprints => {
                     if let Some(board_id) = self.active_board().map(|board| board.id) {
-                        match self.model.sprints_state() {
+                        match self.board_sprints_view(board_id) {
                             LoadState::Loaded(sprints) => {
-                                let sprint_count =
-                                    sprints.iter().filter(|s| s.board_id == board_id).count();
+                                let sprint_count = sprints.len();
                                 let current_idx = self.selection.sprint.get().unwrap_or(0);
                                 if sprint_count == 0 || current_idx >= sprint_count - 1 {
                                     if self.model.columns_state().is_loaded() {
@@ -551,24 +550,17 @@ impl App {
                             .update_item_count(column_count);
                         let was_at_top = self.dialog_input.column_list.navigate_up();
                         if was_at_top {
-                            let sprints_ready =
-                                board_id.is_none() || self.model.sprints_state().is_loaded();
-                            if !sprints_ready {
-                                self.set_error("Sprints are not loaded yet");
-                            } else {
-                                let sprint_count = board_id
-                                    .and_then(|id| match self.model.sprints_state() {
-                                        LoadState::Loaded(sprints) => Some(
-                                            sprints.iter().filter(|s| s.board_id == id).count(),
-                                        ),
-                                        _ => None,
-                                    })
-                                    .unwrap_or(0);
-                                if sprint_count == 0 {
-                                    self.focus.board_focus = BoardFocus::Settings;
-                                } else {
+                            let sprint_rows = match board_id.map(|id| self.board_sprints_view(id)) {
+                                None => Some(0usize),
+                                Some(LoadState::Loaded(sprints)) => Some(sprints.len()),
+                                Some(_) => None,
+                            };
+                            match sprint_rows {
+                                None => self.set_error("Sprints are not loaded yet"),
+                                Some(0) => self.focus.board_focus = BoardFocus::Settings,
+                                Some(n) => {
                                     self.focus.board_focus = BoardFocus::Sprints;
-                                    self.selection.sprint.set(Some(sprint_count - 1));
+                                    self.selection.sprint.set(Some(n - 1));
                                 }
                             }
                         }
@@ -594,13 +586,9 @@ impl App {
                     if let Some(sprint_idx) = self.selection.sprint.get() {
                         let board_ctx = self.board_in_context().map(|b| b.id);
                         if let Some(board_id) = board_ctx {
-                            match self.model.sprints_state() {
+                            match self.board_sprints_view(board_id) {
                                 LoadState::Loaded(sprints) => {
-                                    let sprint_id = sprints
-                                        .iter()
-                                        .filter(|s| s.board_id == board_id)
-                                        .nth(sprint_idx)
-                                        .map(|s| s.id);
+                                    let sprint_id = sprints.get(sprint_idx).map(|s| s.id);
                                     if let Some(sprint_id) = sprint_id {
                                         self.selection.active_sprint_id = Some(sprint_id);
                                         self.selection.active_board_id = Some(board_id);

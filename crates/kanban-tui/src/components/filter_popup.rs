@@ -85,7 +85,8 @@ fn render_filter_sprints_section(
     )));
 
     if let Some(board) = app.active_board() {
-        match app.model.board_sprints_state(board.id) {
+        let board_sprints_view = app.board_sprints_view(board.id);
+        match &board_sprints_view {
             LoadState::Loaded(board_sprints) => {
                 if board_sprints.is_empty() {
                     sprint_lines.push(Line::from(Span::styled(
@@ -114,7 +115,10 @@ fn render_filter_sprints_section(
                     }
                 }
             }
-            other => sprint_lines.extend(load_state_body("Sprints", &other)),
+            _ => sprint_lines.extend(load_state_body(
+                "Sprints",
+                &board_sprints_view.as_ref().map(Vec::as_slice),
+            )),
         }
     }
 

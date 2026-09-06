@@ -24,6 +24,17 @@ impl App {
     pub fn handle_filter_options_popup(&mut self, key_code: KeyCode) {
         use crossterm::event::KeyCode;
 
+        if self.filter.dialog_state.is_none() {
+            return;
+        }
+
+        let board_id = self
+            .selection
+            .active_board_id
+            .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
+            .map(|board| board.id);
+        let board_sprints = board_id.map(|id| self.board_sprints_view(id));
+
         if let Some(ref mut dialog_state) = self.filter.dialog_state {
             match key_code {
                 KeyCode::Esc => {
@@ -31,31 +42,20 @@ impl App {
                     self.pop_mode();
                 }
                 KeyCode::Char('j') | KeyCode::Down => match dialog_state.current_section {
-                    FilterDialogSection::Sprints => {
-                        if let Some(board_id) = self.selection.active_board_id.and_then(|id| {
-                            self.model
-                                .board_by_id_state(id)
-                                .loaded()
-                                .copied()
-                                .map(|b| b.id)
-                        }) {
-                            match self.model.sprints_state() {
-                                LoadState::Loaded(sprints) => {
-                                    let sprint_count =
-                                        sprints.iter().filter(|s| s.board_id == board_id).count();
-                                    let total_items = 1 + sprint_count;
-                                    if dialog_state.item_selection < total_items.saturating_sub(1) {
-                                        dialog_state.item_selection += 1;
-                                    } else {
-                                        dialog_state.next_section();
-                                    }
-                                }
-                                _ => {
-                                    self.set_error("Sprints are not loaded yet".to_string());
-                                }
+                    FilterDialogSection::Sprints => match &board_sprints {
+                        Some(LoadState::Loaded(sprints)) => {
+                            let total_items = 1 + sprints.len();
+                            if dialog_state.item_selection < total_items.saturating_sub(1) {
+                                dialog_state.item_selection += 1;
+                            } else {
+                                dialog_state.next_section();
                             }
                         }
-                    }
+                        Some(_) => {
+                            self.set_error("Sprints are not loaded yet".to_string());
+                        }
+                        None => {}
+                    },
                     _ => {
                         dialog_state.next_section();
                     }
@@ -78,42 +78,35 @@ impl App {
                                 dialog_state.filters.show_unassigned_sprints
                             );
                             self.apply_filters();
-                        } else if let Some(board) = self
-                            .selection
-                            .active_board_id
-                            .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
-                        {
-                            match self.model.sprints_state() {
-                                LoadState::Loaded(sprints) => {
-                                    let board_sprints: Vec<_> =
-                                        sprints.iter().filter(|s| s.board_id == board.id).collect();
+                        } else {
+                            match &board_sprints {
+                                Some(LoadState::Loaded(sprints)) => {
                                     let sprint_idx = dialog_state.item_selection - 1;
-                                    if let Some(sprint) = board_sprints.get(sprint_idx) {
+                                    if let Some(sprint) = sprints.get(sprint_idx) {
+                                        let sprint_id = sprint.id;
                                         if dialog_state
                                             .filters
                                             .selected_sprint_ids
-                                            .contains(&sprint.id)
+                                            .contains(&sprint_id)
                                         {
                                             dialog_state
                                                 .filters
                                                 .selected_sprint_ids
-                                                .remove(&sprint.id);
+                                                .remove(&sprint_id);
                                         } else {
                                             dialog_state
                                                 .filters
                                                 .selected_sprint_ids
-                                                .insert(sprint.id);
+                                                .insert(sprint_id);
                                         }
-                                        tracing::info!(
-                                            "Toggled sprint: {}",
-                                            sprint.formatted_name(board, None)
-                                        );
+                                        tracing::info!("Toggled sprint: {sprint_id}");
                                         self.apply_filters();
                                     }
                                 }
-                                _ => {
+                                Some(_) => {
                                     self.set_error("Sprints are not loaded yet".to_string());
                                 }
+                                None => {}
                             }
                         }
                     }

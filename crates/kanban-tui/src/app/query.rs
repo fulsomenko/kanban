@@ -1,6 +1,27 @@
 use super::{App, AppMode};
+use kanban_domain::{LoadState, Sprint};
 
 impl App {
+    /// One sprint tier per board-scoped feature: the scoped tier when it has
+    /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
+    /// `Loaded` (including an empty one) is authoritative and never falls
+    /// back; only `NotLoaded` triggers the fallback.
+    pub(crate) fn board_sprints_view(&self, board_id: uuid::Uuid) -> LoadState<Vec<Sprint>> {
+        match self.model.board_sprints_state(board_id) {
+            LoadState::Loaded(sprints) => LoadState::Loaded(sprints.to_vec()),
+            LoadState::NotLoaded => match self.model.sprints_state() {
+                LoadState::Loaded(all) => LoadState::Loaded(
+                    all.iter()
+                        .filter(|s| s.board_id == board_id)
+                        .cloned()
+                        .collect(),
+                ),
+                _ => LoadState::NotLoaded,
+            },
+            other => other.map(|_| Vec::new()),
+        }
+    }
+
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(active_id) = self.selection.active_card_id {
             if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
@@ -22,11 +43,9 @@ impl App {
         if let Some(active_id) = self.selection.active_card_id {
             if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
                 if let Some(card_sprint_id) = card.sprint_id {
-                    if let Some(board) = self.active_board() {
-                        if let kanban_domain::LoadState::Loaded(sprints) =
-                            self.model.sprints_state()
-                        {
-                            let entries = build_entries(sprints, board.id, chrono::Utc::now());
+                    if let Some(board_id) = self.active_board().map(|board| board.id) {
+                        if let LoadState::Loaded(sprints) = self.board_sprints_view(board_id) {
+                            let entries = build_entries(&sprints, board_id, chrono::Utc::now());
                             for (idx, entry) in entries.iter().enumerate() {
                                 if sprint_id_of(entry) == Some(card_sprint_id) {
                                     return idx;
