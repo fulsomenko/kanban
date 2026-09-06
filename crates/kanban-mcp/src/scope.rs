@@ -51,7 +51,8 @@ impl FetchPlan for ToolScope {
         let named_cards = self.cards.iter().any(|r| matches!(r, Ref::Name));
         let wants_board_list = matches!(self.board, Some(Ref::Name))
             || (self.resolved_board.is_some() && self.wants_board_sprints)
-            || matches!(self.sprint, Some(Ref::Name));
+            || matches!(self.sprint, Some(Ref::Name))
+            || global_column;
         FetchRound {
             board_list: wants_board_list && requestable(loaded.board_list()),
             column_list: global_column && requestable(loaded.column_list()),
