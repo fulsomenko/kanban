@@ -1,11 +1,14 @@
 use crate::error::{AppError, AppJson};
+use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
-use crate::state::AppState;
+use crate::scope::RouteScope;
+use crate::state::{AppState, Session};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Card, CardListFilter};
+use chrono::{DateTime, Utc};
+use kanban_domain::{filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, NoProjections};
 use kanban_service::api::ArchivedCardResponse;
 use kanban_service::api::ArchivedFilterDto;
 use kanban_service::api::CardResponse;
@@ -14,7 +17,7 @@ use kanban_service::api::{
 };
 use kanban_service::{CardUpdate, KanbanError, KanbanOperations};
 use serde::Deserialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -25,28 +28,84 @@ pub struct CardQuery {
     pub archived: ArchivedFilterDto,
 }
 
+fn optional_card<'a>(
+    state: kanban_domain::LoadState<&'a Card>,
+    what: &str,
+) -> Result<Option<&'a Card>, AppError> {
+    match state {
+        kanban_domain::LoadState::Missing => Ok(None),
+        other => require_loaded(other, what).map(Some),
+    }
+}
+
 async fn list_cards(
     State(state): State<AppState>,
     Path(board_id): Path<Uuid>,
     Query(q): Query<CardQuery>,
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<CardResponse>>, AppError> {
+    let archived: ArchivedFilter = q.archived.into();
+    let scope = RouteScope::BoardCards {
+        board_id,
+        column_id: q.column_id,
+        archived,
+    };
+
+    let mut guard = state.lock_session().await;
+    let Session { ctx, model } = &mut *guard;
+    ctx.sync(&scope, model, &mut NoProjections);
+
+    let board = require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
+    let columns = require_loaded(model.board_columns_state(board_id), "columns of board")?;
+
+    let source_column_ids: Vec<Uuid> = match q.column_id {
+        Some(cid) => {
+            if columns.iter().any(|c| c.id == cid) {
+                vec![cid]
+            } else {
+                Vec::new()
+            }
+        }
+        None => columns.iter().map(|c| c.id).collect(),
+    };
+
+    let mut live: Vec<Card> = Vec::new();
+    for column_id in &source_column_ids {
+        let cards = require_loaded(model.column_cards_state(*column_id), "cards of column")?;
+        live.extend(cards.iter().cloned());
+    }
+
+    let mut cards = if archived == ArchivedFilter::ArchivedOnly {
+        Vec::new()
+    } else {
+        live
+    };
+    let mut archived_at: HashMap<Uuid, DateTime<Utc>> = HashMap::new();
+    if archived != ArchivedFilter::LiveOnly {
+        let markers = require_loaded(model.archived_cards_state(), "archived cards")?;
+        for marker in markers.iter().filter(|m| m.context.board_id == board_id) {
+            if let Some(card) = optional_card(model.card_by_id_state(marker.entity_id), "Card")? {
+                cards.push(card.clone());
+                archived_at.insert(marker.entity_id, marker.metadata.archived_at);
+            }
+        }
+    }
+
     let filter = CardListFilter {
-        board_id: Some(board_id),
+        board_id: if archived == ArchivedFilter::LiveOnly {
+            Some(board_id)
+        } else {
+            None
+        },
         column_id: q.column_id,
         sprint_ids: q.sprint_id.map(|id| HashSet::from([id])),
-        archived: q.archived.into(),
+        archived,
         ..Default::default()
     };
-    let ctx = state.ctx.lock().await;
-    ctx.require_board(board_id)
-        .map_err(|e| AppError::from(&e))?;
-    let cards = ctx
-        .list_cards_detailed(filter)
-        .map_err(|e| AppError::from(&e))?;
-    let responses: Vec<CardResponse> = cards
+    let filtered = filter_and_sort_cards(&cards, columns, &[], Some(board), &[], &filter);
+    let responses: Vec<CardResponse> = filtered
         .iter()
-        .map(|(card, archived_at)| CardResponse::with_archived_at(card, *archived_at))
+        .map(|c| CardResponse::with_archived_at(c, archived_at.get(&c.id).copied()))
         .collect();
     paginate_response(responses, &params)
 }
@@ -55,10 +114,16 @@ async fn get_card(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<CardResponse>, AppError> {
-    let ctx = state.ctx.lock().await;
-    require_card_in_board(&ctx, board_id, id)?;
-    let card = do_get_card(&ctx, id)?;
-    Ok(Json(CardResponse::from(&card)))
+    let scope = RouteScope::Card(id);
+    let mut guard = state.lock_session().await;
+    let Session { ctx, model } = &mut *guard;
+    ctx.sync(&scope, model, &mut NoProjections);
+
+    let card = require_loaded_entity(model.card_by_id_state(id), "Card", id)?;
+    if card.board_id != board_id {
+        return Err(AppError::from(&KanbanError::not_found("Card", id)));
+    }
+    Ok(Json(CardResponse::from(card)))
 }
 
 async fn list_archived_cards(
@@ -66,12 +131,16 @@ async fn list_archived_cards(
     Path(board_id): Path<Uuid>,
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<ArchivedCardResponse>>, AppError> {
-    let ctx = state.ctx.lock().await;
-    ctx.require_board(board_id)
-        .map_err(|e| AppError::from(&e))?;
-    let markers = ctx
-        .list_archived_cards_by_board(board_id)
-        .map_err(|e| AppError::from(&e))?;
+    let scope = RouteScope::BoardArchivedCards(board_id);
+    let mut guard = state.lock_session().await;
+    let Session { ctx, model } = &mut *guard;
+    ctx.sync(&scope, model, &mut NoProjections);
+
+    require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
+    let markers = require_loaded(
+        model.board_archived_cards_state(board_id),
+        "archived cards of board",
+    )?;
     let responses: Vec<ArchivedCardResponse> =
         markers.iter().map(ArchivedCardResponse::from).collect();
     paginate_response(responses, &params)
@@ -113,10 +182,9 @@ fn do_delete_card(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppEr
     crate::state::mutate_unit(ctx, |c| c.delete_card_impl(id)).map_err(|e| AppError::from(&e))
 }
 
-/// Fetch a card and 404 unless it belongs to `board_id` — the same
-/// cross-board guard `get_card` (read route, above) applies, needed here
-/// too since `KanbanOperations::{update_card, delete_card}` key on the
-/// global card id alone with no board scoping of their own.
+/// Fetch a card and 404 unless it belongs to `board_id`, since
+/// `KanbanOperations::{update_card, delete_card}` key on the global card id
+/// alone with no board scoping of their own.
 fn require_card_in_board(
     ctx: &kanban_service::KanbanContext,
     board_id: Uuid,
@@ -224,9 +292,13 @@ async fn get_card_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<CardResponse>, AppError> {
-    let ctx = state.ctx.lock().await;
-    let card = do_get_card(&ctx, id)?;
-    Ok(Json(CardResponse::from(&card)))
+    let scope = RouteScope::Card(id);
+    let mut guard = state.lock_session().await;
+    let Session { ctx, model } = &mut *guard;
+    ctx.sync(&scope, model, &mut NoProjections);
+
+    let card = require_loaded_entity(model.card_by_id_state(id), "Card", id)?;
+    Ok(Json(CardResponse::from(card)))
 }
 
 async fn update_card_route_flat(

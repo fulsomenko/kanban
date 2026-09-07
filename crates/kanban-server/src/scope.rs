@@ -60,13 +60,9 @@ impl FetchPlan for RouteScope {
                 column_id,
                 archived,
             } => {
-                let _ = archived;
                 want_board(&mut round, loaded, board_id);
                 if requestable(loaded.columns_of_board(board_id)) {
                     round.columns_by_board.push(board_id);
-                }
-                if requestable(loaded.archived_cards_of_board(board_id)) {
-                    round.archived_cards_by_board.push(board_id);
                 }
                 match column_id {
                     Some(column_id) => {
@@ -80,6 +76,18 @@ impl FetchPlan for RouteScope {
                                 if requestable(loaded.cards_of_column(column.id)) {
                                     round.cards_by_column.push(column.id);
                                 }
+                            }
+                        }
+                    }
+                }
+                if archived != ArchivedFilter::LiveOnly {
+                    round.archived_card_list = requestable(loaded.archived_card_list());
+                    if let Some(markers) = loaded.loaded_archived_card_markers() {
+                        for marker in markers {
+                            if marker.context.board_id == board_id
+                                && requestable(loaded.card(marker.entity_id))
+                            {
+                                round.cards.push(marker.entity_id);
                             }
                         }
                     }
