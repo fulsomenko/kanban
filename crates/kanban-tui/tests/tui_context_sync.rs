@@ -129,3 +129,16 @@ fn test_tui_context_sync_invalidated_refetches_before_planning() {
         "after"
     );
 }
+
+#[test]
+fn test_tui_context_has_no_whole_store_snapshot_pass_throughs() {
+    let src = include_str!("../src/tui_context.rs");
+    assert!(
+        !src.contains("pub fn snapshot(&self)"),
+        "TuiContext::snapshot must be deleted; callers should use kanban_service::read_full_snapshot(ctx.data_store())"
+    );
+    assert!(
+        !src.contains("pub fn apply_snapshot(&mut self,"),
+        "TuiContext::apply_snapshot must be deleted; callers should use kanban_service::write_full_snapshot(ctx.data_store(), snapshot)"
+    );
+}
