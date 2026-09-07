@@ -858,6 +858,8 @@ mod tests {
             .unwrap();
         app.ctx.create_sprint(board_id, None, None).unwrap();
         refresh(&mut app);
+        app.mode = AppMode::Dialog(DialogMode::DeleteBoardConfirm);
+        app.resolve_for_view();
 
         assert_eq!(
             app.board_delete_counts(board_id),

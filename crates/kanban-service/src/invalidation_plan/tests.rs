@@ -15,6 +15,7 @@ struct StubWorld {
     card_list: FetchStatus,
     sprint_list: FetchStatus,
     graph: FetchStatus,
+    boards: HashMap<Uuid, FetchStatus>,
     columns: HashMap<Uuid, FetchStatus>,
     cards: HashMap<Uuid, FetchStatus>,
     sprints: HashMap<Uuid, FetchStatus>,
@@ -34,6 +35,7 @@ impl Default for StubWorld {
             card_list: FetchStatus::NotLoaded,
             sprint_list: FetchStatus::NotLoaded,
             graph: FetchStatus::NotLoaded,
+            boards: HashMap::new(),
             columns: HashMap::new(),
             cards: HashMap::new(),
             sprints: HashMap::new(),
@@ -62,6 +64,12 @@ impl LoadedState for StubWorld {
     }
     fn graph(&self) -> FetchStatus {
         self.graph
+    }
+    fn board(&self, id: Uuid) -> FetchStatus {
+        self.boards
+            .get(&id)
+            .copied()
+            .unwrap_or(FetchStatus::NotLoaded)
     }
     fn column(&self, id: Uuid) -> FetchStatus {
         self.columns
@@ -111,10 +119,22 @@ impl LoadedState for StubWorld {
     fn archived_board_list(&self) -> FetchStatus {
         self.archived_board_list
     }
+    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
+        self.card(id)
+    }
+    fn board_in_collection(&self, id: Uuid) -> FetchStatus {
+        self.board(id)
+    }
 }
 
 impl LoadedEntities for StubWorld {
     fn loaded_columns_of_board(&self, _board_id: Uuid) -> Option<&[Column]> {
+        None
+    }
+    fn loaded_archived_card_markers(&self) -> Option<&[kanban_domain::ArchivedCard]> {
+        None
+    }
+    fn loaded_archived_board_markers(&self) -> Option<&[kanban_domain::ArchivedBoard]> {
         None
     }
 }
@@ -126,6 +146,7 @@ fn all_loaded() -> StubWorld {
         card_list: FetchStatus::Loaded,
         sprint_list: FetchStatus::Loaded,
         graph: FetchStatus::Loaded,
+        boards: HashMap::new(),
         columns: HashMap::new(),
         cards: HashMap::new(),
         sprints: HashMap::new(),

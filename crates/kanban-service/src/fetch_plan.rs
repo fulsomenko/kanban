@@ -161,6 +161,9 @@ mod tests {
         fn graph(&self) -> FetchStatus {
             FetchStatus::NotLoaded
         }
+        fn board(&self, _id: Uuid) -> FetchStatus {
+            FetchStatus::NotLoaded
+        }
         fn column(&self, _id: Uuid) -> FetchStatus {
             FetchStatus::NotLoaded
         }
@@ -192,11 +195,23 @@ mod tests {
         fn archived_board_list(&self) -> FetchStatus {
             FetchStatus::NotLoaded
         }
+        fn card_in_collection(&self, _id: Uuid) -> FetchStatus {
+            FetchStatus::NotLoaded
+        }
+        fn board_in_collection(&self, _id: Uuid) -> FetchStatus {
+            FetchStatus::NotLoaded
+        }
     }
 
     impl LoadedEntities for StubLoaded {
         fn loaded_columns_of_board(&self, board_id: Uuid) -> Option<&[Column]> {
             self.columns_by_board.get(&board_id).map(Vec::as_slice)
+        }
+        fn loaded_archived_card_markers(&self) -> Option<&[kanban_domain::ArchivedCard]> {
+            None
+        }
+        fn loaded_archived_board_markers(&self) -> Option<&[kanban_domain::ArchivedBoard]> {
+            None
         }
     }
 
@@ -309,6 +324,16 @@ mod tests {
             ..Default::default()
         }
         .is_empty());
+    }
+
+    #[test]
+    fn test_a_board_id_round_is_not_empty() {
+        let round = FetchRound {
+            boards: vec![Uuid::new_v4()],
+            ..Default::default()
+        };
+
+        assert!(!round.is_empty());
     }
 
     #[test]

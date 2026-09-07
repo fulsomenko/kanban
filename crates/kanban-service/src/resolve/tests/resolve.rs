@@ -266,3 +266,26 @@ fn test_a_loaded_card_collection_does_not_report_an_unfetched_card_id_as_loaded(
     assert!(loaded.card_list_state().is_loaded());
     assert!(loaded.card_state(a.id).is_not_loaded());
 }
+
+#[test]
+fn test_resolve_fetches_a_board_by_id_through_get_board() {
+    let store = store();
+    let board = seed_board(&store, "a");
+    let loaded = StubLoaded::default();
+    let plan = FixedPlan(FetchRound {
+        boards: vec![board.id],
+        ..Default::default()
+    });
+
+    let resolved = resolve(&plan, &loaded, &store);
+
+    assert_ops(
+        &store.ops(),
+        &[ReadOp {
+            method: "get_board",
+            ids: vec![board.id],
+        }],
+    );
+    assert!(resolved.boards.by_id.get(&board.id).unwrap().is_loaded());
+    assert!(resolved.boards.all.is_not_loaded());
+}

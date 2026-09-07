@@ -183,6 +183,10 @@ mod tests {
         archived_card_list: FetchStatus,
         archived_cards_of_board: FetchStatus,
         archived_board_list: FetchStatus,
+        card_in_collection: HashMap<Uuid, FetchStatus>,
+        board_in_collection: HashMap<Uuid, FetchStatus>,
+        archived_card_markers: Option<Vec<kanban_domain::ArchivedCard>>,
+        archived_board_markers: Option<Vec<kanban_domain::ArchivedBoard>>,
     }
 
     impl Default for StubLoaded {
@@ -202,6 +206,10 @@ mod tests {
                 archived_card_list: FetchStatus::NotLoaded,
                 archived_cards_of_board: FetchStatus::NotLoaded,
                 archived_board_list: FetchStatus::NotLoaded,
+                card_in_collection: HashMap::new(),
+                board_in_collection: HashMap::new(),
+                archived_card_markers: None,
+                archived_board_markers: None,
             }
         }
     }
@@ -221,6 +229,9 @@ mod tests {
         }
         fn graph(&self) -> FetchStatus {
             self.graph
+        }
+        fn board(&self, _id: Uuid) -> FetchStatus {
+            FetchStatus::NotLoaded
         }
         fn column(&self, _id: Uuid) -> FetchStatus {
             FetchStatus::NotLoaded
@@ -255,11 +266,29 @@ mod tests {
         fn archived_board_list(&self) -> FetchStatus {
             self.archived_board_list
         }
+        fn card_in_collection(&self, id: Uuid) -> FetchStatus {
+            self.card_in_collection
+                .get(&id)
+                .copied()
+                .unwrap_or(FetchStatus::NotLoaded)
+        }
+        fn board_in_collection(&self, id: Uuid) -> FetchStatus {
+            self.board_in_collection
+                .get(&id)
+                .copied()
+                .unwrap_or(FetchStatus::NotLoaded)
+        }
     }
 
     impl LoadedEntities for StubLoaded {
         fn loaded_columns_of_board(&self, board_id: Uuid) -> Option<&[Column]> {
             self.loaded_columns.get(&board_id).map(Vec::as_slice)
+        }
+        fn loaded_archived_card_markers(&self) -> Option<&[kanban_domain::ArchivedCard]> {
+            self.archived_card_markers.as_deref()
+        }
+        fn loaded_archived_board_markers(&self) -> Option<&[kanban_domain::ArchivedBoard]> {
+            self.archived_board_markers.as_deref()
         }
     }
 
@@ -356,6 +385,10 @@ mod tests {
             card: Some(Uuid::new_v4()),
             sprint: Some(Uuid::new_v4()),
             graph: true,
+            archived_card_markers: false,
+            archived_card_bodies: false,
+            archived_board_markers: false,
+            archived_board_bodies: false,
         };
 
         let round = scope.next_round(&stub);
@@ -490,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn test_archived_tiers_are_never_requested_regardless_of_status() {
+    fn test_a_non_archived_scope_never_requests_archived_tiers_or_board_bodies() {
         let board = Uuid::new_v4();
         let stub = StubLoaded::default();
         let scope = ViewScope {
@@ -502,10 +535,118 @@ mod tests {
             card: Some(Uuid::new_v4()),
             sprint: Some(Uuid::new_v4()),
             graph: true,
+            archived_card_markers: false,
+            archived_card_bodies: false,
+            archived_board_markers: false,
+            archived_board_bodies: false,
         };
 
         let round = scope.next_round(&stub);
         assert!(!round.archived_card_list);
         assert!(round.archived_cards_by_board.is_empty());
+        assert!(!round.archived_board_list);
+        assert!(round.boards.is_empty());
+    }
+
+    fn archived_card_marker(entity_id: Uuid) -> kanban_domain::ArchivedCard {
+        kanban_domain::ArchivedCard::new(entity_id, Uuid::new_v4())
+    }
+
+    fn archived_board_marker(entity_id: Uuid) -> kanban_domain::ArchivedBoard {
+        kanban_domain::Archived::now(entity_id)
+    }
+
+    #[test]
+    fn test_archived_cards_view_requests_the_archival_marker_tier() {
+        let stub = StubLoaded::default();
+        let scope = ViewScope {
+            archived_card_markers: true,
+            ..Default::default()
+        };
+
+        let round = scope.next_round(&stub);
+        assert!(round.archived_card_list);
+    }
+
+    #[test]
+    fn test_archived_cards_view_walks_loaded_markers_into_a_body_round() {
+        let m1 = Uuid::new_v4();
+        let m2 = Uuid::new_v4();
+        let stub = StubLoaded {
+            archived_card_list: FetchStatus::Loaded,
+            archived_card_markers: Some(vec![archived_card_marker(m1), archived_card_marker(m2)]),
+            ..StubLoaded::default()
+        };
+        let scope = ViewScope {
+            archived_card_bodies: true,
+            ..Default::default()
+        };
+
+        let round = scope.next_round(&stub);
+        let mut expected = vec![m1, m2];
+        expected.sort();
+        assert_eq!(round.cards, expected);
+        assert!(!round.archived_card_list);
+    }
+
+    #[test]
+    fn test_archived_cards_view_stops_requesting_a_body_already_in_the_collection() {
+        let m1 = Uuid::new_v4();
+        let m2 = Uuid::new_v4();
+        let stub = StubLoaded {
+            archived_card_list: FetchStatus::Loaded,
+            archived_card_markers: Some(vec![archived_card_marker(m1), archived_card_marker(m2)]),
+            card_in_collection: HashMap::from([(m1, FetchStatus::Loaded)]),
+            ..StubLoaded::default()
+        };
+        let scope = ViewScope {
+            archived_card_bodies: true,
+            ..Default::default()
+        };
+
+        let round = scope.next_round(&stub);
+        assert_eq!(round.cards, vec![m2]);
+    }
+
+    #[test]
+    fn test_archived_boards_view_requests_the_marker_tier_then_the_heads() {
+        let stub1 = StubLoaded::default();
+        let scope = ViewScope {
+            archived_board_bodies: true,
+            ..Default::default()
+        };
+
+        let round1 = scope.next_round(&stub1);
+        assert!(round1.archived_board_list);
+        assert!(round1.boards.is_empty());
+
+        let m1 = Uuid::new_v4();
+        let m2 = Uuid::new_v4();
+        let stub2 = StubLoaded {
+            archived_board_list: FetchStatus::Loaded,
+            archived_board_markers: Some(vec![
+                archived_board_marker(m1),
+                archived_board_marker(m2),
+            ]),
+            ..StubLoaded::default()
+        };
+
+        let round2 = scope.next_round(&stub2);
+        let mut expected = vec![m1, m2];
+        expected.sort();
+        assert_eq!(round2.boards, expected);
+    }
+
+    #[test]
+    fn test_delete_board_confirm_requests_the_archived_card_markers_but_no_bodies() {
+        let stub = StubLoaded::default();
+        let scope = ViewScope {
+            archived_card_markers: true,
+            ..Default::default()
+        };
+
+        let round = scope.next_round(&stub);
+        assert!(round.archived_card_list);
+        assert!(round.cards.is_empty());
     }
 }

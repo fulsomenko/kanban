@@ -180,4 +180,162 @@ mod tests {
         fn takes(_: &dyn LoadedEntities) {}
         takes(&Model::default());
     }
+
+    #[test]
+    fn test_card_in_collection_reports_not_loaded_for_an_id_absent_from_a_loaded_flat_list() {
+        let column_id = Uuid::new_v4();
+        let live = card_in(column_id);
+        let archived_id = Uuid::new_v4();
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            cards: Collection {
+                all: LoadState::Loaded(vec![live]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert_eq!(
+            LoadedState::card_in_collection(&model, archived_id),
+            FetchStatus::NotLoaded
+        );
+        assert!(requestable(LoadedState::card_in_collection(
+            &model,
+            archived_id
+        )));
+    }
+
+    #[test]
+    fn test_card_in_collection_ignores_a_loaded_per_id_entry() {
+        let column_id = Uuid::new_v4();
+        let live = card_in(column_id);
+        let archived = card_in(column_id);
+        let archived_id = archived.id;
+        let mut model = Model::default();
+        let mut by_id = std::collections::HashMap::new();
+        by_id.insert(archived_id, LoadState::Loaded(archived));
+        let _ = model.apply_resolved(Resolved {
+            cards: Collection {
+                by_id,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let _ = model.apply_resolved(Resolved {
+            cards: Collection {
+                all: LoadState::Loaded(vec![live]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert_eq!(LoadedState::card(&model, archived_id), FetchStatus::Loaded);
+        assert_eq!(
+            LoadedState::card_in_collection(&model, archived_id),
+            FetchStatus::NotLoaded
+        );
+    }
+
+    #[test]
+    fn test_board_in_collection_mirrors_the_card_accessor() {
+        use kanban_domain::Board;
+
+        let live = Board::new("Live", None::<String>);
+        let archived_id = Uuid::new_v4();
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![live]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert_eq!(
+            LoadedState::board_in_collection(&model, archived_id),
+            FetchStatus::NotLoaded
+        );
+
+        let err = Arc::new(KanbanError::unsupported("boom"));
+        let _ = model.apply_resolved(Resolved {
+            boards: Collection {
+                all: LoadState::Failed(err),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        assert_eq!(
+            LoadedState::board_in_collection(&model, archived_id),
+            FetchStatus::Failed
+        );
+    }
+
+    #[test]
+    fn test_loaded_archived_card_markers_is_none_until_the_marker_tier_loads_and_some_when_empty() {
+        use kanban_domain::ArchivedCard;
+
+        let model = Model::default();
+        assert!(model.loaded_archived_card_markers().is_none());
+
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            archived_cards: Collection {
+                all: LoadState::Loaded(Vec::new()),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        assert!(matches!(
+            model.loaded_archived_card_markers(),
+            Some(s) if s.is_empty()
+        ));
+
+        let marker_id = Uuid::new_v4();
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            archived_cards: Collection {
+                all: LoadState::Loaded(vec![ArchivedCard::new(marker_id, Uuid::new_v4())]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let markers = model.loaded_archived_card_markers().unwrap();
+        assert_eq!(markers.len(), 1);
+        assert_eq!(markers[0].entity_id, marker_id);
+    }
+
+    #[test]
+    fn test_loaded_archived_board_markers_is_none_until_the_marker_tier_loads_and_some_when_empty()
+    {
+        use kanban_domain::Archived;
+
+        let model = Model::default();
+        assert!(model.loaded_archived_board_markers().is_none());
+
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            archived_boards: Collection {
+                all: LoadState::Loaded(Vec::new()),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        assert!(matches!(
+            model.loaded_archived_board_markers(),
+            Some(s) if s.is_empty()
+        ));
+
+        let marker_id = Uuid::new_v4();
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![Archived::now(marker_id)]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let markers = model.loaded_archived_board_markers().unwrap();
+        assert_eq!(markers.len(), 1);
+        assert_eq!(markers[0].entity_id, marker_id);
+    }
 }
