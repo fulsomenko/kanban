@@ -5,7 +5,9 @@
 
 pub mod app;
 pub mod error;
+pub mod model_read;
 pub mod pagination;
+pub mod scope;
 pub mod state;
 pub mod watch;
 
