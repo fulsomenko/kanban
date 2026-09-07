@@ -1,5 +1,5 @@
 use kanban_backend_memory::InMemoryStore;
-use kanban_domain::{FieldUpdate, Invalidation, NoProjections};
+use kanban_domain::{Board, Card, Column, FieldUpdate, Invalidation, NoProjections, Sprint};
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_service::{
     requestable, AppConfig, CardUpdate, FetchPlan, FetchRound, KanbanBackend, KanbanContext,
@@ -32,6 +32,8 @@ impl FetchPlan for WarmPlan {
             } else {
                 vec![]
             },
+            archived_card_list: requestable(loaded.archived_card_list()),
+            archived_board_list: requestable(loaded.archived_board_list()),
             ..Default::default()
         }
     }
@@ -44,7 +46,7 @@ impl FetchPlan for NothingPlan {
     }
 }
 
-fn assert_resync_invalidated_returns_the_updated_graph(ctx: &mut KanbanContext) {
+fn seed(ctx: &mut KanbanContext) -> (Board, Column, Card, Sprint) {
     let board = ctx
         .create_board("Board".into(), Some("BRD".into()))
         .unwrap();
@@ -60,6 +62,11 @@ fn assert_resync_invalidated_returns_the_updated_graph(ctx: &mut KanbanContext) 
     let sprint = ctx
         .create_sprint(board.id, Some("SPR".into()), Some("Sprint".into()))
         .unwrap();
+    (board, column, card, sprint)
+}
+
+fn assert_resync_invalidated_returns_the_updated_graph(ctx: &mut KanbanContext) {
+    let (board, column, card, sprint) = seed(ctx);
 
     let mut model = kanban_domain::Model::default();
     ctx.sync(
@@ -132,6 +139,56 @@ fn assert_resync_invalidated_returns_the_updated_graph(ctx: &mut KanbanContext) 
     assert!(model.graph_state().is_loaded());
 }
 
+fn assert_resync_invalidated_classifies_a_restored_card_as_live(ctx: &mut KanbanContext) {
+    let (_board, _column, card, sprint) = seed(ctx);
+
+    let _ = ctx.archive_card_impl(card.id).unwrap();
+
+    let mut model = kanban_domain::Model::default();
+    ctx.sync(
+        &WarmPlan {
+            card_id: card.id,
+            sprint_id: sprint.id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    assert!(model.archived_cards_state().is_loaded());
+    assert!(model.archived_card_ids().contains(&card.id));
+
+    let (_card, inv) = ctx.restore_card_impl(card.id, None).unwrap();
+    assert!(matches!(inv, Invalidation::Entities(_)));
+
+    ctx.resync_invalidated(inv, &NothingPlan, &mut model, &mut NoProjections);
+
+    assert!(!model.archived_card_ids().contains(&card.id));
+    assert!(model.archived_cards_state().is_loaded());
+}
+
+fn assert_resync_invalidated_classifies_an_archived_board_as_archived(ctx: &mut KanbanContext) {
+    let (board, _column, card, sprint) = seed(ctx);
+
+    let mut model = kanban_domain::Model::default();
+    ctx.sync(
+        &WarmPlan {
+            card_id: card.id,
+            sprint_id: sprint.id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    assert!(model.archived_boards_state().is_loaded());
+    assert!(!model.archived_board_ids().contains(&board.id));
+
+    let inv = ctx.archive_board_impl(board.id).unwrap();
+    assert!(matches!(inv, Invalidation::Entities(_)));
+
+    ctx.resync_invalidated(inv, &NothingPlan, &mut model, &mut NoProjections);
+
+    assert!(model.archived_board_ids().contains(&board.id));
+    assert!(model.archived_boards_state().is_loaded());
+}
+
 #[test]
 fn test_resync_invalidated_returns_the_updated_card_on_the_in_memory_backend() {
     let mut ctx =
@@ -170,4 +227,58 @@ async fn test_resync_invalidated_returns_the_updated_card_on_the_sqlite_backend(
     let path = dir.path().join("test.sqlite3");
     let mut ctx = open_sqlite_context(path.to_str().unwrap(), AppConfig::default()).await;
     assert_resync_invalidated_returns_the_updated_graph(&mut ctx);
+}
+
+#[test]
+fn test_resync_invalidated_classifies_restored_card_as_live_on_the_in_memory_backend() {
+    let mut ctx =
+        KanbanContext::open_deferred(Arc::new(InMemoryStore::new()), AppConfig::default());
+    assert_resync_invalidated_classifies_a_restored_card_as_live(&mut ctx);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resync_invalidated_classifies_restored_card_as_live_on_the_json_backend() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("test.json");
+    let backend: Arc<dyn KanbanBackend> =
+        Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(&path))));
+    let mut ctx = KanbanContext::open(backend, AppConfig::default())
+        .await
+        .unwrap();
+    assert_resync_invalidated_classifies_a_restored_card_as_live(&mut ctx);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resync_invalidated_classifies_restored_card_as_live_on_the_sqlite_backend() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = open_sqlite_context(path.to_str().unwrap(), AppConfig::default()).await;
+    assert_resync_invalidated_classifies_a_restored_card_as_live(&mut ctx);
+}
+
+#[test]
+fn test_resync_invalidated_classifies_archived_board_as_archived_on_the_in_memory_backend() {
+    let mut ctx =
+        KanbanContext::open_deferred(Arc::new(InMemoryStore::new()), AppConfig::default());
+    assert_resync_invalidated_classifies_an_archived_board_as_archived(&mut ctx);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resync_invalidated_classifies_archived_board_as_archived_on_the_json_backend() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("test.json");
+    let backend: Arc<dyn KanbanBackend> =
+        Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(&path))));
+    let mut ctx = KanbanContext::open(backend, AppConfig::default())
+        .await
+        .unwrap();
+    assert_resync_invalidated_classifies_an_archived_board_as_archived(&mut ctx);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resync_invalidated_classifies_archived_board_as_archived_on_the_sqlite_backend() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("test.sqlite3");
+    let mut ctx = open_sqlite_context(path.to_str().unwrap(), AppConfig::default()).await;
+    assert_resync_invalidated_classifies_an_archived_board_as_archived(&mut ctx);
 }

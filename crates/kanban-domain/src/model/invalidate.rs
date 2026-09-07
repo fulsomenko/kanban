@@ -22,9 +22,13 @@ impl Model {
     /// clear of that tier here clears the matching index entries too, so
     /// `set_cards_of_column` remains its only writer.
     ///
-    /// The snapshot-derived archival markers are left untouched on the
-    /// `Entities` path: only `load_from_snapshot` recomputes them, and
-    /// blanking them here would reclassify every archived entity as live.
+    /// The flat archival-marker tiers (`archived_cards`/`archived_boards` and
+    /// their id sets) are dropped by the arm of the entity kind they mark: a
+    /// `cards` id drops the card markers, a `boards` id or a `prefixes` bump
+    /// drops the board markers. `EntityIds` cannot name a marker directly, so
+    /// this is conservative in the same way a card id already drops the whole
+    /// `cards_by_column`/`archived_cards_by_board` scoped tiers. Both
+    /// `apply_resolved` and `load_from_snapshot` repopulate the dropped tier.
     pub fn invalidate(&mut self, invalidation: Invalidation) -> ModelChanged {
         let ids = match invalidation {
             Invalidation::All => {
@@ -39,6 +43,9 @@ impl Model {
             self.boards = LoadState::NotLoaded;
             self.boards_by_id.clear();
             self.board_index.clear();
+            self.archived_boards = None;
+            self.archived_boards_error = None;
+            self.archived_board_ids.clear();
         }
         for id in &ids.boards {
             self.columns_by_board.remove(id);
@@ -65,6 +72,9 @@ impl Model {
             self.cards_by_column.clear();
             self.scoped_card_index.clear();
             self.archived_cards_by_board.clear();
+            self.archived_cards = None;
+            self.archived_cards_error = None;
+            self.archived_card_ids.clear();
         }
 
         if !ids.sprints.is_empty() {
@@ -88,8 +98,8 @@ mod tests {
     use super::*;
     use crate::resolved::Collection;
     use crate::{
-        ArchivedCard, Board, Card, Column, DependencyGraph, EntityIds, NoProjections, Resolved,
-        Snapshot, Sprint,
+        ArchivedBoard, ArchivedCard, Board, Card, Column, DependencyGraph, EntityIds,
+        NoProjections, Resolved, Snapshot, Sprint,
     };
 
     fn seeded() -> (Model, Board, Column, Column, Card, Card, Sprint) {
@@ -597,27 +607,90 @@ mod tests {
     }
 
     #[test]
-    fn test_invalidate_does_not_touch_the_snapshot_derived_archived_ids() {
+    fn test_invalidate_card_entities_drops_flat_archived_card_marker_tier() {
         let board = Board::new("B", None::<String>);
-        let card = Card::new(board.id, Uuid::new_v4(), "task", 0);
-        let card_id = card.id;
-        let marker = ArchivedCard::new(card_id, board.id);
+        let live = Card::new(board.id, Uuid::new_v4(), "live", 0);
+        let archived = Card::new(board.id, Uuid::new_v4(), "archived", 0);
 
-        let mut m = Model::default();
-        let changed = m.load_from_snapshot(Snapshot {
-            boards: vec![board],
-            cards: vec![card],
-            archived_cards: vec![marker],
+        let mut m = Model::with_load_states(ModelLoadStates {
+            cards: LoadState::Loaded(vec![live.clone(), archived.clone()]),
+            archived_cards: Some(vec![ArchivedCard::new(archived.id, board.id)]),
             ..Default::default()
         });
-        NoProjections.resync(&m, changed);
-        let before: std::collections::HashSet<_> = m.archived_card_ids().clone();
-        assert!(!before.is_empty());
+        assert!(m.archived_cards_state().is_loaded());
+        assert!(m.archived_card_ids().contains(&archived.id));
 
-        let _ = m.invalidate(Invalidation::Entities(EntityIds::cards([card_id])));
+        let _ = m.invalidate(Invalidation::Entities(EntityIds::cards([live.id])));
 
-        assert_eq!(m.archived_card_ids(), &before);
-        assert!(!m.archived_card_markers().is_empty());
+        assert!(m.archived_cards_state().is_not_loaded());
+        assert!(m.archived_card_ids().is_empty());
+    }
+
+    #[test]
+    fn test_invalidate_board_entities_drops_flat_archived_board_marker_tier() {
+        let live_board = Board::new("B1", None::<String>);
+        let archived_board = Board::new("B2", None::<String>);
+        let card = Card::new(live_board.id, Uuid::new_v4(), "task", 0);
+
+        let mut m = Model::with_load_states(ModelLoadStates {
+            boards: LoadState::Loaded(vec![live_board.clone(), archived_board.clone()]),
+            cards: LoadState::Loaded(vec![card.clone()]),
+            archived_boards: Some(vec![ArchivedBoard::now(archived_board.id)]),
+            archived_cards: Some(vec![ArchivedCard::new(card.id, live_board.id)]),
+            ..Default::default()
+        });
+        assert!(m.archived_boards_state().is_loaded());
+        assert!(m.archived_board_ids().contains(&archived_board.id));
+        assert!(m.archived_cards_state().is_loaded());
+        assert!(m.archived_card_ids().contains(&card.id));
+
+        let _ = m.invalidate(Invalidation::Entities(EntityIds::boards([live_board.id])));
+
+        assert!(m.archived_boards_state().is_not_loaded());
+        assert!(m.archived_board_ids().is_empty());
+        assert!(m.archived_cards_state().is_loaded());
+        assert!(m.archived_card_ids().contains(&card.id));
+    }
+
+    #[test]
+    fn test_invalidate_prefix_bump_drops_the_flat_archived_board_marker_tier() {
+        let live_board = Board::new("B1", None::<String>);
+        let archived_board = Board::new("B2", None::<String>);
+        let card = Card::new(live_board.id, Uuid::new_v4(), "task", 0);
+
+        let mut m = Model::with_load_states(ModelLoadStates {
+            boards: LoadState::Loaded(vec![live_board.clone(), archived_board.clone()]),
+            cards: LoadState::Loaded(vec![card.clone()]),
+            archived_boards: Some(vec![ArchivedBoard::now(archived_board.id)]),
+            archived_cards: Some(vec![ArchivedCard::new(card.id, live_board.id)]),
+            ..Default::default()
+        });
+
+        let _ = m.invalidate(Invalidation::Entities(EntityIds::default().with_prefixes()));
+
+        assert!(m.archived_boards_state().is_not_loaded());
+        assert!(m.archived_board_ids().is_empty());
+    }
+
+    #[test]
+    fn test_invalidate_sprint_entities_leaves_archival_marker_tiers_loaded() {
+        let board = Board::new("B", None::<String>);
+        let card = Card::new(board.id, Uuid::new_v4(), "task", 0);
+        let sprint = Sprint::new(board.id, 1, None, None::<String>);
+
+        let mut m = Model::with_load_states(ModelLoadStates {
+            boards: LoadState::Loaded(vec![board.clone()]),
+            cards: LoadState::Loaded(vec![card.clone()]),
+            sprints: LoadState::Loaded(vec![sprint.clone()]),
+            archived_boards: Some(vec![]),
+            archived_cards: Some(vec![ArchivedCard::new(card.id, board.id)]),
+            ..Default::default()
+        });
+
+        let _ = m.invalidate(Invalidation::Entities(EntityIds::sprints([sprint.id])));
+
+        assert!(m.archived_cards_state().is_loaded());
+        assert!(m.archived_boards_state().is_loaded());
     }
 
     #[test]
