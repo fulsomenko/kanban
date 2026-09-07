@@ -87,7 +87,7 @@ async fn test_external_file_change_invalidates_the_shared_model() {
         .unwrap();
     let state = AppState::new(ctx);
 
-    kanban_server::watch::watch_for_external_changes(state.clone(), path.to_str().unwrap())
+    kanban_server::watch::watch_for_external_changes(state.clone(), path.to_str().unwrap(), false)
         .await
         .unwrap();
 
