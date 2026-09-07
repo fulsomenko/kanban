@@ -113,12 +113,46 @@ impl App {
     /// Reload the whole view model from the store. I/O. Call after a mutation,
     /// after an external change, or on a cold path (startup, backend swap).
     pub fn reload_model(&mut self) {
-        match self.ctx.snapshot() {
-            Ok(snapshot) => self.load_snapshot(snapshot),
-            Err(e) => {
-                tracing::warn!("Failed to load model from store: {e}");
-                self.set_error(format!("Failed to load from store: {e}"));
-            }
+        let scope = self.view_scope();
+        self.ctx.resync_invalidated(
+            Invalidation::All,
+            &scope,
+            &mut self.model,
+            &mut self.controller,
+        );
+        self.surface_load_failures();
+    }
+
+    /// Walks every tier `reload_model` can populate and surfaces the first
+    /// `Failed` one as a user-visible error, so a loud-unsupported backend
+    /// (e.g. a global archived read over HTTP) never reads as an empty view.
+    pub(crate) fn surface_load_failures(&mut self) {
+        if let LoadState::Failed(e) = self.model.boards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return;
+        }
+        if let LoadState::Failed(e) = self.model.columns_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return;
+        }
+        if let LoadState::Failed(e) = self.model.cards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return;
+        }
+        if let LoadState::Failed(e) = self.model.sprints_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return;
+        }
+        if let LoadState::Failed(e) = self.model.graph_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return;
+        }
+        if let LoadState::Failed(e) = self.model.archived_cards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return;
+        }
+        if let LoadState::Failed(e) = self.model.archived_boards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
         }
     }
 

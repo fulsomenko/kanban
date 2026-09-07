@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use kanban_domain::{Column, LoadState};
+use kanban_domain::{ArchivedBoard, ArchivedCard, Column, LoadState};
 
 /// Payload-free mirror of `LoadState<T>`'s variants, usable across entity
 /// kinds behind a `dyn` trait without a generic parameter per kind.
@@ -49,6 +49,7 @@ pub trait LoadedState {
     fn card_list(&self) -> FetchStatus;
     fn sprint_list(&self) -> FetchStatus;
     fn graph(&self) -> FetchStatus;
+    fn board(&self, id: Uuid) -> FetchStatus;
     fn column(&self, id: Uuid) -> FetchStatus;
     fn card(&self, id: Uuid) -> FetchStatus;
     fn sprint(&self, id: Uuid) -> FetchStatus;
@@ -58,6 +59,13 @@ pub trait LoadedState {
     fn archived_card_list(&self) -> FetchStatus;
     fn archived_cards_of_board(&self, board_id: Uuid) -> FetchStatus;
     fn archived_board_list(&self) -> FetchStatus;
+    /// The flat-collection tier alone, never the composed per-id tier.
+    /// `NotLoaded` for an id absent from a `Loaded` flat list, because the
+    /// flat lists exclude archived rows by design; use this, not `card`/
+    /// `board`, to decide whether an archived body still needs fetching
+    /// after the flat tier has been replaced by a live-only refetch.
+    fn card_in_collection(&self, id: Uuid) -> FetchStatus;
+    fn board_in_collection(&self, id: Uuid) -> FetchStatus;
 }
 
 /// The `*_list` flags request a whole collection, the `*_by_*` vectors
@@ -70,6 +78,7 @@ pub struct FetchRound {
     pub card_list: bool,
     pub sprint_list: bool,
     pub graph: bool,
+    pub boards: Vec<Uuid>,
     pub columns: Vec<Uuid>,
     pub cards: Vec<Uuid>,
     pub sprints: Vec<Uuid>,
@@ -92,6 +101,7 @@ impl FetchRound {
             && !self.card_list
             && !self.sprint_list
             && !self.graph
+            && self.boards.is_empty()
             && self.columns.is_empty()
             && self.cards.is_empty()
             && self.sprints.is_empty()
@@ -111,6 +121,10 @@ impl FetchRound {
 /// name a later round's ids.
 pub trait LoadedEntities: LoadedState {
     fn loaded_columns_of_board(&self, board_id: Uuid) -> Option<&[Column]>;
+    /// `Some` exactly when the global archived-card-marker tier is `Loaded`,
+    /// naming every marker a plan needs to walk into a body round.
+    fn loaded_archived_card_markers(&self) -> Option<&[ArchivedCard]>;
+    fn loaded_archived_board_markers(&self) -> Option<&[ArchivedBoard]>;
 }
 
 pub trait FetchPlan {

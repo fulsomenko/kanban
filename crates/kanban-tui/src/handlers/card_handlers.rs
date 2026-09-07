@@ -974,9 +974,6 @@ impl App {
         // which would strand a drilled-in archived board.
         if entering {
             self.push_mode(AppMode::ArchivedCardsView);
-            if !self.model.archived_card_markers_absorbed() {
-                self.reload_model();
-            }
         } else {
             self.pop_mode();
         }

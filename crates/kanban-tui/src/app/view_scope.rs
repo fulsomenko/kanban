@@ -19,6 +19,13 @@ pub struct ViewScope {
     pub card: Option<Uuid>,
     pub sprint: Option<Uuid>,
     pub graph: bool,
+    /// Wants the global archived-card marker tier, without walking it into
+    /// per-card body fetches.
+    pub archived_card_markers: bool,
+    /// Wants the archived-card marker tier AND every marker's card body.
+    pub archived_card_bodies: bool,
+    pub archived_board_markers: bool,
+    pub archived_board_bodies: bool,
 }
 
 impl FetchPlan for ViewScope {
@@ -74,6 +81,38 @@ impl FetchPlan for ViewScope {
             }
         }
 
+        if self.archived_card_markers || self.archived_card_bodies {
+            if requestable(loaded.archived_card_list()) {
+                round.archived_card_list = true;
+            } else if self.archived_card_bodies {
+                if let Some(markers) = loaded.loaded_archived_card_markers() {
+                    let mut ids: Vec<Uuid> = markers
+                        .iter()
+                        .map(|m| m.entity_id)
+                        .filter(|&id| requestable(loaded.card_in_collection(id)))
+                        .collect();
+                    ids.sort_unstable();
+                    round.cards.extend(ids);
+                }
+            }
+        }
+
+        if self.archived_board_markers || self.archived_board_bodies {
+            if requestable(loaded.archived_board_list()) {
+                round.archived_board_list = true;
+            } else if self.archived_board_bodies {
+                if let Some(markers) = loaded.loaded_archived_board_markers() {
+                    let mut ids: Vec<Uuid> = markers
+                        .iter()
+                        .map(|m| m.entity_id)
+                        .filter(|&id| requestable(loaded.board_in_collection(id)))
+                        .collect();
+                    ids.sort_unstable();
+                    round.boards.extend(ids);
+                }
+            }
+        }
+
         round
     }
 }
@@ -115,11 +154,16 @@ impl App {
                 scope.board_columns = false;
                 scope.board_cards = false;
             }
-            // Archived cards are snapshot-fed from the marker set populated on
-            // load, not fetched through a round, so this view requests nothing
-            // beyond the default board scope. The archived tier itself has no
-            // producer here.
-            AppMode::ArchivedCardsView => {}
+            AppMode::ArchivedCardsView => {
+                scope.archived_card_markers = true;
+                scope.archived_card_bodies = true;
+            }
+            AppMode::ArchivedBoardsView => {
+                scope.archived_board_markers = true;
+                scope.archived_board_bodies = true;
+                scope.archived_card_markers = true;
+                scope.board_sprints = true;
+            }
             // Card search filters the board already in scope (`board_cards`
             // covers it) and board search filters the board list
             // (`board_list` covers it); `CardQueryBuilder::execute` cannot
@@ -149,6 +193,10 @@ impl App {
                 scope.board_sprints = true;
             }
             _ => {}
+        }
+
+        if matches!(current, AppMode::Dialog(DialogMode::DeleteBoardConfirm)) {
+            scope.archived_card_markers = true;
         }
 
         if !self.filter.active_sprint_filters.is_empty() {

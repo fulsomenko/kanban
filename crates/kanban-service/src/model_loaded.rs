@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use kanban_domain::{Column, Model};
+use kanban_domain::{ArchivedBoard, ArchivedCard, Column, Model};
 
 use crate::fetch_plan::{FetchStatus, LoadedEntities, LoadedState};
 
@@ -28,6 +28,10 @@ impl LoadedState for Model {
 
     fn graph(&self) -> FetchStatus {
         self.graph_state().into()
+    }
+
+    fn board(&self, id: Uuid) -> FetchStatus {
+        (&self.board_id_status(id)).into()
     }
 
     fn column(&self, id: Uuid) -> FetchStatus {
@@ -65,11 +69,27 @@ impl LoadedState for Model {
     fn archived_board_list(&self) -> FetchStatus {
         (&self.archived_boards_state()).into()
     }
+
+    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
+        (&self.card_in_collection_status(id)).into()
+    }
+
+    fn board_in_collection(&self, id: Uuid) -> FetchStatus {
+        (&self.board_in_collection_status(id)).into()
+    }
 }
 
 impl LoadedEntities for Model {
     fn loaded_columns_of_board(&self, board_id: Uuid) -> Option<&[Column]> {
         self.board_columns_state(board_id).loaded().copied()
+    }
+
+    fn loaded_archived_card_markers(&self) -> Option<&[ArchivedCard]> {
+        self.archived_cards_state().loaded().copied()
+    }
+
+    fn loaded_archived_board_markers(&self) -> Option<&[ArchivedBoard]> {
+        self.archived_boards_state().loaded().copied()
     }
 }
 

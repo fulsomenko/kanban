@@ -64,6 +64,30 @@ impl Model {
             LoadState::Failed(e) => LoadState::Failed(e),
         }
     }
+
+    pub fn board_id_status(&self, id: Uuid) -> LoadState<&Board> {
+        self.boards_by_id
+            .get(&id)
+            .map(|s| s.as_ref())
+            .unwrap_or(LoadState::NotLoaded)
+    }
+
+    /// Answers `NotLoaded` for an id absent from a `Loaded` flat list rather
+    /// than `Missing`, because `list_boards` excludes archived heads by
+    /// design: the id may still be requestable through a per-id fetch even
+    /// though the flat list has been read.
+    pub fn board_in_collection_status(&self, id: Uuid) -> LoadState<&Board> {
+        match self.boards.as_ref() {
+            LoadState::Loaded(boards) => {
+                match self.board_index.get(&id).and_then(|&idx| boards.get(idx)) {
+                    Some(board) => LoadState::Loaded(board),
+                    None => LoadState::NotLoaded,
+                }
+            }
+            LoadState::NotLoaded | LoadState::Missing => LoadState::NotLoaded,
+            LoadState::Failed(e) => LoadState::Failed(e),
+        }
+    }
 }
 
 #[cfg(test)]
