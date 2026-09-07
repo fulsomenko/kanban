@@ -6,16 +6,20 @@
 
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_server::handlers::cards::{create_card, create_or_replace_card};
+use kanban_server::state::Session;
 use kanban_service::api::CreateCardRequest;
 use kanban_service::{AppConfig, KanbanBackend, KanbanContext, KanbanOperations};
 use std::sync::Arc;
 use tempfile::tempdir;
 use uuid::Uuid;
 
-fn make_ctx(path: &std::path::Path) -> KanbanContext {
+fn make_ctx(path: &std::path::Path) -> Session {
     let backend: Arc<dyn KanbanBackend> =
         Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(path))));
-    KanbanContext::open_deferred(backend, AppConfig::default())
+    Session {
+        ctx: KanbanContext::open_deferred(backend, AppConfig::default()),
+        model: Default::default(),
+    }
 }
 
 /// Seed a board with a single column; the card seam takes the column id as the

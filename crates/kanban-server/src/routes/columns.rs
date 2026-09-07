@@ -53,14 +53,14 @@ fn do_get_column(ctx: &kanban_service::KanbanContext, id: Uuid) -> Result<Column
 }
 
 fn do_update_column(
-    ctx: &mut kanban_service::KanbanContext,
+    ctx: &mut crate::state::Session,
     id: Uuid,
     updates: ColumnUpdate,
 ) -> Result<Column, AppError> {
     crate::state::mutate(ctx, |c| c.update_column_impl(id, updates)).map_err(|e| AppError::from(&e))
 }
 
-fn do_delete_column(ctx: &mut kanban_service::KanbanContext, id: Uuid) -> Result<(), AppError> {
+fn do_delete_column(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
     crate::state::mutate_unit(ctx, |c| c.delete_column_impl(id)).map_err(|e| AppError::from(&e))
 }
 

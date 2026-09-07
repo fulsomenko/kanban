@@ -6,27 +6,6 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
 
-/// Run a mutation against `ctx`, returning its value and discarding the
-/// `Invalidation` it produced.
-pub(crate) fn mutate<T>(
-    ctx: &mut KanbanContext,
-    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<(T, Invalidation)>,
-) -> KanbanResult<T> {
-    let (value, invalidation) = op(ctx)?;
-    let _ = invalidation;
-    Ok(value)
-}
-
-/// Like [`mutate`], for operations that return only an `Invalidation`.
-pub(crate) fn mutate_unit(
-    ctx: &mut KanbanContext,
-    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<Invalidation>,
-) -> KanbanResult<()> {
-    let invalidation = op(ctx)?;
-    let _ = invalidation;
-    Ok(())
-}
-
 /// The context and the Model it feeds live under one guard, so a reader can
 /// never observe a Model that a committed mutation has already invalidated.
 /// `Deref`/`DerefMut` to the context keep every existing `state.ctx.lock()`
@@ -48,6 +27,29 @@ impl std::ops::DerefMut for Session {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.ctx
     }
+}
+
+/// Run a mutation against the session's context, then apply the
+/// `Invalidation` it produced to the session's Model before the guard
+/// drops, so the next reader replans exactly the tiers this mutation
+/// touched.
+pub(crate) fn mutate<T>(
+    session: &mut Session,
+    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<(T, Invalidation)>,
+) -> KanbanResult<T> {
+    let (value, invalidation) = op(&mut session.ctx)?;
+    let _changed = session.model.invalidate(invalidation);
+    Ok(value)
+}
+
+/// Like [`mutate`], for operations that return only an `Invalidation`.
+pub(crate) fn mutate_unit(
+    session: &mut Session,
+    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<Invalidation>,
+) -> KanbanResult<()> {
+    let invalidation = op(&mut session.ctx)?;
+    let _changed = session.model.invalidate(invalidation);
+    Ok(())
 }
 
 /// Shared state for every axum handler.
@@ -159,20 +161,25 @@ mod tests {
     use kanban_service::{AppConfig, KanbanBackend, KanbanOperations};
     use std::cell::Cell;
 
-    async fn seeded_ctx() -> (KanbanContext, Uuid) {
+    async fn seeded_ctx() -> (Session, Uuid) {
         let backend: Arc<dyn KanbanBackend> = Arc::new(InMemoryStore::new());
         let mut ctx = KanbanContext::open(backend, AppConfig::default())
             .await
             .unwrap();
         let board = ctx.create_board("Board1".into(), None).unwrap();
-        (ctx, board.id)
+        (
+            Session {
+                ctx,
+                model: Model::default(),
+            },
+            board.id,
+        )
     }
 
     fn json_state(dir: &std::path::Path) -> AppState {
-        let backend: Arc<dyn KanbanBackend> =
-            Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(
-                &dir.join("s.json"),
-            ))));
+        let backend: Arc<dyn KanbanBackend> = Arc::new(JsonDataStore::new(Arc::new(
+            JsonFileStore::new(dir.join("s.json")),
+        )));
         let ctx = KanbanContext::open_deferred(backend, AppConfig::default());
         AppState::new(ctx)
     }
@@ -283,15 +290,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_mutate_propagates_the_error_and_invalidates_nothing() {
-        let (mut ctx, _board_id) = seeded_ctx().await;
+        let (mut session, _board_id) = seeded_ctx().await;
         let absent_id = Uuid::new_v4();
+        session.ctx.sync(
+            &RouteScope::BoardList,
+            &mut session.model,
+            &mut NoProjections,
+        );
+        assert!(matches!(session.model.boards_state(), LoadState::Loaded(_)));
 
-        let result = mutate(&mut ctx, |c| {
+        let result = mutate(&mut session, |c| {
             c.update_board_impl(absent_id, kanban_domain::BoardUpdate::default())
         });
 
         assert!(result.is_err());
-        assert_eq!(ctx.list_boards().unwrap().len(), 1);
+        assert_eq!(session.ctx.list_boards().unwrap().len(), 1);
+        assert!(matches!(session.model.boards_state(), LoadState::Loaded(_)));
     }
 
     #[tokio::test]

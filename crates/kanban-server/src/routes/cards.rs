@@ -102,14 +102,14 @@ pub(crate) fn do_get_card(ctx: &kanban_service::KanbanContext, id: Uuid) -> Resu
 }
 
 fn do_update_card(
-    ctx: &mut kanban_service::KanbanContext,
+    ctx: &mut crate::state::Session,
     id: Uuid,
     updates: CardUpdate,
 ) -> Result<Card, AppError> {
     crate::state::mutate(ctx, |c| c.update_card_impl(id, updates)).map_err(|e| AppError::from(&e))
 }
 
-fn do_delete_card(ctx: &mut kanban_service::KanbanContext, id: Uuid) -> Result<(), AppError> {
+fn do_delete_card(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
     crate::state::mutate_unit(ctx, |c| c.delete_card_impl(id)).map_err(|e| AppError::from(&e))
 }
 

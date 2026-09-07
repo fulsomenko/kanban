@@ -9,16 +9,20 @@
 
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_server::handlers::sprints::{create_or_replace_sprint, create_sprint};
+use kanban_server::state::Session;
 use kanban_service::api::{CreateSprintRequest, ErrorCode, ReplaceSprintRequest};
 use kanban_service::{AppConfig, KanbanBackend, KanbanContext, KanbanOperations};
 use std::sync::Arc;
 use tempfile::tempdir;
 use uuid::Uuid;
 
-fn make_ctx(path: &std::path::Path) -> KanbanContext {
+fn make_ctx(path: &std::path::Path) -> Session {
     let backend: Arc<dyn KanbanBackend> =
         Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(path))));
-    KanbanContext::open_deferred(backend, AppConfig::default())
+    Session {
+        ctx: KanbanContext::open_deferred(backend, AppConfig::default()),
+        model: Default::default(),
+    }
 }
 
 fn seed_board(ctx: &mut KanbanContext) -> Uuid {

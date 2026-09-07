@@ -20,7 +20,7 @@ use uuid::Uuid;
 /// exists under a *different* column, this 404s rather than silently
 /// relocating it — see [`create_or_replace_card`].
 pub fn create_card(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     column_id: Uuid,
     req: CreateCardRequest,
 ) -> Result<(CardResponse, bool), ApiError> {
@@ -44,7 +44,7 @@ pub fn create_card(
 /// `create_or_replace_card`'s replace arm never checks the existing card's
 /// column on its own.
 pub fn create_or_replace_card(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     column_id: Uuid,
     id: Uuid,
     req: CreateCardRequest,
