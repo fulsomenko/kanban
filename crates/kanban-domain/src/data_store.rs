@@ -301,10 +301,6 @@ pub trait DataStore: Send + Sync {
         f(&mut graph)?;
         self.set_graph(graph)
     }
-
-    // Snapshot (import/export, JSON file I/O, migration)
-    fn snapshot(&self) -> KanbanResult<Snapshot>;
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()>;
 }
 
 #[cfg(test)]
