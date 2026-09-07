@@ -775,4 +775,48 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_all_invalid_detailed_batch_leaves_the_loaded_tier_loaded() -> KanbanResult<()> {
+        use crate::cli::{Commands, RelationAction, RelationCommand, SortDir, SortKey};
+        use crate::scope::CommandScope;
+
+        let mut ctx = seam_context();
+        let board = ctx.mutate(|c| c.create_board_impl("Board".to_string(), None))?;
+        let column = ctx.mutate(|c| c.create_column_impl(board.id, "Col".to_string(), None))?;
+        let parent = ctx.mutate(|c| {
+            c.create_card_impl(
+                board.id,
+                column.id,
+                "Parent".to_string(),
+                kanban_domain::CreateCardOptions::default(),
+            )
+        })?;
+        let child = ctx.mutate(|c| {
+            c.create_card_impl(
+                board.id,
+                column.id,
+                "Child".to_string(),
+                kanban_domain::CreateCardOptions::default(),
+            )
+        })?;
+        ctx.mutate_unit(|c| c.attach_children_impl(parent.id, vec![child.id]))?;
+
+        ctx.set_scope(CommandScope::from_command(&Commands::Relation(
+            RelationCommand {
+                action: RelationAction::Children {
+                    card: parent.id.to_string(),
+                    sort: SortKey::CardNumber,
+                    order: SortDir::Asc,
+                },
+            },
+        )));
+        ctx.sync();
+
+        let result = ctx.archive_cards_detailed(vec![Uuid::new_v4()]);
+        assert!(result.succeeded.is_empty());
+        assert_eq!(ctx.list_children_of(parent.id)?, vec![child.id]);
+
+        Ok(())
+    }
 }
