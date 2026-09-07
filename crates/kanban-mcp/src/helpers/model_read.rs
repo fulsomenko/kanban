@@ -236,32 +236,6 @@ fn find_card_matches<'a>(
     }
 }
 
-pub(crate) fn resolve_card(model: &Model, raw: &str) -> Result<Uuid, McpError> {
-    if let Ok(uuid) = Uuid::parse_str(raw) {
-        return Ok(uuid);
-    }
-    let cards = require_loaded(model.cards_state().as_ref(), "card list")?;
-    let matches = find_card_matches(cards, raw);
-    match matches.as_slice() {
-        [] => Err(kanban_err_to_mcp(KanbanError::not_found_by_name(
-            "Card",
-            raw,
-            Vec::new(),
-        ))),
-        [c] => Ok(c.id),
-        many => Err(kanban_err_to_mcp(KanbanError::ambiguous(
-            "Card",
-            raw,
-            many.iter()
-                .map(|c| AmbiguousMatch {
-                    label: format!("'{}'", c.title),
-                    id: c.id,
-                })
-                .collect(),
-        ))),
-    }
-}
-
 pub(crate) fn resolve_cards(model: &Model, raws: &[String]) -> Result<Vec<Uuid>, McpError> {
     let mut resolved = Vec::with_capacity(raws.len());
     let mut failures = Vec::new();
@@ -521,32 +495,6 @@ mod tests {
 
         let err = resolve_sprint_global(&Model::default(), "1").unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-    }
-
-    #[test]
-    fn test_resolve_card_by_identifier_reads_the_card_list() {
-        let mut card = Card::new(Uuid::new_v4(), Uuid::new_v4(), "Title", 0);
-        card.prefix = "KAN".into();
-        card.card_number = 5;
-        let card_id = card.id;
-
-        let mut model = Model::default();
-        let _ = model.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Loaded(vec![card]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert_eq!(resolve_card(&model, "KAN-5").unwrap(), card_id);
-        assert_eq!(resolve_card(&model, "5").unwrap(), card_id);
-
-        let err = resolve_card(&Model::default(), "KAN-5").unwrap_err();
-        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
-
-        assert!(resolve_card(&model, "KAN-999").is_err());
     }
 
     #[test]

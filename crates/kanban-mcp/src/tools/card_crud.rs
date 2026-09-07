@@ -1,6 +1,6 @@
 use crate::helpers::model_read::{
-    resolve_board, resolve_card, resolve_column_global, resolve_column_in_board,
-    resolve_sprint_global, resolve_sprint_in_board,
+    resolve_board, resolve_column_global, resolve_column_in_board, resolve_sprint_global,
+    resolve_sprint_in_board,
 };
 use crate::helpers::{
     board_head, card_board, core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write,
@@ -61,10 +61,7 @@ impl ToolScoped for ListCardsRequest {
 
 impl ToolScoped for UpdateCardRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -72,7 +69,6 @@ impl ToolScoped for MoveCardRequest {
     fn scope(&self) -> ToolScope {
         let column_ref = Ref::of(&self.column);
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             column: Some(column_ref),
             wants_board_columns: matches!(column_ref, Ref::Name),
             ..Default::default()
@@ -82,10 +78,7 @@ impl ToolScoped for MoveCardRequest {
 
 impl ToolScoped for ArchiveCardRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -93,7 +86,6 @@ impl ToolScoped for RestoreCardRequest {
     fn scope(&self) -> ToolScope {
         let column_ref = self.column.as_deref().map(Ref::of);
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             column: column_ref,
             wants_board_columns: matches!(column_ref, Some(Ref::Name)),
             ..Default::default()
@@ -103,28 +95,19 @@ impl ToolScoped for RestoreCardRequest {
 
 impl ToolScoped for DeleteCardRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for GetCardBranchNameRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for GetCardGitCheckoutRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -276,7 +259,6 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let status = req.status.as_deref().map(parse_status).transpose()?;
         let due_date = if req.clear_due_date == Some(true) {
@@ -305,8 +287,7 @@ impl KanbanMcpServer {
             sprint_id: FieldUpdate::NoChange,
         };
         let card = locked_write(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             ctx.mutate(|c| c.update_card_impl(id, updates))
                 .map(|(card, _inv)| card)
                 .map_err(kanban_err_to_mcp)
@@ -320,12 +301,10 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<MoveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let card = locked_write(&self.ctx, |ctx| {
-            let mut model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let board_id = card_board(ctx, id)?;
-            ctx.sync_into(&req.scope().for_board(board_id), &mut model);
+            let model = ctx.model_for(&req.scope().for_board(board_id));
             let column_id = resolve_column_in_board(&model, &req.column, board_id)?;
             ctx.mutate(|c| c.move_card_impl(id, column_id, req.position))
                 .map(|(card, _inv)| card)
@@ -340,10 +319,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let (_val, _inv) = ctx
                 .mutate(|c| c.archive_card_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -358,14 +335,12 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<RestoreCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let card = locked_write(&self.ctx, |ctx| {
-            let mut model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let column_id = match req.column.as_deref() {
                 Some(raw) => {
                     let board_id = card_board(ctx, id)?;
-                    ctx.sync_into(&req.scope().for_board(board_id), &mut model);
+                    let model = ctx.model_for(&req.scope().for_board(board_id));
                     Some(resolve_column_in_board(&model, raw, board_id)?)
                 }
                 None => None,
@@ -383,10 +358,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.delete_card_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -403,10 +376,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardBranchNameRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let branch_name = locked_read(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             ctx.get_card_branch_name(id).map_err(kanban_err_to_mcp)
         })
         .await?;
@@ -418,10 +389,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardGitCheckoutRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let command = locked_read(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             ctx.get_card_git_checkout(id).map_err(kanban_err_to_mcp)
         })
         .await?;

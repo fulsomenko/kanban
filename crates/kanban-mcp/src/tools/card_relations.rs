@@ -1,15 +1,15 @@
-use crate::helpers::model_read::{require_loaded, resolve_card};
+use crate::helpers::model_read::require_loaded;
 use crate::helpers::{
-    core_err_to_mcp, locked_read, locked_write, mcp_enrich_add_error, mcp_enrich_remove_error,
-    resolve_summaries, to_call_tool_result, to_call_tool_result_json,
+    core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write, mcp_enrich_add_error,
+    mcp_enrich_remove_error, resolve_summaries, to_call_tool_result, to_call_tool_result_json,
 };
 use crate::requests::card::{
     ListCardChildrenRequest, ListCardParentsRequest, RemoveCardParentRequest, SetCardParentRequest,
 };
-use crate::scope::{Ref, ToolScope, ToolScoped};
+use crate::scope::{ToolScope, ToolScoped};
 use crate::KanbanMcpServer;
 use kanban_core::{resolve_page_params, PaginatedList};
-use kanban_domain::Model;
+use kanban_domain::{KanbanOperations, Model};
 use rmcp::{
     handler::server::wrapper::Parameters,
     model::{CallToolResult, ErrorData as McpError},
@@ -19,28 +19,19 @@ use uuid::Uuid;
 
 impl ToolScoped for SetCardParentRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.parent), Ref::of(&self.child)],
-            wants_graph: true,
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for RemoveCardParentRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.parent), Ref::of(&self.child)],
-            wants_graph: true,
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for ListCardParentsRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             wants_graph: true,
             ..Default::default()
         }
@@ -50,7 +41,6 @@ impl ToolScoped for ListCardParentsRequest {
 impl ToolScoped for ListCardChildrenRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             wants_graph: true,
             ..Default::default()
         }
@@ -78,11 +68,9 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let parent_raw = req.parent.clone();
         let child_raw = req.child.clone();
-        let scope = req.scope();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let child_id = resolve_card(&model, &req.child)?;
-            let parent_id = resolve_card(&model, &req.parent)?;
+            let child_id = ctx.resolve_card_id(&req.child).map_err(kanban_err_to_mcp)?;
+            let parent_id = ctx.resolve_card_id(&req.parent).map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.attach_children_impl(parent_id, vec![child_id]))
                 .map_err(|e| mcp_enrich_add_error(e, &parent_raw, &child_raw))?;
@@ -102,11 +90,9 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let parent_raw = req.parent.clone();
         let child_raw = req.child.clone();
-        let scope = req.scope();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let child_id = resolve_card(&model, &req.child)?;
-            let parent_id = resolve_card(&model, &req.parent)?;
+            let child_id = ctx.resolve_card_id(&req.child).map_err(kanban_err_to_mcp)?;
+            let parent_id = ctx.resolve_card_id(&req.parent).map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.detach_children_impl(parent_id, vec![child_id]))
                 .map_err(|e| mcp_enrich_remove_error(e, &parent_raw, &child_raw))?;
@@ -129,7 +115,7 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let parents = locked_read(&self.ctx, |ctx| -> Result<_, McpError> {
             let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let ids = list_parents_in_model(&model, id)?;
             Ok(resolve_summaries(ctx, ids))
         })
@@ -150,7 +136,7 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let children = locked_read(&self.ctx, |ctx| -> Result<_, McpError> {
             let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let ids = list_children_in_model(&model, id)?;
             Ok(resolve_summaries(ctx, ids))
         })
