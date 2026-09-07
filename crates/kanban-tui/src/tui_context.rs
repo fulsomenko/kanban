@@ -37,22 +37,25 @@ impl TuiContext {
         Ok((tui_ctx, save_rx, completion_rx))
     }
 
-    pub fn execute_command(&mut self, command: Command) -> KanbanResult<()> {
+    pub fn execute_command(&mut self, command: Command) -> KanbanResult<kanban_domain::Invalidation> {
         self.execute_commands_batch(vec![command])
     }
 
-    pub fn execute_commands_batch(&mut self, commands: Vec<Command>) -> KanbanResult<()> {
-        let _ = self.inner.execute(commands)?;
+    pub fn execute_commands_batch(
+        &mut self,
+        commands: Vec<Command>,
+    ) -> KanbanResult<kanban_domain::Invalidation> {
+        let inv = self.inner.execute(commands)?;
         if self.save_coordinator.has_save_channel() {
             self.save_coordinator.queue_flush();
         }
-        Ok(())
+        Ok(inv)
     }
 
     pub fn execute_with(
         &mut self,
         build: impl FnOnce(&dyn kanban_domain::DataStore) -> KanbanResult<Vec<Command>>,
-    ) -> KanbanResult<()> {
+    ) -> KanbanResult<kanban_domain::Invalidation> {
         self.execute_with_extra(kanban_domain::EntityIds::default(), build)
     }
 
@@ -60,12 +63,39 @@ impl TuiContext {
         &mut self,
         extra: kanban_domain::EntityIds,
         build: impl FnOnce(&dyn kanban_domain::DataStore) -> KanbanResult<Vec<Command>>,
-    ) -> KanbanResult<()> {
-        let _ = self.inner.execute_with_extra(extra, build)?;
+    ) -> KanbanResult<kanban_domain::Invalidation> {
+        let inv = self.inner.execute_with_extra(extra, build)?;
         if self.save_coordinator.has_save_channel() {
             self.save_coordinator.queue_flush();
         }
-        Ok(())
+        Ok(inv)
+    }
+
+    pub fn update_card_impl(
+        &mut self,
+        id: Uuid,
+        updates: CardUpdate,
+    ) -> KanbanResult<(Card, kanban_domain::Invalidation)> {
+        let r = self.inner.update_card_impl(id, updates);
+        self.with_flush(r)
+    }
+
+    pub fn update_cards_impl(
+        &mut self,
+        updates: Vec<(Uuid, CardUpdate)>,
+    ) -> KanbanResult<(usize, kanban_domain::Invalidation)> {
+        let r = self.inner.update_cards_impl(updates);
+        self.with_flush(r)
+    }
+
+    pub fn move_card_impl(
+        &mut self,
+        id: Uuid,
+        column_id: Uuid,
+        position: Option<i32>,
+    ) -> KanbanResult<(Card, kanban_domain::Invalidation)> {
+        let r = self.inner.move_card_impl(id, column_id, position);
+        self.with_flush(r)
     }
 
     // --- Delegation: state methods ---
@@ -179,6 +209,16 @@ impl TuiContext {
         proj: &mut impl kanban_domain::DerivedProjections,
     ) {
         self.inner.sync_invalidated(inv, plan, model, proj);
+    }
+
+    pub fn resync_invalidated(
+        &self,
+        inv: kanban_domain::Invalidation,
+        plan: &dyn kanban_service::FetchPlan,
+        model: &mut kanban_domain::Model,
+        proj: &mut impl kanban_domain::DerivedProjections,
+    ) {
+        self.inner.resync_invalidated(inv, plan, model, proj);
     }
 
     pub fn persistence_metadata(&self) -> Option<kanban_persistence::PersistenceMetadata> {

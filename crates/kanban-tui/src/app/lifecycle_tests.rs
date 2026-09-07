@@ -149,7 +149,8 @@ async fn test_adopt_storage_file_leaves_context_ready_for_mutations() {
         card_prefix: None,
         position: 0,
     }));
-    app.ctx
+    let _ = app
+        .ctx
         .execute_command(cmd)
         .expect("execute_command must succeed after adopt_storage_file");
 }

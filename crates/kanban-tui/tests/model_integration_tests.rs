@@ -93,7 +93,7 @@ fn test_model_reflects_mutation_after_prepare_frame() {
             },
         },
     ));
-    app.execute_command(cmd).unwrap();
+    let _ = app.execute_command(cmd).unwrap();
     app.reload_model();
     app.prepare_frame();
 
@@ -160,7 +160,7 @@ fn test_model_description_reflects_mutation() {
             },
         },
     ));
-    app.execute_command(cmd).unwrap();
+    let _ = app.execute_command(cmd).unwrap();
     app.reload_model();
     app.prepare_frame();
 

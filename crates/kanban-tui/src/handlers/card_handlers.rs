@@ -4,7 +4,7 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, ColumnCommand, Command, CreateCard, CreateColumn, RestoreCard,
     SetBoardTaskSort, UpdateCard,
 };
-use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, KanbanOperations, LoadState};
+use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, LoadState};
 use kanban_view::card_list::CardListId;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -248,12 +248,14 @@ impl App {
                             order: new_order,
                         }));
 
-                        if let Err(e) = self.execute_command(cmd) {
-                            tracing::error!("Failed to set board task sort: {}", e);
-                            self.set_error(format!("Failed to set board task sort: {}", e));
-                            return;
+                        match self.execute_command(cmd) {
+                            Ok(inv) => self.resolve_after_command(inv),
+                            Err(e) => {
+                                tracing::error!("Failed to set board task sort: {}", e);
+                                self.set_error(format!("Failed to set board task sort: {}", e));
+                                return;
+                            }
                         }
-                        self.reload_model();
                     }
                 }
 
@@ -317,20 +319,22 @@ impl App {
             };
 
             // Service layer chains the column move automatically.
-            if let Err(e) = self.ctx.update_card(
+            let inv = match self.ctx.update_card_impl(
                 card_id,
                 CardUpdate {
                     status: Some(new_status),
                     ..Default::default()
                 },
             ) {
-                tracing::error!("Failed to toggle card completion: {}", e);
-                self.set_error(format!("Failed to toggle card completion: {}", e));
-                return;
-            }
+                Ok((_, inv)) => inv,
+                Err(e) => {
+                    tracing::error!("Failed to toggle card completion: {}", e);
+                    self.set_error(format!("Failed to toggle card completion: {}", e));
+                    return;
+                }
+            };
 
-            // Refresh the view-layer task list before selecting so column lists are current.
-            self.reload_model();
+            self.resolve_after_command(inv);
             self.prepare_frame();
             self.select_card_by_id(card_id);
         }
@@ -365,20 +369,26 @@ impl App {
             .collect();
 
         let toggled_count = updates.len();
-        if !updates.is_empty() {
-            if let Err(e) = self.ctx.update_cards(updates) {
-                tracing::error!("Failed to toggle card completion: {}", e);
-                self.set_error(format!("Failed to toggle card completion: {}", e));
-                return;
+        let invalidation = if updates.is_empty() {
+            None
+        } else {
+            match self.ctx.update_cards_impl(updates) {
+                Ok((_, inv)) => Some(inv),
+                Err(e) => {
+                    tracing::error!("Failed to toggle card completion: {}", e);
+                    self.set_error(format!("Failed to toggle card completion: {}", e));
+                    return;
+                }
             }
-        }
+        };
 
         tracing::info!("Toggled {} cards completion status", toggled_count);
         self.multi_select.selected_cards.clear();
         self.multi_select.selection_mode_active = false;
         if let Some(card_id) = first_card_id {
-            // Refresh the view-layer task list before selecting so column lists are current.
-            self.reload_model();
+            if let Some(inv) = invalidation {
+                self.resolve_after_command(inv);
+            }
             self.prepare_frame();
             self.select_card_by_id(card_id);
         }
@@ -518,15 +528,16 @@ impl App {
                     },
                 );
 
-                if let Err(e) = result {
-                    tracing::error!("Failed to create card: {}", e);
-                    self.set_error(format!("Failed to create card: {}", e));
-                    return;
-                }
+                let inv = match result {
+                    Ok(inv) => inv,
+                    Err(e) => {
+                        tracing::error!("Failed to create card: {}", e);
+                        self.set_error(format!("Failed to create card: {}", e));
+                        return;
+                    }
+                };
 
-                // Refresh the view-layer task list so the new card's ID is
-                // present before we try to select it.
-                self.reload_model();
+                self.resolve_after_command(inv);
                 self.prepare_frame();
                 self.select_card_by_id(card_id);
             }
@@ -576,18 +587,21 @@ impl App {
             };
 
             let card_id = card.id;
-            if let Err(e) = self
+            let inv = match self
                 .ctx
-                .move_card(card_id, move_result.target_column_id, None)
+                .move_card_impl(card_id, move_result.target_column_id, None)
             {
-                let dir = match direction {
-                    kanban_domain::card_lifecycle::MoveDirection::Left => "left",
-                    kanban_domain::card_lifecycle::MoveDirection::Right => "right",
-                };
-                tracing::error!("Failed to move card {}: {}", dir, e);
-                self.set_error(format!("Failed to move card {}: {}", dir, e));
-                return;
-            }
+                Ok((_, inv)) => inv,
+                Err(e) => {
+                    let dir = match direction {
+                        kanban_domain::card_lifecycle::MoveDirection::Left => "left",
+                        kanban_domain::card_lifecycle::MoveDirection::Right => "right",
+                    };
+                    tracing::error!("Failed to move card {}: {}", dir, e);
+                    self.set_error(format!("Failed to move card {}: {}", dir, e));
+                    return;
+                }
+            };
 
             match direction {
                 kanban_domain::card_lifecycle::MoveDirection::Right => {
@@ -623,7 +637,7 @@ impl App {
                 }
             }
 
-            self.reload_model();
+            self.resolve_after_command(inv);
             self.prepare_frame();
             self.select_card_by_id(card_id);
         }
@@ -666,17 +680,22 @@ impl App {
             .collect();
 
         let moved_count = updates.len();
-        if !updates.is_empty() {
-            if let Err(e) = self.ctx.update_cards(updates) {
-                let dir = match direction {
-                    kanban_domain::card_lifecycle::MoveDirection::Left => "left",
-                    kanban_domain::card_lifecycle::MoveDirection::Right => "right",
-                };
-                tracing::error!("Failed to move cards {}: {}", dir, e);
-                self.set_error(format!("Failed to move cards {}: {}", dir, e));
-                return;
+        let invalidation = if updates.is_empty() {
+            None
+        } else {
+            match self.ctx.update_cards_impl(updates) {
+                Ok((_, inv)) => Some(inv),
+                Err(e) => {
+                    let dir = match direction {
+                        kanban_domain::card_lifecycle::MoveDirection::Left => "left",
+                        kanban_domain::card_lifecycle::MoveDirection::Right => "right",
+                    };
+                    tracing::error!("Failed to move cards {}: {}", dir, e);
+                    self.set_error(format!("Failed to move cards {}: {}", dir, e));
+                    return;
+                }
             }
-        }
+        };
 
         tracing::info!("Moved {} cards", moved_count);
         self.multi_select.selected_cards.clear();
@@ -690,7 +709,9 @@ impl App {
             }
         }
         if let Some(card_id) = first_card_id {
-            self.reload_model();
+            if let Some(inv) = invalidation {
+                self.resolve_after_command(inv);
+            }
             self.prepare_frame();
             self.select_card_by_id(card_id);
         }
@@ -1347,18 +1368,21 @@ mod create_card_factory_tests {
 
         let (_save_rx, _completion_rx) = app.ctx.save_coordinator.reset_save_channels();
 
-        app.execute_with_extra(kanban_domain::EntityIds::default().with_prefixes(), |_| {
-            Ok(vec![kanban_domain::commands::Command::Card(
-                kanban_domain::commands::CardCommand::Update(kanban_domain::commands::UpdateCard {
-                    card_id: card.id,
-                    updates: kanban_domain::CardUpdate {
-                        title: Some("x".into()),
-                        ..Default::default()
-                    },
-                }),
-            )])
-        })
-        .unwrap();
+        let _ = app
+            .execute_with_extra(kanban_domain::EntityIds::default().with_prefixes(), |_| {
+                Ok(vec![kanban_domain::commands::Command::Card(
+                    kanban_domain::commands::CardCommand::Update(
+                        kanban_domain::commands::UpdateCard {
+                            card_id: card.id,
+                            updates: kanban_domain::CardUpdate {
+                                title: Some("x".into()),
+                                ..Default::default()
+                            },
+                        },
+                    ),
+                )])
+            })
+            .unwrap();
 
         assert!(app.ctx.save_coordinator.has_pending_saves());
 

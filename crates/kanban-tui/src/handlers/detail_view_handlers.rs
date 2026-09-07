@@ -416,11 +416,13 @@ impl App {
                 kanban_domain::commands::ApplyBoardSettings { board_id, dto },
             ),
         );
-        if let Err(e) = self.ctx.execute_command(cmd) {
-            tracing::error!("Failed to apply board settings: {}", e);
-            self.set_error(format!("Failed to apply board settings: {}", e));
+        match self.ctx.execute_command(cmd) {
+            Ok(inv) => self.resolve_after_command(inv),
+            Err(e) => {
+                tracing::error!("Failed to apply board settings: {}", e);
+                self.set_error(format!("Failed to apply board settings: {}", e));
+            }
         }
-        self.reload_model();
     }
 
     fn handle_board_detail_navigation_key(&mut self, key_code: KeyCode) -> bool {
@@ -729,11 +731,13 @@ impl App {
                 kanban_domain::commands::ApplyCardMetadata { card_id, dto },
             ),
         );
-        if let Err(e) = self.ctx.execute_command(cmd) {
-            tracing::error!("Failed to apply metadata: {}", e);
-            self.set_error(format!("Failed to apply metadata: {}", e));
+        match self.ctx.execute_command(cmd) {
+            Ok(inv) => self.resolve_after_command(inv),
+            Err(e) => {
+                tracing::error!("Failed to apply metadata: {}", e);
+                self.set_error(format!("Failed to apply metadata: {}", e));
+            }
         }
-        self.reload_model();
     }
 
     /// The single card highlighted in whichever sprint-detail panel is active
@@ -1372,7 +1376,7 @@ impl App {
     }
 
     pub fn toggle_completion_for_card_ids(&mut self, ids: Vec<uuid::Uuid>) {
-        use kanban_domain::{CardStatus, CardUpdate, KanbanOperations};
+        use kanban_domain::{CardStatus, CardUpdate};
 
         let LoadState::Loaded(all_cards) = self.model.cards_state() else {
             self.set_error("Cards are not loaded yet");
@@ -1399,11 +1403,12 @@ impl App {
             .collect();
 
         if !updates.is_empty() {
-            if let Err(e) = self.ctx.update_cards(updates) {
-                tracing::error!("Failed to toggle card completion: {}", e);
-                self.set_error(format!("Failed to toggle card completion: {}", e));
-            } else {
-                self.reload_model();
+            match self.ctx.update_cards_impl(updates) {
+                Ok((_, inv)) => self.resolve_after_command(inv),
+                Err(e) => {
+                    tracing::error!("Failed to toggle card completion: {}", e);
+                    self.set_error(format!("Failed to toggle card completion: {}", e));
+                }
             }
         }
     }

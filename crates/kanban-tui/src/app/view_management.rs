@@ -1,8 +1,8 @@
 use super::{App, AppMode, ViewScope};
 use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::{
-    filter_and_sort_boards, Board, BoardListFilter, Card, DerivedProjections, KanbanResult,
-    LoadState, Snapshot,
+    filter_and_sort_boards, Board, BoardListFilter, Card, DerivedProjections, Invalidation,
+    KanbanResult, LoadState, Snapshot,
 };
 use kanban_view::view_strategy::{ViewRefreshContext, ViewStrategy};
 use std::collections::HashMap;
@@ -13,6 +13,14 @@ impl App {
     /// resyncing the controller's derived partitions.
     pub fn populate(&mut self, scope: ViewScope) {
         self.ctx.sync(&scope, &mut self.model, &mut self.controller);
+    }
+
+    /// Refetches what `inv` invalidated, plus whatever the current screen
+    /// reads, in place of a full `reload_model`.
+    pub fn resolve_after_command(&mut self, inv: Invalidation) {
+        let scope = self.view_scope();
+        self.ctx
+            .resync_invalidated(inv, &scope, &mut self.model, &mut self.controller);
     }
 
     /// Resolve the board the user is currently acting on / viewing, by identity.

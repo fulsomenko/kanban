@@ -698,15 +698,16 @@ fn test_move_card_right_syncs_column_list_count_to_filtered_columns_not_raw_boar
     // `is_kanban_view()` reads the board's persisted `task_list_view`, not
     // the app's local view strategy — both must be set for
     // `handle_move_card`'s column_list tracking block to actually run.
-    app.execute_command(kanban_domain::commands::Command::Board(
-        kanban_domain::commands::BoardCommand::SetTaskListView(
-            kanban_domain::commands::SetBoardTaskListView {
-                board_id: board.id,
-                view: kanban_domain::TaskListView::ColumnView,
-            },
-        ),
-    ))
-    .unwrap();
+    let _ = app
+        .execute_command(kanban_domain::commands::Command::Board(
+            kanban_domain::commands::BoardCommand::SetTaskListView(
+                kanban_domain::commands::SetBoardTaskListView {
+                    board_id: board.id,
+                    view: kanban_domain::TaskListView::ColumnView,
+                },
+            ),
+        ))
+        .unwrap();
     app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
     app.reload_model();
     app.prepare_frame();
