@@ -13,10 +13,10 @@ fn setup_app_without_columns() -> App {
     let mut app = App::test_default();
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();
     app.ctx.create_sprint(board.id, None, None).unwrap();
+    app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
-    app.selection.active_board_id = Some(board.id);
     app
 }
 
@@ -32,10 +32,10 @@ fn setup_app_with_two_columns() -> App {
         .create_column(board.id, "Doing".to_string(), Some(1))
         .unwrap();
     app.ctx.create_sprint(board.id, None, None).unwrap();
+    app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
-    app.selection.active_board_id = Some(board.id);
     app
 }
 

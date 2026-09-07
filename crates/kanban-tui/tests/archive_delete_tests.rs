@@ -1,3 +1,6 @@
+mod helpers;
+
+use helpers::warm_archived_card_markers;
 use kanban_domain::{CreateCardOptions, KanbanOperations};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::AppMode;
@@ -207,6 +210,7 @@ fn test_archive_animation_completion_is_a_single_undo_step() {
     app.handle_animation_tick();
     app.reload_model();
     app.prepare_frame();
+    warm_archived_card_markers(&mut app);
 
     // Unified model: the row stays in `cards_state()`; archival is recorded by the
     // id set. "Archived" means present in `archived_card_ids`, not removed.
@@ -223,6 +227,7 @@ fn test_archive_animation_completion_is_a_single_undo_step() {
     assert!(app.ctx.undo().unwrap(), "first undo must succeed");
     app.reload_model();
     app.prepare_frame();
+    warm_archived_card_markers(&mut app);
 
     assert!(
         app.model

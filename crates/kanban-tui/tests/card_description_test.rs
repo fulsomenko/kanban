@@ -87,6 +87,7 @@ fn test_card_description_preserved_after_edit() {
         .unwrap();
 
     // Verify description exists
+    app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
     let cards_before = app.model.cards_state().loaded_or_empty();

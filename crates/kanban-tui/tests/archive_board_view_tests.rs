@@ -3,6 +3,9 @@
 //! archived-cards view tests (`archive_delete_tests.rs`) but for boards, which
 //! use direct restore/delete (no animation / multi-select).
 
+mod helpers;
+
+use helpers::warm_archived_board_markers;
 use kanban_domain::KanbanOperations;
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::{AppMode, DialogMode};
@@ -28,6 +31,7 @@ fn test_toggle_into_archived_boards_view_and_back() {
     app.mode = AppMode::Normal;
     app.reload_model();
     app.prepare_frame();
+    warm_archived_board_markers(&mut app);
     // The live boards view (unified collection filtered by the archived-id set)
     // excludes the archived head, even though `boards_state()` now carries it.
     assert!(app

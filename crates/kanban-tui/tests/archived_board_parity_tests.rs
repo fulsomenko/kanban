@@ -274,6 +274,7 @@ fn test_live_projects_panel_lists_live_boards_only() {
 
     // Toggled to archived: only the archived head.
     app.mode = AppMode::ArchivedBoardsView;
+    app.resolve_for_view();
     let archived: Vec<_> = app
         .displayed_boards()
         .loaded()

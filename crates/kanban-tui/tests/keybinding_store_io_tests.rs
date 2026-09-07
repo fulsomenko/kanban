@@ -10,12 +10,18 @@ use std::collections::HashSet;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Purity {
     Pure,
+    /// Reads the store on its own terms: entering an archived view lazily
+    /// fetches the archival marker tier (and any bodies it names) instead
+    /// of relying on a prior full-store snapshot.
+    LazyRead,
     Mutating,
 }
 
 fn classify(action: &KeybindingAction) -> Purity {
     use KeybindingAction::*;
     match action {
+        ToggleArchivedView | ToggleArchivedBoardsView => Purity::LazyRead,
+
         NavigateDown
         | NavigateUp
         | NavigateLeft
@@ -27,8 +33,6 @@ fn classify(action: &KeybindingAction) -> Purity {
         | JumpToBottom
         | JumpHalfViewportUp
         | JumpHalfViewportDown
-        | ToggleArchivedView
-        | ToggleArchivedBoardsView
         | ToggleCardSelection
         | ClearCardSelection
         | SelectAllCards

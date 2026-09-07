@@ -101,7 +101,7 @@ fn test_tasks_panel_title_with_no_active_board_omits_sprint_filter_suffix() {
     );
     assert_eq!(
         tasks_panel_title(&app, true),
-        "Tasks [2] (0)",
+        "Tasks [2] (…)",
         "with no active board, the sprint-filter suffix must be omitted rather than panic"
     );
 }

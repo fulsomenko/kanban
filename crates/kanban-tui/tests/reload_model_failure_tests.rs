@@ -1,6 +1,6 @@
 mod helpers;
 
-use helpers::FailingSnapshotBackend;
+use helpers::{CountingBackend, FailingSnapshotBackend};
 use kanban_domain::{CreateCardOptions, KanbanOperations};
 use kanban_tui::components::BannerVariant;
 use kanban_tui::App;
@@ -14,7 +14,7 @@ fn test_a_failed_reload_surfaces_an_error_to_the_user() {
     app.reload_model();
     assert!(app.ui_state.banner.is_none());
 
-    let failing = FailingSnapshotBackend::wrap(app.ctx.backend());
+    let failing = CountingBackend::wrap_failing(app.ctx.backend(), "list_boards");
     app.ctx.replace_backend(failing);
     app.reload_model();
 
@@ -47,13 +47,14 @@ fn test_a_failed_reload_leaves_the_previous_model_contents() {
         )
         .expect("create card");
 
+    app.selection.active_board_id = Some(board.id);
     app.reload_model();
     let boards_before = app.model.boards_state().loaded_or_empty().len();
     let cards_before = app.model.cards_state().loaded_or_empty().len();
     assert_eq!(boards_before, 1);
     assert_eq!(cards_before, 1);
 
-    let failing = FailingSnapshotBackend::wrap(app.ctx.backend());
+    let failing = CountingBackend::wrap_failing(app.ctx.backend(), "list_boards");
     app.ctx.replace_backend(failing);
     app.reload_model();
 
