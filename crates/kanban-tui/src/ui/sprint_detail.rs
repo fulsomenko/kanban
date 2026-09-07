@@ -243,11 +243,9 @@ pub(super) fn render_sprint_task_panel_with_selection(
             "Task",
         ));
 
-        let empty_sprints: &[Sprint] = &[];
-        let sprints = match app.model.board_sprints_state(board.id) {
-            LoadState::Loaded(sprints) => sprints,
-            _ => empty_sprints,
-        };
+        let board_sprints_view = app.board_sprints_view(board.id);
+        let sprints = board_sprints_view.loaded_or_empty();
+        let sprints_loaded = board_sprints_view.is_loaded();
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -262,6 +260,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
                         card,
                         board,
                         sprints,
+                        sprints_loaded,
                         is_selected,
                         is_focused,
                         is_multi_selected: false,

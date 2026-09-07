@@ -10,6 +10,7 @@ pub struct CardListItemConfig<'a> {
     pub card: &'a Card,
     pub board: &'a Board,
     pub sprints: &'a [Sprint],
+    pub sprints_loaded: bool,
     pub is_selected: bool,
     pub is_focused: bool,
     pub is_multi_selected: bool,
@@ -49,12 +50,11 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
 
     let suffix_text = if config.show_sprint_name {
         if let Some(sprint_id) = config.card.sprint_id {
-            config
-                .sprints
-                .iter()
-                .find(|s| s.id == sprint_id)
-                .map(|s| format!(" ({})", s.formatted_name(config.board, None)))
-                .unwrap_or_default()
+            match config.sprints.iter().find(|s| s.id == sprint_id) {
+                Some(s) => format!(" ({})", s.formatted_name(config.board, None)),
+                None if !config.sprints_loaded => " (\u{2026})".to_string(),
+                None => String::new(),
+            }
         } else {
             String::new()
         }

@@ -154,7 +154,8 @@ fn render_board_sprints_list(
 
     let mut sprint_lines = vec![];
 
-    match app.model.board_sprints_state(board.id) {
+    let board_sprints_view = app.board_sprints_view(board.id);
+    match &board_sprints_view {
         LoadState::Loaded(board_sprints) => {
             if board_sprints.is_empty() {
                 sprint_lines.push(Line::from(Span::styled(
@@ -219,7 +220,10 @@ fn render_board_sprints_list(
                 }
             }
         }
-        other => sprint_lines.extend(load_state_body("Sprints", &other)),
+        _ => sprint_lines.extend(load_state_body(
+            "Sprints",
+            &board_sprints_view.as_ref().map(Vec::as_slice),
+        )),
     }
 
     let selected_idx = app.selection.sprint.get().unwrap_or(0);

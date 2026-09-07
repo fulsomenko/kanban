@@ -467,10 +467,9 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => match self.focus.board_focus {
                 BoardFocus::Sprints => {
                     if let Some(board_id) = self.active_board().map(|board| board.id) {
-                        match self.model.sprints_state() {
+                        match self.board_sprints_view(board_id) {
                             LoadState::Loaded(sprints) => {
-                                let sprint_count =
-                                    sprints.iter().filter(|s| s.board_id == board_id).count();
+                                let sprint_count = sprints.len();
                                 let current_idx = self.selection.sprint.get().unwrap_or(0);
                                 if sprint_count == 0 || current_idx >= sprint_count - 1 {
                                     if self.model.columns_state().is_loaded() {
@@ -551,24 +550,17 @@ impl App {
                             .update_item_count(column_count);
                         let was_at_top = self.dialog_input.column_list.navigate_up();
                         if was_at_top {
-                            let sprints_ready =
-                                board_id.is_none() || self.model.sprints_state().is_loaded();
-                            if !sprints_ready {
-                                self.set_error("Sprints are not loaded yet");
-                            } else {
-                                let sprint_count = board_id
-                                    .and_then(|id| match self.model.sprints_state() {
-                                        LoadState::Loaded(sprints) => Some(
-                                            sprints.iter().filter(|s| s.board_id == id).count(),
-                                        ),
-                                        _ => None,
-                                    })
-                                    .unwrap_or(0);
-                                if sprint_count == 0 {
-                                    self.focus.board_focus = BoardFocus::Settings;
-                                } else {
+                            let sprint_rows = match board_id.map(|id| self.board_sprints_view(id)) {
+                                None => Some(0usize),
+                                Some(LoadState::Loaded(sprints)) => Some(sprints.len()),
+                                Some(_) => None,
+                            };
+                            match sprint_rows {
+                                None => self.set_error("Sprints are not loaded yet"),
+                                Some(0) => self.focus.board_focus = BoardFocus::Settings,
+                                Some(n) => {
                                     self.focus.board_focus = BoardFocus::Sprints;
-                                    self.selection.sprint.set(Some(sprint_count - 1));
+                                    self.selection.sprint.set(Some(n - 1));
                                 }
                             }
                         }
@@ -594,13 +586,9 @@ impl App {
                     if let Some(sprint_idx) = self.selection.sprint.get() {
                         let board_ctx = self.board_in_context().map(|b| b.id);
                         if let Some(board_id) = board_ctx {
-                            match self.model.sprints_state() {
+                            match self.board_sprints_view(board_id) {
                                 LoadState::Loaded(sprints) => {
-                                    let sprint_id = sprints
-                                        .iter()
-                                        .filter(|s| s.board_id == board_id)
-                                        .nth(sprint_idx)
-                                        .map(|s| s.id);
+                                    let sprint_id = sprints.get(sprint_idx).map(|s| s.id);
                                     if let Some(sprint_id) = sprint_id {
                                         self.selection.active_sprint_id = Some(sprint_id);
                                         self.selection.active_board_id = Some(board_id);
@@ -2580,5 +2568,137 @@ mod tests {
             CardStatus::Todo,
             "status must be unchanged when the handler declines"
         );
+    }
+
+    fn seed_board_with_scoped_and_flat_sprints(
+        app: &mut App,
+        build_scoped: impl FnOnce(uuid::Uuid) -> Vec<kanban_domain::Sprint>,
+        build_flat_all: impl FnOnce(uuid::Uuid) -> LoadState<Vec<kanban_domain::Sprint>>,
+    ) -> uuid::Uuid {
+        use kanban_domain::resolved::Collection;
+        use kanban_domain::{Column, DependencyGraph, Resolved};
+
+        let board = kanban_domain::Board::new("Board", None::<String>);
+        let board_id = board.id;
+        let column = Column::new(board_id, "Todo", 0);
+        let scoped = build_scoped(board_id);
+        let flat_all = build_flat_all(board_id);
+
+        let resolved = Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![board]),
+                ..Default::default()
+            },
+            columns: Collection {
+                all: LoadState::Loaded(vec![column]),
+                ..Default::default()
+            },
+            cards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
+            sprints: Collection {
+                all: flat_all,
+                by_parent: [(board_id, LoadState::Loaded(scoped))].into(),
+                ..Default::default()
+            },
+            graph: LoadState::Loaded(DependencyGraph::default()),
+            ..Default::default()
+        };
+        let changed = app.model.apply_resolved(resolved);
+        app.controller.resync(&app.model, changed);
+        app.selection.active_board_id = Some(board_id);
+        app.prepare_frame();
+        board_id
+    }
+
+    #[test]
+    fn test_board_detail_sprint_nav_uses_scoped_tier_rows() {
+        let mut app = App::test_default();
+        let board_id = seed_board_with_scoped_and_flat_sprints(
+            &mut app,
+            |board_id| {
+                vec![
+                    kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
+                    kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
+                ]
+            },
+            |_| LoadState::NotLoaded,
+        );
+
+        app.selection.active_board_id = Some(board_id);
+        app.focus.board_focus = BoardFocus::Sprints;
+        app.selection.sprint.set(Some(0));
+
+        app.handle_board_detail_navigation_key(KeyCode::Char('j'));
+
+        assert_eq!(app.selection.sprint.get(), Some(1));
+        assert_eq!(app.focus.board_focus, BoardFocus::Sprints);
+        assert_no_banner(&app);
+    }
+
+    #[test]
+    fn test_board_detail_sprint_enter_opens_the_sprint_the_scoped_tier_shows() {
+        let mut app = App::test_default();
+        let s2_id = std::cell::Cell::new(uuid::Uuid::nil());
+        let board_id = seed_board_with_scoped_and_flat_sprints(
+            &mut app,
+            |board_id| {
+                let s1 = kanban_domain::Sprint::new(board_id, 1, None, None::<String>);
+                let s2 = kanban_domain::Sprint::new(board_id, 2, None, None::<String>);
+                s2_id.set(s2.id);
+                vec![s1, s2]
+            },
+            |board_id| {
+                LoadState::Loaded(vec![kanban_domain::Sprint::new(
+                    board_id,
+                    99,
+                    None,
+                    None::<String>,
+                )])
+            },
+        );
+        let s2_id = s2_id.get();
+
+        app.selection.active_board_id = Some(board_id);
+        app.focus.board_focus = BoardFocus::Sprints;
+        app.selection.sprint.set(Some(1));
+
+        app.handle_board_detail_navigation_key(KeyCode::Enter);
+
+        assert_eq!(app.selection.active_sprint_id, Some(s2_id));
+        assert_eq!(app.mode, AppMode::SprintDetail);
+        assert_no_banner(&app);
+    }
+
+    #[test]
+    fn test_column_focus_exit_upwards_lands_on_the_last_scoped_sprint_row() {
+        let mut app = App::test_default();
+        let board_id = seed_board_with_scoped_and_flat_sprints(
+            &mut app,
+            |board_id| {
+                vec![
+                    kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
+                    kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
+                ]
+            },
+            |board_id| {
+                LoadState::Loaded(vec![
+                    kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
+                    kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
+                    kanban_domain::Sprint::new(board_id, 3, None, None::<String>),
+                ])
+            },
+        );
+
+        app.selection.active_board_id = Some(board_id);
+        app.focus.board_focus = BoardFocus::Columns;
+        app.dialog_input.column_list.update_item_count(1);
+        app.dialog_input.column_list.set_selected_index(Some(0));
+
+        app.handle_board_detail_navigation_key(KeyCode::Char('k'));
+
+        assert_eq!(app.focus.board_focus, BoardFocus::Sprints);
+        assert_eq!(app.selection.sprint.get(), Some(1));
     }
 }

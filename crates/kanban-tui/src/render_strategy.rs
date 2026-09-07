@@ -148,11 +148,9 @@ impl RenderStrategy for SinglePanelRenderer {
 
                             // Render all cards with column headers interspersed
                             let mut columns_shown = std::collections::HashSet::new();
-                            let empty_sprints: &[kanban_domain::Sprint] = &[];
-                            let sprints = match app.model.board_sprints_state(board.id) {
-                                LoadState::Loaded(sprints) => sprints,
-                                _ => empty_sprints,
-                            };
+                            let board_sprints_view = app.board_sprints_view(board.id);
+                            let sprints = board_sprints_view.loaded_or_empty();
+                            let sprints_loaded = board_sprints_view.is_loaded();
 
                             for card_idx in &render_info.visible_card_indices {
                                 // Find which column this card belongs to
@@ -192,6 +190,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                             card,
                                             board,
                                             sprints,
+                                            sprints_loaded,
                                             is_selected,
                                             is_focused: app.focus.active
                                                 == crate::app::Focus::Cards,
@@ -272,11 +271,9 @@ impl RenderStrategy for SinglePanelRenderer {
                             "Task",
                         ));
 
-                        let empty_sprints: &[kanban_domain::Sprint] = &[];
-                        let sprints = match app.model.board_sprints_state(board.id) {
-                            LoadState::Loaded(sprints) => sprints,
-                            _ => empty_sprints,
-                        };
+                        let board_sprints_view = app.board_sprints_view(board.id);
+                        let sprints = board_sprints_view.loaded_or_empty();
+                        let sprints_loaded = board_sprints_view.is_loaded();
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -292,6 +289,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         card,
                                         board,
                                         sprints,
+                                        sprints_loaded,
                                         is_selected: task_list.get_selected_index()
                                             == Some(*card_idx),
                                         is_focused: app.focus.active == crate::app::Focus::Cards,
@@ -382,11 +380,9 @@ impl RenderStrategy for MultiPanelRenderer {
                     .split(area);
 
                 let active_task_list = app.view.strategy.get_active_task_list();
-                let empty_sprints: &[kanban_domain::Sprint] = &[];
-                let sprints = match app.model.board_sprints_state(board.id) {
-                    LoadState::Loaded(sprints) => sprints,
-                    _ => empty_sprints,
-                };
+                let board_sprints_view = app.board_sprints_view(board.id);
+                let sprints = board_sprints_view.loaded_or_empty();
+                let sprints_loaded = board_sprints_view.is_loaded();
 
                 for (col_idx, task_list) in task_lists.iter().enumerate() {
                     let mut lines = vec![];
@@ -443,6 +439,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                         card,
                                         board,
                                         sprints,
+                                        sprints_loaded,
                                         is_selected,
                                         is_focused: app.focus.active == crate::app::Focus::Cards
                                             && is_focused_column,
