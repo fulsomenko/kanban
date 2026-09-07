@@ -1,5 +1,5 @@
 use kanban_core::AppConfig;
-use kanban_domain::{DataStore, KanbanOperations, KanbanResult};
+use kanban_domain::{KanbanOperations, KanbanResult};
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_json::JsonFileStore;
 use kanban_persistence_sqlite::SqliteStore;
@@ -49,7 +49,7 @@ async fn test_migrate_json_to_sqlite_roundtrip() {
     let (snap, _) = json_store.load().await.unwrap();
     let snapshot: kanban_domain::Snapshot = serde_json::from_slice(&snap.data).unwrap();
     let sqlite = SqliteStore::open(db_path.to_str().unwrap()).await.unwrap();
-    sqlite.apply_snapshot(snapshot).unwrap();
+    kanban_service::write_full_snapshot(&sqlite, snapshot).unwrap();
     drop(sqlite);
 
     let loaded = open_context(db_path.to_str().unwrap(), AppConfig::default())
@@ -87,7 +87,7 @@ async fn test_migrate_sqlite_to_json_roundtrip() {
         .unwrap();
 
     // Migrate snapshot from SQLite to JSON via context snapshot
-    let snapshot = original.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(original.data_store()).unwrap();
     let data = serde_json::to_vec(&snapshot).unwrap();
     let json_store = Arc::new(JsonFileStore::new(&json_path));
     let store_snap = kanban_persistence::StoreSnapshot {
@@ -151,9 +151,9 @@ async fn test_migrate_sqlite_to_sqlite_roundtrip() {
         .unwrap();
 
     // Copy snapshot to destination
-    let snapshot = original.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(original.data_store()).unwrap();
     let dst = SqliteStore::open(dst_path.to_str().unwrap()).await.unwrap();
-    dst.apply_snapshot(snapshot).unwrap();
+    kanban_service::write_full_snapshot(&dst, snapshot).unwrap();
     drop(dst);
 
     let loaded = open_context(dst_path.to_str().unwrap(), AppConfig::default())

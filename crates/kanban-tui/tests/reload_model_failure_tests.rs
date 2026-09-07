@@ -1,6 +1,6 @@
 mod helpers;
 
-use helpers::{CountingBackend, FailingSnapshotBackend};
+use helpers::CountingBackend;
 use kanban_domain::{CreateCardOptions, KanbanOperations};
 use kanban_tui::components::BannerVariant;
 use kanban_tui::App;
@@ -71,16 +71,4 @@ fn test_a_successful_reload_sets_no_banner() {
         .expect("create board");
     app.reload_model();
     assert!(app.ui_state.banner.is_none());
-}
-
-#[test]
-fn test_from_app_propagates_a_failed_snapshot_read() {
-    let mut app = App::test_default();
-    app.ctx
-        .replace_backend(FailingSnapshotBackend::wrap(app.ctx.backend()));
-    let result = app.ctx.snapshot();
-    assert!(
-        result.is_err(),
-        "ctx.snapshot() must propagate a failed backend read, not fall back to Snapshot::default()"
-    );
 }

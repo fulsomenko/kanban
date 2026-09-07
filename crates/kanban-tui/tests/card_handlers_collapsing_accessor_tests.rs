@@ -15,7 +15,7 @@ use kanban_view::card_list::CardListId;
 use uuid::Uuid;
 
 fn sync_model_from_store(app: &mut App) {
-    let snapshot = app.ctx.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
     app.load_snapshot(snapshot);
 }
 

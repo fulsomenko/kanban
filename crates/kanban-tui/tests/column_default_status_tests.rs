@@ -5,7 +5,7 @@ use kanban_tui::app::{AppMode, BoardFocus, DialogMode};
 use kanban_tui::App;
 
 fn refresh(app: &mut App) {
-    let snap = app.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
     app.load_snapshot(snap);
 }
 

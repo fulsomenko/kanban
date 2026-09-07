@@ -156,10 +156,6 @@ impl TuiContext {
         self.inner.can_redo()
     }
 
-    pub fn snapshot(&self) -> KanbanResult<kanban_domain::Snapshot> {
-        self.inner.snapshot()
-    }
-
     pub fn transfer_state_to(&self, target: &dyn KanbanBackend) -> KanbanResult<()> {
         self.inner.transfer_state_to(target)
     }
@@ -174,10 +170,6 @@ impl TuiContext {
             self.save_coordinator.queue_flush();
         }
         Ok(result)
-    }
-
-    pub fn apply_snapshot(&mut self, s: kanban_domain::Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(s)
     }
 
     pub fn mark_clean(&mut self) {

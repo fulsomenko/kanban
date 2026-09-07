@@ -140,7 +140,7 @@ fn test_tui_export_all_round_trips_archived_board_with_subtree() {
     // The archived board's SUBTREE must round-trip. Assert against the raw
     // backend snapshot (the model's live-scoped views exclude archived-board
     // descendants).
-    let snap = app2.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app2.ctx.data_store()).unwrap();
     assert!(
         snap.boards.iter().any(|b| b.id == arch_board.id),
         "archived board head must be in the re-imported snapshot.boards"
@@ -209,7 +209,7 @@ fn test_tui_auto_save_round_trips_archived_board_with_subtree() {
         1,
         "archived_boards marker must survive auto_save round-trip"
     );
-    let snap = app2.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app2.ctx.data_store()).unwrap();
     assert!(
         snap.boards.iter().any(|b| b.id == arch_board.id),
         "archived board head must survive auto_save round-trip"
@@ -370,7 +370,7 @@ fn test_export_all_boards_round_trips_an_archived_board_subtree() {
         "archived board head must round-trip"
     );
 
-    let snap = app2.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app2.ctx.data_store()).unwrap();
 
     let re_live_col = snap
         .columns

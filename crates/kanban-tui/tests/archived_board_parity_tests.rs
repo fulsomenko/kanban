@@ -44,7 +44,7 @@ fn seed_and_archive_board(
         .unwrap();
     let sprint = app.ctx.create_sprint(board.id, None, None).unwrap();
     app.ctx.archive_board(board.id).unwrap();
-    let snap = app.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
     app.load_snapshot(snap);
     (board.id, col.id, card1.id, sprint.id)
 }
@@ -196,7 +196,7 @@ fn test_archived_board_card_action_works() {
 
     // Toggle completion via the SAME handler a live board's card uses.
     app.handle_toggle_card_completion();
-    let snap = app.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
     app.load_snapshot(snap);
 
     let card = app
@@ -226,7 +226,7 @@ fn test_archived_board_kanban_view_honours_board_setting() {
             },
         )
         .unwrap();
-    let snap = app.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
     app.load_snapshot(snap);
 
     // Browsing the archived LIST is never kanban (the list must stay visible)...
@@ -501,7 +501,7 @@ fn test_restore_card_reachable_from_drilled_in_archived_board() {
         .unwrap();
     app.ctx.archive_card(card.id).unwrap();
     app.ctx.archive_board(board.id).unwrap();
-    let snap = app.ctx.snapshot().unwrap();
+    let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
     app.load_snapshot(snap);
 
     open_archived_board(&mut app);

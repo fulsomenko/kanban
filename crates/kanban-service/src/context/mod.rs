@@ -255,3 +255,19 @@ impl KanbanOperations for KanbanContext {
         Ok(KanbanContext::import_board_impl(self, data)?.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_kanban_context_has_no_whole_store_snapshot_pass_throughs() {
+        let src = include_str!("core.rs");
+        assert!(
+            !src.contains("pub fn snapshot(&self)"),
+            "KanbanContext::snapshot must be deleted; callers should use kanban_service::read_full_snapshot(ctx.data_store())"
+        );
+        assert!(
+            !src.contains("pub fn apply_snapshot(&self,"),
+            "KanbanContext::apply_snapshot must be deleted; callers should use kanban_service::write_full_snapshot(ctx.data_store(), snapshot)"
+        );
+    }
+}

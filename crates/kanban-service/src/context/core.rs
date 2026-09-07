@@ -4,7 +4,7 @@ use crate::fetch_plan::{FetchPlan, LoadedEntities};
 use kanban_core::{AppConfig, AppType};
 use kanban_domain::{
     ArchivedCard, Board, Card, Column, DataStore, DependencyGraph, Invalidation, KanbanResult,
-    Resolved, Snapshot, Sprint,
+    Resolved, Sprint,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -133,14 +133,6 @@ impl KanbanContext {
         self.backend
             .get_column(id)?
             .ok_or_else(|| kanban_domain::KanbanError::not_found("Column", id))
-    }
-
-    pub fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.backend.snapshot()
-    }
-
-    pub fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.backend.apply_snapshot(snapshot)
     }
 
     pub fn is_dirty(&self) -> bool {
