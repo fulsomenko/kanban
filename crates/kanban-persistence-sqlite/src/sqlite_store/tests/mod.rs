@@ -3,6 +3,7 @@ mod archived_cards;
 mod board_archival;
 mod boards;
 mod cards;
+mod close;
 mod columns;
 mod command_log;
 mod composite_indexes;
