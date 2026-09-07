@@ -1,7 +1,29 @@
 use super::{App, AppMode};
-use kanban_domain::{LoadState, Sprint};
+use kanban_domain::{Column, LoadState, Sprint};
 
 impl App {
+    /// One column tier per board-scoped feature: the scoped tier when it has
+    /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
+    /// `Loaded` (including an empty one) is authoritative and never falls
+    /// back; only `NotLoaded` triggers the fallback. Unfiltered — callers
+    /// that need the position-ordered, search-narrowed view use
+    /// `visible_board_columns` instead.
+    pub(crate) fn board_columns_view(&self, board_id: uuid::Uuid) -> LoadState<Vec<Column>> {
+        match self.model.board_columns_state(board_id) {
+            LoadState::Loaded(columns) => LoadState::Loaded(columns.to_vec()),
+            LoadState::NotLoaded => match self.model.columns_state() {
+                LoadState::Loaded(all) => LoadState::Loaded(
+                    all.iter()
+                        .filter(|c| c.board_id == board_id)
+                        .cloned()
+                        .collect(),
+                ),
+                _ => LoadState::NotLoaded,
+            },
+            other => other.map(|_| Vec::new()),
+        }
+    }
+
     /// One sprint tier per board-scoped feature: the scoped tier when it has
     /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
     /// `Loaded` (including an empty one) is authoritative and never falls

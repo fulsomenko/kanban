@@ -257,7 +257,10 @@ fn render_board_columns_list(
     match app.model.board_columns_state(board.id) {
         LoadState::Loaded(columns) => {
             let total_columns = sorted_board_columns(board.id, columns).len();
-            let board_columns = app.visible_board_columns(board.id);
+            let board_columns = app
+                .visible_board_columns(board.id)
+                .loaded_or_empty()
+                .to_vec();
 
             if board_columns.is_empty() {
                 column_lines.push(Line::from(Span::styled(

@@ -135,6 +135,9 @@ impl App {
         if self.focus.active == Focus::Boards {
             if let Some(board_id) = self.board_list.get_selected_board_id() {
                 self.open_dialog(DialogMode::DeleteBoardConfirm);
+                if !self.model.archived_card_markers_absorbed() {
+                    self.reload_model();
+                }
                 // Snapshot the counts once, here, rather than re-scanning the
                 // model on every frame the modal is open.
                 let Some(counts) = self.board_delete_counts(board_id) else {
@@ -175,6 +178,9 @@ impl App {
         let Some(board_id) = self.selected_archived_board_id() else {
             return;
         };
+        if !self.model.archived_card_markers_absorbed() {
+            self.reload_model();
+        }
         let Some(counts) = self.board_delete_counts(board_id) else {
             self.set_error("Board contents are not loaded yet".to_string());
             return;
@@ -270,18 +276,17 @@ impl App {
         let col_ids: std::collections::HashSet<uuid::Uuid> =
             scoped_columns.iter().map(|c| c.id).collect();
         let columns = col_ids.len();
-        let cards = self
-            .controller
-            .live_cards()
-            .loaded()
-            .copied()
-            .unwrap_or(&[])
+        let LoadState::Loaded(cards_all) = self.controller.live_cards() else {
+            return None;
+        };
+        let cards = cards_all
             .iter()
             .filter(|c| col_ids.contains(&c.column_id))
             .count();
-        let archived = self
-            .model
-            .archived_card_markers()
+        let LoadState::Loaded(markers) = self.model.archived_cards_state() else {
+            return None;
+        };
+        let archived = markers
             .iter()
             .filter(|a| a.context.board_id == board_id)
             .count();

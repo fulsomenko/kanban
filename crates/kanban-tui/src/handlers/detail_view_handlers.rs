@@ -29,31 +29,31 @@ impl App {
     /// per `FieldSearcher`'s empty-query contract). This is the single
     /// source of truth for both rendering (`ui::board_detail`) and index
     /// resolution in the column handlers, so a filtered list and an
-    /// unfiltered handler can never disagree on what index N means.
-    pub(crate) fn visible_board_columns(&self, board_id: uuid::Uuid) -> Vec<Column> {
-        let columns: &[Column] = match self.model.columns_state() {
-            LoadState::Loaded(columns) => columns,
-            _ => &[],
-        };
-        let ordered = sorted_board_columns(board_id, columns);
-        let query = self.filter.column_search.active_query().unwrap_or("");
-        let searcher = FieldSearcher::new(query, |c: &&Column| c.name.as_str());
-        kanban_view::list_query::search_and_sort(
-            ordered,
-            |c| searcher.matches(c),
-            |a, b| a.position.cmp(&b.position),
-        )
-        .into_iter()
-        .cloned()
-        .collect()
+    /// unfiltered handler can never disagree on what index N means. Prefers
+    /// the board-scoped column tier and falls back to the flat one, per
+    /// `board_columns_view`.
+    pub(crate) fn visible_board_columns(&self, board_id: uuid::Uuid) -> LoadState<Vec<Column>> {
+        self.board_columns_view(board_id).map(|columns| {
+            let ordered = sorted_board_columns(board_id, &columns);
+            let query = self.filter.column_search.active_query().unwrap_or("");
+            let searcher = FieldSearcher::new(query, |c: &&Column| c.name.as_str());
+            kanban_view::list_query::search_and_sort(
+                ordered,
+                |c| searcher.matches(c),
+                |a, b| a.position.cmp(&b.position),
+            )
+            .into_iter()
+            .cloned()
+            .collect()
+        })
     }
 
     fn column_count_for_board(&self, board_id: uuid::Uuid) -> usize {
-        self.visible_board_columns(board_id).len()
+        self.visible_board_columns(board_id).loaded_or_empty().len()
     }
 
     fn enter_column_focus_at_top(&mut self, board_id: uuid::Uuid) {
-        if !self.model.columns_state().is_loaded() {
+        if !self.visible_board_columns(board_id).is_loaded() {
             self.set_error("Columns are not loaded yet");
             return;
         }
@@ -472,7 +472,7 @@ impl App {
                                 let sprint_count = sprints.len();
                                 let current_idx = self.selection.sprint.get().unwrap_or(0);
                                 if sprint_count == 0 || current_idx >= sprint_count - 1 {
-                                    if self.model.columns_state().is_loaded() {
+                                    if self.visible_board_columns(board_id).is_loaded() {
                                         self.focus.board_focus = BoardFocus::Columns;
                                         self.enter_column_focus_at_top(board_id);
                                     } else {
@@ -488,7 +488,7 @@ impl App {
                 }
                 BoardFocus::Columns => {
                     if let Some(board_id) = self.active_board().map(|board| board.id) {
-                        if self.model.columns_state().is_loaded() {
+                        if self.visible_board_columns(board_id).is_loaded() {
                             let column_count = self.column_count_for_board(board_id);
                             self.dialog_input
                                 .column_list
@@ -537,8 +537,10 @@ impl App {
                 }
                 BoardFocus::Columns => {
                     let board_id = self.board_list.get_selected_board_id();
-                    let columns_ready =
-                        board_id.is_none() || self.model.columns_state().is_loaded();
+                    let columns_ready = match board_id {
+                        None => true,
+                        Some(id) => self.visible_board_columns(id).is_loaded(),
+                    };
                     if !columns_ready {
                         self.set_error("Columns are not loaded yet");
                     } else {

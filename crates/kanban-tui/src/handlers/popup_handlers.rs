@@ -111,29 +111,35 @@ impl App {
                             if let Some(column_idx) =
                                 self.dialog_input.column_list.get_selected_index()
                             {
-                                if let Some(column) =
-                                    self.visible_board_columns(board_id).get(column_idx)
-                                {
-                                    let column_id = column.id;
-                                    let cmd =
-                                        Command::Column(ColumnCommand::Update(UpdateColumn {
-                                            column_id,
-                                            updates: ColumnUpdate {
-                                                default_status: Some(status),
-                                                ..Default::default()
-                                            },
-                                        }));
-                                    if let Err(e) = self.execute_command(cmd) {
-                                        tracing::error!(
-                                            "Failed to update column default status: {}",
-                                            e
-                                        );
-                                        self.set_error(format!(
-                                            "Failed to update column default status: {}",
-                                            e
-                                        ));
+                                match self.visible_board_columns(board_id) {
+                                    LoadState::Loaded(columns) => {
+                                        if let Some(column) = columns.get(column_idx) {
+                                            let column_id = column.id;
+                                            let cmd = Command::Column(ColumnCommand::Update(
+                                                UpdateColumn {
+                                                    column_id,
+                                                    updates: ColumnUpdate {
+                                                        default_status: Some(status),
+                                                        ..Default::default()
+                                                    },
+                                                },
+                                            ));
+                                            if let Err(e) = self.execute_command(cmd) {
+                                                tracing::error!(
+                                                    "Failed to update column default status: {}",
+                                                    e
+                                                );
+                                                self.set_error(format!(
+                                                    "Failed to update column default status: {}",
+                                                    e
+                                                ));
+                                            }
+                                            self.reload_model();
+                                        }
                                     }
-                                    self.reload_model();
+                                    _ => {
+                                        self.set_error("Columns are not loaded yet".to_string());
+                                    }
                                 }
                             }
                         }

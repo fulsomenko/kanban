@@ -30,7 +30,11 @@ impl App {
             {
                 if let Some(board) = self.active_board() {
                     let board_id = board.id;
-                    let board_columns = self.visible_board_columns(board_id);
+                    let LoadState::Loaded(board_columns) = self.visible_board_columns(board_id)
+                    else {
+                        self.set_error("Columns are not loaded yet".to_string());
+                        return;
+                    };
 
                     if let Some(column_idx) = self.dialog_input.column_list.get_selected_index() {
                         if let Some(column) = board_columns.get(column_idx) {
@@ -49,8 +53,12 @@ impl App {
         {
             if let Some(board) = self.active_board() {
                 let board_id = board.id;
+                let LoadState::Loaded(board_columns) = self.visible_board_columns(board_id) else {
+                    self.set_error("Columns are not loaded yet".to_string());
+                    return;
+                };
                 if let Some(column_idx) = self.dialog_input.column_list.get_selected_index() {
-                    if let Some(column) = self.visible_board_columns(board_id).get(column_idx) {
+                    if let Some(column) = board_columns.get(column_idx) {
                         let idx = kanban_view::selection_dialog::popup_index_of_default_status(
                             column.default_status,
                         );
@@ -295,21 +303,19 @@ impl App {
 
     pub fn rename_column(&mut self) {
         {
-            // Collect column ID before mutable borrow
-            let column_info = {
-                if let Some(board) = self.active_board() {
-                    let board_id = board.id;
-                    if let Some(column_idx) = self.dialog_input.column_list.get_selected_index() {
-                        self.visible_board_columns(board_id)
-                            .get(column_idx)
-                            .map(|col| col.id)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+            let board_id = match self.active_board() {
+                Some(board) => board.id,
+                None => return,
             };
+            let column_idx = match self.dialog_input.column_list.get_selected_index() {
+                Some(idx) => idx,
+                None => return,
+            };
+            let LoadState::Loaded(board_columns) = self.visible_board_columns(board_id) else {
+                self.set_error("Columns are not loaded yet".to_string());
+                return;
+            };
+            let column_info = board_columns.get(column_idx).map(|col| col.id);
 
             if let Some(column_id) = column_info {
                 let new_name = self.input.as_str().trim().to_string();
@@ -361,11 +367,13 @@ impl App {
                             return;
                         }
 
-                        // Resolved against the filtered list the confirm
-                        // dialog was opened from, not `all_columns`, so a
-                        // narrowed search doesn't delete the wrong column.
-                        let column_to_delete = self
-                            .visible_board_columns(board_id)
+                        let LoadState::Loaded(visible_columns) =
+                            self.visible_board_columns(board_id)
+                        else {
+                            self.set_error("Columns are not loaded yet".to_string());
+                            return;
+                        };
+                        let column_to_delete = visible_columns
                             .get(column_idx)
                             .map(|col| (col.id, col.name.clone()));
                         let first_column_id = all_columns.first().map(|(id, _)| *id);
