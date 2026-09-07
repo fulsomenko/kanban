@@ -131,18 +131,29 @@ impl App {
         }
     }
 
+    /// Opens the archive-confirmation dialog for the HIGHLIGHTED board. The
+    /// board is made active across the transition resolve and the count
+    /// snapshot so the fetch scope names it, then the prior active board is
+    /// restored.
     pub fn handle_delete_board_key(&mut self) {
-        if self.focus.active == Focus::Boards {
-            if let Some(board_id) = self.board_list.get_selected_board_id() {
-                self.open_dialog(DialogMode::DeleteBoardConfirm);
-                // Snapshot the counts once, here, rather than re-scanning the
-                // model on every frame the modal is open.
-                let Some(counts) = self.board_delete_counts(board_id) else {
-                    self.pop_mode();
-                    self.set_error("Board contents are not loaded yet".to_string());
-                    return;
-                };
-                self.dialog_input.board_delete_counts = Some(counts);
+        if self.focus.active != Focus::Boards {
+            return;
+        }
+        let Some(board_id) = self.board_list.get_selected_board_id() else {
+            return;
+        };
+
+        let prior_active_board_id = self.selection.active_board_id;
+        self.selection.active_board_id = Some(board_id);
+        self.open_dialog(DialogMode::DeleteBoardConfirm);
+        let counts = self.board_delete_counts(board_id);
+        self.selection.active_board_id = prior_active_board_id;
+
+        match counts {
+            Some(counts) => self.dialog_input.board_delete_counts = Some(counts),
+            None => {
+                self.pop_mode();
+                self.set_error("Board contents are not loaded yet".to_string());
             }
         }
     }
