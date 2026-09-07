@@ -318,7 +318,7 @@ async fn test_failed_import_returns_error() {
 // multi_thread: sqlx connection pool spawns background tasks that deadlock on single-threaded runtime
 #[tokio::test(flavor = "multi_thread")]
 async fn test_async_load_initial_state_sqlite() {
-    use kanban_domain::{Board, Column, DataStore};
+    use kanban_domain::{Board, Column};
 
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("test_load.db");
@@ -341,7 +341,7 @@ async fn test_async_load_initial_state_sqlite() {
         graph: Default::default(),
         prefixes: Vec::new(),
     };
-    store.apply_snapshot(snapshot).unwrap();
+    kanban_service::write_full_snapshot(&store, snapshot).unwrap();
     drop(store);
 
     let sm = test_store_manager();

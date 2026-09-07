@@ -50,6 +50,7 @@ async-trait.workspace = true
 kanban-backend-memory = { path = "../kanban-backend-memory" }
 kanban-persistence-json = { path = "../kanban-persistence-json" }
 kanban-persistence-sqlite = { path = "../kanban-persistence-sqlite", features = ["test-helpers"] }
+kanban-service = { path = "../kanban-service", features = ["test-helpers"] }
 tempfile.workspace = true
 assert_cmd.workspace = true
 predicates.workspace = true

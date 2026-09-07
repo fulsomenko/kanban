@@ -431,7 +431,7 @@ mod backend_parity {
             ),
             other => panic!("unknown backend kind {other}"),
         };
-        backend.apply_snapshot(snapshot.clone()).unwrap();
+        kanban_service::write_full_snapshot(backend.as_data_store(), snapshot.clone()).unwrap();
         KanbanContext::open(backend, AppConfig::default())
             .await
             .unwrap()
@@ -471,7 +471,7 @@ mod backend_parity {
         ctx.attach_child(card1.id, card2.id).unwrap();
         ctx.create_sprint(board1.id, None, Some("Sprint 1".to_string()))
             .unwrap();
-        let snapshot = ctx.snapshot().unwrap();
+        let snapshot = kanban_service::read_full_snapshot(ctx.data_store()).unwrap();
         (snapshot, board1.id, board2.id)
     }
 
@@ -481,7 +481,7 @@ mod backend_parity {
             .await
             .unwrap();
         let board = ctx.create_board("Empty Board".to_string(), None).unwrap();
-        let snapshot = ctx.snapshot().unwrap();
+        let snapshot = kanban_service::read_full_snapshot(ctx.data_store()).unwrap();
         (snapshot, board.id)
     }
 

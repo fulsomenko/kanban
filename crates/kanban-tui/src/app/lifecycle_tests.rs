@@ -935,8 +935,7 @@ async fn test_adopt_storage_file_writes_the_whole_workspace_to_disk_json() {
             target.to_str().unwrap(),
         )),
     ));
-    use kanban_domain::DataStore as _;
-    let snapshot = backend.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(&*backend).unwrap();
 
     assert_whole_workspace(&snapshot, &ids);
 }
@@ -968,7 +967,7 @@ async fn test_adopt_storage_file_writes_the_whole_workspace_to_disk_sqlite() {
         .create(target.to_str().unwrap(), &kanban_core::AppConfig::default())
         .await
         .unwrap();
-    let snapshot = backend.as_data_store().snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(backend.as_data_store()).unwrap();
 
     assert_whole_workspace(&snapshot, &ids);
 }
@@ -1001,8 +1000,7 @@ async fn test_adopt_storage_file_writes_an_empty_workspace_to_disk() {
             target.to_str().unwrap(),
         )),
     ));
-    use kanban_domain::DataStore as _;
-    let snapshot = backend.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(&*backend).unwrap();
     assert!(snapshot.boards.is_empty(), "empty workspace has no boards");
 }
 
@@ -1051,8 +1049,7 @@ async fn test_adopt_storage_file_does_not_call_the_whole_store_trait_methods() {
             target.to_str().unwrap(),
         )),
     ));
-    use kanban_domain::DataStore as _;
-    let snapshot = readback.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(&*readback).unwrap();
     assert_eq!(
         snapshot.boards.len(),
         1,

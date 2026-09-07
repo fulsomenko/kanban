@@ -89,7 +89,8 @@ mod tests {
     fn test_check_ended_sprints_reports_ended_sprints_in_the_loaded_tier() {
         let mut app = App::test_default();
         let sprint_id = seed_ended_sprint(&mut app);
-        let _ = app.model.load_from_snapshot(app.ctx.snapshot().unwrap());
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
+        let _ = app.model.load_from_snapshot(snap);
         assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
 
         let ended = app.check_ended_sprints();
@@ -101,7 +102,8 @@ mod tests {
     fn test_check_ended_sprints_with_a_not_loaded_boards_tier_skips_the_board_name_lookup() {
         let mut app = App::test_default();
         let sprint_id = seed_ended_sprint(&mut app);
-        let _ = app.model.load_from_snapshot(app.ctx.snapshot().unwrap());
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
+        let _ = app.model.load_from_snapshot(snap);
         assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
 
         let _ = app

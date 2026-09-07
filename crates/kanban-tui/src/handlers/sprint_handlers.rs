@@ -264,7 +264,7 @@ mod create_sprint_factory_tests {
     /// `self.model`) sees prior writes. The event loop does this each frame via
     /// `prepare_frame`; tests pull the snapshot directly.
     fn refresh(app: &mut App) {
-        let snap = app.ctx.snapshot().unwrap();
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         app.load_snapshot(snap);
     }
 

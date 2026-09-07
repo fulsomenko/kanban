@@ -1070,7 +1070,7 @@ mod create_card_factory_tests {
     /// per-board scoped columns/sprints tiers `load_from_snapshot` leaves
     /// untouched, since `create_card_target_column` reads them.
     fn refresh(app: &mut App) {
-        let snap = app.ctx.snapshot().unwrap();
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         let mut columns_by_board: std::collections::HashMap<
             uuid::Uuid,
             Vec<kanban_domain::Column>,

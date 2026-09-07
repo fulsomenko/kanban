@@ -758,7 +758,7 @@ async fn test_migration_complete_preserves_the_whole_graph_of_the_incoming_file_
 
     let seed_store = kanban_backend_memory::InMemoryStore::new();
     let ids = seed_full_graph(&seed_store);
-    let snapshot = seed_store.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(&seed_store).unwrap();
 
     let json_path = dir.path().join("destination-full-graph.json");
     let json_path_str = json_path.to_str().unwrap().to_string();
@@ -786,14 +786,14 @@ async fn test_migration_complete_preserves_the_whole_graph_of_the_incoming_file_
 
     let seed_store = kanban_backend_memory::InMemoryStore::new();
     let ids = seed_full_graph(&seed_store);
-    let snapshot = seed_store.snapshot().unwrap();
+    let snapshot = kanban_service::read_full_snapshot(&seed_store).unwrap();
 
     let sqlite_path = dir.path().join("destination-full-graph.sqlite3");
     let sqlite_path_str = sqlite_path.to_str().unwrap().to_string();
     let sqlite_store = kanban_persistence_sqlite::SqliteStore::open(&sqlite_path_str)
         .await
         .unwrap();
-    sqlite_store.apply_snapshot(snapshot).unwrap();
+    kanban_service::write_full_snapshot(&sqlite_store, snapshot).unwrap();
     drop(sqlite_store);
 
     app.app_config.storage_location = Some(sqlite_path_str.clone());

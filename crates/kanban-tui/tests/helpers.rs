@@ -1124,8 +1124,6 @@ pub async fn create_test_json_file(dir: &std::path::Path, name: &str, boards: &[
 }
 
 pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: &[&str]) -> String {
-    use kanban_domain::DataStore;
-
     let path = dir.join(name);
     let path_str = path.to_str().unwrap().to_string();
     let store = kanban_persistence_sqlite::SqliteStore::open(&path_str)
@@ -1146,7 +1144,7 @@ pub async fn create_test_sqlite_file(dir: &std::path::Path, name: &str, boards: 
         graph: Default::default(),
         prefixes: Vec::new(),
     };
-    store.apply_snapshot(snapshot).unwrap();
+    kanban_service::write_full_snapshot(&store, snapshot).unwrap();
 
     path_str
 }

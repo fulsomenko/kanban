@@ -1064,7 +1064,7 @@ mod tests {
             .unwrap();
         app.ctx.inner_mut().archive_board(b1.id).unwrap();
         app.ctx.inner_mut().archive_board(b2.id).unwrap();
-        let snap = app.ctx.snapshot().unwrap();
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         app.load_snapshot(snap);
     }
 
@@ -1113,7 +1113,7 @@ mod tests {
         app.ctx.inner_mut().archive_board(b1.id).unwrap();
         app.ctx.inner_mut().archive_board(b2.id).unwrap();
         app.ctx.inner_mut().archive_board(b3.id).unwrap();
-        let snap = app.ctx.snapshot().unwrap();
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         app.load_snapshot(snap);
         app.mode = AppMode::ArchivedBoardsView;
         app.focus.active = Focus::Boards;
@@ -1158,7 +1158,7 @@ mod tests {
         app.ctx.inner_mut().archive_board(b1.id).unwrap();
         app.ctx.inner_mut().archive_board(b2.id).unwrap();
         app.ctx.inner_mut().archive_board(b3.id).unwrap();
-        let snap = app.ctx.snapshot().unwrap();
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         app.load_snapshot(snap);
         app.mode = AppMode::ArchivedBoardsView;
         app.focus.active = Focus::Boards;
@@ -1227,7 +1227,7 @@ mod tests {
                 .unwrap();
             app.ctx.inner_mut().archive_board(b.id).unwrap();
         }
-        let snap = app.ctx.snapshot().unwrap();
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         app.load_snapshot(snap);
         app.mode = AppMode::Normal;
         app.focus.active = Focus::Boards;
@@ -1316,7 +1316,7 @@ mod tests {
                 },
             )
             .unwrap();
-        let snap = app.ctx.snapshot().unwrap();
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         app.load_snapshot(snap);
         app.selection.active_board_id = app
             .model
