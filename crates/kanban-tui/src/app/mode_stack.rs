@@ -39,23 +39,18 @@ impl App {
 
     pub fn set_mode(&mut self, new_mode: AppMode) {
         self.mode = new_mode;
-        self.populate_for_current_mode();
+        self.resolve_for_view();
     }
 
     pub fn push_mode(&mut self, new_mode: AppMode) {
         self.mode_stack.push(self.mode.clone());
         self.mode = new_mode;
-        self.populate_for_current_mode();
+        self.resolve_for_view();
     }
 
     pub fn pop_mode(&mut self) {
         self.mode = self.mode_stack.pop().unwrap_or(AppMode::Normal);
-        self.populate_for_current_mode();
-    }
-
-    fn populate_for_current_mode(&mut self) {
-        let scope = self.view_scope();
-        self.populate(scope);
+        self.resolve_for_view();
     }
 
     pub fn is_dialog_mode(&self) -> bool {

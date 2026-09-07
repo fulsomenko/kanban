@@ -15,6 +15,18 @@ impl App {
         self.ctx.sync(&scope, &mut self.model, &mut self.controller);
     }
 
+    /// Fetches whatever the current view scope still needs.
+    pub fn resolve_for_view(&mut self) {
+        let scope = self.view_scope();
+        self.populate(scope);
+    }
+
+    /// `resolve_for_view` followed by a `prepare_frame` rebuild.
+    pub fn refresh_view(&mut self) {
+        self.resolve_for_view();
+        self.prepare_frame();
+    }
+
     /// Refetches what `inv` invalidated, plus whatever the current screen
     /// reads, in place of a full `reload_model`.
     pub fn resolve_after_command(&mut self, inv: Invalidation) {
