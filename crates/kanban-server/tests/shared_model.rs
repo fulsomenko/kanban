@@ -28,7 +28,7 @@ fn json_state(path: &std::path::Path) -> AppState {
     AppState::new(ctx)
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lock_session_resets_the_model_for_a_sqlite_locator() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("board.sqlite");
@@ -80,8 +80,12 @@ async fn test_app_state_new_does_not_reset_the_model_per_request() {
 async fn test_external_file_change_invalidates_the_shared_model() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("board.json");
-    std::fs::write(&path, "{}").unwrap();
-    let state = json_state(&path);
+    let backend: Arc<dyn KanbanBackend> =
+        Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(&path))));
+    let ctx = KanbanContext::open(backend, AppConfig::default())
+        .await
+        .unwrap();
+    let state = AppState::new(ctx);
 
     kanban_server::watch::watch_for_external_changes(state.clone(), path.to_str().unwrap())
         .await
