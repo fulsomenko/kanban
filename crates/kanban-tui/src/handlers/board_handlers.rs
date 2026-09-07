@@ -1423,6 +1423,57 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_delete_key_on_a_non_active_highlighted_board_snapshots_that_boards_counts() {
+        let mut app = App::test_default();
+        create_named_board(&mut app, "A");
+        create_named_board(&mut app, "B");
+        let boards = app.ctx.data_store().list_boards().unwrap();
+        let a_id = boards.iter().find(|b| b.name == "A").unwrap().id;
+        let b_id = boards.iter().find(|b| b.name == "B").unwrap().id;
+        let b_column_id = first_column_id(&app, b_id);
+        app.ctx
+            .create_card(
+                b_id,
+                b_column_id,
+                "Task".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        app.ctx.create_sprint(b_id, None, None).unwrap();
+
+        app.selection.active_board_id = Some(a_id);
+        app.board_list.select_board(a_id);
+        refresh(&mut app);
+
+        app.board_list.select_board(b_id);
+        app.focus.active = Focus::Boards;
+        assert!(
+            !app.model.board_columns_state(b_id).is_loaded(),
+            "precondition: B's subtree is not loaded, only A's is"
+        );
+
+        app.handle_delete_board_key();
+
+        assert_eq!(app.mode, AppMode::Dialog(DialogMode::DeleteBoardConfirm));
+        assert_eq!(
+            app.dialog_input.board_delete_counts,
+            Some(BoardDeleteCounts {
+                columns: 3,
+                cards: 1,
+                archived: 0,
+                sprints: 1,
+            }),
+            "counts belong to the highlighted board B, not the active board A"
+        );
+        assert!(app.ui_state.banner.is_none());
+        assert_eq!(
+            app.selection.active_board_id,
+            Some(a_id),
+            "the prior active board is restored"
+        );
+    }
+
     // KAN-891: archived-board drill-down tests
 
     fn seed_archived_board_with_cards(app: &mut App, name: &str) -> (uuid::Uuid, uuid::Uuid) {
