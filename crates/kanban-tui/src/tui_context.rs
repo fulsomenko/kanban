@@ -37,7 +37,10 @@ impl TuiContext {
         Ok((tui_ctx, save_rx, completion_rx))
     }
 
-    pub fn execute_command(&mut self, command: Command) -> KanbanResult<kanban_domain::Invalidation> {
+    pub fn execute_command(
+        &mut self,
+        command: Command,
+    ) -> KanbanResult<kanban_domain::Invalidation> {
         self.execute_commands_batch(vec![command])
     }
 

@@ -1,5 +1,6 @@
 mod helpers;
 
+use crossterm::event::KeyCode;
 use helpers::{CountingBackend, ReadOp, ReadOpLog};
 use kanban_core::Editable;
 use kanban_domain::{
@@ -11,7 +12,6 @@ use kanban_tui::app::mode::AppMode;
 use kanban_tui::app::BoardFocus;
 use kanban_tui::App;
 use uuid::Uuid;
-use crossterm::event::KeyCode;
 
 struct Seed {
     board: Uuid,
@@ -104,7 +104,9 @@ fn select_column(app: &mut App, board_id: Uuid, column_id: Uuid) {
         .iter()
         .position(|c| c.id == column_id)
         .expect("column visible");
-    app.dialog_input.column_list.update_item_count(columns.len());
+    app.dialog_input
+        .column_list
+        .update_item_count(columns.len());
     app.dialog_input.column_list.set_selected_index(Some(idx));
 }
 
@@ -197,10 +199,7 @@ async fn test_delete_column_refetches_the_card_tier_because_the_batch_moved_card
         has_op_with_id(&refetch, "list_columns_by_board", board.id),
         "got {refetch:?}"
     );
-    assert!(
-        has_op(&refetch, "list_cards_by_column"),
-        "got {refetch:?}"
-    );
+    assert!(has_op(&refetch, "list_cards_by_column"), "got {refetch:?}");
 
     let moved: Vec<_> = app
         .model
@@ -209,7 +208,11 @@ async fn test_delete_column_refetches_the_card_tier_because_the_batch_moved_card
         .iter()
         .filter(|card| card.column_id == c1.id)
         .collect();
-    assert_eq!(moved.len(), 3, "the three cards moved out of c2 must all report c1");
+    assert_eq!(
+        moved.len(),
+        3,
+        "the three cards moved out of c2 must all report c1"
+    );
     let _ = c3;
 }
 
@@ -231,7 +234,12 @@ async fn test_move_column_up_leaves_an_untouched_columns_card_scope_loaded() {
         .unwrap();
     for (col, name) in [(&c1, "k1"), (&c2, "k2"), (&c3, "k3")] {
         app.ctx
-            .create_card(board.id, col.id, name.to_string(), CreateCardOptions::default())
+            .create_card(
+                board.id,
+                col.id,
+                name.to_string(),
+                CreateCardOptions::default(),
+            )
             .unwrap();
     }
 
@@ -424,7 +432,12 @@ async fn test_move_card_refetches_the_card_tiers_and_leaves_the_column_tier_unto
     for i in 0..3 {
         last = Some(
             app.ctx
-                .create_card(board.id, c1.id, format!("K{i}"), CreateCardOptions::default())
+                .create_card(
+                    board.id,
+                    c1.id,
+                    format!("K{i}"),
+                    CreateCardOptions::default(),
+                )
                 .unwrap(),
         );
     }
@@ -466,7 +479,12 @@ async fn test_toggle_selected_cards_completion_refetches_once_for_the_whole_batc
     for i in 0..4 {
         let card = app
             .ctx
-            .create_card(board.id, c1.id, format!("K{i}"), CreateCardOptions::default())
+            .create_card(
+                board.id,
+                c1.id,
+                format!("K{i}"),
+                CreateCardOptions::default(),
+            )
             .unwrap();
         ids.push(card.id);
     }
@@ -481,7 +499,10 @@ async fn test_toggle_selected_cards_completion_refetches_once_for_the_whole_batc
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    let list_all_cards_count = refetch.iter().filter(|op| op.method == "list_all_cards").count();
+    let list_all_cards_count = refetch
+        .iter()
+        .filter(|op| op.method == "list_all_cards")
+        .count();
     assert_eq!(list_all_cards_count, 1, "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_cards_by_column", c1.id),
@@ -697,8 +718,12 @@ fn test_no_converted_card_board_or_column_handler_still_reloads_wholesale() {
     assert_eq!(production_reload_model_count(board_handlers), 6);
     assert_eq!(production_reload_model_count(column_handlers), 0);
 
-    let card_handlers_boundary = card_handlers.find("#[cfg(test)]").unwrap_or(card_handlers.len());
-    let entity_ids_count = card_handlers[..card_handlers_boundary].matches("EntityIds").count();
+    let card_handlers_boundary = card_handlers
+        .find("#[cfg(test)]")
+        .unwrap_or(card_handlers.len());
+    let entity_ids_count = card_handlers[..card_handlers_boundary]
+        .matches("EntityIds")
+        .count();
     assert_eq!(
         entity_ids_count, 1,
         "the only production EntityIds construction left is create_card's with_prefixes() extra"
@@ -706,9 +731,17 @@ fn test_no_converted_card_board_or_column_handler_still_reloads_wholesale() {
 
     for src in [detail_view_handlers, board_handlers, column_handlers] {
         let boundary = src.find("#[cfg(test)]").unwrap_or(src.len());
-        assert!(!src[..boundary].contains("EntityIds"), "handler built its own invalidation");
+        assert!(
+            !src[..boundary].contains("EntityIds"),
+            "handler built its own invalidation"
+        );
     }
-    for src in [card_handlers, detail_view_handlers, board_handlers, column_handlers] {
+    for src in [
+        card_handlers,
+        detail_view_handlers,
+        board_handlers,
+        column_handlers,
+    ] {
         let boundary = src.find("#[cfg(test)]").unwrap_or(src.len());
         assert!(
             !src[..boundary].contains("invalidation_from_inverse"),
