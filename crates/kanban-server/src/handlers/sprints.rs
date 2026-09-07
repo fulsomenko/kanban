@@ -23,7 +23,7 @@ use uuid::Uuid;
 /// wire projection plus whether the sprint was created (`true`) or replaced an
 /// existing id (`false`).
 pub fn create_sprint(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     board_id: Uuid,
     req: CreateSprintRequest,
 ) -> Result<(SprintResponse, bool), ApiError> {
@@ -51,7 +51,7 @@ pub fn create_sprint(
 /// `KanbanContext::create_or_replace_sprint`'s replace arm never checks the
 /// existing sprint's board on its own.
 pub fn create_or_replace_sprint(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     board_id: Uuid,
     id: Uuid,
     req: ReplaceSprintRequest,

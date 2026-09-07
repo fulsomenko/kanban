@@ -61,14 +61,14 @@ fn do_get_sprint(ctx: &kanban_service::KanbanContext, id: Uuid) -> Result<Sprint
 }
 
 fn do_update_sprint(
-    ctx: &mut kanban_service::KanbanContext,
+    ctx: &mut crate::state::Session,
     id: Uuid,
     updates: SprintUpdate,
 ) -> Result<Sprint, AppError> {
     crate::state::mutate(ctx, |c| c.update_sprint_impl(id, updates)).map_err(|e| AppError::from(&e))
 }
 
-fn do_delete_sprint(ctx: &mut kanban_service::KanbanContext, id: Uuid) -> Result<(), AppError> {
+fn do_delete_sprint(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
     crate::state::mutate_unit(ctx, |c| c.delete_sprint_impl(id)).map_err(|e| AppError::from(&e))
 }
 

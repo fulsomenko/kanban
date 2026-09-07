@@ -2,8 +2,10 @@
 
 use kanban_domain::{LoadState, NoProjections};
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
+use kanban_server::scope::RouteScope;
 use kanban_server::state::{AppState, Session};
 use kanban_server::test_helpers::make_sqlite_state;
+use kanban_service::api::CreateBoardRequest;
 use kanban_service::{
     requestable, AppConfig, FetchPlan, FetchRound, KanbanBackend, KanbanContext, KanbanOperations,
     LoadedEntities,
@@ -126,4 +128,33 @@ async fn test_external_file_change_invalidates_the_shared_model() {
 
     let guard = state.ctx.lock().await;
     assert_eq!(guard.ctx.list_boards().unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_the_board_create_handler_seam_invalidates_the_shared_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("board.json");
+    let state = json_state(&path);
+
+    let mut guard = state.lock_session().await;
+    {
+        let Session { ctx, model } = &mut *guard;
+        ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+    }
+    assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
+
+    let req = CreateBoardRequest {
+        id: None,
+        name: "Fresh".to_string(),
+        description: None,
+        sprint_prefix: None,
+        card_prefix: None,
+        task_sort_field: None,
+        task_sort_order: None,
+        sprint_duration_days: None,
+        task_list_view: None,
+    };
+    kanban_server::handlers::boards::create_board(&mut guard, req).unwrap();
+
+    assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
 }

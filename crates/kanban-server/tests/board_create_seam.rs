@@ -3,6 +3,7 @@
 
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_server::handlers::boards::{create_board, create_or_replace_board};
+use kanban_server::state::Session;
 use kanban_service::api::{
     CreateBoardRequest, ReplaceBoardRequest, SortFieldDto, SortOrderDto, TaskListViewDto,
 };
@@ -11,10 +12,13 @@ use std::sync::Arc;
 use tempfile::tempdir;
 use uuid::Uuid;
 
-fn make_ctx(path: &std::path::Path) -> KanbanContext {
+fn make_ctx(path: &std::path::Path) -> Session {
     let backend: Arc<dyn KanbanBackend> =
         Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(path))));
-    KanbanContext::open_deferred(backend, AppConfig::default())
+    Session {
+        ctx: KanbanContext::open_deferred(backend, AppConfig::default()),
+        model: Default::default(),
+    }
 }
 
 fn create_req(id: Option<Uuid>, name: &str) -> CreateBoardRequest {

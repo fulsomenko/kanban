@@ -6,27 +6,6 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
 
-/// Run a mutation against `ctx`, returning its value and discarding the
-/// `Invalidation` it produced.
-pub(crate) fn mutate<T>(
-    ctx: &mut KanbanContext,
-    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<(T, Invalidation)>,
-) -> KanbanResult<T> {
-    let (value, invalidation) = op(ctx)?;
-    let _ = invalidation;
-    Ok(value)
-}
-
-/// Like [`mutate`], for operations that return only an `Invalidation`.
-pub(crate) fn mutate_unit(
-    ctx: &mut KanbanContext,
-    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<Invalidation>,
-) -> KanbanResult<()> {
-    let invalidation = op(ctx)?;
-    let _ = invalidation;
-    Ok(())
-}
-
 /// The context and the Model it feeds live under one guard, so a reader can
 /// never observe a Model that a committed mutation has already invalidated.
 /// `Deref`/`DerefMut` to the context keep every existing `state.ctx.lock()`
@@ -48,6 +27,29 @@ impl std::ops::DerefMut for Session {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.ctx
     }
+}
+
+/// Run a mutation against the session's context, then apply the
+/// `Invalidation` it produced to the session's Model before the guard
+/// drops, so the next reader replans exactly the tiers this mutation
+/// touched.
+pub(crate) fn mutate<T>(
+    session: &mut Session,
+    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<(T, Invalidation)>,
+) -> KanbanResult<T> {
+    let (value, invalidation) = op(&mut session.ctx)?;
+    let _changed = session.model.invalidate(invalidation);
+    Ok(value)
+}
+
+/// Like [`mutate`], for operations that return only an `Invalidation`.
+pub(crate) fn mutate_unit(
+    session: &mut Session,
+    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<Invalidation>,
+) -> KanbanResult<()> {
+    let invalidation = op(&mut session.ctx)?;
+    let _changed = session.model.invalidate(invalidation);
+    Ok(())
 }
 
 /// Shared state for every axum handler.
@@ -152,17 +154,120 @@ impl AppState {
 #[cfg(all(test, feature = "test-helpers"))]
 mod tests {
     use super::*;
+    use crate::scope::RouteScope;
     use kanban_backend_memory::InMemoryStore;
+    use kanban_domain::{BoardUpdate, LoadState, NoProjections};
+    use kanban_persistence_json::{JsonDataStore, JsonFileStore};
     use kanban_service::{AppConfig, KanbanBackend, KanbanOperations};
     use std::cell::Cell;
 
-    async fn seeded_ctx() -> (KanbanContext, Uuid) {
+    async fn seeded_ctx() -> (Session, Uuid) {
         let backend: Arc<dyn KanbanBackend> = Arc::new(InMemoryStore::new());
         let mut ctx = KanbanContext::open(backend, AppConfig::default())
             .await
             .unwrap();
         let board = ctx.create_board("Board1".into(), None).unwrap();
-        (ctx, board.id)
+        (
+            Session {
+                ctx,
+                model: Model::default(),
+            },
+            board.id,
+        )
+    }
+
+    fn json_state(dir: &std::path::Path) -> AppState {
+        let backend: Arc<dyn KanbanBackend> = Arc::new(JsonDataStore::new(Arc::new(
+            JsonFileStore::new(dir.join("s.json")),
+        )));
+        let ctx = KanbanContext::open_deferred(backend, AppConfig::default());
+        AppState::new(ctx)
+    }
+
+    #[tokio::test]
+    async fn test_mutate_blanks_the_session_model_tier_the_invalidation_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = json_state(dir.path());
+        let mut guard = state.lock_session().await;
+
+        let board_id = guard.ctx.create_board("A".into(), None).unwrap().id;
+        {
+            let Session { ctx, model } = &mut *guard;
+            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+        }
+        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
+
+        mutate(&mut guard, |c| {
+            c.update_board_impl(
+                board_id,
+                BoardUpdate {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap();
+
+        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
+    }
+
+    #[tokio::test]
+    async fn test_mutate_blanks_only_the_tiers_the_invalidation_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = json_state(dir.path());
+        let mut guard = state.lock_session().await;
+
+        let board_a = guard.ctx.create_board("A".into(), None).unwrap().id;
+        let board_b = guard.ctx.create_board("B".into(), None).unwrap().id;
+        {
+            let Session { ctx, model } = &mut *guard;
+            ctx.sync(
+                &RouteScope::BoardColumns(board_b),
+                model,
+                &mut NoProjections,
+            );
+            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+        }
+        assert!(matches!(
+            guard.model.board_columns_state(board_b),
+            LoadState::Loaded(_)
+        ));
+        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
+
+        mutate(&mut guard, |c| {
+            c.update_board_impl(
+                board_a,
+                BoardUpdate {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap();
+
+        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
+        assert!(matches!(
+            guard.model.board_columns_state(board_b),
+            LoadState::Loaded(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_mutate_unit_blanks_the_session_model_tier_the_invalidation_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = json_state(dir.path());
+        let mut guard = state.lock_session().await;
+
+        let board_id = guard.ctx.create_board("A".into(), None).unwrap().id;
+        {
+            let Session { ctx, model } = &mut *guard;
+            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+        }
+        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
+
+        mutate_unit(&mut guard, |c| c.delete_board_impl(board_id)).unwrap();
+
+        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
     }
 
     #[tokio::test]
@@ -185,15 +290,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_mutate_propagates_the_error_and_invalidates_nothing() {
-        let (mut ctx, _board_id) = seeded_ctx().await;
+        let (mut session, _board_id) = seeded_ctx().await;
         let absent_id = Uuid::new_v4();
+        session.ctx.sync(
+            &RouteScope::BoardList,
+            &mut session.model,
+            &mut NoProjections,
+        );
+        assert!(matches!(session.model.boards_state(), LoadState::Loaded(_)));
 
-        let result = mutate(&mut ctx, |c| {
+        let result = mutate(&mut session, |c| {
             c.update_board_impl(absent_id, kanban_domain::BoardUpdate::default())
         });
 
         assert!(result.is_err());
-        assert_eq!(ctx.list_boards().unwrap().len(), 1);
+        assert_eq!(session.ctx.list_boards().unwrap().len(), 1);
+        assert!(matches!(session.model.boards_state(), LoadState::Loaded(_)));
     }
 
     #[tokio::test]

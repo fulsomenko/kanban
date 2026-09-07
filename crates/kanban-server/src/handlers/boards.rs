@@ -7,14 +7,13 @@
 //! [`BoardResponse`].
 
 use kanban_service::api::{ApiError, BoardResponse, CreateBoardRequest, ReplaceBoardRequest};
-use kanban_service::KanbanContext;
 use uuid::Uuid;
 
 /// `POST /v1/boards`: pure create. The body id is honoured when present
 /// (idempotent create with that exact id); a present id that already exists
 /// is a conflict (`AlreadyExists` -> 409), not a silent replace.
 pub fn create_board(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     req: CreateBoardRequest,
 ) -> Result<BoardResponse, ApiError> {
     let (id, spec) = req.into_new_board();
@@ -27,7 +26,7 @@ pub fn create_board(
 /// the path `id`. Returns the wire projection plus whether the board was
 /// created (`true`, 201) or replaced (`false`, 200).
 pub fn create_or_replace_board(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     id: Uuid,
     req: ReplaceBoardRequest,
 ) -> Result<(BoardResponse, bool), ApiError> {

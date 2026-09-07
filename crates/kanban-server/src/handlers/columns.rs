@@ -19,7 +19,7 @@ use uuid::Uuid;
 /// exists under a *different* board, this 404s rather than silently
 /// relocating it — see [`create_or_replace_column`].
 pub fn create_column(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     board_id: Uuid,
     req: CreateColumnRequest,
 ) -> Result<(ColumnResponse, bool), ApiError> {
@@ -42,7 +42,7 @@ pub fn create_column(
 /// guard (`routes/columns.rs::get_column`) since `create_or_replace_column`'s
 /// replace arm never checks the existing column's board on its own.
 pub fn create_or_replace_column(
-    ctx: &mut KanbanContext,
+    ctx: &mut crate::state::Session,
     board_id: Uuid,
     id: Uuid,
     req: ReplaceColumnRequest,
