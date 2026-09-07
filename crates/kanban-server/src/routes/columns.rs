@@ -1,11 +1,13 @@
 use crate::error::{AppError, AppJson};
+use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
-use crate::state::AppState;
+use crate::scope::RouteScope;
+use crate::state::{AppState, Session};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::Column;
+use kanban_domain::{Column, NoProjections};
 use kanban_service::api::{ChangeKind, ColumnResponse, EntityType, Page, PageParams};
 use kanban_service::{ColumnUpdate, KanbanError, KanbanOperations};
 use uuid::Uuid;
@@ -15,10 +17,12 @@ async fn list_columns(
     Path(board_id): Path<Uuid>,
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<ColumnResponse>>, AppError> {
-    let ctx = state.ctx.lock().await;
-    ctx.require_board(board_id)
-        .map_err(|e| AppError::from(&e))?;
-    let cols = ctx.list_columns(board_id).map_err(|e| AppError::from(&e))?;
+    let mut session = state.lock_session().await;
+    let scope = RouteScope::BoardColumns(board_id);
+    let Session { ctx, model } = &mut *session;
+    ctx.sync(&scope, model, &mut NoProjections);
+    require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
+    let cols = require_loaded(model.board_columns_state(board_id), "columns")?;
     paginate_response(cols.iter().map(ColumnResponse::from).collect(), &params)
 }
 
@@ -26,10 +30,15 @@ async fn get_column(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<ColumnResponse>, AppError> {
-    let ctx = state.ctx.lock().await;
-    require_column_in_board(&ctx, board_id, id)?;
-    let column = do_get_column(&ctx, id)?;
-    Ok(Json(ColumnResponse::from(&column)))
+    let mut session = state.lock_session().await;
+    let scope = RouteScope::Column(id);
+    let Session { ctx, model } = &mut *session;
+    ctx.sync(&scope, model, &mut NoProjections);
+    let column = require_loaded_entity(model.column_id_status(id), "Column", id)?;
+    if column.board_id != board_id {
+        return Err(AppError::from(&KanbanError::not_found("Column", id)));
+    }
+    Ok(Json(ColumnResponse::from(column)))
 }
 
 pub fn read_router() -> Router<AppState> {
@@ -46,12 +55,6 @@ fn created_status(created: bool) -> StatusCode {
     }
 }
 
-fn do_get_column(ctx: &kanban_service::KanbanContext, id: Uuid) -> Result<Column, AppError> {
-    ctx.get_column(id)
-        .map_err(|e| AppError::from(&e))?
-        .ok_or_else(|| AppError::from(&KanbanError::not_found("Column", id)))
-}
-
 fn do_update_column(
     ctx: &mut crate::state::Session,
     id: Uuid,
@@ -64,10 +67,9 @@ fn do_delete_column(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), App
     crate::state::mutate_unit(ctx, |c| c.delete_column_impl(id)).map_err(|e| AppError::from(&e))
 }
 
-/// Fetch a column and 404 unless it belongs to `board_id` — the same
-/// cross-board guard `get_column` (read route, above) applies, needed here
-/// too since `KanbanOperations::{update_column, delete_column, reorder_column}`
-/// key on the global column id alone with no board scoping of their own.
+/// Fetch a column and 404 unless it belongs to `board_id`, needed because
+/// `KanbanOperations::{update_column, delete_column, reorder_column}` key on
+/// the global column id with no board scoping of their own.
 fn require_column_in_board(
     ctx: &kanban_service::KanbanContext,
     board_id: Uuid,
@@ -201,9 +203,12 @@ async fn get_column_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ColumnResponse>, AppError> {
-    let ctx = state.ctx.lock().await;
-    let column = do_get_column(&ctx, id)?;
-    Ok(Json(ColumnResponse::from(&column)))
+    let mut session = state.lock_session().await;
+    let scope = RouteScope::Column(id);
+    let Session { ctx, model } = &mut *session;
+    ctx.sync(&scope, model, &mut NoProjections);
+    let column = require_loaded_entity(model.column_id_status(id), "Column", id)?;
+    Ok(Json(ColumnResponse::from(column)))
 }
 
 async fn update_column_route_flat(
