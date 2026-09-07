@@ -333,6 +333,42 @@ fn test_handle_delete_board_key_still_opens_on_a_loaded_model() {
 }
 
 #[test]
+fn test_a_declined_delete_board_restores_the_prior_active_board() {
+    let mut app = App::test_default();
+    let a = app.ctx.create_board("A".into(), None).unwrap();
+    app.ctx.create_column(a.id, "Todo".into(), Some(0)).unwrap();
+    let b = app.ctx.create_board("B".into(), None).unwrap();
+    app.ctx.create_column(b.id, "Todo".into(), Some(0)).unwrap();
+    sync_model_from_store(&mut app);
+    app.prepare_frame();
+    app.selection.active_board_id = Some(a.id);
+    app.focus.active = Focus::Boards;
+    app.board_list.select_board(b.id);
+
+    invalidate_columns_tier(&mut app);
+    let failing = CountingBackend::wrap_failing(app.ctx.backend(), "list_columns_by_board");
+    app.ctx.replace_backend(failing);
+
+    app.handle_delete_board_key();
+
+    let banner = app
+        .ui_state
+        .banner
+        .as_ref()
+        .expect("declining a NotLoaded columns tier must set an error banner");
+    assert!(banner.message.to_lowercase().contains("board"));
+    assert!(
+        !matches!(app.mode, AppMode::Dialog(DialogMode::DeleteBoardConfirm)),
+        "the delete-board confirm dialog must not open on a declined tier"
+    );
+    assert_eq!(
+        app.selection.active_board_id,
+        Some(a.id),
+        "the board active before the key press must still be active after the decline"
+    );
+}
+
+#[test]
 fn test_handle_delete_archived_board_key_declines_when_board_delete_counts_is_not_loaded() {
     let mut app = App::test_default();
     let board = app.ctx.create_board("Board".into(), None).unwrap();
