@@ -1,3 +1,131 @@
+//! A `RouteScope` is built from the matched route plus its path/query
+//! params. The tiers a variant names are the tiers that route's response
+//! body reads; `GET /v1/prefixes` has no variant because no prefix tier
+//! exists in `FetchRound` at any level, so that route stays a lock-only
+//! read outside this plan.
+
+use kanban_service::{requestable, FetchPlan, FetchRound, LoadedEntities};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RouteScope {
+    BoardList,
+    Board(Uuid),
+    BoardColumns(Uuid),
+    BoardCards {
+        board_id: Uuid,
+        column_id: Option<Uuid>,
+    },
+    BoardArchivedCards(Uuid),
+    BoardSprints(Uuid),
+    Card(Uuid),
+    Column(Uuid),
+    /// `board_id` is `Some` only for the nested route, where the path
+    /// already names the board whose name pool the response needs.
+    Sprint {
+        board_id: Option<Uuid>,
+        sprint_id: Uuid,
+    },
+    CardGraph(Uuid),
+}
+
+fn want_board(round: &mut FetchRound, loaded: &dyn LoadedEntities, board_id: Uuid) {
+    if requestable(loaded.board(board_id)) {
+        round.boards.push(board_id);
+    }
+}
+
+impl FetchPlan for RouteScope {
+    fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
+        let mut round = FetchRound::default();
+
+        match *self {
+            RouteScope::BoardList => {
+                round.board_list = requestable(loaded.board_list());
+            }
+            RouteScope::Board(id) => {
+                want_board(&mut round, loaded, id);
+                round.archived_board_list = requestable(loaded.archived_board_list());
+            }
+            RouteScope::BoardColumns(board_id) => {
+                want_board(&mut round, loaded, board_id);
+                if requestable(loaded.columns_of_board(board_id)) {
+                    round.columns_by_board.push(board_id);
+                }
+            }
+            RouteScope::BoardCards {
+                board_id,
+                column_id,
+            } => {
+                want_board(&mut round, loaded, board_id);
+                if requestable(loaded.columns_of_board(board_id)) {
+                    round.columns_by_board.push(board_id);
+                }
+                if requestable(loaded.archived_cards_of_board(board_id)) {
+                    round.archived_cards_by_board.push(board_id);
+                }
+                match column_id {
+                    Some(column_id) => {
+                        if requestable(loaded.cards_of_column(column_id)) {
+                            round.cards_by_column.push(column_id);
+                        }
+                    }
+                    None => {
+                        if let Some(columns) = loaded.loaded_columns_of_board(board_id) {
+                            for column in columns {
+                                if requestable(loaded.cards_of_column(column.id)) {
+                                    round.cards_by_column.push(column.id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            RouteScope::BoardArchivedCards(board_id) => {
+                want_board(&mut round, loaded, board_id);
+                if requestable(loaded.archived_cards_of_board(board_id)) {
+                    round.archived_cards_by_board.push(board_id);
+                }
+            }
+            RouteScope::BoardSprints(board_id) => {
+                want_board(&mut round, loaded, board_id);
+                if requestable(loaded.sprints_of_board(board_id)) {
+                    round.sprints_by_board.push(board_id);
+                }
+            }
+            RouteScope::Card(id) => {
+                if requestable(loaded.card(id)) {
+                    round.cards.push(id);
+                }
+            }
+            RouteScope::Column(id) => {
+                if requestable(loaded.column(id)) {
+                    round.columns.push(id);
+                }
+            }
+            RouteScope::Sprint {
+                board_id,
+                sprint_id,
+            } => {
+                if requestable(loaded.sprint(sprint_id)) {
+                    round.sprints.push(sprint_id);
+                }
+                if let Some(board_id) = board_id {
+                    want_board(&mut round, loaded, board_id);
+                }
+            }
+            RouteScope::CardGraph(id) => {
+                round.graph = requestable(loaded.graph());
+                if requestable(loaded.card(id)) {
+                    round.cards.push(id);
+                }
+            }
+        }
+
+        round
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -103,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_route_scope_for_board_cards_filtered_by_column_requests_that_column_in_the_first_round()
-     {
+    {
         let board_id = Uuid::new_v4();
         let column_id = Uuid::new_v4();
         let round = RouteScope::BoardCards {
