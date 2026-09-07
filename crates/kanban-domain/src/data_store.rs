@@ -1,8 +1,6 @@
 use uuid::Uuid;
 
-use crate::{
-    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Prefix, Sprint,
-};
+use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Prefix, Sprint};
 
 pub type GraphMutFn = Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>;
 

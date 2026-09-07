@@ -5,7 +5,7 @@ use kanban_domain::command_batch::CommandBatch;
 use kanban_domain::data_store::GraphMutFn;
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, CommandStore, DataStore, DependencyGraph,
-    KanbanError, KanbanResult, Snapshot, Sprint,
+    KanbanError, KanbanResult, Sprint,
 };
 use kanban_persistence::{
     snapshot_from_json_bytes, snapshot_to_json_bytes, PersistenceMetadata, PersistenceStore,
@@ -495,6 +495,7 @@ mod tests {
     use super::*;
     use crate::JsonFileStore;
     use kanban_domain::Board;
+    use kanban_domain::Snapshot;
     use tempfile::tempdir;
 
     fn make_store(path: &std::path::Path) -> JsonDataStore {
