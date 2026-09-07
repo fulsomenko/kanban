@@ -70,7 +70,9 @@ impl KanbanMcpServer {
         let child_raw = req.child.clone();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let child_id = ctx.resolve_card_id(&req.child).map_err(kanban_err_to_mcp)?;
-            let parent_id = ctx.resolve_card_id(&req.parent).map_err(kanban_err_to_mcp)?;
+            let parent_id = ctx
+                .resolve_card_id(&req.parent)
+                .map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.attach_children_impl(parent_id, vec![child_id]))
                 .map_err(|e| mcp_enrich_add_error(e, &parent_raw, &child_raw))?;
@@ -92,7 +94,9 @@ impl KanbanMcpServer {
         let child_raw = req.child.clone();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
             let child_id = ctx.resolve_card_id(&req.child).map_err(kanban_err_to_mcp)?;
-            let parent_id = ctx.resolve_card_id(&req.parent).map_err(kanban_err_to_mcp)?;
+            let parent_id = ctx
+                .resolve_card_id(&req.parent)
+                .map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.detach_children_impl(parent_id, vec![child_id]))
                 .map_err(|e| mcp_enrich_remove_error(e, &parent_raw, &child_raw))?;
@@ -348,8 +352,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_json()
-    {
+    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_json() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
         seeded.handle.fail("list_cards_by_prefix_and_number");
@@ -369,8 +372,8 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_sqlite(
-    ) {
+    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_sqlite()
+    {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
         seeded.handle.fail("list_cards_by_prefix_and_number");
@@ -463,10 +466,7 @@ mod tests {
 
         assert_eq!(seeded.handle.op_count("get_graph"), 0);
         assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
-        assert_eq!(
-            seeded.handle.op_count("list_cards_by_prefix_and_number"),
-            2
-        );
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
 
         let response = text_payload(
             &seeded
@@ -500,10 +500,7 @@ mod tests {
 
         assert_eq!(seeded.handle.op_count("get_graph"), 0);
         assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
-        assert_eq!(
-            seeded.handle.op_count("list_cards_by_prefix_and_number"),
-            2
-        );
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
 
         let response = text_payload(
             &seeded
@@ -545,10 +542,7 @@ mod tests {
 
         assert_eq!(seeded.handle.op_count("get_graph"), 0);
         assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
-        assert_eq!(
-            seeded.handle.op_count("list_cards_by_prefix_and_number"),
-            2
-        );
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
 
         let response = text_payload(
             &seeded
@@ -589,10 +583,7 @@ mod tests {
 
         assert_eq!(seeded.handle.op_count("get_graph"), 0);
         assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
-        assert_eq!(
-            seeded.handle.op_count("list_cards_by_prefix_and_number"),
-            2
-        );
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
 
         let response = text_payload(
             &seeded

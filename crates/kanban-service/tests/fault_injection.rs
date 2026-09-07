@@ -129,9 +129,7 @@ fn test_faulting_an_indexed_card_lookup_returns_an_error() {
     let (backend, _board) = wrapped_in_memory();
 
     backend.fail("list_cards_by_prefix_and_number");
-    assert!(backend
-        .list_cards_by_prefix_and_number("KAN", 5)
-        .is_err());
+    assert!(backend.list_cards_by_prefix_and_number("KAN", 5).is_err());
 
     backend.clear_faults();
 
@@ -163,9 +161,7 @@ async fn test_fault_backend_records_indexed_card_lookups_on_sqlite() {
 
     let backend = FaultInjectingBackend::new(inner);
 
-    let by_prefix = backend
-        .list_cards_by_prefix_and_number("PIN", 7)
-        .unwrap();
+    let by_prefix = backend.list_cards_by_prefix_and_number("PIN", 7).unwrap();
     let by_number = backend.list_cards_by_number(7).unwrap();
 
     assert_eq!(by_prefix.first().map(|c| c.id), Some(card.id));
