@@ -426,12 +426,13 @@ mod tests {
                 CreateCardOptions::default(),
             )
             .unwrap();
-        app.reload_model();
-        app.prepare_frame();
         // copy_branch_name/copy_git_checkout_command resolve the board via
         // active_board_id, which real navigation always sets before either
-        // CardDetail or SprintDetail is reached.
+        // CardDetail or SprintDetail is reached; it must be set BEFORE
+        // reload_model so the scoped resolve fetches this board's subtree.
         app.selection.active_board_id = Some(board.id);
+        app.reload_model();
+        app.prepare_frame();
         card.id
     }
 
@@ -507,10 +508,11 @@ mod tests {
             .unwrap();
         app.ctx.activate_sprint(completed.id, None).unwrap();
         app.ctx.complete_sprint(completed.id).unwrap();
-        app.reload_model();
-        app.prepare_frame();
+        app.selection.active_board_id = Some(board.id);
         app.selection.active_sprint_id = Some(completed.id);
         app.mode = AppMode::SprintDetail;
+        app.reload_model();
+        app.prepare_frame();
 
         app.execute_action(&KeybindingAction::CarryOver);
 

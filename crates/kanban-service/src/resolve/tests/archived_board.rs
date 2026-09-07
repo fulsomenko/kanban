@@ -5,6 +5,32 @@ use crate::read_recorder::{assert_ops, ReadOp};
 use crate::resolve::resolve;
 
 #[test]
+fn test_resolve_returns_an_archived_board_head_by_id() {
+    let store = store();
+    let archived = seed_board(&store, "archived");
+    seed_archived_board(&store, &archived);
+
+    let loaded = StubLoaded::default();
+    let plan = FixedPlan(FetchRound {
+        boards: vec![archived.id],
+        ..Default::default()
+    });
+
+    let resolved = resolve(&plan, &loaded, &store);
+
+    assert_ops(
+        &store.ops(),
+        &[ReadOp {
+            method: "get_board",
+            ids: vec![archived.id],
+        }],
+    );
+    let state = resolved.boards.by_id.get(&archived.id).unwrap();
+    assert!(state.is_loaded());
+    assert_eq!(state.loaded().unwrap().id, archived.id);
+}
+
+#[test]
 fn test_a_flat_archived_board_round_resolves_every_marker() {
     let store = store();
     let live = seed_board(&store, "live");

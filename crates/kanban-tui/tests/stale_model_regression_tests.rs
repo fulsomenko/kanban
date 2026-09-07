@@ -11,16 +11,10 @@ fn setup_app_with_board() -> App {
         .ctx
         .create_column(board.id, "Todo".to_string(), Some(0))
         .unwrap();
+    app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
-    app.selection.active_board_id = app
-        .ctx
-        .data_store()
-        .list_boards()
-        .unwrap()
-        .first()
-        .map(|b| b.id);
     app
 }
 

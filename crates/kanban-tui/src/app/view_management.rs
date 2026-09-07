@@ -2,7 +2,7 @@ use super::{App, AppMode, ViewScope};
 use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::{
     filter_and_sort_boards, Board, BoardListFilter, Card, DerivedProjections, Invalidation,
-    KanbanResult, LoadState, Snapshot,
+    KanbanResult, LoadState, Resolved, Snapshot,
 };
 use kanban_view::view_strategy::{ViewRefreshContext, ViewStrategy};
 use std::collections::HashMap;
@@ -112,14 +112,61 @@ impl App {
 
     /// Reload the whole view model from the store. I/O. Call after a mutation,
     /// after an external change, or on a cold path (startup, backend swap).
+    ///
+    /// A read that fails mid-reload must not trade good data for a blank
+    /// panel: the pre-reload model is kept aside and restored whenever any
+    /// tier the reload touched comes back `Failed`, so a transient read
+    /// failure only ever costs a banner, never the last-known-good view.
     pub fn reload_model(&mut self) {
-        match self.ctx.snapshot() {
-            Ok(snapshot) => self.load_snapshot(snapshot),
-            Err(e) => {
-                tracing::warn!("Failed to load model from store: {e}");
-                self.set_error(format!("Failed to load from store: {e}"));
-            }
+        let previous = self.model.clone();
+        let scope = self.view_scope();
+        self.ctx.resync_invalidated(
+            Invalidation::All,
+            &scope,
+            &mut self.model,
+            &mut self.controller,
+        );
+        if self.surface_load_failures() {
+            self.model = previous;
+            let changed = self.model.apply_resolved(Resolved::default());
+            self.controller.resync(&self.model, changed);
         }
+    }
+
+    /// Walks every tier `reload_model` can populate and surfaces the first
+    /// `Failed` one as a user-visible error, so a loud-unsupported backend
+    /// (e.g. a global archived read over HTTP) never reads as an empty view.
+    /// Returns whether any tier was found `Failed`.
+    pub(crate) fn surface_load_failures(&mut self) -> bool {
+        if let LoadState::Failed(e) = self.model.boards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return true;
+        }
+        if let LoadState::Failed(e) = self.model.columns_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return true;
+        }
+        if let LoadState::Failed(e) = self.model.cards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return true;
+        }
+        if let LoadState::Failed(e) = self.model.sprints_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return true;
+        }
+        if let LoadState::Failed(e) = self.model.graph_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return true;
+        }
+        if let LoadState::Failed(e) = self.model.archived_cards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return true;
+        }
+        if let LoadState::Failed(e) = self.model.archived_boards_state() {
+            self.set_error(format!("Failed to load from store: {e}"));
+            return true;
+        }
+        false
     }
 
     /// Rebuild the display partitions and task lists from the cached model.

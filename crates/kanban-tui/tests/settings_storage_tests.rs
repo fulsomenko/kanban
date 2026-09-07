@@ -417,9 +417,9 @@ async fn test_migration_complete_does_not_call_the_whole_store_trait_methods() {
     );
     assert_eq!(
         snapshot_reads.load(Ordering::SeqCst),
-        1,
-        "the only whole-Snapshot read must be reload_model's post-swap sync, \
-         not the migration probe"
+        0,
+        "reload_model's post-swap sync is scope-driven, not a whole-Snapshot \
+         read, so migration must call ctx.snapshot() zero times"
     );
 }
 

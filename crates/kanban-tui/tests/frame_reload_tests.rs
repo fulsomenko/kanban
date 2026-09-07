@@ -186,6 +186,7 @@ fn test_restore_card_is_visible_in_model_without_a_further_redraw() {
     app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
+    helpers::warm_archived_card_markers(&mut app);
 
     let archived_card = app
         .model

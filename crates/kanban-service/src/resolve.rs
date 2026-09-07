@@ -34,6 +34,12 @@ impl LoadedState for Overlay<'_> {
     fn graph(&self) -> FetchStatus {
         overlay_status(&self.pass.graph, self.base.graph())
     }
+    fn board(&self, id: Uuid) -> FetchStatus {
+        match self.pass.boards.by_id.get(&id) {
+            Some(state) => state.into(),
+            None => self.base.board(id),
+        }
+    }
     fn column(&self, id: Uuid) -> FetchStatus {
         match self.pass.columns.by_id.get(&id) {
             Some(state) => state.into(),
@@ -88,6 +94,20 @@ impl LoadedState for Overlay<'_> {
             self.base.archived_board_list(),
         )
     }
+
+    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
+        match self.pass.cards.by_id.get(&id) {
+            Some(state) => state.into(),
+            None => self.base.card_in_collection(id),
+        }
+    }
+
+    fn board_in_collection(&self, id: Uuid) -> FetchStatus {
+        match self.pass.boards.by_id.get(&id) {
+            Some(state) => state.into(),
+            None => self.base.board_in_collection(id),
+        }
+    }
 }
 
 impl LoadedEntities for Overlay<'_> {
@@ -96,6 +116,22 @@ impl LoadedEntities for Overlay<'_> {
             Some(LoadState::Loaded(v)) => Some(v.as_slice()),
             Some(_) => None,
             None => self.base.loaded_columns_of_board(board_id),
+        }
+    }
+
+    fn loaded_archived_card_markers(&self) -> Option<&[kanban_domain::ArchivedCard]> {
+        match &self.pass.archived_cards.all {
+            LoadState::Loaded(v) => Some(v.as_slice()),
+            LoadState::NotLoaded => self.base.loaded_archived_card_markers(),
+            LoadState::Missing | LoadState::Failed(_) => None,
+        }
+    }
+
+    fn loaded_archived_board_markers(&self) -> Option<&[kanban_domain::ArchivedBoard]> {
+        match &self.pass.archived_boards.all {
+            LoadState::Loaded(v) => Some(v.as_slice()),
+            LoadState::NotLoaded => self.base.loaded_archived_board_markers(),
+            LoadState::Missing | LoadState::Failed(_) => None,
         }
     }
 }
@@ -107,6 +143,7 @@ struct Fetched {
     card_list: bool,
     sprint_list: bool,
     graph: bool,
+    boards: HashSet<Uuid>,
     columns: HashSet<Uuid>,
     cards: HashSet<Uuid>,
     sprints: HashSet<Uuid>,
@@ -125,6 +162,7 @@ impl Fetched {
         self.card_list |= round.card_list;
         self.sprint_list |= round.sprint_list;
         self.graph |= round.graph;
+        self.boards.extend(round.boards.iter().copied());
         self.columns.extend(round.columns.iter().copied());
         self.cards.extend(round.cards.iter().copied());
         self.sprints.extend(round.sprints.iter().copied());
@@ -169,6 +207,7 @@ fn narrow_to_outstanding(
         card_list: round.card_list && !fetched.card_list,
         sprint_list: round.sprint_list && !fetched.sprint_list,
         graph: round.graph && !fetched.graph,
+        boards: outstanding(round.boards, &fetched.boards, |id| loaded.board(id)),
         columns: outstanding(round.columns, &fetched.columns, |id| loaded.column(id)),
         cards: outstanding(round.cards, &fetched.cards, |id| loaded.card(id)),
         sprints: outstanding(round.sprints, &fetched.sprints, |id| loaded.sprint(id)),
@@ -228,6 +267,14 @@ fn fetch_round(round: &FetchRound, store: &dyn DataStore, resolved: &mut Resolve
         };
     }
 
+    for &id in &round.boards {
+        let state = match store.get_board(id) {
+            Ok(Some(v)) => LoadState::Loaded(v),
+            Ok(None) => LoadState::Missing,
+            Err(e) => LoadState::Failed(Arc::new(e)),
+        };
+        resolved.boards.by_id.insert(id, state);
+    }
     for &id in &round.columns {
         let state = match store.get_column(id) {
             Ok(Some(v)) => LoadState::Loaded(v),

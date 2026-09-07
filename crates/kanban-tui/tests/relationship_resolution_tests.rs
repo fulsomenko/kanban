@@ -15,6 +15,17 @@ fn invalidate_graph(app: &mut App) {
         .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
 }
 
+/// The dependency graph is only requested by `ViewScope` for `CardDetail`
+/// and the manage-parents/children dialogs. Tests that inspect
+/// `model.graph_state()` directly, without driving one of those handlers,
+/// must warm it themselves.
+fn warm_graph(app: &mut App) {
+    let prior = app.mode.clone();
+    app.mode = AppMode::CardDetail;
+    app.resolve_for_view();
+    app.mode = prior;
+}
+
 fn create_board_and_column(app: &mut App, board_title: &str) -> (Uuid, Uuid) {
     let board = app.ctx.create_board(board_title.into(), None).unwrap();
     let column = app
@@ -56,7 +67,9 @@ fn test_resolve_relationship_cards_returns_only_the_related_cards() {
 
     app.ctx.attach_child(parent, subject).unwrap();
     app.ctx.attach_child(subject, child).unwrap();
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
+    warm_graph(&mut app);
 
     assert_eq!(app.model.cards_state().loaded_or_empty().len(), 50);
 
@@ -94,7 +107,9 @@ fn test_resolve_relationship_cards_resolves_archived_related_card() {
 
     app.ctx.attach_child(parent, subject).unwrap();
     app.ctx.archive_card(parent).unwrap();
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
+    helpers::warm_archived_card_markers(&mut app);
 
     assert!(app.model.archived_card_ids().contains(&parent));
     assert!(!app
@@ -123,8 +138,9 @@ fn test_resolve_relationship_cards_resolves_cross_board_related_card() {
     let cross = create_card(&mut app, board_c_id, column_c_id, "CrossBoardChildXYZ");
 
     app.ctx.attach_child(subject, cross).unwrap();
-    app.reload_model();
     app.selection.active_board_id = Some(board_b_id);
+    app.reload_model();
+    warm_graph(&mut app);
 
     let children = app
         .model
@@ -147,6 +163,7 @@ fn test_resolve_relationship_cards_omits_id_with_no_card() {
     let known = create_card(&mut app, board_id, column_id, "Known");
     create_card(&mut app, board_id, column_id, "Other1");
     create_card(&mut app, board_id, column_id, "Other2");
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
 
     let unknown = Uuid::new_v4();
@@ -171,7 +188,10 @@ fn test_resolve_relationship_cards_resolves_same_set_as_full_collection_scan() {
     app.ctx.attach_child(archived_parent, subject).unwrap();
     app.ctx.attach_child(subject, cross_child).unwrap();
     app.ctx.archive_card(archived_parent).unwrap();
+    app.selection.active_board_id = Some(board_b_id);
     app.reload_model();
+    helpers::warm_archived_card_markers(&mut app);
+    warm_graph(&mut app);
 
     let mut ids = [
         app.model
@@ -218,6 +238,7 @@ fn test_resolve_relationship_cards_with_no_ids_returns_empty() {
     for i in 0..50 {
         create_card(&mut app, board_id, column_id, &format!("Card {i}"));
     }
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
 
     assert_eq!(app.model.cards_state().loaded_or_empty().len(), 50);
@@ -258,6 +279,7 @@ fn test_manage_parents_refuses_to_open_when_the_graph_is_not_loaded() {
     let mut app = App::test_default();
     let (board_id, column_id) = create_board_and_column(&mut app, "Board");
     let subject = create_card(&mut app, board_id, column_id, "Subject");
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
     app.selection.active_card_id = Some(subject);
 
@@ -276,6 +298,7 @@ fn test_manage_children_refuses_to_open_when_the_graph_is_not_loaded() {
     let mut app = App::test_default();
     let (board_id, column_id) = create_board_and_column(&mut app, "Board");
     let subject = create_card(&mut app, board_id, column_id, "Subject");
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
     app.selection.active_card_id = Some(subject);
 
@@ -326,6 +349,7 @@ fn test_manage_parents_does_not_offer_a_descendant_when_the_graph_is_not_loaded(
     let a = create_card(&mut app, board_id, column_id, "A");
     let b = create_card(&mut app, board_id, column_id, "B");
     app.ctx.attach_child(a, b).unwrap();
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
     app.selection.active_card_id = Some(a);
 
@@ -353,8 +377,10 @@ fn test_an_existing_parent_is_pre_selected_so_toggling_it_detaches() {
     let p = create_card(&mut app, board_id, column_id, "Parent");
     let c = create_card(&mut app, board_id, column_id, "Child");
     app.ctx.attach_child(p, c).unwrap();
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
     app.selection.active_card_id = Some(c);
+    warm_graph(&mut app);
 
     app.handle_manage_parents();
 
@@ -369,8 +395,10 @@ fn test_manage_parents_still_opens_and_filters_when_the_graph_is_loaded() {
     let a = create_card(&mut app, board_id, column_id, "A");
     let b = create_card(&mut app, board_id, column_id, "B");
     app.ctx.attach_child(a, b).unwrap();
+    app.selection.active_board_id = Some(board_id);
     app.reload_model();
     app.selection.active_card_id = Some(a);
+    warm_graph(&mut app);
 
     app.handle_manage_parents();
 

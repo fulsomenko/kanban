@@ -1168,3 +1168,24 @@ pub async fn setup_app_with_json_file_and_save_worker(dir: &std::path::Path) -> 
     );
     app
 }
+
+/// Requests the global archived-card marker tier (and, for any marker
+/// found, its body) without changing which mode the app ends up in.
+/// Archived data is lazily fetched by `ViewScope`; tests that inspect
+/// `model.archived_card_ids()`/`model.cards_state()` for an archived row
+/// without having navigated through the archived-cards view must call this
+/// first, or the tier stays `NotLoaded` and reads as empty.
+pub fn warm_archived_card_markers(app: &mut App) {
+    let prior = app.mode.clone();
+    app.mode = kanban_tui::app::mode::AppMode::ArchivedCardsView;
+    app.resolve_for_view();
+    app.mode = prior;
+}
+
+/// Board-head equivalent of [`warm_archived_card_markers`].
+pub fn warm_archived_board_markers(app: &mut App) {
+    let prior = app.mode.clone();
+    app.mode = kanban_tui::app::mode::AppMode::ArchivedBoardsView;
+    app.resolve_for_view();
+    app.mode = prior;
+}

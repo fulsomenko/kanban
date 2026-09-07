@@ -15,6 +15,7 @@ use uuid::Uuid;
 /// `Collection` answers "what did this specific resolve pass say about this
 /// tier", and conflating the two would let an archived-excluding tier
 /// silently mark an id `Missing` that another tier still holds.
+#[derive(Clone)]
 pub struct Model {
     boards: LoadState<Vec<Board>>,
     columns: LoadState<Vec<Column>>,

@@ -13,16 +13,10 @@ fn setup_app_with_board() -> App {
         .ctx
         .create_column(board.id, "Todo".to_string(), Some(0))
         .unwrap();
+    app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
-    app.selection.active_board_id = app
-        .ctx
-        .data_store()
-        .list_boards()
-        .unwrap()
-        .first()
-        .map(|b| b.id);
     app
 }
 
@@ -41,17 +35,11 @@ fn setup_app_with_board_and_sprint() -> App {
 
 fn setup_app_with_board_no_columns() -> App {
     let mut app = App::test_default();
-    let _board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
-    app.selection.active_board_id = app
-        .ctx
-        .data_store()
-        .list_boards()
-        .unwrap()
-        .first()
-        .map(|b| b.id);
     app
 }
 

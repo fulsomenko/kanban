@@ -50,6 +50,13 @@ impl LoadedStateTrait for StubLoaded {
     fn graph(&self) -> FetchStatus {
         (&self.graph).into()
     }
+    fn board(&self, id: Uuid) -> FetchStatus {
+        self.boards
+            .by_id
+            .get(&id)
+            .map(FetchStatus::from)
+            .unwrap_or(FetchStatus::NotLoaded)
+    }
     fn column(&self, id: Uuid) -> FetchStatus {
         self.columns
             .by_id
@@ -105,6 +112,22 @@ impl LoadedStateTrait for StubLoaded {
     fn archived_board_list(&self) -> FetchStatus {
         (&self.archived_boards.all).into()
     }
+    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
+        self.cards
+            .all
+            .loaded()
+            .and_then(|cards| cards.iter().find(|c| c.id == id))
+            .map(|_| FetchStatus::Loaded)
+            .unwrap_or(FetchStatus::NotLoaded)
+    }
+    fn board_in_collection(&self, id: Uuid) -> FetchStatus {
+        self.boards
+            .all
+            .loaded()
+            .and_then(|boards| boards.iter().find(|b| b.id == id))
+            .map(|_| FetchStatus::Loaded)
+            .unwrap_or(FetchStatus::NotLoaded)
+    }
 }
 
 impl LoadedEntities for StubLoaded {
@@ -114,6 +137,12 @@ impl LoadedEntities for StubLoaded {
             .get(&board_id)
             .and_then(LoadState::loaded)
             .map(Vec::as_slice)
+    }
+    fn loaded_archived_card_markers(&self) -> Option<&[ArchivedCard]> {
+        self.archived_cards.all.loaded().map(Vec::as_slice)
+    }
+    fn loaded_archived_board_markers(&self) -> Option<&[ArchivedBoard]> {
+        self.archived_boards.all.loaded().map(Vec::as_slice)
     }
 }
 

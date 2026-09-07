@@ -135,9 +135,6 @@ impl App {
         if self.focus.active == Focus::Boards {
             if let Some(board_id) = self.board_list.get_selected_board_id() {
                 self.open_dialog(DialogMode::DeleteBoardConfirm);
-                if !self.model.archived_card_markers_absorbed() {
-                    self.reload_model();
-                }
                 // Snapshot the counts once, here, rather than re-scanning the
                 // model on every frame the modal is open.
                 let Some(counts) = self.board_delete_counts(board_id) else {
@@ -178,9 +175,6 @@ impl App {
         let Some(board_id) = self.selected_archived_board_id() else {
             return;
         };
-        if !self.model.archived_card_markers_absorbed() {
-            self.reload_model();
-        }
         let Some(counts) = self.board_delete_counts(board_id) else {
             self.set_error("Board contents are not loaded yet".to_string());
             return;
@@ -308,13 +302,12 @@ impl App {
         let mode = self.mode.clone();
         match mode {
             AppMode::Normal if self.focus.active == Focus::Boards => {
-                self.set_mode(AppMode::ArchivedBoardsView);
                 // Toggling the displayed set returns to the projects list; any
-                // board that was open is no longer active.
+                // board that was open is no longer active. This must run
+                // BEFORE `set_mode`, whose `resolve_for_view` reads
+                // `active_board_id` to build the fetch scope.
                 self.selection.active_board_id = None;
-                if !self.model.archived_boards_absorbed() {
-                    self.reload_model();
-                }
+                self.set_mode(AppMode::ArchivedBoardsView);
                 // `prepare_frame` resyncs `board_list` from the new (archived)
                 // partition; the previously highlighted live board's id is not in
                 // it, so `BoardList::update_boards` falls back to the first
@@ -858,6 +851,8 @@ mod tests {
             .unwrap();
         app.ctx.create_sprint(board_id, None, None).unwrap();
         refresh(&mut app);
+        app.mode = AppMode::Dialog(DialogMode::DeleteBoardConfirm);
+        app.resolve_for_view();
 
         assert_eq!(
             app.board_delete_counts(board_id),
@@ -1596,6 +1591,7 @@ mod tests {
         app.prepare_frame();
         app.focus.active = Focus::Boards;
         app.board_list.inner_mut().set_selected_index(Some(0));
+        app.resolve_for_view();
 
         // `x` opens the confirm dialog rather than deleting immediately.
         app.handle_archived_boards_view_mode(KeyCode::Char('x'));
@@ -1652,6 +1648,7 @@ mod tests {
         app.prepare_frame();
         app.focus.active = Focus::Boards;
         app.board_list.inner_mut().set_selected_index(Some(0));
+        app.resolve_for_view();
 
         app.handle_archived_boards_view_mode(KeyCode::Char('x'));
         app.handle_delete_permanent_board_confirm_popup(KeyCode::Esc);

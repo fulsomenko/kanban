@@ -69,6 +69,7 @@ fn test_tui_export_all_round_trips_archived_board_with_subtree() {
     app.ctx.archive_board(arch_board.id).unwrap();
     app.reload_model();
     app.prepare_frame();
+    helpers::warm_archived_board_markers(&mut app);
 
     // Sanity: the archived board head is hidden from the live list, present in
     // the archived-boards view.
@@ -98,6 +99,7 @@ fn test_tui_export_all_round_trips_archived_board_with_subtree() {
         .unwrap();
     app2.reload_model();
     app2.prepare_frame();
+    helpers::warm_archived_board_markers(&mut app2);
 
     // Live board still live.
     assert!(
@@ -200,6 +202,7 @@ fn test_tui_auto_save_round_trips_archived_board_with_subtree() {
         .unwrap();
     app2.reload_model();
     app2.prepare_frame();
+    helpers::warm_archived_board_markers(&mut app2);
 
     assert_eq!(
         app2.model.archived_boards().len(),
@@ -347,6 +350,8 @@ fn test_export_all_boards_round_trips_an_archived_board_subtree() {
         .unwrap();
     app2.reload_model();
     app2.prepare_frame();
+    helpers::warm_archived_board_markers(&mut app2);
+    helpers::warm_archived_card_markers(&mut app2);
 
     assert!(
         app2.model

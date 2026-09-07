@@ -3,6 +3,9 @@
 //! archived-cards view tests (`archive_delete_tests.rs`) but for boards, which
 //! use direct restore/delete (no animation / multi-select).
 
+mod helpers;
+
+use helpers::warm_archived_board_markers;
 use kanban_domain::KanbanOperations;
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::{AppMode, DialogMode};
@@ -28,6 +31,7 @@ fn test_toggle_into_archived_boards_view_and_back() {
     app.mode = AppMode::Normal;
     app.reload_model();
     app.prepare_frame();
+    warm_archived_board_markers(&mut app);
     // The live boards view (unified collection filtered by the archived-id set)
     // excludes the archived head, even though `boards_state()` now carries it.
     assert!(app
@@ -137,6 +141,7 @@ fn test_permanent_delete_from_archived_boards_view_removes_board() {
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
+    app.resolve_for_view();
 
     // `x` opens the confirm dialog; confirming with Enter permanently deletes.
     app.handle_archived_boards_view_mode(crossterm::event::KeyCode::Char('x'));
@@ -177,6 +182,7 @@ fn test_x_in_archived_view_opens_confirm_not_immediate_delete() {
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
+    app.resolve_for_view();
 
     // `x` must open the confirm dialog, NOT delete immediately.
     app.handle_archived_boards_view_mode(crossterm::event::KeyCode::Char('x'));
@@ -211,6 +217,7 @@ fn test_confirm_permanent_delete_removes_board() {
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
+    app.resolve_for_view();
 
     app.handle_archived_boards_view_mode(crossterm::event::KeyCode::Char('x'));
     assert_eq!(
@@ -252,6 +259,7 @@ fn test_cancel_permanent_delete_keeps_board() {
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
+    app.resolve_for_view();
 
     app.handle_archived_boards_view_mode(crossterm::event::KeyCode::Char('x'));
     assert_eq!(
@@ -339,6 +347,7 @@ fn test_archived_view_u_undoes_permanent_delete() {
     app.reload_model();
     app.prepare_frame();
     app.board_list.inner_mut().set_selected_index(Some(0));
+    app.resolve_for_view();
 
     // Delete the archived board permanently via the confirm dialog.
     app.handle_archived_boards_view_mode(crossterm::event::KeyCode::Char('x'));
