@@ -146,7 +146,10 @@ fn test_load_legacy_db_without_stamp_returns_none_writer_fields() {
         pool.close().await;
 
         let store = SqliteStore::open(&path).await.unwrap();
-        let meta = store.read_metadata_sync().unwrap().expect("metadata row exists");
+        let meta = store
+            .read_metadata_sync()
+            .unwrap()
+            .expect("metadata row exists");
         assert!(meta.writer_version.is_none());
         assert!(meta.writer_commit.is_none());
     });
