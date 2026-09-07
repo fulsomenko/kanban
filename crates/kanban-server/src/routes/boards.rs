@@ -1,40 +1,52 @@
 use crate::error::{AppError, AppJson};
 use crate::handlers::boards::{create_board, create_or_replace_board};
+use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
-use crate::state::AppState;
+use crate::scope::RouteScope;
+use crate::state::{AppState, Session};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
+use kanban_domain::NoProjections;
 use kanban_service::api::{
     BoardResponse, ChangeKind, CreateBoardRequest, EntityType, Page, PageParams,
     ReplaceBoardRequest, UpdateBoardRequest,
 };
-use kanban_service::{KanbanError, KanbanOperations};
 use uuid::Uuid;
 
 async fn list_boards(
     State(state): State<AppState>,
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<BoardResponse>>, AppError> {
-    let ctx = state.ctx.lock().await;
-    let boards = ctx.list_boards().map_err(|e| AppError::from(&e))?;
-    paginate_response(boards.iter().map(BoardResponse::from).collect(), &params)
+    let mut guard = state.lock_session().await;
+    {
+        let Session { ctx, model } = &mut *guard;
+        ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+    }
+    let boards = require_loaded(guard.model.live_boards_state(), "board list")?;
+    paginate_response(
+        boards.iter().map(|b| BoardResponse::from(*b)).collect(),
+        &params,
+    )
 }
 
 async fn get_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<BoardResponse>, AppError> {
-    let ctx = state.ctx.lock().await;
-    let board = ctx
-        .get_board(id)
-        .map_err(|e| AppError::from(&e))?
-        .ok_or_else(|| AppError::from(&KanbanError::not_found("Board", id)))?;
-    // get_board is unfiltered, so an archived board comes back looking live
-    // unless stamped with the marker's archived_at (mirrors kanban-cli/-mcp).
-    let archived_at = ctx.board_archived_at(id).map_err(|e| AppError::from(&e))?;
-    Ok(Json(BoardResponse::with_archived_at(&board, archived_at)))
+    let mut guard = state.lock_session().await;
+    {
+        let Session { ctx, model } = &mut *guard;
+        ctx.sync(&RouteScope::Board(id), model, &mut NoProjections);
+    }
+    let board = require_loaded_entity(guard.model.board_id_status(id), "Board", id)?;
+    let markers = require_loaded(guard.model.archived_boards_state(), "archived board list")?;
+    let archived_at = markers
+        .iter()
+        .find(|marker| marker.entity_id == id)
+        .map(|marker| marker.metadata.archived_at);
+    Ok(Json(BoardResponse::with_archived_at(board, archived_at)))
 }
 
 pub fn read_router() -> Router<AppState> {
