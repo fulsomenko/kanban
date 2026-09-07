@@ -1,5 +1,5 @@
 use super::{App, SprintTaskPanel};
-use kanban_domain::{partition_sprint_cards, sort_card_ids, Card, SortField, SortOrder};
+use kanban_domain::{partition_sprint_cards, sort_card_ids, Card, LoadState, SortField, SortOrder};
 
 impl App {
     pub fn get_selected_card_in_context(&self) -> Option<Card> {
@@ -69,18 +69,17 @@ impl App {
         }
     }
 
-    /// Sets `active_card_id` to `id` if the card resolves in the model,
-    /// otherwise clears it. Use at sites where `id` was obtained from a
-    /// surface that may still reference an archived card (the file-watcher
-    /// reload race), so downstream code that gates on
-    /// `active_card_id.is_some()` does not act on a stale previous card.
+    /// Sets `active_card_id` to `id` when the card is loaded, clears it when
+    /// the card is genuinely `Missing` (the archived-card / file-watcher
+    /// reload race this exists for), and otherwise leaves the current
+    /// selection untouched: a `NotLoaded` or `Failed` tier means the card's
+    /// existence is unknown, not that it is gone.
     pub(crate) fn set_active_card_or_clear(&mut self, id: uuid::Uuid) {
-        self.selection.active_card_id = self
-            .model
-            .card_by_id_state(id)
-            .loaded()
-            .copied()
-            .map(|c| c.id);
+        match self.model.card_by_id_state(id) {
+            LoadState::Loaded(card) => self.selection.active_card_id = Some(card.id),
+            LoadState::Missing => self.selection.active_card_id = None,
+            LoadState::NotLoaded | LoadState::Failed(_) => {}
+        }
     }
 
     pub fn populate_sprint_task_lists(&mut self, sprint_id: uuid::Uuid) {
@@ -187,7 +186,10 @@ impl App {
 #[cfg(test)]
 mod active_card_helpers {
     use crate::App;
-    use kanban_domain::{CreateCardOptions, KanbanOperations, Snapshot};
+    use kanban_domain::{
+        CreateCardOptions, EntityIds, Invalidation, KanbanError, KanbanOperations, Snapshot,
+    };
+    use std::sync::Arc;
 
     fn app_with_card() -> (App, uuid::Uuid) {
         let mut app = App::test_default();
@@ -264,5 +266,43 @@ mod active_card_helpers {
                 app.selection.active_card_id, None,
                 "set_active_card_or_clear must clear the previous active card when the new id is absent — prevents downstream handlers from acting on a stale active card"
             );
+    }
+
+    #[test]
+    fn test_set_active_card_or_clear_with_not_loaded_tier_preserves_selection() {
+        let (mut app, card_id) = app_with_card();
+        app.selection.active_card_id = Some(card_id);
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::cards([
+                uuid::Uuid::new_v4(),
+            ])));
+
+        app.set_active_card_or_clear(card_id);
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(card_id),
+            "a transiently NotLoaded card tier must not clear the selection — only a genuinely Missing card may"
+        );
+    }
+
+    #[test]
+    fn test_set_active_card_or_clear_with_failed_tier_preserves_selection() {
+        let (mut app, card_id) = app_with_card();
+        app.selection.active_card_id = Some(card_id);
+        let err = Arc::new(KanbanError::unsupported("boom"));
+        let _ = app
+            .model
+            .mark_failed(EntityIds::cards([uuid::Uuid::new_v4()]), err);
+
+        app.set_active_card_or_clear(card_id);
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(card_id),
+            "a failed fetch does not mean the card is gone; only a genuinely Missing card may clear the selection"
+        );
     }
 }

@@ -356,24 +356,27 @@ impl App {
                         return;
                     }
                 };
-                let card_id = match self
+                let card_id = self
                     .model
                     .card_by_id_state(active_card_id)
                     .loaded()
                     .copied()
-                {
-                    Some(card) => card.id,
-                    None => return,
+                    .map(|c| c.id);
+                let Some(card_id) = card_id else {
+                    self.set_error("Card is not loaded yet".to_string());
+                    return;
                 };
                 let active_board_id = self
                     .selection
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                     .map(|b| b.id);
+                let Some(active_board_id) = active_board_id else {
+                    self.set_error("Board is not loaded yet".to_string());
+                    return;
+                };
                 let picker = &self.dialog_input.assign_sprint_picker;
-                let board_matches = active_board_id
-                    .map(|bid| picker.bound_board_id() == Some(bid))
-                    .unwrap_or(false);
+                let board_matches = picker.bound_board_id() == Some(active_board_id);
                 let cmd = if !board_matches {
                     None
                 } else if let Some(sprint_id) = picker.selected_sprint_id() {
@@ -442,10 +445,12 @@ impl App {
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                     .map(|b| b.id);
+                let Some(active_board_id) = active_board_id else {
+                    self.set_error("Board is not loaded yet".to_string());
+                    return;
+                };
                 let picker = &self.dialog_input.assign_sprint_picker;
-                let board_matches = active_board_id
-                    .map(|bid| picker.bound_board_id() == Some(bid))
-                    .unwrap_or(false);
+                let board_matches = picker.bound_board_id() == Some(active_board_id);
                 let cmds: Vec<kanban_domain::commands::Command> = if !board_matches {
                     Vec::new()
                 } else if let Some(sprint_id) = picker.selected_sprint_id() {
@@ -777,7 +782,10 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_helpers::{load_with_card_order, setup_reload_resort_fixture};
+    use crate::app::{AppMode, DialogMode};
+    use crate::test_helpers::{
+        load_with_card_order, setup_reload_resort_fixture, ReloadResortFixture,
+    };
     use crate::App;
     use crossterm::event::KeyCode;
     use kanban_domain::{
@@ -785,6 +793,27 @@ mod tests {
         SprintStatus, SprintUpdate,
     };
     use std::collections::HashSet;
+
+    fn assign_dialog_fixture(app: &mut App) -> (ReloadResortFixture, uuid::Uuid) {
+        let fx = setup_reload_resort_fixture(app);
+        let sprint = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
+        load_with_card_order(app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
+
+        let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+        let board = app
+            .model
+            .boards_state()
+            .loaded_or_empty()
+            .iter()
+            .find(|b| b.id == fx.board_id)
+            .cloned()
+            .expect("board exists");
+        app.dialog_input
+            .assign_sprint_picker
+            .reset_for_card_assignment(Some(sprint.id), &sprints, &board, chrono::Utc::now());
+
+        (fx, sprint.id)
+    }
 
     #[test]
     fn test_handle_set_card_priority_popup_after_reload_resort_updates_originally_selected_card_priority(
@@ -985,6 +1014,130 @@ mod tests {
         assert!(
             app.ui_state.banner.is_none(),
             "the per-keystroke search filter must degrade silently, not spam a banner per character"
+        );
+    }
+
+    #[test]
+    fn test_assign_sprint_enter_with_not_loaded_board_tier_keeps_dialog_open_and_banners() {
+        let mut app = App::test_default();
+        let (fx, sprint_id) = assign_dialog_fixture(&mut app);
+        app.mode = AppMode::Dialog(DialogMode::AssignCardToSprint);
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::boards([
+                uuid::Uuid::new_v4(),
+            ])));
+
+        app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::AssignCardToSprint),
+            "a not-loaded board tier must keep the dialog open"
+        );
+        assert_eq!(
+            app.dialog_input.assign_sprint_picker.selected_sprint_id(),
+            Some(sprint_id),
+            "the staged sprint pick must survive"
+        );
+        assert_eq!(
+            app.dialog_input.assign_sprint_picker.bound_board_id(),
+            Some(fx.board_id),
+            "the picker must not be cleared"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("a not-loaded board tier must banner instead of failing silently");
+        assert!(
+            banner.message.to_lowercase().contains("not loaded"),
+            "banner should explain the tier is not loaded, got: {}",
+            banner.message
+        );
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        let a_card = cards.iter().find(|c| c.id == fx.a_id).expect("A exists");
+        assert_eq!(
+            a_card.sprint_id, None,
+            "declining on an unloaded tier must not mutate the store"
+        );
+    }
+
+    #[test]
+    fn test_assign_sprint_enter_with_not_loaded_card_tier_banners_instead_of_dead_modal() {
+        let mut app = App::test_default();
+        let (_fx, sprint_id) = assign_dialog_fixture(&mut app);
+        app.mode = AppMode::Dialog(DialogMode::AssignCardToSprint);
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::cards([
+                uuid::Uuid::new_v4(),
+            ])));
+
+        app.handle_assign_card_to_sprint_popup(KeyCode::Enter);
+
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("a not-loaded card tier must banner instead of leaving a dead modal");
+        assert!(
+            banner.message.to_lowercase().contains("not loaded"),
+            "banner should explain the tier is not loaded, got: {}",
+            banner.message
+        );
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::AssignCardToSprint),
+            "pin: the dialog must still be open (not a new close-on-miss path)"
+        );
+        assert_eq!(
+            app.dialog_input.assign_sprint_picker.selected_sprint_id(),
+            Some(sprint_id),
+            "pin: the staged sprint pick must survive"
+        );
+    }
+
+    #[test]
+    fn test_assign_multiple_enter_with_not_loaded_board_tier_keeps_dialog_and_selection() {
+        let mut app = App::test_default();
+        let (fx, sprint_id) = assign_dialog_fixture(&mut app);
+        app.multi_select.selected_cards = HashSet::from_iter([fx.a_id, fx.b_id]);
+        app.multi_select.selection_mode_active = true;
+        app.mode = AppMode::Dialog(DialogMode::AssignMultipleCardsToSprint);
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::boards([
+                uuid::Uuid::new_v4(),
+            ])));
+
+        app.handle_assign_multiple_cards_to_sprint_popup(KeyCode::Enter);
+
+        assert_eq!(
+            app.mode,
+            AppMode::Dialog(DialogMode::AssignMultipleCardsToSprint),
+            "a not-loaded board tier must keep the dialog open"
+        );
+        assert_eq!(
+            app.multi_select.selected_cards,
+            HashSet::from_iter([fx.a_id, fx.b_id]),
+            "the multi-selection must survive"
+        );
+        assert!(
+            app.multi_select.selection_mode_active,
+            "selection mode must stay active"
+        );
+        assert_eq!(
+            app.dialog_input.assign_sprint_picker.selected_sprint_id(),
+            Some(sprint_id),
+            "the staged sprint pick must survive"
+        );
+        assert!(
+            app.ui_state.banner.is_some(),
+            "a not-loaded board tier must banner instead of failing silently"
         );
     }
 }
