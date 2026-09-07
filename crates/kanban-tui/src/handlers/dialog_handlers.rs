@@ -223,13 +223,16 @@ impl App {
                             },
                         ),
                     );
-                    if let Err(e) = self.execute_command(cmd) {
-                        tracing::error!("Failed to set card points: {}", e);
-                        self.set_error(format!("Failed to set card points: {}", e));
-                    } else {
-                        tracing::info!("Set points to: {:?}", points);
+                    match self.execute_command(cmd) {
+                        Ok(inv) => {
+                            tracing::info!("Set points to: {:?}", points);
+                            self.resolve_after_command(inv);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to set card points: {}", e);
+                            self.set_error(format!("Failed to set card points: {}", e));
+                        }
                     }
-                    self.reload_model();
                 }
                 self.pop_mode();
                 self.input.clear();
@@ -266,16 +269,19 @@ impl App {
                                             },
                                         ),
                                     );
-                                    if let Err(e) = self.execute_command(cmd) {
-                                        tracing::error!("Failed to clear sprint prefix: {}", e);
-                                        self.set_error(format!(
-                                            "Failed to clear sprint prefix: {}",
-                                            e
-                                        ));
-                                    } else {
-                                        tracing::info!("Cleared sprint prefix");
+                                    match self.execute_command(cmd) {
+                                        Ok(inv) => {
+                                            tracing::info!("Cleared sprint prefix");
+                                            self.resolve_after_command(inv);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to clear sprint prefix: {}", e);
+                                            self.set_error(format!(
+                                                "Failed to clear sprint prefix: {}",
+                                                e
+                                            ));
+                                        }
                                     }
-                                    self.reload_model();
                                 }
                             }
                         }
@@ -294,16 +300,22 @@ impl App {
                                                 },
                                             ),
                                         );
-                                        if let Err(e) = self.execute_command(cmd) {
-                                            tracing::error!("Failed to clear sprint prefix: {}", e);
-                                            self.set_error(format!(
-                                                "Failed to clear sprint prefix: {}",
-                                                e
-                                            ));
-                                        } else {
-                                            tracing::info!("Cleared sprint prefix");
+                                        match self.execute_command(cmd) {
+                                            Ok(inv) => {
+                                                tracing::info!("Cleared sprint prefix");
+                                                self.resolve_after_command(inv);
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    "Failed to clear sprint prefix: {}",
+                                                    e
+                                                );
+                                                self.set_error(format!(
+                                                    "Failed to clear sprint prefix: {}",
+                                                    e
+                                                ));
+                                            }
                                         }
-                                        self.reload_model();
                                     }
                                     LoadState::Missing => {}
                                     _ => {
@@ -327,19 +339,24 @@ impl App {
                                                 },
                                             ),
                                         );
-                                        if let Err(e) = self.execute_command(cmd) {
-                                            tracing::error!(
-                                                "Failed to clear sprint card prefix override: {}",
-                                                e
-                                            );
-                                            self.set_error(format!(
-                                                "Failed to clear sprint card prefix override: {}",
-                                                e
-                                            ));
-                                        } else {
-                                            tracing::info!("Cleared sprint card prefix override");
+                                        match self.execute_command(cmd) {
+                                            Ok(inv) => {
+                                                tracing::info!(
+                                                    "Cleared sprint card prefix override"
+                                                );
+                                                self.resolve_after_command(inv);
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    "Failed to clear sprint card prefix override: {}",
+                                                    e
+                                                );
+                                                self.set_error(format!(
+                                                    "Failed to clear sprint card prefix override: {}",
+                                                    e
+                                                ));
+                                            }
                                         }
-                                        self.reload_model();
                                     }
                                     LoadState::Missing => {}
                                     _ => {
@@ -367,16 +384,19 @@ impl App {
                                             },
                                         ),
                                     );
-                                    if let Err(e) = self.execute_command(cmd) {
-                                        tracing::error!("Failed to set sprint prefix: {}", e);
-                                        self.set_error(format!(
-                                            "Failed to set sprint prefix: {}",
-                                            e
-                                        ));
-                                    } else {
-                                        tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                    match self.execute_command(cmd) {
+                                        Ok(inv) => {
+                                            tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                            self.resolve_after_command(inv);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to set sprint prefix: {}", e);
+                                            self.set_error(format!(
+                                                "Failed to set sprint prefix: {}",
+                                                e
+                                            ));
+                                        }
                                     }
-                                    self.reload_model();
                                 }
                             }
                         }
@@ -397,16 +417,25 @@ impl App {
                                                 },
                                             ),
                                         );
-                                        if let Err(e) = self.execute_command(cmd) {
-                                            tracing::error!("Failed to set sprint prefix: {}", e);
-                                            self.set_error(format!(
-                                                "Failed to set sprint prefix: {}",
-                                                e
-                                            ));
-                                        } else {
-                                            tracing::info!("Set sprint prefix to: {}", prefix_str);
+                                        match self.execute_command(cmd) {
+                                            Ok(inv) => {
+                                                tracing::info!(
+                                                    "Set sprint prefix to: {}",
+                                                    prefix_str
+                                                );
+                                                self.resolve_after_command(inv);
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    "Failed to set sprint prefix: {}",
+                                                    e
+                                                );
+                                                self.set_error(format!(
+                                                    "Failed to set sprint prefix: {}",
+                                                    e
+                                                ));
+                                            }
                                         }
-                                        self.reload_model();
                                     }
                                     LoadState::Missing => {}
                                     _ => {
@@ -432,22 +461,25 @@ impl App {
                                                 },
                                             ),
                                         );
-                                        if let Err(e) = self.execute_command(cmd) {
-                                            tracing::error!(
-                                                "Failed to set sprint card prefix override: {}",
-                                                e
-                                            );
-                                            self.set_error(format!(
-                                                "Failed to set sprint card prefix override: {}",
-                                                e
-                                            ));
-                                        } else {
-                                            tracing::info!(
-                                                "Set sprint card prefix override to: {}",
-                                                prefix_str
-                                            );
+                                        match self.execute_command(cmd) {
+                                            Ok(inv) => {
+                                                tracing::info!(
+                                                    "Set sprint card prefix override to: {}",
+                                                    prefix_str
+                                                );
+                                                self.resolve_after_command(inv);
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    "Failed to set sprint card prefix override: {}",
+                                                    e
+                                                );
+                                                self.set_error(format!(
+                                                    "Failed to set sprint card prefix override: {}",
+                                                    e
+                                                ));
+                                            }
                                         }
-                                        self.reload_model();
                                     }
                                     LoadState::Missing => {}
                                     _ => {

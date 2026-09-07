@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode};
 use crossterm::event::KeyCode;
 use kanban_domain::commands::{ColumnCommand, Command, UpdateColumn};
-use kanban_domain::{ColumnUpdate, GraphOperations, KanbanOperations, LoadState, SortOrder};
+use kanban_domain::{ColumnUpdate, LoadState, SortOrder};
 
 const PRIORITY_COUNT: usize = 4;
 const DEFAULT_STATUS_COUNT: usize = 5;
@@ -73,11 +73,16 @@ impl App {
                                     },
                                 ),
                             );
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to update card priority: {}", e);
-                                self.set_error(format!("Failed to update card priority: {}", e));
+                            match self.execute_command(cmd) {
+                                Ok(inv) => self.resolve_after_command(inv),
+                                Err(e) => {
+                                    tracing::error!("Failed to update card priority: {}", e);
+                                    self.set_error(format!(
+                                        "Failed to update card priority: {}",
+                                        e
+                                    ));
+                                }
                             }
-                            self.reload_model();
                         }
                     }
                 }
@@ -124,17 +129,19 @@ impl App {
                                                     },
                                                 },
                                             ));
-                                            if let Err(e) = self.execute_command(cmd) {
-                                                tracing::error!(
-                                                    "Failed to update column default status: {}",
-                                                    e
-                                                );
-                                                self.set_error(format!(
-                                                    "Failed to update column default status: {}",
-                                                    e
-                                                ));
+                                            match self.execute_command(cmd) {
+                                                Ok(inv) => self.resolve_after_command(inv),
+                                                Err(e) => {
+                                                    tracing::error!(
+                                                        "Failed to update column default status: {}",
+                                                        e
+                                                    );
+                                                    self.set_error(format!(
+                                                        "Failed to update column default status: {}",
+                                                        e
+                                                    ));
+                                                }
                                             }
-                                            self.reload_model();
                                         }
                                     }
                                     _ => {
@@ -195,17 +202,20 @@ impl App {
                     }
 
                     if !commands.is_empty() {
-                        if let Err(e) = self.execute_commands_batch(commands) {
-                            tracing::error!("Failed to update cards priority: {}", e);
-                            self.set_error(format!("Failed to update cards priority: {}", e));
-                        } else {
-                            tracing::info!(
-                                "Set priority to {:?} for {} cards",
-                                priority,
-                                card_ids.len()
-                            );
+                        match self.execute_commands_batch(commands) {
+                            Ok(inv) => {
+                                tracing::info!(
+                                    "Set priority to {:?} for {} cards",
+                                    priority,
+                                    card_ids.len()
+                                );
+                                self.resolve_after_command(inv);
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to update cards priority: {}", e);
+                                self.set_error(format!("Failed to update cards priority: {}", e));
+                            }
                         }
-                        self.reload_model();
                     }
 
                     self.multi_select.selected_cards.clear();
@@ -271,11 +281,13 @@ impl App {
                                 },
                             ),
                         );
-                        if let Err(e) = self.execute_command(cmd) {
-                            tracing::error!("Failed to set board task sort: {}", e);
-                            self.set_error(format!("Failed to set board task sort: {}", e));
+                        match self.execute_command(cmd) {
+                            Ok(inv) => self.resolve_after_command(inv),
+                            Err(e) => {
+                                tracing::error!("Failed to set board task sort: {}", e);
+                                self.set_error(format!("Failed to set board task sort: {}", e));
+                            }
                         }
-                        self.reload_model();
                     }
 
                     let is_sprint_detail = self.selection.active_sprint_id.is_some();
@@ -407,11 +419,13 @@ impl App {
                     None
                 };
                 if let Some(cmd) = cmd {
-                    if let Err(e) = self.execute_commands_batch(vec![cmd]) {
-                        tracing::error!("Failed to update card sprint: {}", e);
-                        self.set_error(format!("Failed to update card sprint: {}", e));
+                    match self.execute_commands_batch(vec![cmd]) {
+                        Ok(inv) => self.resolve_after_command(inv),
+                        Err(e) => {
+                            tracing::error!("Failed to update card sprint: {}", e);
+                            self.set_error(format!("Failed to update card sprint: {}", e));
+                        }
                     }
-                    self.reload_model();
                 }
                 self.pop_mode();
                 self.dialog_input.assign_sprint_picker.clear();
@@ -486,11 +500,13 @@ impl App {
                     Vec::new()
                 };
                 if !cmds.is_empty() {
-                    if let Err(e) = self.execute_commands_batch(cmds) {
-                        tracing::error!("Failed to update cards' sprint: {}", e);
-                        self.set_error(format!("Failed to update cards' sprint: {}", e));
+                    match self.execute_commands_batch(cmds) {
+                        Ok(inv) => self.resolve_after_command(inv),
+                        Err(e) => {
+                            tracing::error!("Failed to update cards' sprint: {}", e);
+                            self.set_error(format!("Failed to update cards' sprint: {}", e));
+                        }
                     }
-                    self.reload_model();
                 }
                 self.pop_mode();
                 self.dialog_input.assign_sprint_picker.clear();
@@ -598,12 +614,12 @@ impl App {
                                                 _ => "sprint".to_string(),
                                             };
 
-                                            match self
-                                                .ctx
-                                                .carry_over_sprint_cards(source_id, to_sprint_id)
-                                            {
-                                                Ok(count) => {
-                                                    self.reload_model();
+                                            match self.ctx.carry_over_sprint_cards_impl(
+                                                source_id,
+                                                to_sprint_id,
+                                            ) {
+                                                Ok((count, inv)) => {
+                                                    self.resolve_after_command(inv);
                                                     self.set_success(format!(
                                                         "Carried over {} card(s) to {}",
                                                         count, sprint_label
@@ -731,13 +747,13 @@ impl App {
                                 let was_selected =
                                     self.relationship.selected.contains(&selected_card_id);
                                 let result = if was_selected {
-                                    self.ctx.detach_child(parent_id, child_id)
+                                    self.ctx.detach_children_impl(parent_id, vec![child_id])
                                 } else {
-                                    self.ctx.attach_child(parent_id, child_id)
+                                    self.ctx.attach_children_impl(parent_id, vec![child_id])
                                 };
                                 match result {
-                                    Ok(()) => {
-                                        self.reload_model();
+                                    Ok(inv) => {
+                                        self.resolve_after_command(inv);
                                         if was_selected {
                                             self.relationship.selected.remove(&selected_card_id);
                                         } else {
