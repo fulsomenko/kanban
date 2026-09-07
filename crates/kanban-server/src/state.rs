@@ -152,7 +152,10 @@ impl AppState {
 #[cfg(all(test, feature = "test-helpers"))]
 mod tests {
     use super::*;
+    use crate::scope::RouteScope;
     use kanban_backend_memory::InMemoryStore;
+    use kanban_domain::{BoardUpdate, LoadState, NoProjections};
+    use kanban_persistence_json::{JsonDataStore, JsonFileStore};
     use kanban_service::{AppConfig, KanbanBackend, KanbanOperations};
     use std::cell::Cell;
 
@@ -163,6 +166,101 @@ mod tests {
             .unwrap();
         let board = ctx.create_board("Board1".into(), None).unwrap();
         (ctx, board.id)
+    }
+
+    fn json_state(dir: &std::path::Path) -> AppState {
+        let backend: Arc<dyn KanbanBackend> =
+            Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(
+                &dir.join("s.json"),
+            ))));
+        let ctx = KanbanContext::open_deferred(backend, AppConfig::default());
+        AppState::new(ctx)
+    }
+
+    #[tokio::test]
+    async fn test_mutate_blanks_the_session_model_tier_the_invalidation_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = json_state(dir.path());
+        let mut guard = state.lock_session().await;
+
+        let board_id = guard.ctx.create_board("A".into(), None).unwrap().id;
+        {
+            let Session { ctx, model } = &mut *guard;
+            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+        }
+        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
+
+        mutate(&mut guard, |c| {
+            c.update_board_impl(
+                board_id,
+                BoardUpdate {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap();
+
+        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
+    }
+
+    #[tokio::test]
+    async fn test_mutate_blanks_only_the_tiers_the_invalidation_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = json_state(dir.path());
+        let mut guard = state.lock_session().await;
+
+        let board_a = guard.ctx.create_board("A".into(), None).unwrap().id;
+        let board_b = guard.ctx.create_board("B".into(), None).unwrap().id;
+        {
+            let Session { ctx, model } = &mut *guard;
+            ctx.sync(
+                &RouteScope::BoardColumns(board_b),
+                model,
+                &mut NoProjections,
+            );
+            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+        }
+        assert!(matches!(
+            guard.model.board_columns_state(board_b),
+            LoadState::Loaded(_)
+        ));
+        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
+
+        mutate(&mut guard, |c| {
+            c.update_board_impl(
+                board_a,
+                BoardUpdate {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap();
+
+        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
+        assert!(matches!(
+            guard.model.board_columns_state(board_b),
+            LoadState::Loaded(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_mutate_unit_blanks_the_session_model_tier_the_invalidation_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = json_state(dir.path());
+        let mut guard = state.lock_session().await;
+
+        let board_id = guard.ctx.create_board("A".into(), None).unwrap().id;
+        {
+            let Session { ctx, model } = &mut *guard;
+            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+        }
+        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
+
+        mutate_unit(&mut guard, |c| c.delete_board_impl(board_id)).unwrap();
+
+        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
     }
 
     #[tokio::test]
