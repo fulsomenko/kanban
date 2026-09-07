@@ -356,13 +356,7 @@ async fn test_get_column_flat_populates_the_session_models_per_id_column_tier() 
             .id;
     }
 
-    let response = send(
-        &state,
-        "GET",
-        &format!("/v1/columns/{}", column_id),
-        None,
-    )
-    .await;
+    let response = send(&state, "GET", &format!("/v1/columns/{}", column_id), None).await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let guard = state.ctx.lock().await;
