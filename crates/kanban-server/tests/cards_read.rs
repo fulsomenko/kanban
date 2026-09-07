@@ -5,8 +5,8 @@
 //! against the router directly, with no real TCP socket.
 
 use axum::http::StatusCode;
-use kanban_domain::{CardPriority, CardUpdate, CreateCardOptions};
-use kanban_server::test_helpers::{json_of, make_state, send};
+use kanban_domain::{CardPriority, CardUpdate, CreateCardOptions, LoadState};
+use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::api::CardResponse;
 use kanban_service::KanbanOperations;
 use tempfile::tempdir;
@@ -727,4 +727,320 @@ async fn test_list_cards_and_get_card_agree_for_a_live_card() {
 
     assert_eq!(list.items.len(), 1);
     assert_eq!(list.items[0], single);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_loads_the_board_scoped_tiers_into_the_shared_model() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let col1_id: Uuid;
+    let col2_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        col1_id = ctx
+            .create_column(board_id, "Column 1".to_string(), None)
+            .unwrap()
+            .id;
+        col2_id = ctx
+            .create_column(board_id, "Column 2".to_string(), None)
+            .unwrap()
+            .id;
+        ctx.create_card(board_id, col1_id, "Card 1".to_string(), Default::default())
+            .unwrap();
+        ctx.create_card(board_id, col2_id, "Card 2".to_string(), Default::default())
+            .unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let guard = state.ctx.lock().await;
+    assert!(matches!(
+        guard.model.board_id_status(board_id),
+        LoadState::Loaded(_)
+    ));
+    assert!(matches!(
+        guard.model.board_columns_state(board_id),
+        LoadState::Loaded(_)
+    ));
+    assert!(matches!(
+        guard.model.column_cards_state(col1_id),
+        LoadState::Loaded(_)
+    ));
+    assert!(matches!(
+        guard.model.column_cards_state(col2_id),
+        LoadState::Loaded(_)
+    ));
+    assert!(matches!(
+        guard.model.archived_cards_state(),
+        LoadState::NotLoaded
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_archived_include_loads_archived_bodies_through_the_per_id_card_tier() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let archived_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Live Card".to_string(),
+            Default::default(),
+        )
+        .unwrap();
+        archived_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Archived Card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        ctx.archive_card(archived_id).unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?archived=include", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let arr = json["items"].as_array().unwrap();
+    assert_eq!(arr.len(), 2);
+
+    let guard = state.ctx.lock().await;
+    assert!(matches!(
+        guard.model.archived_cards_state(),
+        LoadState::Loaded(_)
+    ));
+    assert!(matches!(
+        guard.model.card_id_status(archived_id),
+        LoadState::Loaded(_)
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_archived_only_over_a_sqlite_locator_serves_the_archived_body_from_the_model(
+) {
+    let dir = tempdir().unwrap();
+    let state = make_sqlite_state(&dir.path().join("s.sqlite")).await;
+
+    let board_id: Uuid;
+    let archived_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Live Card".to_string(),
+            Default::default(),
+        )
+        .unwrap();
+        archived_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Archived Card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        ctx.archive_card(archived_id).unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?archived=archived_only", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let arr = json["items"].as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], archived_id.to_string());
+    assert!(!arr[0]["archived_at"].is_null());
+
+    let guard = state.ctx.lock().await;
+    assert!(matches!(
+        guard.model.card_id_status(archived_id),
+        LoadState::Loaded(_)
+    ));
+    assert!(matches!(
+        guard.model.archived_cards_state(),
+        LoadState::Loaded(_)
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_resolves_through_the_per_id_card_tier_and_still_404s_a_card_of_another_board(
+) {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_a_id: Uuid;
+    let board_b_id: Uuid;
+    let card_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_a_id = ctx
+            .create_board("Board A".to_string(), Some("BA".to_string()))
+            .unwrap()
+            .id;
+        board_b_id = ctx
+            .create_board("Board B".to_string(), Some("BB".to_string()))
+            .unwrap()
+            .id;
+        let col_a_id = ctx
+            .create_column(board_a_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        card_id = ctx
+            .create_card(
+                board_a_id,
+                col_a_id,
+                "Card in A".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+    }
+
+    let wrong_board_response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards/{}", board_b_id, card_id),
+        None,
+    )
+    .await;
+    assert_eq!(wrong_board_response.status(), StatusCode::NOT_FOUND);
+    let wrong_board_json = json_of(wrong_board_response).await;
+    assert_eq!(wrong_board_json["code"], "NOT_FOUND");
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards/{}", board_a_id, card_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let guard = state.ctx.lock().await;
+    assert!(matches!(
+        guard.model.card_id_status(card_id),
+        LoadState::Loaded(_)
+    ));
+    assert!(matches!(guard.model.cards_state(), LoadState::NotLoaded));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_with_a_column_from_another_board_returns_an_empty_page_for_every_archived_selector(
+) {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_a_id: Uuid;
+    let col_b_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_a_id = ctx
+            .create_board("Board A".to_string(), Some("BA".to_string()))
+            .unwrap()
+            .id;
+        let board_b_id = ctx
+            .create_board("Board B".to_string(), Some("BB".to_string()))
+            .unwrap()
+            .id;
+        let col_a_id = ctx
+            .create_column(board_a_id, "Column A".to_string(), None)
+            .unwrap()
+            .id;
+        col_b_id = ctx
+            .create_column(board_b_id, "Column B".to_string(), None)
+            .unwrap()
+            .id;
+        ctx.create_card(
+            board_a_id,
+            col_a_id,
+            "Card in A".to_string(),
+            Default::default(),
+        )
+        .unwrap();
+        let card_in_b = ctx
+            .create_card(
+                board_b_id,
+                col_b_id,
+                "Card in B".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        ctx.archive_card(card_in_b).unwrap();
+        ctx.create_card(
+            board_b_id,
+            col_b_id,
+            "Live card in B".to_string(),
+            Default::default(),
+        )
+        .unwrap();
+    }
+
+    for query in ["", "&archived=include", "&archived=archived_only"] {
+        let response = send(
+            &state,
+            "GET",
+            &format!(
+                "/v1/boards/{}/cards?column_id={}{}",
+                board_a_id, col_b_id, query
+            ),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = json_of(response).await;
+        assert_eq!(
+            json["items"],
+            serde_json::json!([]),
+            "query {query:?} should return no cards from another board's column"
+        );
+    }
 }
