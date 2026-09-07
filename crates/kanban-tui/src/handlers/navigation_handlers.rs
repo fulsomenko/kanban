@@ -485,16 +485,8 @@ impl App {
                 if let Some(selected_card) = self.get_selected_card_in_context() {
                     let card_id = selected_card.id;
                     self.set_active_card_or_clear(card_id);
-                    // Initialize list components with item counts
-                    let parents = self.get_current_card_parents();
-                    let children = self.get_current_card_children();
-                    self.relationship
-                        .parents_list
-                        .update_item_count(parents.len());
-                    self.relationship
-                        .children_list
-                        .update_item_count(children.len());
                     self.push_mode(AppMode::CardDetail);
+                    self.refresh_relationship_counts();
                 }
             }
         }

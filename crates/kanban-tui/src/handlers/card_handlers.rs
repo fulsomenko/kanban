@@ -984,7 +984,10 @@ impl App {
             None => return,
         };
 
+        self.open_dialog(DialogMode::ManageChildren);
+
         let Some(graph) = self.model.graph_state().loaded() else {
+            self.pop_mode();
             self.set_error("Relationships are still loading. Try again in a moment.");
             return;
         };
@@ -1001,6 +1004,7 @@ impl App {
                         .map(|c| c.id)
                         .collect(),
                     _ => {
+                        self.pop_mode();
                         self.set_error("Columns are not loaded yet");
                         return;
                     }
@@ -1010,6 +1014,7 @@ impl App {
         let target_is_archived = self.model.archived_card_ids().contains(&card_id);
 
         let LoadState::Loaded(cards) = self.model.cards_state() else {
+            self.pop_mode();
             self.set_error("Cards are not loaded yet");
             return;
         };
@@ -1033,8 +1038,6 @@ impl App {
         self.relationship.selected = current_children;
         self.relationship.selection.set(Some(0));
         self.relationship.search.clear();
-
-        self.open_dialog(DialogMode::ManageChildren);
     }
 }
 
