@@ -1,4 +1,3 @@
-mod apply_snapshot_rejection;
 mod archived_cards;
 mod board_archival;
 mod boards;
@@ -28,12 +27,9 @@ mod migration_v6_to_v7;
 mod migration_v7_to_v8;
 mod migration_v8_to_v9;
 mod migration_v9_to_v10;
-mod persistence_store;
 mod pre_migration_backup;
 mod prefix_fk_enforcement;
 mod prefix_repair;
-mod snapshot_atomicity;
-mod snapshot_prefix_ordering;
 mod transaction;
 mod whole_graph_cross_backend_agreement;
 mod whole_graph_migration_v12_to_v13;
