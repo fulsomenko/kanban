@@ -386,12 +386,6 @@ impl DataStore for NoWholeStoreReads {
     fn upsert_prefix(&self, prefix: Prefix) -> KanbanResult<()> {
         self.0.upsert_prefix(prefix)
     }
-    fn snapshot(&self) -> KanbanResult<kanban_domain::Snapshot> {
-        panic!("transfer_state_to must compose per-entity reads, not call snapshot()")
-    }
-    fn apply_snapshot(&self, _snapshot: kanban_domain::Snapshot) -> KanbanResult<()> {
-        panic!("transfer_state_to must compose per-entity writes, not call apply_snapshot()")
-    }
     fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
         self.0.get_board(id)
     }
@@ -777,12 +771,6 @@ impl DataStore for UnsupportedArchivedBoards {
     // Uses the trait default: Err(unsupported("insert_archived_board")).
     fn delete_archived_board(&self, board_id: Uuid) -> KanbanResult<()> {
         self.0.delete_archived_board(board_id)
-    }
-    fn snapshot(&self) -> KanbanResult<kanban_domain::Snapshot> {
-        self.0.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: kanban_domain::Snapshot) -> KanbanResult<()> {
-        self.0.apply_snapshot(snapshot)
     }
     fn get_sprint(&self, id: Uuid) -> KanbanResult<Option<Sprint>> {
         self.0.get_sprint(id)

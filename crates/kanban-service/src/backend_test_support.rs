@@ -2,7 +2,7 @@ use kanban_backend::{KanbanBackend, RemoteWrites, TransactionFn};
 use kanban_backend_memory::InMemoryStore;
 use kanban_domain::{
     Board, BoardUpdate, Card, CardUpdate, Column, ColumnUpdate, CommandBatch, CommandStore,
-    DataStore, KanbanResult, NewBoard, NewCard, NewColumn, Snapshot,
+    DataStore, KanbanResult, NewBoard, NewCard, NewColumn,
 };
 use uuid::Uuid;
 
@@ -193,12 +193,6 @@ impl DataStore for MockBackend {
     }
     fn set_graph(&self, graph: kanban_domain::DependencyGraph) -> KanbanResult<()> {
         self.inner.set_graph(graph)
-    }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
     }
 }
 

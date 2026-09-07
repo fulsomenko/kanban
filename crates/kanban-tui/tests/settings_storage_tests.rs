@@ -383,9 +383,9 @@ async fn test_storage_swap_still_syncs_the_view_when_the_read_succeeds() {
     assert_eq!(app.model.boards_state().loaded_or_empty()[0].id, board_id);
 }
 
-/// The counter never observes `apply_snapshot`: both `SnapshotCountingBackend`
-/// and `FailingSnapshotBackend` delegate it verbatim to `inner`. It only pins
-/// that the migration probe itself stops reading a whole `Snapshot`.
+/// Both `SnapshotCountingBackend` and `FailingSnapshotBackend` delegate every
+/// `DataStore` method verbatim to `inner`. This pins that the migration probe
+/// itself stops reading a whole `Snapshot`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_migration_complete_does_not_call_the_whole_store_trait_methods() {
     let dir = tempfile::tempdir().unwrap();
@@ -419,7 +419,7 @@ async fn test_migration_complete_does_not_call_the_whole_store_trait_methods() {
         snapshot_reads.load(Ordering::SeqCst),
         0,
         "reload_model's post-swap sync is scope-driven, not a whole-Snapshot \
-         read, so migration must call ctx.snapshot() zero times"
+         read, so the migration probe must observe zero snapshot reads"
     );
 }
 

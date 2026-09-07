@@ -1,7 +1,7 @@
 use kanban_backend_memory::InMemoryStore;
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, DataStore, DependencyGraph, KanbanResult,
-    Prefix, Snapshot, Sprint,
+    Prefix, Sprint,
 };
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -202,12 +202,5 @@ impl DataStore for PrefixWriteOrderStore {
     }
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()> {
         self.inner.set_graph(graph)
-    }
-
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
     }
 }

@@ -5,7 +5,7 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedCard, Board, Card, Column, CommandBatch, DependencyGraph, KanbanOperations,
-    KanbanResult, Snapshot, Sprint,
+    KanbanResult, Sprint,
 };
 use kanban_service::{AppConfig, KanbanContext};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -206,12 +206,6 @@ impl DataStore for CountingBackend {
     }
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()> {
         self.inner.set_graph(graph)
-    }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
     }
 }
 

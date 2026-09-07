@@ -1,8 +1,6 @@
 use uuid::Uuid;
 
-use crate::{
-    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Prefix, Snapshot, Sprint,
-};
+use crate::{ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Prefix, Sprint};
 
 pub type GraphMutFn = Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>;
 
@@ -301,10 +299,6 @@ pub trait DataStore: Send + Sync {
         f(&mut graph)?;
         self.set_graph(graph)
     }
-
-    // Snapshot (import/export, JSON file I/O, migration)
-    fn snapshot(&self) -> KanbanResult<Snapshot>;
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()>;
 }
 
 #[cfg(test)]
@@ -461,12 +455,6 @@ mod tests {
             unimplemented!()
         }
         fn set_graph(&self, _graph: DependencyGraph) -> KanbanResult<()> {
-            unimplemented!()
-        }
-        fn snapshot(&self) -> KanbanResult<Snapshot> {
-            unimplemented!()
-        }
-        fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
             unimplemented!()
         }
     }

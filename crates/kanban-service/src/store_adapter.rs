@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 /// Reads a whole workspace through per-entity `DataStore` calls rather than
-/// `DataStore::snapshot`.
+/// a single whole-store read.
 ///
 /// Archived boards are absent from `list_boards`, so their heads are recovered
 /// individually through the unfiltered `get_board`. Archived cards are likewise
@@ -56,7 +56,7 @@ pub fn read_full_snapshot(store: &dyn DataStore) -> KanbanResult<Snapshot> {
 }
 
 /// Writes a whole workspace through per-entity `DataStore` calls rather than
-/// `DataStore::apply_snapshot`. The caller supplies the transaction.
+/// a single whole-store write. The caller supplies the transaction.
 ///
 /// Order is load-bearing on a relational backend, which checks foreign keys as
 /// each row lands: sprints precede cards because `cards.sprint_id` references
@@ -168,13 +168,6 @@ mod tests {
         }
         fn upsert_prefix(&self, prefix: kanban_domain::Prefix) -> KanbanResult<()> {
             self.0.upsert_prefix(prefix)
-        }
-
-        fn snapshot(&self) -> KanbanResult<Snapshot> {
-            panic!("read_full_snapshot must compose per-entity reads, not call snapshot()")
-        }
-        fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
-            panic!("write_full_snapshot must compose per-entity writes, not call apply_snapshot()")
         }
 
         fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
@@ -769,12 +762,6 @@ mod tests {
             timestamp: chrono::DateTime<chrono::Utc>,
         ) -> KanbanResult<()> {
             self.inner.clear_sprint_from_cards(sprint_id, timestamp)
-        }
-        fn snapshot(&self) -> KanbanResult<Snapshot> {
-            panic!("write_full_snapshot must compose per-entity writes, not call apply_snapshot()")
-        }
-        fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
-            panic!("write_full_snapshot must compose per-entity writes, not call apply_snapshot()")
         }
     }
 

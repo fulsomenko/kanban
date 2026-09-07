@@ -4,7 +4,7 @@ use kanban_backend::{KanbanBackend, RemoteWrites, TransactionFn};
 use kanban_domain::KanbanError;
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, CommandBatch, CommandStore, DataStore,
-    DependencyGraph, KanbanResult, Snapshot, Sprint,
+    DependencyGraph, KanbanResult, Sprint,
 };
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::{AppMode, DialogMode};
@@ -282,13 +282,6 @@ impl DataStore for CountingBackend {
         self.record("modify_graph", vec![]);
         self.inner.modify_graph(f)
     }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.record("snapshot", vec![]);
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
-    }
 }
 
 impl CommandStore for CountingBackend {
@@ -319,11 +312,7 @@ impl KanbanBackend for CountingBackend {
     }
 }
 
-/// A `KanbanBackend` decorator that counts only `DataStore::snapshot` calls
-/// (what `App::reload_model` issues), delegating everything else verbatim to
-/// `inner`. Unlike `CountingBackend`, this does not count the incidental
-/// reads a command's own validation/execution performs, so it isolates "how
-/// many whole-model reloads happened" from "how many store reads happened".
+/// A `KanbanBackend` decorator that delegates everything verbatim to `inner`.
 pub struct SnapshotCountingBackend {
     inner: Arc<dyn KanbanBackend>,
     snapshot_reads: Arc<AtomicUsize>,
@@ -504,13 +493,6 @@ impl DataStore for SnapshotCountingBackend {
     fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         self.inner.modify_graph(f)
     }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.snapshot_reads.fetch_add(1, Ordering::SeqCst);
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
-    }
 }
 
 impl CommandStore for SnapshotCountingBackend {
@@ -539,12 +521,8 @@ impl KanbanBackend for SnapshotCountingBackend {
     }
 }
 
-/// A `KanbanBackend` decorator whose `snapshot()` always fails, delegating
-/// every other `DataStore`/`CommandStore` method verbatim to `inner`. Used to
-/// simulate a transient read failure (SQLite busy, I/O error) on the
-/// destination backend right after a storage-location swap, while still
-/// allowing direct entity reads against `inner` to prove the destination's
-/// data survived.
+/// A `KanbanBackend` decorator that delegates every `DataStore`/`CommandStore`
+/// method verbatim to `inner`.
 pub struct FailingSnapshotBackend {
     inner: Arc<dyn KanbanBackend>,
 }
@@ -717,14 +695,6 @@ impl DataStore for FailingSnapshotBackend {
     }
     fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         self.inner.modify_graph(f)
-    }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        Err(kanban_domain::KanbanError::Database(
-            "simulated transient read failure".to_string(),
-        ))
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
     }
 }
 
@@ -928,12 +898,6 @@ impl DataStore for FailingBoardListBackend {
     }
     fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         self.inner.modify_graph(f)
-    }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
     }
 }
 

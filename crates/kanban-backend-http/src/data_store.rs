@@ -9,7 +9,7 @@ use kanban_api::{
 };
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, DataStore, DependencyGraph, KanbanError,
-    KanbanResult, Prefix, Snapshot, Sprint,
+    KanbanResult, Prefix, Sprint,
 };
 use uuid::Uuid;
 
@@ -288,14 +288,6 @@ impl DataStore for HttpBackend {
 
     fn set_graph(&self, _graph: DependencyGraph) -> KanbanResult<()> {
         Err(KanbanError::unsupported("set_graph"))
-    }
-
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        Err(KanbanError::unsupported("snapshot"))
-    }
-
-    fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
-        Err(KanbanError::unsupported("apply_snapshot"))
     }
 
     /// No route filters cards by a bare `board_id` + `card_number` pair, and

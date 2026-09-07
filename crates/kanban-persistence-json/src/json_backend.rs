@@ -5,7 +5,7 @@ use kanban_domain::command_batch::CommandBatch;
 use kanban_domain::data_store::GraphMutFn;
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, CommandStore, DataStore, DependencyGraph,
-    KanbanError, KanbanResult, Snapshot, Sprint,
+    KanbanError, KanbanResult, Sprint,
 };
 use kanban_persistence::{
     snapshot_from_json_bytes, snapshot_to_json_bytes, PersistenceMetadata, PersistenceStore,
@@ -390,15 +390,6 @@ impl DataStore for JsonDataStore {
     fn modify_graph(&self, f: GraphMutFn) -> KanbanResult<()> {
         self.with_mutate(|s| s.modify_graph(f))
     }
-
-    // Snapshot
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.with_read(|s| s.snapshot())
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        kanban_domain::ensure_prefix_rows_exist(&snapshot.cards, &snapshot.prefixes)?;
-        self.with_mutate(|s| s.apply_snapshot(snapshot))
-    }
 }
 
 // ─── CommandStore ─────────────────────────────────────────────────────────────
@@ -504,6 +495,7 @@ mod tests {
     use super::*;
     use crate::JsonFileStore;
     use kanban_domain::Board;
+    use kanban_domain::Snapshot;
     use tempfile::tempdir;
 
     fn make_store(path: &std::path::Path) -> JsonDataStore {
@@ -1089,10 +1081,8 @@ mod tests {
         assert_eq!(boards2[0].name, "ConcurrentBoard");
     }
 
-    // Characterization test for KAN-1070: `ensure_loaded`/`do_flush` swap onto
-    // `InMemoryStore::apply_snapshot_impl`/`snapshot_impl`. Behaviour-preserving
-    // by construction (`DataStore::apply_snapshot`/`snapshot` already delegate to
-    // these), so this passes identically before and after the swap; it pins the
+    // Characterization test: `ensure_loaded`/`do_flush` swap onto
+    // `InMemoryStore::apply_snapshot_impl`/`snapshot_impl`. Pins the
     // full-graph fidelity so a future change to either path cannot regress it.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_json_backend_load_flush_round_trip_preserves_full_graph() {
