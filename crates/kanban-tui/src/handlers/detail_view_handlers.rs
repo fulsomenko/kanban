@@ -380,25 +380,7 @@ impl App {
                             Ok(Some(new_content)) => {
                                 match serde_json::from_str::<BoardSettingsDto>(&new_content) {
                                     Ok(new_dto) => {
-                                        let cmd = kanban_domain::commands::Command::Board(
-                                            kanban_domain::commands::BoardCommand::ApplySettings(
-                                                kanban_domain::commands::ApplyBoardSettings {
-                                                    board_id,
-                                                    dto: new_dto,
-                                                },
-                                            ),
-                                        );
-                                        if let Err(e) = self.ctx.execute_command(cmd) {
-                                            tracing::error!(
-                                                "Failed to apply board settings: {}",
-                                                e
-                                            );
-                                            self.set_error(format!(
-                                                "Failed to apply board settings: {}",
-                                                e
-                                            ));
-                                        }
-                                        self.reload_model();
+                                        self.apply_board_settings(board_id, new_dto);
                                     }
                                     Err(e) => {
                                         tracing::error!(
@@ -426,6 +408,19 @@ impl App {
             BoardFocus::Columns => {}
         }
         should_restart
+    }
+
+    pub fn apply_board_settings(&mut self, board_id: uuid::Uuid, dto: BoardSettingsDto) {
+        let cmd = kanban_domain::commands::Command::Board(
+            kanban_domain::commands::BoardCommand::ApplySettings(
+                kanban_domain::commands::ApplyBoardSettings { board_id, dto },
+            ),
+        );
+        if let Err(e) = self.ctx.execute_command(cmd) {
+            tracing::error!("Failed to apply board settings: {}", e);
+            self.set_error(format!("Failed to apply board settings: {}", e));
+        }
+        self.reload_model();
     }
 
     fn handle_board_detail_navigation_key(&mut self, key_code: KeyCode) -> bool {
@@ -712,19 +707,7 @@ impl App {
         match edit_in_external_editor(terminal, event_handler, temp_file, &json) {
             Ok(Some(new_content)) => match serde_json::from_str::<CardMetadataDto>(&new_content) {
                 Ok(new_dto) => {
-                    let cmd = kanban_domain::commands::Command::Card(
-                        kanban_domain::commands::CardCommand::ApplyMetadata(
-                            kanban_domain::commands::ApplyCardMetadata {
-                                card_id,
-                                dto: new_dto,
-                            },
-                        ),
-                    );
-                    if let Err(e) = self.ctx.execute_command(cmd) {
-                        tracing::error!("Failed to apply metadata: {}", e);
-                        self.set_error(format!("Failed to apply metadata: {}", e));
-                    }
-                    self.reload_model();
+                    self.apply_card_metadata(card_id, new_dto);
                 }
                 Err(e) => {
                     tracing::error!("Failed to parse metadata JSON: {}", e);
@@ -738,6 +721,19 @@ impl App {
             }
         }
         true
+    }
+
+    pub fn apply_card_metadata(&mut self, card_id: uuid::Uuid, dto: CardMetadataDto) {
+        let cmd = kanban_domain::commands::Command::Card(
+            kanban_domain::commands::CardCommand::ApplyMetadata(
+                kanban_domain::commands::ApplyCardMetadata { card_id, dto },
+            ),
+        );
+        if let Err(e) = self.ctx.execute_command(cmd) {
+            tracing::error!("Failed to apply metadata: {}", e);
+            self.set_error(format!("Failed to apply metadata: {}", e));
+        }
+        self.reload_model();
     }
 
     /// The single card highlighted in whichever sprint-detail panel is active
