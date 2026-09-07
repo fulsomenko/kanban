@@ -636,16 +636,15 @@ impl App {
         }
     }
 
-    fn handle_relationship_popup(&mut self, key_code: KeyCode, is_parent_mode: bool) {
-        // Filter cards by search
-        let filtered_cards: Vec<_> = if self.relationship.search.is_empty() {
-            self.relationship.card_ids.clone()
-        } else {
-            let search_lower = self.relationship.search.to_lowercase();
-            let cards = match self.model.cards_state() {
-                LoadState::Loaded(cards) => cards.as_slice(),
-                _ => &[],
-            };
+    fn filtered_relationship_card_ids(&self) -> Option<Vec<uuid::Uuid>> {
+        if self.relationship.search.is_empty() {
+            return Some(self.relationship.card_ids.clone());
+        }
+        let LoadState::Loaded(cards) = self.model.cards_state() else {
+            return None;
+        };
+        let search_lower = self.relationship.search.to_lowercase();
+        Some(
             self.relationship
                 .card_ids
                 .iter()
@@ -657,11 +656,11 @@ impl App {
                         .unwrap_or(false)
                 })
                 .copied()
-                .collect()
-        };
+                .collect(),
+        )
+    }
 
-        let list_len = filtered_cards.len();
-
+    fn handle_relationship_popup(&mut self, key_code: KeyCode, is_parent_mode: bool) {
         // Handle search mode separately
         if self.relationship.search_active {
             match key_code {
@@ -701,12 +700,20 @@ impl App {
                 self.relationship.search_active = true;
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.relationship.selection.next(list_len);
+                let Some(filtered_cards) = self.filtered_relationship_card_ids() else {
+                    self.set_error("Cards are not loaded yet");
+                    return;
+                };
+                self.relationship.selection.next(filtered_cards.len());
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.relationship.selection.prev();
             }
             KeyCode::Char(' ') | KeyCode::Enter => {
+                let Some(filtered_cards) = self.filtered_relationship_card_ids() else {
+                    self.set_error("Cards are not loaded yet");
+                    return;
+                };
                 // Toggle relationship
                 if let Some(idx) = self.relationship.selection.get() {
                     if let Some(selected_card_id) = filtered_cards.get(idx).copied() {
@@ -757,31 +764,14 @@ impl App {
     }
 
     fn update_relationship_selection_after_search(&mut self) {
-        let filtered_count = if self.relationship.search.is_empty() {
-            self.relationship.card_ids.len()
-        } else {
-            let search_lower = self.relationship.search.to_lowercase();
-            let cards = match self.model.cards_state() {
-                LoadState::Loaded(cards) => cards.as_slice(),
-                _ => &[],
-            };
-            self.relationship
-                .card_ids
-                .iter()
-                .filter(|card_id| {
-                    cards
-                        .iter()
-                        .find(|c| c.id == **card_id)
-                        .map(|c| c.title.to_lowercase().contains(&search_lower))
-                        .unwrap_or(false)
-                })
-                .count()
+        let Some(filtered) = self.filtered_relationship_card_ids() else {
+            self.set_error("Cards are not loaded yet");
+            return;
         };
-
-        if filtered_count > 0 {
-            self.relationship.selection.set(Some(0));
-        } else {
+        if filtered.is_empty() {
             self.relationship.selection.clear();
+        } else {
+            self.relationship.selection.set(Some(0));
         }
     }
 }
@@ -998,10 +988,10 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_relationship_popup_search_with_a_not_loaded_cards_tier_shows_no_matches_without_a_banner(
-    ) {
+    fn test_relationship_search_with_not_loaded_cards_tier_banners_and_preserves_list() {
         let mut app = App::test_default();
         let (_board_id, _card_id) = seed_relationship_dialog(&mut app);
+        app.relationship.selection.set(Some(0));
 
         let _ = app
             .model
@@ -1014,12 +1004,23 @@ mod tests {
 
         assert_eq!(
             app.relationship.selection.get(),
-            None,
-            "a NotLoaded cards tier must filter to zero matches, clearing the selection"
+            Some(0),
+            "a NotLoaded cards tier must not clear a staged selection"
         );
+        assert_eq!(
+            app.relationship.card_ids.len(),
+            1,
+            "a NotLoaded cards tier must not empty the candidate list"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("a NotLoaded cards tier must banner rather than silently show no matches");
         assert!(
-            app.ui_state.banner.is_none(),
-            "the per-keystroke search filter must degrade silently, not spam a banner per character"
+            banner.message.to_lowercase().contains("not loaded"),
+            "banner should explain the cards tier is not loaded, got: {}",
+            banner.message
         );
     }
 

@@ -624,12 +624,11 @@ fn test_restore_card_without_reload_remaps_to_first_column_when_the_original_is_
 }
 
 // ---------------------------------------------------------------------
-// handle_manage_children_from_list: decline on a NotLoaded board-scoped
-// columns tier
+// handle_manage_children_from_list: a NotLoaded board-scoped columns tier
 // ---------------------------------------------------------------------
 
 #[test]
-fn test_handle_manage_children_from_list_declines_on_a_not_loaded_column_tier() {
+fn test_handle_manage_children_from_list_with_a_cold_column_tier_repopulates_and_opens() {
     let mut app = App::test_default();
     let (board_id, first_col, _second_col) = seed_board_with_two_columns(&mut app);
     let card = app
@@ -657,15 +656,14 @@ fn test_handle_manage_children_from_list_declines_on_a_not_loaded_column_tier() 
 
     app.handle_manage_children_from_list();
 
-    let banner = app
-        .ui_state
-        .banner
-        .as_ref()
-        .expect("declining a NotLoaded board-scoped columns tier must set an error banner");
-    assert!(banner.message.to_lowercase().contains("column"));
+    assert_eq!(
+        app.mode,
+        AppMode::Dialog(DialogMode::ManageChildren),
+        "opening the dialog first lets the mode-transition populate repair the columns tier, so the handler no longer dead-ends"
+    );
     assert!(
-        app.relationship.card_ids.is_empty(),
-        "the manage-children list must not be populated while the columns tier is declined"
+        app.ui_state.banner.is_none(),
+        "a repaired columns tier must not leave a stale decline banner"
     );
 }
 

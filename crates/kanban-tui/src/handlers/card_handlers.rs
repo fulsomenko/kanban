@@ -984,7 +984,10 @@ impl App {
             None => return,
         };
 
+        self.open_dialog(DialogMode::ManageChildren);
+
         let Some(graph) = self.model.graph_state().loaded() else {
+            self.pop_mode();
             self.set_error("Relationships are still loading. Try again in a moment.");
             return;
         };
@@ -1001,6 +1004,7 @@ impl App {
                         .map(|c| c.id)
                         .collect(),
                     _ => {
+                        self.pop_mode();
                         self.set_error("Columns are not loaded yet");
                         return;
                     }
@@ -1010,6 +1014,7 @@ impl App {
         let target_is_archived = self.model.archived_card_ids().contains(&card_id);
 
         let LoadState::Loaded(cards) = self.model.cards_state() else {
+            self.pop_mode();
             self.set_error("Cards are not loaded yet");
             return;
         };
@@ -1033,8 +1038,6 @@ impl App {
         self.relationship.selected = current_children;
         self.relationship.selection.set(Some(0));
         self.relationship.search.clear();
-
-        self.open_dialog(DialogMode::ManageChildren);
     }
 }
 
@@ -1760,7 +1763,7 @@ mod cards_tier_decline_tests {
     }
 
     #[test]
-    fn test_handle_manage_children_from_list_with_a_not_loaded_cards_tier_declines() {
+    fn test_handle_manage_children_from_list_with_a_cold_cards_tier_repopulates_and_opens() {
         let mut app = App::test_default();
         let (board_id, _column_id, card_id) = seed_board_column_card(&mut app);
         refresh(&mut app);
@@ -1773,11 +1776,37 @@ mod cards_tier_decline_tests {
 
         app.handle_manage_children_from_list();
 
-        assert_error_banner(&app, "Cards are not loaded yet");
-        assert_ne!(
+        assert_eq!(
             app.mode,
             crate::app::AppMode::Dialog(crate::app::DialogMode::ManageChildren),
-            "the ManageChildren dialog must not open while the cards tier is not loaded"
+            "opening the dialog first lets the mode-transition populate repair the cards tier, so the handler no longer dead-ends"
         );
+        assert!(
+            app.ui_state.banner.is_none(),
+            "a repaired cards tier must not leave a stale decline banner"
+        );
+    }
+
+    #[test]
+    fn test_handle_manage_children_from_list_with_a_cold_graph_opens_the_dialog() {
+        let mut app = App::test_default();
+        let (board_id, _column_id, card_id) = seed_board_column_card(&mut app);
+        refresh(&mut app);
+        app.selection.active_board_id = Some(board_id);
+        app.focus.active = Focus::Cards;
+        select_card_in_active_task_list(&mut app, card_id);
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
+
+        app.handle_manage_children_from_list();
+
+        assert_eq!(
+            app.mode,
+            crate::app::AppMode::Dialog(crate::app::DialogMode::ManageChildren),
+            "opening the dialog before the graph read lets the transition populate warm the graph instead of dead-ending on a stale check"
+        );
+        assert!(app.ui_state.banner.is_none());
     }
 }

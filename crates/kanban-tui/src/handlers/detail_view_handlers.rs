@@ -6,7 +6,6 @@ use crate::events::EventHandler;
 use crossterm::event::KeyCode;
 use kanban_core::Editable;
 use kanban_domain::card_lifecycle::sorted_board_columns;
-use kanban_domain::Model;
 use kanban_domain::{
     BoardSettingsDto, CardMetadataDto, Column, FieldSearcher, LoadState, Searcher,
 };
@@ -101,7 +100,15 @@ impl App {
                 match self.focus.card_focus {
                     CardFocus::Parents => {
                         // Navigate within parents list or wrap to next section
-                        let parents = self.get_current_card_parents();
+                        let (Some(parents), Some(children)) = (
+                            self.get_current_card_parents(),
+                            self.get_current_card_children(),
+                        ) else {
+                            self.set_error(
+                                "Relationships are still loading. Try again in a moment.",
+                            );
+                            return should_restart;
+                        };
                         if !parents.is_empty() {
                             let was_at_boundary = self.relationship.parents_list.navigate_down();
                             let viewport = self
@@ -117,7 +124,6 @@ impl App {
                                 self.focus.card_focus = CardFocus::Children;
                                 self.relationship.parents_list.selection.clear();
 
-                                let children = self.get_current_card_children();
                                 self.relationship
                                     .children_list
                                     .update_item_count(children.len());
@@ -132,7 +138,12 @@ impl App {
                     }
                     CardFocus::Children => {
                         // Navigate within children list or wrap to next section
-                        let children = self.get_current_card_children();
+                        let Some(children) = self.get_current_card_children() else {
+                            self.set_error(
+                                "Relationships are still loading. Try again in a moment.",
+                            );
+                            return should_restart;
+                        };
                         if !children.is_empty() {
                             let was_at_boundary = self.relationship.children_list.navigate_down();
                             let viewport = self
@@ -169,7 +180,12 @@ impl App {
                 match self.focus.card_focus {
                     CardFocus::Parents => {
                         // Navigate within parents list or wrap to previous section
-                        let parents = self.get_current_card_parents();
+                        let Some(parents) = self.get_current_card_parents() else {
+                            self.set_error(
+                                "Relationships are still loading. Try again in a moment.",
+                            );
+                            return should_restart;
+                        };
                         if !parents.is_empty() {
                             let was_at_boundary = self.relationship.parents_list.navigate_up();
                             let viewport = self
@@ -192,7 +208,15 @@ impl App {
                     }
                     CardFocus::Children => {
                         // Navigate within children list or wrap to previous section
-                        let children = self.get_current_card_children();
+                        let (Some(children), Some(parents)) = (
+                            self.get_current_card_children(),
+                            self.get_current_card_parents(),
+                        ) else {
+                            self.set_error(
+                                "Relationships are still loading. Try again in a moment.",
+                            );
+                            return should_restart;
+                        };
                         if !children.is_empty() {
                             let was_at_boundary = self.relationship.children_list.navigate_up();
                             let viewport = self
@@ -205,7 +229,6 @@ impl App {
 
                             if was_at_boundary {
                                 // At first child or no selection, wrap to Parents section
-                                let parents = self.get_current_card_parents();
                                 self.focus.card_focus = CardFocus::Parents;
                                 self.relationship.children_list.selection.clear();
                                 self.relationship
@@ -225,7 +248,12 @@ impl App {
                     }
                     CardFocus::Title => {
                         // When at Title, wrap backward to Children and select last child
-                        let children = self.get_current_card_children();
+                        let Some(children) = self.get_current_card_children() else {
+                            self.set_error(
+                                "Relationships are still loading. Try again in a moment.",
+                            );
+                            return should_restart;
+                        };
                         self.focus.card_focus = CardFocus::Children;
                         self.relationship
                             .children_list
@@ -936,31 +964,15 @@ impl App {
                     match action {
                         CardListAction::Select(card_id) => {
                             if self.activate_card(card_id) {
-                                // Initialize list components with item counts
-                                let parents = self.get_current_card_parents();
-                                let children = self.get_current_card_children();
-                                self.relationship
-                                    .parents_list
-                                    .update_item_count(parents.len());
-                                self.relationship
-                                    .children_list
-                                    .update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
+                                self.refresh_relationship_counts();
                                 self.focus.card_focus = CardFocus::Title;
                             }
                         }
                         CardListAction::Edit(card_id) => {
                             if self.activate_card(card_id) {
-                                // Initialize list components with item counts
-                                let parents = self.get_current_card_parents();
-                                let children = self.get_current_card_children();
-                                self.relationship
-                                    .parents_list
-                                    .update_item_count(parents.len());
-                                self.relationship
-                                    .children_list
-                                    .update_item_count(children.len());
                                 self.push_mode(AppMode::CardDetail);
+                                self.refresh_relationship_counts();
                                 self.focus.card_focus = CardFocus::Title;
                             }
                         }
@@ -1258,37 +1270,39 @@ impl App {
         self.open_dialog(DialogMode::ManageChildren);
     }
 
-    pub fn get_current_card_parents(&self) -> Vec<uuid::Uuid> {
+    pub fn get_current_card_parents(&self) -> Option<Vec<uuid::Uuid>> {
         if let Some(active_id) = self.selection.active_card_id {
             if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
                 return self
                     .model
                     .graph_state()
                     .loaded()
-                    .unwrap_or_else(|| Model::empty_graph())
-                    .parents(card.id);
+                    .map(|graph| graph.parents(card.id));
             }
         }
-        Vec::new()
+        Some(Vec::new())
     }
 
-    pub fn get_current_card_children(&self) -> Vec<uuid::Uuid> {
+    pub fn get_current_card_children(&self) -> Option<Vec<uuid::Uuid>> {
         if let Some(active_id) = self.selection.active_card_id {
             if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
                 return self
                     .model
                     .graph_state()
                     .loaded()
-                    .unwrap_or_else(|| Model::empty_graph())
-                    .children(card.id);
+                    .map(|graph| graph.children(card.id));
             }
         }
-        Vec::new()
+        Some(Vec::new())
     }
 
-    fn refresh_relationship_counts(&mut self) {
-        let parents = self.get_current_card_parents();
-        let children = self.get_current_card_children();
+    pub(crate) fn refresh_relationship_counts(&mut self) {
+        let (Some(parents), Some(children)) = (
+            self.get_current_card_parents(),
+            self.get_current_card_children(),
+        ) else {
+            return;
+        };
         self.relationship
             .parents_list
             .update_item_count(parents.len());
@@ -1297,7 +1311,7 @@ impl App {
             .update_item_count(children.len());
     }
 
-    fn related_card_ids(&self, side: RelationSide) -> Vec<uuid::Uuid> {
+    fn related_card_ids(&self, side: RelationSide) -> Option<Vec<uuid::Uuid>> {
         match side {
             RelationSide::Parents => self.get_current_card_parents(),
             RelationSide::Children => self.get_current_card_children(),
@@ -1335,7 +1349,10 @@ impl App {
         let Some(current_card_id) = self.selection.active_card_id else {
             return;
         };
-        let related = self.related_card_ids(side);
+        let Some(related) = self.related_card_ids(side) else {
+            self.set_error("Relationships are still loading. Try again in a moment.");
+            return;
+        };
         let selected_id = self
             .list_selection(side)
             .and_then(|i| related.get(i).copied());
@@ -1918,7 +1935,7 @@ mod tests {
 
         assert_eq!(
             parents,
-            vec![fx.p_id],
+            Some(vec![fx.p_id]),
             "after reload-resort, parents of the active card (A) must be returned by id; resolving by stale index would return parents of the wrong card"
         );
     }
@@ -1933,8 +1950,142 @@ mod tests {
 
         assert_eq!(
             children,
-            vec![fx.d_id],
+            Some(vec![fx.d_id]),
             "after reload-resort, children of the active card (A) must be returned by id; resolving by stale index would return children of the wrong card"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_parents_with_a_not_loaded_graph_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_parents(), Some(vec![fx.p_id]));
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
+
+        assert_eq!(
+            app.get_current_card_parents(),
+            None,
+            "a NotLoaded graph tier must be reported as a tier gap, not as zero parents"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_children_with_a_not_loaded_graph_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_children(), Some(vec![fx.d_id]));
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
+
+        assert_eq!(
+            app.get_current_card_children(),
+            None,
+            "a NotLoaded graph tier must be reported as a tier gap, not as zero children"
+        );
+    }
+
+    #[test]
+    fn test_refresh_relationship_counts_with_a_not_loaded_graph_leaves_the_list_counts_untouched() {
+        let mut app = App::test_default();
+        let _fx = setup_reload_resort_fixture(&mut app);
+
+        app.refresh_relationship_counts();
+        assert_eq!(app.relationship.parents_list.selection.get(), Some(0));
+        assert_eq!(app.relationship.children_list.selection.get(), Some(0));
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
+
+        app.refresh_relationship_counts();
+
+        assert_eq!(
+            app.relationship.parents_list.selection.get(),
+            Some(0),
+            "a cold graph tier must not clear an already-populated parents selection"
+        );
+        assert_eq!(
+            app.relationship.children_list.selection.get(),
+            Some(0),
+            "a cold graph tier must not clear an already-populated children selection"
+        );
+    }
+
+    #[test]
+    fn test_navigate_to_selected_parent_with_a_not_loaded_graph_banners_instead_of_silently_doing_nothing(
+    ) {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+        app.focus.card_focus = CardFocus::Parents;
+        app.relationship.parents_list.update_item_count(1);
+        app.relationship.parents_list.selection.set(Some(0));
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
+
+        app.navigate_to_selected_parent();
+
+        assert_eq!(
+            app.selection.active_card_id,
+            Some(fx.a_id),
+            "a cold graph tier must not change the active card"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("a cold graph tier must banner rather than silently do nothing");
+        let message = banner.message.to_lowercase();
+        assert!(
+            message.contains("loading") || message.contains("not loaded"),
+            "banner should explain the graph tier is not loaded, got: {}",
+            banner.message
+        );
+    }
+
+    #[test]
+    fn test_handle_selection_activate_into_card_detail_with_a_cold_graph_counts_the_children() {
+        use crate::app::Focus;
+
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+        app.selection.active_card_id = None;
+        app.mode = AppMode::Normal;
+        app.focus.active = Focus::Cards;
+        app.prepare_frame();
+        {
+            let list = app
+                .view
+                .strategy
+                .get_active_task_list_mut()
+                .expect("active task list");
+            let idx = list
+                .cards
+                .iter()
+                .position(|&id| id == fx.a_id)
+                .expect("card A present in active task list");
+            list.set_selected_index(Some(idx));
+        }
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
+
+        app.handle_selection_activate();
+
+        assert_eq!(app.mode, AppMode::CardDetail);
+        assert_eq!(
+            app.relationship.children_list.selection.get(),
+            Some(0),
+            "the mode-transition populate must warm the graph before the counts are snapshotted"
         );
     }
 

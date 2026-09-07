@@ -96,15 +96,8 @@ impl App {
     /// effect on the shared `CardListComponent` dispatch, needs no terminal.
     pub(in crate::app) fn open_sprint_detail_card_for_edit(&mut self, card_id: uuid::Uuid) {
         if self.activate_card(card_id) {
-            let parents = self.get_current_card_parents();
-            let children = self.get_current_card_children();
-            self.relationship
-                .parents_list
-                .update_item_count(parents.len());
-            self.relationship
-                .children_list
-                .update_item_count(children.len());
             self.push_mode(AppMode::CardDetail);
+            self.refresh_relationship_counts();
             self.focus.card_focus = crate::app::CardFocus::Title;
         }
     }
