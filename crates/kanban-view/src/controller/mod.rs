@@ -410,6 +410,14 @@ mod tests {
                 all: LoadState::Loaded(Vec::new()),
                 ..Default::default()
             },
+            archived_cards: Collection {
+                all: LoadState::Loaded(Vec::new()),
+                ..Default::default()
+            },
+            archived_boards: Collection {
+                all: LoadState::Loaded(Vec::new()),
+                ..Default::default()
+            },
             ..Default::default()
         });
         let mut controller = Controller::default();
@@ -419,6 +427,126 @@ mod tests {
         assert!(matches!(controller.displayed_cards(true), LoadState::Loaded(v) if v.is_empty()));
         assert!(matches!(controller.displayed_boards(false), LoadState::Loaded(v) if v.is_empty()));
         assert!(matches!(controller.displayed_boards(true), LoadState::Loaded(v) if v.is_empty()));
+    }
+
+    #[test]
+    fn test_card_partitions_report_not_loaded_when_markers_not_loaded_and_cards_loaded() {
+        let board = seed_board("B", 0);
+        let column = Column::new(board.id, "Col", 0);
+        let card = Card::new(board.id, column.id, "card", 0);
+        let card_id = card.id;
+        let mut model = Model::default();
+        let changed = model.apply_resolved(Resolved {
+            cards: Collection {
+                all: LoadState::Loaded(vec![card.clone()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model, changed);
+
+        assert!(!controller.displayed_cards(true).is_loaded());
+        assert!(controller.displayed_cards(true).is_not_loaded());
+        assert!(controller.displayed_cards(false).is_loaded());
+        let live_ids: Vec<Uuid> = controller
+            .displayed_cards(false)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(live_ids, vec![card_id]);
+
+        let changed = model.load_from_snapshot(Snapshot {
+            boards: vec![board],
+            columns: vec![column],
+            cards: vec![card],
+            archived_cards: Vec::new(),
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+        controller.resync(&model, changed);
+        assert!(controller.displayed_cards(true).is_loaded());
+    }
+
+    #[test]
+    fn test_board_partitions_report_not_loaded_when_markers_not_loaded_and_boards_loaded() {
+        let board = seed_board("B", 0);
+        let board_id = board.id;
+        let mut model = Model::default();
+        let changed = model.apply_resolved(Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![board]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model, changed);
+
+        assert!(controller.displayed_boards(true).is_not_loaded());
+        assert!(controller.displayed_boards(false).is_loaded());
+        let live_ids: Vec<Uuid> = controller
+            .displayed_boards(false)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|b| b.id)
+            .collect();
+        assert_eq!(live_ids, vec![board_id]);
+    }
+
+    #[test]
+    fn test_card_partitions_report_failed_when_marker_tier_failed() {
+        let board = seed_board("B", 0);
+        let column = Column::new(board.id, "Col", 0);
+        let card = Card::new(board.id, column.id, "card", 0);
+        let mut model = Model::default();
+        let changed = model.apply_resolved(Resolved {
+            cards: Collection {
+                all: LoadState::Loaded(vec![card]),
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                all: LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("boom"),
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model, changed);
+
+        assert!(controller.displayed_cards(true).is_failed());
+        assert!(controller.displayed_cards(false).is_loaded());
+    }
+
+    #[test]
+    fn test_board_partitions_report_failed_when_marker_tier_failed() {
+        let board = seed_board("B", 0);
+        let mut model = Model::default();
+        let changed = model.apply_resolved(Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![board]),
+                ..Default::default()
+            },
+            archived_boards: Collection {
+                all: LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("boom"),
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model, changed);
+
+        assert!(controller.displayed_boards(true).is_failed());
+        assert!(controller.displayed_boards(false).is_loaded());
     }
 
     #[test]

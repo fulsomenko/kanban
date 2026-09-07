@@ -1,10 +1,22 @@
 use super::Controller;
 use kanban_domain::{filter_and_sort_boards, Board, BoardListFilter, Card, LoadState, Model};
 
+/// The join of a flat collection's state and its archival-marker tier's
+/// state, payload blanked: `Failed` wins, then `Missing`, then `NotLoaded`.
+/// `Loaded` only when both sides are.
+fn joined<T, A, B>(flat: LoadState<A>, markers: LoadState<B>) -> LoadState<Vec<T>> {
+    match (flat, markers) {
+        (LoadState::Failed(e), _) | (_, LoadState::Failed(e)) => LoadState::Failed(e),
+        (LoadState::Missing, _) | (_, LoadState::Missing) => LoadState::Missing,
+        (LoadState::NotLoaded, _) | (_, LoadState::NotLoaded) => LoadState::NotLoaded,
+        (LoadState::Loaded(_), LoadState::Loaded(_)) => LoadState::Loaded(Vec::new()),
+    }
+}
+
 impl Controller {
     pub(super) fn rebuild_card_partitions(&mut self, model: &Model) {
-        match model.cards_state().as_ref() {
-            LoadState::Loaded(cards) => {
+        match (model.cards_state().as_ref(), model.archived_cards_state()) {
+            (LoadState::Loaded(cards), LoadState::Loaded(_)) => {
                 let (archived_cards, live_cards): (Vec<Card>, Vec<Card>) = cards
                     .iter()
                     .cloned()
@@ -12,16 +24,20 @@ impl Controller {
                 self.displayed_cards_live = LoadState::Loaded(live_cards);
                 self.displayed_cards_archived = LoadState::Loaded(archived_cards);
             }
-            other => {
-                self.displayed_cards_live = other.as_ref().map(|_| Vec::new());
-                self.displayed_cards_archived = other.map(|_| Vec::new());
+            (LoadState::Loaded(cards), markers) => {
+                self.displayed_cards_live = LoadState::Loaded(cards.clone());
+                self.displayed_cards_archived = markers.map(|_| Vec::new());
+            }
+            (flat, markers) => {
+                self.displayed_cards_live = flat.clone().map(|_| Vec::new());
+                self.displayed_cards_archived = joined(flat, markers);
             }
         }
     }
 
     pub(super) fn rebuild_board_partitions(&mut self, model: &Model) {
-        match model.boards_state().as_ref() {
-            LoadState::Loaded(boards) => {
+        match (model.boards_state().as_ref(), model.archived_boards_state()) {
+            (LoadState::Loaded(boards), LoadState::Loaded(_)) => {
                 let (archived_boards, live_boards): (Vec<Board>, Vec<Board>) = boards
                     .iter()
                     .cloned()
@@ -29,9 +45,13 @@ impl Controller {
                 self.displayed_boards_live = LoadState::Loaded(live_boards);
                 self.displayed_boards_archived = LoadState::Loaded(archived_boards);
             }
-            other => {
-                self.displayed_boards_live = other.as_ref().map(|_| Vec::new());
-                self.displayed_boards_archived = other.map(|_| Vec::new());
+            (LoadState::Loaded(boards), markers) => {
+                self.displayed_boards_live = LoadState::Loaded(boards.clone());
+                self.displayed_boards_archived = markers.map(|_| Vec::new());
+            }
+            (flat, markers) => {
+                self.displayed_boards_live = flat.clone().map(|_| Vec::new());
+                self.displayed_boards_archived = joined(flat, markers);
             }
         }
         self.sort_partitions();
