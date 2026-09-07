@@ -304,3 +304,50 @@ async fn test_a_failed_scoped_fetch_is_recorded_once_and_retried_on_the_next_key
         "expected exactly one retry read, got {retry_log:?}"
     );
 }
+
+#[tokio::test]
+async fn test_reactivating_an_already_loaded_board_reads_nothing() {
+    let mut app = App::test_default();
+    let seed = seed_two_boards(&mut app);
+    let ops = prime(&mut app).await;
+
+    app.board_list.inner_mut().set_selected_index(Some(1));
+    app.focus.active = Focus::Boards;
+    app.handle_selection_activate();
+    assert!(app.model.board_columns_state(seed.b2).is_loaded());
+
+    ops.lock().unwrap().clear();
+    app.handle_escape_key();
+    app.handle_selection_activate();
+
+    let ops = refetch_ops(&ops);
+    assert!(ops.is_empty(), "expected no refetch reads, got {ops:?}");
+}
+
+#[tokio::test]
+async fn test_navigating_away_from_a_failed_panel_does_not_refetch_it() {
+    let mut app = App::test_default();
+    let seed = seed_two_boards(&mut app);
+    app.load_initial_state().await;
+
+    let inner = app.ctx.backend();
+    let failing = CountingBackend::wrap_failing(inner.clone(), "list_columns_by_board");
+    let (outer, _reads, ops) = CountingBackend::wrap(failing);
+    app.ctx.replace_backend(outer);
+
+    app.focus.active = Focus::Boards;
+    app.board_list.inner_mut().set_selected_index(Some(1));
+    app.handle_selection_activate();
+    assert!(app.model.board_columns_state(seed.b2).is_failed());
+
+    ops.lock().unwrap().clear();
+    app.handle_escape_key();
+    app.board_list.inner_mut().set_selected_index(Some(0));
+    app.handle_selection_activate();
+
+    let log = ops.lock().unwrap().clone();
+    assert!(
+        !has_op_with_id(&log, "list_columns_by_board", seed.b2),
+        "expected no re-read of board 2's failed tier, got {log:?}"
+    );
+}

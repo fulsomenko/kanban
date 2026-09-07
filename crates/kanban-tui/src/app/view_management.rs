@@ -123,7 +123,8 @@ impl App {
     }
 
     /// Rebuild the display partitions and task lists from the cached model.
-    /// Pure: performs no store access.
+    /// Pure: performs no store access, unlike `refresh_view`, which fetches
+    /// first.
     pub fn prepare_frame(&mut self) {
         // Single card-side selector: borrow the cached displayed subset (stack-
         // aware base mode). No per-frame filter/clone — the partition was built
