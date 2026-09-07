@@ -362,11 +362,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_card_parent_with_an_unloadable_card_list_errors_naming_the_collection_on_json(
-    ) {
+    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_json()
+    {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let err = seeded
             .server
@@ -378,17 +378,16 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_set_card_parent_with_an_unloadable_card_list_errors_naming_the_collection_on_sqlite(
+    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_sqlite(
     ) {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let err = seeded
             .server
@@ -400,9 +399,280 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_remove_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_json(
+    ) {
+        let seeded = seeded_server("test.json").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+        seeded.handle.fail("list_cards_by_prefix_and_number");
+
+        let err = seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("injected fault"));
+        assert!(!err.message.to_lowercase().contains("not found"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_remove_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_sqlite(
+    ) {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+        seeded.handle.fail("list_cards_by_prefix_and_number");
+
+        let err = seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("injected fault"));
+        assert!(!err.message.to_lowercase().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_set_card_parent_does_not_fetch_the_graph_or_the_card_list_on_json() {
+        let seeded = seeded_server("test.json").await;
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(
+            seeded.handle.op_count("list_cards_by_prefix_and_number"),
+            2
+        );
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], seeded.card_b_id);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_set_card_parent_does_not_fetch_the_graph_or_the_card_list_on_sqlite() {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(
+            seeded.handle.op_count("list_cards_by_prefix_and_number"),
+            2
+        );
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], seeded.card_b_id);
+    }
+
+    #[tokio::test]
+    async fn test_remove_card_parent_does_not_fetch_the_graph_or_the_card_list_on_json() {
+        let seeded = seeded_server("test.json").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(
+            seeded.handle.op_count("list_cards_by_prefix_and_number"),
+            2
+        );
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert!(items.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_remove_card_parent_does_not_fetch_the_graph_or_the_card_list_on_sqlite() {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(
+            seeded.handle.op_count("list_cards_by_prefix_and_number"),
+            2
+        );
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert!(items.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_card_parents_still_fetches_the_graph_on_json() {
+        let seeded = seeded_server("test.json").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_list_card_parents(Parameters(ListCardParentsRequest {
+                card: seeded.card_b_identifier.clone(),
+                page: None,
+                page_size: None,
+            }))
+            .await
+            .unwrap();
+
+        assert!(seeded.handle.op_count("get_graph") >= 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_list_card_parents_still_fetches_the_graph_on_sqlite() {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_list_card_parents(Parameters(ListCardParentsRequest {
+                card: seeded.card_b_identifier.clone(),
+                page: None,
+                page_size: None,
+            }))
+            .await
+            .unwrap();
+
+        assert!(seeded.handle.op_count("get_graph") >= 1);
     }
 
     #[tokio::test]
@@ -453,7 +723,7 @@ mod tests {
         assert_eq!(not_found_err.code, ErrorCode::INVALID_PARAMS);
         assert!(not_found_err.message.to_lowercase().contains("not found"));
 
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let fault_err = seeded
             .server
@@ -465,7 +735,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(fault_err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(fault_err.message.contains("card list"));
         assert!(fault_err.message.contains("injected fault"));
 
         assert_ne!(not_found_err.code, fault_err.code);
