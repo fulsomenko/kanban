@@ -125,6 +125,58 @@ async fn test_the_wrapper_delegates_a_backend_overridden_default_method() {
 }
 
 #[test]
+fn test_faulting_an_indexed_card_lookup_returns_an_error() {
+    let (backend, _board) = wrapped_in_memory();
+
+    backend.fail("list_cards_by_prefix_and_number");
+    assert!(backend.list_cards_by_prefix_and_number("KAN", 5).is_err());
+
+    backend.clear_faults();
+
+    backend.fail("list_cards_by_number");
+    assert!(backend.list_cards_by_number(5).is_err());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fault_backend_records_indexed_card_lookups_on_sqlite() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("indexed.sqlite3");
+    let inner: Arc<dyn KanbanBackend> = Arc::new(
+        SqliteBackend::open(path.to_str().unwrap())
+            .await
+            .expect("open sqlite backend"),
+    );
+
+    let board = Board::new("Pinned", Some("PIN"));
+    let column = Column::new(board.id, "Todo", 0);
+    let mut card = Card::new(board.id, column.id, "Pinned card", 0);
+    card.card_number = 7;
+    card.prefix = "PIN".to_string();
+    inner
+        .upsert_prefix(kanban_domain::Prefix::new("PIN"))
+        .unwrap();
+    inner.upsert_board(board.clone()).unwrap();
+    inner.upsert_column(column).unwrap();
+    inner.upsert_card(card.clone()).unwrap();
+
+    let backend = FaultInjectingBackend::new(inner);
+
+    let by_prefix = backend.list_cards_by_prefix_and_number("PIN", 7).unwrap();
+    let by_number = backend.list_cards_by_number(7).unwrap();
+
+    assert_eq!(by_prefix.first().map(|c| c.id), Some(card.id));
+    assert_eq!(by_number.first().map(|c| c.id), Some(card.id));
+
+    assert_eq!(backend.op_count("list_cards_by_prefix_and_number"), 1);
+    assert_eq!(backend.op_count("list_cards_by_number"), 1);
+    assert_eq!(
+        backend.op_count("list_all_cards"),
+        0,
+        "the wrapper must answer from the backend's indexed override, not fall back"
+    );
+}
+
+#[test]
 fn test_an_intercepted_read_is_recorded_in_call_order() {
     let (backend, _board) = wrapped_in_memory();
     let card_id = uuid::Uuid::new_v4();

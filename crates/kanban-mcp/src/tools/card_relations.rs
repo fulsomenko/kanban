@@ -1,15 +1,15 @@
-use crate::helpers::model_read::{require_loaded, resolve_card};
+use crate::helpers::model_read::require_loaded;
 use crate::helpers::{
-    core_err_to_mcp, locked_read, locked_write, mcp_enrich_add_error, mcp_enrich_remove_error,
-    resolve_summaries, to_call_tool_result, to_call_tool_result_json,
+    core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write, mcp_enrich_add_error,
+    mcp_enrich_remove_error, resolve_summaries, to_call_tool_result, to_call_tool_result_json,
 };
 use crate::requests::card::{
     ListCardChildrenRequest, ListCardParentsRequest, RemoveCardParentRequest, SetCardParentRequest,
 };
-use crate::scope::{Ref, ToolScope, ToolScoped};
+use crate::scope::{ToolScope, ToolScoped};
 use crate::KanbanMcpServer;
 use kanban_core::{resolve_page_params, PaginatedList};
-use kanban_domain::Model;
+use kanban_domain::{KanbanOperations, Model};
 use rmcp::{
     handler::server::wrapper::Parameters,
     model::{CallToolResult, ErrorData as McpError},
@@ -19,28 +19,19 @@ use uuid::Uuid;
 
 impl ToolScoped for SetCardParentRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.parent), Ref::of(&self.child)],
-            wants_graph: true,
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for RemoveCardParentRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.parent), Ref::of(&self.child)],
-            wants_graph: true,
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for ListCardParentsRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             wants_graph: true,
             ..Default::default()
         }
@@ -50,7 +41,6 @@ impl ToolScoped for ListCardParentsRequest {
 impl ToolScoped for ListCardChildrenRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             wants_graph: true,
             ..Default::default()
         }
@@ -78,11 +68,11 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let parent_raw = req.parent.clone();
         let child_raw = req.child.clone();
-        let scope = req.scope();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let child_id = resolve_card(&model, &req.child)?;
-            let parent_id = resolve_card(&model, &req.parent)?;
+            let child_id = ctx.resolve_card_id(&req.child).map_err(kanban_err_to_mcp)?;
+            let parent_id = ctx
+                .resolve_card_id(&req.parent)
+                .map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.attach_children_impl(parent_id, vec![child_id]))
                 .map_err(|e| mcp_enrich_add_error(e, &parent_raw, &child_raw))?;
@@ -102,11 +92,11 @@ impl KanbanMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let parent_raw = req.parent.clone();
         let child_raw = req.child.clone();
-        let scope = req.scope();
         let (child_id, parent_id) = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let child_id = resolve_card(&model, &req.child)?;
-            let parent_id = resolve_card(&model, &req.parent)?;
+            let child_id = ctx.resolve_card_id(&req.child).map_err(kanban_err_to_mcp)?;
+            let parent_id = ctx
+                .resolve_card_id(&req.parent)
+                .map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.detach_children_impl(parent_id, vec![child_id]))
                 .map_err(|e| mcp_enrich_remove_error(e, &parent_raw, &child_raw))?;
@@ -129,7 +119,7 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let parents = locked_read(&self.ctx, |ctx| -> Result<_, McpError> {
             let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let ids = list_parents_in_model(&model, id)?;
             Ok(resolve_summaries(ctx, ids))
         })
@@ -150,7 +140,7 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let children = locked_read(&self.ctx, |ctx| -> Result<_, McpError> {
             let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let ids = list_children_in_model(&model, id)?;
             Ok(resolve_summaries(ctx, ids))
         })
@@ -362,11 +352,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_card_parent_with_an_unloadable_card_list_errors_naming_the_collection_on_json(
-    ) {
+    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_json() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let err = seeded
             .server
@@ -378,17 +367,16 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_set_card_parent_with_an_unloadable_card_list_errors_naming_the_collection_on_sqlite(
-    ) {
+    async fn test_set_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_sqlite()
+    {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let err = seeded
             .server
@@ -400,9 +388,268 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_remove_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_json(
+    ) {
+        let seeded = seeded_server("test.json").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+        seeded.handle.fail("list_cards_by_prefix_and_number");
+
+        let err = seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("injected fault"));
+        assert!(!err.message.to_lowercase().contains("not found"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_remove_card_parent_with_an_unloadable_card_index_errors_naming_the_lookup_on_sqlite(
+    ) {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+        seeded.handle.fail("list_cards_by_prefix_and_number");
+
+        let err = seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("injected fault"));
+        assert!(!err.message.to_lowercase().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_set_card_parent_does_not_fetch_the_graph_or_the_card_list_on_json() {
+        let seeded = seeded_server("test.json").await;
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], seeded.card_b_id);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_set_card_parent_does_not_fetch_the_graph_or_the_card_list_on_sqlite() {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], seeded.card_b_id);
+    }
+
+    #[tokio::test]
+    async fn test_remove_card_parent_does_not_fetch_the_graph_or_the_card_list_on_json() {
+        let seeded = seeded_server("test.json").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert!(items.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_remove_card_parent_does_not_fetch_the_graph_or_the_card_list_on_sqlite() {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(seeded.handle.op_count("get_graph"), 0);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 2);
+
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: seeded.card_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items = response["items"].as_array().unwrap();
+        assert!(items.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_card_parents_still_fetches_the_graph_on_json() {
+        let seeded = seeded_server("test.json").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_list_card_parents(Parameters(ListCardParentsRequest {
+                card: seeded.card_b_identifier.clone(),
+                page: None,
+                page_size: None,
+            }))
+            .await
+            .unwrap();
+
+        assert!(seeded.handle.op_count("get_graph") >= 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_list_card_parents_still_fetches_the_graph_on_sqlite() {
+        let seeded = seeded_server("test.sqlite").await;
+        seeded
+            .server
+            .tool_set_card_parent(Parameters(SetCardParentRequest {
+                parent: seeded.card_a_identifier.clone(),
+                child: seeded.card_b_identifier.clone(),
+            }))
+            .await
+            .unwrap();
+        seeded.handle.clear_ops();
+
+        seeded
+            .server
+            .tool_list_card_parents(Parameters(ListCardParentsRequest {
+                card: seeded.card_b_identifier.clone(),
+                page: None,
+                page_size: None,
+            }))
+            .await
+            .unwrap();
+
+        assert!(seeded.handle.op_count("get_graph") >= 1);
     }
 
     #[tokio::test]
@@ -453,7 +700,7 @@ mod tests {
         assert_eq!(not_found_err.code, ErrorCode::INVALID_PARAMS);
         assert!(not_found_err.message.to_lowercase().contains("not found"));
 
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let fault_err = seeded
             .server
@@ -465,7 +712,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(fault_err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(fault_err.message.contains("card list"));
         assert!(fault_err.message.contains("injected fault"));
 
         assert_ne!(not_found_err.code, fault_err.code);

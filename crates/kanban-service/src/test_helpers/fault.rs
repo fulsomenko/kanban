@@ -37,6 +37,8 @@ pub const FAULTABLE_READS: &[&str] = &[
     "get_column",
     "list_all_cards",
     "list_cards_by_column",
+    "list_cards_by_prefix_and_number",
+    "list_cards_by_number",
     "get_card",
     "list_all_sprints",
     "list_sprints_by_board",
@@ -240,10 +242,12 @@ impl DataStore for FaultInjectingBackend {
         prefix: &str,
         card_number: u32,
     ) -> KanbanResult<Vec<Card>> {
+        self.check("list_cards_by_prefix_and_number", vec![])?;
         self.inner
             .list_cards_by_prefix_and_number(prefix, card_number)
     }
     fn list_cards_by_number(&self, card_number: u32) -> KanbanResult<Vec<Card>> {
+        self.check("list_cards_by_number", vec![])?;
         self.inner.list_cards_by_number(card_number)
     }
     fn get_card_by_board_and_number(

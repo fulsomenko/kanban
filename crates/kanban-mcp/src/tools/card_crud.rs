@@ -1,6 +1,6 @@
 use crate::helpers::model_read::{
-    resolve_board, resolve_card, resolve_column_global, resolve_column_in_board,
-    resolve_sprint_global, resolve_sprint_in_board,
+    resolve_board, resolve_column_global, resolve_column_in_board, resolve_sprint_global,
+    resolve_sprint_in_board,
 };
 use crate::helpers::{
     board_head, card_board, core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write,
@@ -61,10 +61,7 @@ impl ToolScoped for ListCardsRequest {
 
 impl ToolScoped for UpdateCardRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -72,7 +69,6 @@ impl ToolScoped for MoveCardRequest {
     fn scope(&self) -> ToolScope {
         let column_ref = Ref::of(&self.column);
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             column: Some(column_ref),
             wants_board_columns: matches!(column_ref, Ref::Name),
             ..Default::default()
@@ -82,10 +78,7 @@ impl ToolScoped for MoveCardRequest {
 
 impl ToolScoped for ArchiveCardRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -93,7 +86,6 @@ impl ToolScoped for RestoreCardRequest {
     fn scope(&self) -> ToolScope {
         let column_ref = self.column.as_deref().map(Ref::of);
         ToolScope {
-            cards: vec![Ref::of(&self.card)],
             column: column_ref,
             wants_board_columns: matches!(column_ref, Some(Ref::Name)),
             ..Default::default()
@@ -103,28 +95,19 @@ impl ToolScoped for RestoreCardRequest {
 
 impl ToolScoped for DeleteCardRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for GetCardBranchNameRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for GetCardGitCheckoutRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: vec![Ref::of(&self.card)],
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -276,7 +259,6 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let priority = req.priority.as_deref().map(parse_priority).transpose()?;
         let status = req.status.as_deref().map(parse_status).transpose()?;
         let due_date = if req.clear_due_date == Some(true) {
@@ -305,8 +287,7 @@ impl KanbanMcpServer {
             sprint_id: FieldUpdate::NoChange,
         };
         let card = locked_write(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             ctx.mutate(|c| c.update_card_impl(id, updates))
                 .map(|(card, _inv)| card)
                 .map_err(kanban_err_to_mcp)
@@ -320,12 +301,10 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<MoveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let card = locked_write(&self.ctx, |ctx| {
-            let mut model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let board_id = card_board(ctx, id)?;
-            ctx.sync_into(&req.scope().for_board(board_id), &mut model);
+            let model = ctx.model_for(&req.scope().for_board(board_id));
             let column_id = resolve_column_in_board(&model, &req.column, board_id)?;
             ctx.mutate(|c| c.move_card_impl(id, column_id, req.position))
                 .map(|(card, _inv)| card)
@@ -340,10 +319,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let (_val, _inv) = ctx
                 .mutate(|c| c.archive_card_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -358,14 +335,12 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<RestoreCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let card = locked_write(&self.ctx, |ctx| {
-            let mut model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let column_id = match req.column.as_deref() {
                 Some(raw) => {
                     let board_id = card_board(ctx, id)?;
-                    ctx.sync_into(&req.scope().for_board(board_id), &mut model);
+                    let model = ctx.model_for(&req.scope().for_board(board_id));
                     Some(resolve_column_in_board(&model, raw, board_id)?)
                 }
                 None => None,
@@ -383,10 +358,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteCardRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             let _inv = ctx
                 .mutate_unit(|c| c.delete_card_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -403,10 +376,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardBranchNameRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let branch_name = locked_read(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             ctx.get_card_branch_name(id).map_err(kanban_err_to_mcp)
         })
         .await?;
@@ -418,10 +389,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetCardGitCheckoutRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let command = locked_read(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_card(&model, &req.card)?;
+            let id = ctx.resolve_card_id(&req.card).map_err(kanban_err_to_mcp)?;
             ctx.get_card_git_checkout(id).map_err(kanban_err_to_mcp)
         })
         .await?;
@@ -616,7 +585,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_card_crud_tools_resolve_names_from_the_model_not_the_backend_on_json() {
+    async fn test_card_crud_tools_resolve_a_card_identifier_via_the_index_on_json() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
 
@@ -637,7 +606,8 @@ mod tests {
                 .unwrap(),
         );
         assert_eq!(updated["title"], "Renamed");
-        assert_eq!(seeded.handle.op_count("list_all_cards"), 1);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 1);
 
         seeded.handle.clear_ops();
         text_payload(
@@ -664,7 +634,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_card_crud_tools_resolve_names_from_the_model_not_the_backend_on_sqlite() {
+    async fn test_card_crud_tools_resolve_a_card_identifier_via_the_index_on_sqlite() {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
 
@@ -685,7 +655,8 @@ mod tests {
                 .unwrap(),
         );
         assert_eq!(updated["title"], "Renamed");
-        assert_eq!(seeded.handle.op_count("list_all_cards"), 1);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
+        assert_eq!(seeded.handle.op_count("list_cards_by_prefix_and_number"), 1);
 
         seeded.handle.clear_ops();
         text_payload(
@@ -712,11 +683,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_card_crud_tool_with_an_unloadable_collection_errors_instead_of_reporting_not_found_on_json(
+    async fn test_card_crud_tool_with_an_unloadable_card_index_errors_instead_of_reporting_not_found_on_json(
     ) {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let err = seeded
             .server
@@ -727,17 +698,16 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_card_crud_tool_with_an_unloadable_collection_errors_instead_of_reporting_not_found_on_sqlite(
+    async fn test_card_crud_tool_with_an_unloadable_card_index_errors_instead_of_reporting_not_found_on_sqlite(
     ) {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
         let err = seeded
             .server
@@ -748,7 +718,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
@@ -1134,7 +1103,7 @@ mod tests {
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 
-    async fn assert_card_ref_by_name_errors_on_unloadable_card_list(
+    async fn assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
         seeded: &Seeded,
         label: &str,
         result: Result<CallToolResult, McpError>,
@@ -1144,11 +1113,6 @@ mod tests {
             err.code,
             ErrorCode::INTERNAL_ERROR,
             "{label} did not surface INTERNAL_ERROR"
-        );
-        assert!(
-            err.message.contains("card list"),
-            "{label}: {}",
-            err.message
         );
         assert!(
             err.message.contains("injected fault"),
@@ -1164,12 +1128,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_card_crud_tools_error_on_unloadable_card_list_by_name_on_json() {
+    async fn test_card_crud_tools_error_on_an_unloadable_card_index_by_identifier_on_json() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_update_card",
             seeded
@@ -1188,7 +1152,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_move_card",
             seeded
@@ -1202,7 +1166,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_restore_card",
             seeded
@@ -1215,7 +1179,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_delete_card",
             seeded
@@ -1227,7 +1191,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_get_card_branch_name",
             seeded
@@ -1239,7 +1203,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_get_card_git_checkout",
             seeded
@@ -1253,12 +1217,12 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_card_crud_tools_error_on_unloadable_card_list_by_name_on_sqlite() {
+    async fn test_card_crud_tools_error_on_an_unloadable_card_index_by_identifier_on_sqlite() {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
-        seeded.handle.fail("list_all_cards");
+        seeded.handle.fail("list_cards_by_prefix_and_number");
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_update_card",
             seeded
@@ -1277,7 +1241,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_move_card",
             seeded
@@ -1291,7 +1255,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_restore_card",
             seeded
@@ -1304,7 +1268,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_delete_card",
             seeded
@@ -1316,7 +1280,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_get_card_branch_name",
             seeded
@@ -1328,7 +1292,7 @@ mod tests {
         )
         .await;
 
-        assert_card_ref_by_name_errors_on_unloadable_card_list(
+        assert_card_ref_by_identifier_errors_on_an_unloadable_card_index(
             &seeded,
             "tool_get_card_git_checkout",
             seeded
@@ -1686,5 +1650,214 @@ mod tests {
         assert!(err.message.contains("sprints of the board"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
+    }
+
+    async fn assert_ambiguous_bare_number_reports_ambiguity(file_name: &str) {
+        let seeded = seeded_server(file_name).await;
+
+        let second_board = text_payload(
+            &seeded
+                .server
+                .tool_create_board(Parameters(crate::requests::board::CreateBoardParams {
+                    content: CreateBoardRequest {
+                        id: None,
+                        name: "Beta".to_string(),
+                        description: None,
+                        sprint_prefix: None,
+                        card_prefix: Some("BETA".to_string()),
+                        task_sort_field: None,
+                        task_sort_order: None,
+                        sprint_duration_days: None,
+                        task_list_view: None,
+                    },
+                    with_default_columns: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_board_id = second_board["id"].as_str().unwrap().to_string();
+
+        let second_column = text_payload(
+            &seeded
+                .server
+                .tool_create_column(Parameters(CreateColumnParams {
+                    board: second_board_id.clone(),
+                    content: kanban_service::api::CreateColumnRequest {
+                        id: None,
+                        name: "TODO".to_string(),
+                        wip_limit: None,
+                        default_status: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_column_id = second_column["id"].as_str().unwrap().to_string();
+
+        text_payload(
+            &seeded
+                .server
+                .tool_create_card(Parameters(CreateCardParams {
+                    board: second_board_id,
+                    column: second_column_id,
+                    sprint: None,
+                    content: kanban_service::api::CreateCardRequest {
+                        id: None,
+                        title: "Other board's card".to_string(),
+                        description: None,
+                        priority: None,
+                        due_date: None,
+                        points: None,
+                        sprint_id: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+
+        let err = seeded
+            .server
+            .tool_update_card(Parameters(UpdateCardRequest {
+                card: "1".to_string(),
+                title: Some("Should not apply".into()),
+                description: None,
+                priority: None,
+                status: None,
+                due_date: None,
+                clear_due_date: None,
+                points: None,
+            }))
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains("Do the thing"));
+        assert!(err.message.contains("Other board's card"));
+
+        let card = text_payload(
+            &seeded
+                .server
+                .tool_get_card(Parameters(GetCardRequest {
+                    card: seeded.card_id.clone(),
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(card["title"], "Do the thing");
+    }
+
+    #[tokio::test]
+    async fn test_update_card_by_an_ambiguous_bare_number_reports_ambiguity_on_json() {
+        assert_ambiguous_bare_number_reports_ambiguity("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_update_card_by_an_ambiguous_bare_number_reports_ambiguity_on_sqlite() {
+        assert_ambiguous_bare_number_reports_ambiguity("test.sqlite").await;
+    }
+
+    async fn assert_update_card_on_an_archived_board_still_mutates_it(file_name: &str) {
+        let seeded = seeded_server(file_name).await;
+
+        let second_board = text_payload(
+            &seeded
+                .server
+                .tool_create_board(Parameters(crate::requests::board::CreateBoardParams {
+                    content: CreateBoardRequest {
+                        id: None,
+                        name: "Beta".to_string(),
+                        description: None,
+                        sprint_prefix: None,
+                        card_prefix: Some("BETA".to_string()),
+                        task_sort_field: None,
+                        task_sort_order: None,
+                        sprint_duration_days: None,
+                        task_list_view: None,
+                    },
+                    with_default_columns: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_board_id = second_board["id"].as_str().unwrap().to_string();
+
+        let second_column = text_payload(
+            &seeded
+                .server
+                .tool_create_column(Parameters(CreateColumnParams {
+                    board: second_board_id.clone(),
+                    content: kanban_service::api::CreateColumnRequest {
+                        id: None,
+                        name: "TODO".to_string(),
+                        wip_limit: None,
+                        default_status: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_column_id = second_column["id"].as_str().unwrap().to_string();
+
+        let second_card = text_payload(
+            &seeded
+                .server
+                .tool_create_card(Parameters(CreateCardParams {
+                    board: second_board_id.clone(),
+                    column: second_column_id,
+                    sprint: None,
+                    content: kanban_service::api::CreateCardRequest {
+                        id: None,
+                        title: "Card on archived board".to_string(),
+                        description: None,
+                        priority: None,
+                        due_date: None,
+                        points: None,
+                        sprint_id: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_card_identifier = format!(
+            "{}-{}",
+            second_card["prefix"].as_str().unwrap(),
+            second_card["card_number"].as_u64().unwrap()
+        );
+
+        seeded
+            .server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: second_board_id,
+            }))
+            .await
+            .unwrap();
+
+        let updated = text_payload(
+            &seeded
+                .server
+                .tool_update_card(Parameters(UpdateCardRequest {
+                    card: second_card_identifier,
+                    title: Some("Renamed on an archived board".into()),
+                    description: None,
+                    priority: None,
+                    status: None,
+                    due_date: None,
+                    clear_due_date: None,
+                    points: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(updated["title"], "Renamed on an archived board");
+    }
+
+    #[tokio::test]
+    async fn test_update_card_by_identifier_on_an_archived_board_still_mutates_it_on_json() {
+        assert_update_card_on_an_archived_board_still_mutates_it("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_update_card_by_identifier_on_an_archived_board_still_mutates_it_on_sqlite() {
+        assert_update_card_on_an_archived_board_still_mutates_it("test.sqlite").await;
     }
 }
