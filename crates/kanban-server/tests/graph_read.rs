@@ -4,8 +4,8 @@
 //! Established via `tower::ServiceExt::oneshot` against the router directly,
 //! with no real TCP socket.
 
-use kanban_domain::{GraphOperations, RelatesKind, Severity};
-use kanban_server::test_helpers::{json_of, make_state, send};
+use kanban_domain::{GraphOperations, LoadState, RelatesKind, Severity};
+use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::KanbanOperations;
 use serde_json::json;
 use tempfile::tempdir;
@@ -170,4 +170,134 @@ async fn test_get_card_graph_existing_card_with_no_edges_returns_200_empty_array
             "related": [],
         })
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_graph_populates_the_graph_and_per_id_card_tiers() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let subject: Uuid;
+    let child: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        let board = ctx
+            .create_board("Board".to_string(), Some("KAN".to_string()))
+            .unwrap();
+        let column = ctx
+            .create_column(board.id, "Todo".to_string(), None)
+            .unwrap();
+        subject = ctx
+            .create_card(
+                board.id,
+                column.id,
+                "Subject".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        child = ctx
+            .create_card(board.id, column.id, "Child".to_string(), Default::default())
+            .unwrap()
+            .id;
+        ctx.attach_children(subject, vec![child]).unwrap();
+    }
+
+    let response = send(&state, "GET", &format!("/v1/cards/{subject}/graph"), None).await;
+    assert_eq!(response.status(), 200);
+    let response_json = json_of(response).await;
+    assert_eq!(response_json["children"], json!([child]));
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.graph_state(), LoadState::Loaded(_)),
+        "get_card_graph must sync the graph tier"
+    );
+    assert!(
+        matches!(guard.model.card_id_status(subject), LoadState::Loaded(_)),
+        "get_card_graph must sync the per-id card tier"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_graph_unknown_card_records_missing_on_the_per_id_card_tier_and_returns_404()
+{
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    {
+        let mut ctx = state.ctx.lock().await;
+        let board = ctx
+            .create_board("Board".to_string(), Some("KAN".to_string()))
+            .unwrap();
+        ctx.create_column(board.id, "Todo".to_string(), None)
+            .unwrap();
+    }
+
+    let unknown_id = Uuid::new_v4();
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/cards/{unknown_id}/graph"),
+        None,
+    )
+    .await;
+
+    assert_eq!(response.status(), 404);
+    let response_json = json_of(response).await;
+    assert_eq!(response_json["code"], "NOT_FOUND");
+    assert!(response_json.get("children").is_none());
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.card_id_status(unknown_id), LoadState::Missing),
+        "an unknown card id must be recorded Missing on the per-id tier"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_graph_on_a_sqlite_locator_syncs_the_graph_tier() {
+    let dir = tempdir().unwrap();
+    let state = make_sqlite_state(&dir.path().join("b.sqlite")).await;
+
+    let subject: Uuid;
+    let child: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        let board = ctx
+            .create_board("Board".to_string(), Some("KAN".to_string()))
+            .unwrap();
+        let column = ctx
+            .create_column(board.id, "Todo".to_string(), None)
+            .unwrap();
+        subject = ctx
+            .create_card(
+                board.id,
+                column.id,
+                "Subject".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        child = ctx
+            .create_card(board.id, column.id, "Child".to_string(), Default::default())
+            .unwrap()
+            .id;
+        ctx.attach_children(subject, vec![child]).unwrap();
+    }
+
+    let response = send(&state, "GET", &format!("/v1/cards/{subject}/graph"), None).await;
+    assert_eq!(response.status(), 200);
+    let response_json = json_of(response).await;
+    assert_eq!(response_json["children"], json!([child]));
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.graph_state(), LoadState::Loaded(_)),
+        "sqlite: get_card_graph must sync the graph tier"
+    );
+    assert!(matches!(
+        guard.model.card_id_status(subject),
+        LoadState::Loaded(_)
+    ));
 }
