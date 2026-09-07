@@ -1618,6 +1618,55 @@ mod cards_tier_decline_tests {
         );
     }
 
+    fn invalidate_columns_tier(app: &mut App) {
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::columns([
+                uuid::Uuid::new_v4(),
+            ])));
+    }
+
+    fn resupply_scoped_columns_only(app: &mut App, board_id: uuid::Uuid) {
+        let columns = app
+            .ctx
+            .data_store()
+            .list_all_columns()
+            .unwrap()
+            .into_iter()
+            .filter(|c| c.board_id == board_id)
+            .collect();
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            columns: kanban_domain::resolved::Collection {
+                by_parent: [(board_id, kanban_domain::LoadState::Loaded(columns))].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        NoProjections.resync(&app.model, changed);
+    }
+
+    #[test]
+    fn test_create_card_creates_when_only_the_scoped_column_tier_is_loaded() {
+        let mut app = App::test_default();
+        let (board_id, _column_id, _card_id) = seed_board_column_card(&mut app);
+        refresh(&mut app);
+        app.selection.active_board_id = Some(board_id);
+
+        invalidate_columns_tier(&mut app);
+        resupply_scoped_columns_only(&mut app, board_id);
+
+        app.input.set("New card".to_string());
+        app.create_card();
+        app.input.clear();
+
+        assert!(app.ui_state.banner.is_none());
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        assert!(
+            cards.iter().any(|c| c.title == "New card"),
+            "the card must be created from the scoped-only column tier"
+        );
+    }
+
     #[test]
     fn test_handle_move_card_with_a_not_loaded_cards_tier_declines() {
         let mut app = App::test_default();

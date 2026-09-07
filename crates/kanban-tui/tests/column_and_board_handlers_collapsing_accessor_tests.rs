@@ -442,3 +442,90 @@ fn test_all_nine_migrated_sites_still_produce_identical_results_on_a_fully_loade
 
     assert!(app.ui_state.banner.is_none());
 }
+
+fn resupply_scoped_columns_only(app: &mut App, board_id: Uuid) {
+    use kanban_domain::resolved::Collection;
+    use kanban_domain::{LoadState, Resolved};
+
+    let columns = app
+        .ctx
+        .data_store()
+        .list_all_columns()
+        .unwrap()
+        .into_iter()
+        .filter(|c| c.board_id == board_id)
+        .collect();
+    let _ = app.model.apply_resolved(Resolved {
+        columns: Collection {
+            by_parent: [(board_id, LoadState::Loaded(columns))].into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+}
+
+#[test]
+fn test_delete_column_deletes_when_only_the_scoped_column_tier_is_loaded() {
+    let mut app = App::test_default();
+    let (board_id, first, second) = seed_board_with_two_columns(&mut app);
+    sync_model_from_store(&mut app);
+    invalidate_columns_tier(&mut app);
+    resupply_scoped_columns_only(&mut app, board_id);
+
+    app.selection.active_board_id = Some(board_id);
+    app.focus.board_focus = BoardFocus::Columns;
+    app.dialog_input.column_list.update_item_count(2);
+    app.dialog_input.column_list.set_selected_index(Some(0));
+
+    app.delete_column();
+
+    assert!(app.ui_state.banner.is_none());
+    assert!(app.ctx.data_store().get_column(first).unwrap().is_none());
+    assert!(app.ctx.data_store().get_column(second).unwrap().is_some());
+}
+
+#[test]
+fn test_rename_column_renames_when_only_the_scoped_column_tier_is_loaded() {
+    let mut app = App::test_default();
+    let (board_id, first, _second) = seed_board_with_two_columns(&mut app);
+    sync_model_from_store(&mut app);
+    invalidate_columns_tier(&mut app);
+    resupply_scoped_columns_only(&mut app, board_id);
+
+    app.selection.active_board_id = Some(board_id);
+    app.focus.board_focus = BoardFocus::Columns;
+    app.dialog_input.column_list.update_item_count(2);
+    app.dialog_input.column_list.set_selected_index(Some(0));
+
+    app.input.set("Renamed".to_string());
+    app.rename_column();
+
+    assert!(app.ui_state.banner.is_none());
+    let renamed = app.ctx.data_store().get_column(first).unwrap().unwrap();
+    assert_eq!(renamed.name, "Renamed");
+}
+
+#[test]
+fn test_rename_column_declines_when_no_column_tier_is_loaded() {
+    let mut app = App::test_default();
+    let (board_id, first, _second) = seed_board_with_two_columns(&mut app);
+    sync_model_from_store(&mut app);
+    invalidate_columns_tier(&mut app);
+
+    app.selection.active_board_id = Some(board_id);
+    app.focus.board_focus = BoardFocus::Columns;
+    app.dialog_input.column_list.update_item_count(2);
+    app.dialog_input.column_list.set_selected_index(Some(0));
+
+    app.input.set("Renamed".to_string());
+    app.rename_column();
+
+    let banner = app
+        .ui_state
+        .banner
+        .as_ref()
+        .expect("declining a NotLoaded columns tier must set an error banner");
+    assert!(banner.message.to_lowercase().contains("column"));
+    let unchanged = app.ctx.data_store().get_column(first).unwrap().unwrap();
+    assert_eq!(unchanged.name, "Todo");
+}

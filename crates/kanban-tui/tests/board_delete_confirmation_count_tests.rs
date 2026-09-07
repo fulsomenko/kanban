@@ -77,3 +77,62 @@ fn test_board_delete_confirmation_card_count_excludes_archived_cards() {
         output
     );
 }
+
+#[test]
+fn test_the_delete_board_confirmation_reports_the_archived_count_after_a_lazy_populate() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let col = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    let _live = app
+        .ctx
+        .create_card(board.id, col.id, "Live".to_string(), Default::default())
+        .unwrap();
+    let archived = app
+        .ctx
+        .create_card(board.id, col.id, "Archived".to_string(), Default::default())
+        .unwrap();
+    app.ctx.archive_card(archived.id).unwrap();
+
+    app.populate(kanban_tui::app::ViewScope {
+        board_list: true,
+        board: Some(board.id),
+        board_columns: true,
+        board_cards: true,
+        board_sprints: true,
+        ..Default::default()
+    });
+    app.prepare_frame();
+
+    assert!(
+        !app.model.archived_card_markers_absorbed(),
+        "a lazy populate must not absorb the archived marker tier"
+    );
+
+    app.board_list.inner_mut().set_selected_index(Some(0));
+    app.selection.active_board_id = Some(board.id);
+    app.focus.active = Focus::Boards;
+
+    app.handle_delete_board_key();
+
+    assert!(
+        app.ui_state.banner.is_none(),
+        "the delete-board confirmation must open after absorbing the archived tier, got banner:\n{:?}",
+        app.ui_state.banner
+    );
+
+    let output = render_to_string(&mut app, 100, 30);
+
+    assert!(
+        output.contains("1 archived task(s)"),
+        "the archived task count must reflect the one archived card, got:\n{}",
+        output
+    );
+    assert!(
+        output.contains("1 task(s)"),
+        "the live task count must be reported, got:\n{}",
+        output
+    );
+}
