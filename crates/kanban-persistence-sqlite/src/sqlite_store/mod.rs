@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use kanban_domain::{KanbanError, KanbanResult};
@@ -48,7 +48,6 @@ type MetadataRow = (String, String, Option<String>, Option<String>, u32);
 /// SQLite-backed persistence store using sqlx connection pool.
 pub struct SqliteStore {
     pub(crate) pool: Pool<Sqlite>,
-    pub(crate) path: PathBuf,
     pub(crate) instance_id: Uuid,
     /// Ambient transaction driven by `SqliteBackend::with_transaction`. When
     /// `Some`, every `db_conn`/`db_conn_local` call joins it instead of
@@ -155,7 +154,6 @@ impl SqliteStore {
 
         Ok(Self {
             pool,
-            path: path_buf,
             instance_id,
             active_tx: tokio::sync::Mutex::new(None),
         })
