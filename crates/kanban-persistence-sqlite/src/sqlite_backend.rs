@@ -7,7 +7,7 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::data_store::DataStore;
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, KanbanError,
-    KanbanResult, Snapshot, Sprint,
+    KanbanResult, Sprint,
 };
 use kanban_persistence::{PersistenceMetadata, PersistenceStore};
 use uuid::Uuid;
@@ -236,13 +236,6 @@ impl DataStore for SqliteBackend {
     }
     fn modify_graph(&self, f: GraphMutFn) -> KanbanResult<()> {
         self.db.modify_graph(f)
-    }
-
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.db.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.db.apply_snapshot(snapshot)
     }
 }
 

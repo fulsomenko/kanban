@@ -170,13 +170,6 @@ mod tests {
             self.0.upsert_prefix(prefix)
         }
 
-        fn snapshot(&self) -> KanbanResult<Snapshot> {
-            panic!("read_full_snapshot must compose per-entity reads, not call snapshot()")
-        }
-        fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
-            panic!("write_full_snapshot must compose per-entity writes, not call apply_snapshot()")
-        }
-
         fn get_board(&self, id: Uuid) -> KanbanResult<Option<Board>> {
             self.0.get_board(id)
         }
@@ -769,12 +762,6 @@ mod tests {
             timestamp: chrono::DateTime<chrono::Utc>,
         ) -> KanbanResult<()> {
             self.inner.clear_sprint_from_cards(sprint_id, timestamp)
-        }
-        fn snapshot(&self) -> KanbanResult<Snapshot> {
-            panic!("write_full_snapshot must compose per-entity writes, not call apply_snapshot()")
-        }
-        fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
-            panic!("write_full_snapshot must compose per-entity writes, not call apply_snapshot()")
         }
     }
 

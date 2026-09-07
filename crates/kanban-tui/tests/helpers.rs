@@ -4,7 +4,7 @@ use kanban_backend::{KanbanBackend, RemoteWrites, TransactionFn};
 use kanban_domain::KanbanError;
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, CommandBatch, CommandStore, DataStore,
-    DependencyGraph, KanbanResult, Snapshot, Sprint,
+    DependencyGraph, KanbanResult, Sprint,
 };
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::{AppMode, DialogMode};
@@ -282,13 +282,6 @@ impl DataStore for CountingBackend {
         self.record("modify_graph", vec![]);
         self.inner.modify_graph(f)
     }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.record("snapshot", vec![]);
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
-    }
 }
 
 impl CommandStore for CountingBackend {
@@ -504,13 +497,6 @@ impl DataStore for SnapshotCountingBackend {
     fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         self.inner.modify_graph(f)
     }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.snapshot_reads.fetch_add(1, Ordering::SeqCst);
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
-    }
 }
 
 impl CommandStore for SnapshotCountingBackend {
@@ -718,14 +704,6 @@ impl DataStore for FailingSnapshotBackend {
     fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         self.inner.modify_graph(f)
     }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        Err(kanban_domain::KanbanError::Database(
-            "simulated transient read failure".to_string(),
-        ))
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
-    }
 }
 
 impl CommandStore for FailingSnapshotBackend {
@@ -928,12 +906,6 @@ impl DataStore for FailingBoardListBackend {
     }
     fn modify_graph(&self, f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
         self.inner.modify_graph(f)
-    }
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
     }
 }
 

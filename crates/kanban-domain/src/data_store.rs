@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::{
-    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Prefix, Snapshot, Sprint,
+    ArchivedCard, Board, Card, Column, DependencyGraph, KanbanResult, Prefix, Sprint,
 };
 
 pub type GraphMutFn = Box<dyn FnOnce(&mut DependencyGraph) -> KanbanResult<()>>;
@@ -457,12 +457,6 @@ mod tests {
             unimplemented!()
         }
         fn set_graph(&self, _graph: DependencyGraph) -> KanbanResult<()> {
-            unimplemented!()
-        }
-        fn snapshot(&self) -> KanbanResult<Snapshot> {
-            unimplemented!()
-        }
-        fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
             unimplemented!()
         }
     }

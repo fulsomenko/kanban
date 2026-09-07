@@ -390,15 +390,6 @@ impl DataStore for JsonDataStore {
     fn modify_graph(&self, f: GraphMutFn) -> KanbanResult<()> {
         self.with_mutate(|s| s.modify_graph(f))
     }
-
-    // Snapshot
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.with_read(|s| s.snapshot())
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        kanban_domain::ensure_prefix_rows_exist(&snapshot.cards, &snapshot.prefixes)?;
-        self.with_mutate(|s| s.apply_snapshot(snapshot))
-    }
 }
 
 // ─── CommandStore ─────────────────────────────────────────────────────────────

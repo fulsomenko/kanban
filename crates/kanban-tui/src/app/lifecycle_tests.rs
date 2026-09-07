@@ -336,14 +336,6 @@ impl kanban_domain::DataStore for HostileSourceBackend {
     fn list_boards(&self) -> kanban_domain::KanbanResult<Vec<kanban_domain::Board>> {
         self.inner.as_data_store().list_boards()
     }
-    fn snapshot(&self) -> kanban_domain::KanbanResult<kanban_domain::Snapshot> {
-        Err(kanban_domain::KanbanError::Database(
-            "HostileSourceBackend: snapshot must not be called".into(),
-        ))
-    }
-    fn apply_snapshot(&self, snapshot: kanban_domain::Snapshot) -> kanban_domain::KanbanResult<()> {
-        self.inner.as_data_store().apply_snapshot(snapshot)
-    }
 }
 
 impl kanban_domain::command_store::CommandStore for HostileSourceBackend {
@@ -406,17 +398,6 @@ impl kanban_domain::DataStore for HostileTargetBackend {
 
     fn list_boards(&self) -> kanban_domain::KanbanResult<Vec<kanban_domain::Board>> {
         self.inner.as_data_store().list_boards()
-    }
-    fn snapshot(&self) -> kanban_domain::KanbanResult<kanban_domain::Snapshot> {
-        self.inner.as_data_store().snapshot()
-    }
-    fn apply_snapshot(
-        &self,
-        _snapshot: kanban_domain::Snapshot,
-    ) -> kanban_domain::KanbanResult<()> {
-        Err(kanban_domain::KanbanError::Database(
-            "HostileTargetBackend: apply_snapshot must not be called".into(),
-        ))
     }
 }
 
@@ -533,12 +514,6 @@ struct UnreadableTargetBackend {
 impl kanban_domain::DataStore for UnreadableTargetBackend {
     delegate_data_store!();
 
-    fn snapshot(&self) -> kanban_domain::KanbanResult<kanban_domain::Snapshot> {
-        self.inner.as_data_store().snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: kanban_domain::Snapshot) -> kanban_domain::KanbanResult<()> {
-        self.inner.as_data_store().apply_snapshot(snapshot)
-    }
     fn list_boards(&self) -> kanban_domain::KanbanResult<Vec<kanban_domain::Board>> {
         Err(kanban_domain::KanbanError::Database(
             "UnreadableTargetBackend: list_boards must not be called".into(),

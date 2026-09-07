@@ -8,7 +8,7 @@ use kanban_domain::command_store::CommandStore;
 use kanban_domain::data_store::{DataStore, GraphMutFn};
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, ArchivedFilter, Board, Card, Column, DependencyGraph, KanbanError,
-    KanbanResult, Prefix, Snapshot, Sprint,
+    KanbanResult, Prefix, Sprint,
 };
 use uuid::Uuid;
 
@@ -384,13 +384,6 @@ impl DataStore for FaultInjectingBackend {
     }
     fn modify_graph(&self, f: GraphMutFn) -> KanbanResult<()> {
         self.inner.modify_graph(f)
-    }
-
-    fn snapshot(&self) -> KanbanResult<Snapshot> {
-        self.inner.snapshot()
-    }
-    fn apply_snapshot(&self, snapshot: Snapshot) -> KanbanResult<()> {
-        self.inner.apply_snapshot(snapshot)
     }
 }
 

@@ -282,12 +282,6 @@ mod tests {
         fn set_graph(&self, _graph: DependencyGraph) -> KanbanResult<()> {
             unimplemented!()
         }
-        fn snapshot(&self) -> KanbanResult<Snapshot> {
-            unimplemented!()
-        }
-        fn apply_snapshot(&self, _snapshot: Snapshot) -> KanbanResult<()> {
-            unimplemented!()
-        }
     }
 
     impl CommandStore for StubBackend {
