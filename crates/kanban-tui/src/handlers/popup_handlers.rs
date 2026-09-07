@@ -356,24 +356,27 @@ impl App {
                         return;
                     }
                 };
-                let card_id = match self
+                let card_id = self
                     .model
                     .card_by_id_state(active_card_id)
                     .loaded()
                     .copied()
-                {
-                    Some(card) => card.id,
-                    None => return,
+                    .map(|c| c.id);
+                let Some(card_id) = card_id else {
+                    self.set_error("Card is not loaded yet".to_string());
+                    return;
                 };
                 let active_board_id = self
                     .selection
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                     .map(|b| b.id);
+                let Some(active_board_id) = active_board_id else {
+                    self.set_error("Board is not loaded yet".to_string());
+                    return;
+                };
                 let picker = &self.dialog_input.assign_sprint_picker;
-                let board_matches = active_board_id
-                    .map(|bid| picker.bound_board_id() == Some(bid))
-                    .unwrap_or(false);
+                let board_matches = picker.bound_board_id() == Some(active_board_id);
                 let cmd = if !board_matches {
                     None
                 } else if let Some(sprint_id) = picker.selected_sprint_id() {
@@ -442,10 +445,12 @@ impl App {
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                     .map(|b| b.id);
+                let Some(active_board_id) = active_board_id else {
+                    self.set_error("Board is not loaded yet".to_string());
+                    return;
+                };
                 let picker = &self.dialog_input.assign_sprint_picker;
-                let board_matches = active_board_id
-                    .map(|bid| picker.bound_board_id() == Some(bid))
-                    .unwrap_or(false);
+                let board_matches = picker.bound_board_id() == Some(active_board_id);
                 let cmds: Vec<kanban_domain::commands::Command> = if !board_matches {
                     Vec::new()
                 } else if let Some(sprint_id) = picker.selected_sprint_id() {
@@ -778,7 +783,9 @@ impl App {
 #[cfg(test)]
 mod tests {
     use crate::app::{AppMode, DialogMode};
-    use crate::test_helpers::{load_with_card_order, setup_reload_resort_fixture, ReloadResortFixture};
+    use crate::test_helpers::{
+        load_with_card_order, setup_reload_resort_fixture, ReloadResortFixture,
+    };
     use crate::App;
     use crossterm::event::KeyCode;
     use kanban_domain::{
