@@ -9,7 +9,7 @@ use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, Card, Column, DependencyGraph, GraphMutFn, KanbanError,
     KanbanResult, Sprint,
 };
-use kanban_persistence::{PersistenceMetadata, PersistenceStore};
+use kanban_persistence::PersistenceMetadata;
 use uuid::Uuid;
 
 pub struct SqliteBackend {

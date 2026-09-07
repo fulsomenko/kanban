@@ -15,7 +15,6 @@ mod helpers;
 mod init;
 mod lists;
 mod metadata;
-mod persistence_store;
 mod prefix_fk;
 mod prefix_repair;
 mod snapshot;
@@ -175,5 +174,12 @@ impl SqliteStore {
 
     pub fn instance_id(&self) -> Uuid {
         self.instance_id
+    }
+
+    /// Closes the underlying pool. Callers that may delete the database file
+    /// afterwards must await this first: Windows refuses to unlink a file with
+    /// live handles.
+    pub async fn close(&self) {
+        self.pool.close().await;
     }
 }
