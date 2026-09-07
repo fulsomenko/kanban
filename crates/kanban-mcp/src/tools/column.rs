@@ -268,7 +268,7 @@ mod tests {
         };
         let round = named_get.scope().next_round(&Model::default());
         assert!(round.column_list);
-        assert!(!round.board_list);
+        assert!(round.board_list);
         assert!(round.columns_by_board.is_empty());
         assert!(!named_get.scope().wants_board_columns);
 
@@ -288,7 +288,7 @@ mod tests {
         };
         let round = named_update.scope().next_round(&Model::default());
         assert!(round.column_list);
-        assert!(!round.board_list);
+        assert!(round.board_list);
         assert!(!named_update.scope().wants_board_columns);
 
         let named_delete = DeleteColumnRequest {
@@ -296,6 +296,7 @@ mod tests {
         };
         let round = named_delete.scope().next_round(&Model::default());
         assert!(round.column_list);
+        assert!(round.board_list);
         assert!(!named_delete.scope().wants_board_columns);
 
         let named_reorder = ReorderColumnRequest {
@@ -304,6 +305,7 @@ mod tests {
         };
         let round = named_reorder.scope().next_round(&Model::default());
         assert!(round.column_list);
+        assert!(round.board_list);
         assert!(!named_reorder.scope().wants_board_columns);
     }
 
@@ -491,7 +493,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_column_by_name_reads_the_column_list_exactly_once_on_json() {
+    async fn test_get_column_by_name_reads_the_column_list_and_the_board_list_exactly_once_on_json()
+    {
         let (server, _dir, handle) = seeded_server("test.json").await;
         handle.clear_ops();
 
@@ -503,11 +506,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(handle.op_count("list_all_columns"), 1);
-        assert_eq!(handle.op_count("list_boards"), 0);
+        assert_eq!(handle.op_count("list_boards"), 1);
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_get_column_by_name_reads_the_column_list_exactly_once_on_sqlite() {
+    async fn test_get_column_by_name_reads_the_column_list_and_the_board_list_exactly_once_on_sqlite(
+    ) {
         let (server, _dir, handle) = seeded_server("test.sqlite").await;
         handle.clear_ops();
 
@@ -519,7 +523,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(handle.op_count("list_all_columns"), 1);
-        assert_eq!(handle.op_count("list_boards"), 0);
+        assert_eq!(handle.op_count("list_boards"), 1);
     }
 
     #[tokio::test]
@@ -692,6 +696,47 @@ mod tests {
                 .unwrap(),
         );
         assert_eq!(still_live["name"], "Icebox");
+    }
+
+    #[tokio::test]
+    async fn test_column_ambiguity_error_names_the_real_boards_on_json() {
+        test_column_ambiguity_error_names_the_real_boards("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_column_ambiguity_error_names_the_real_boards_on_sqlite() {
+        test_column_ambiguity_error_names_the_real_boards("test.sqlite").await;
+    }
+
+    async fn test_column_ambiguity_error_names_the_real_boards(file_name: &str) {
+        let (server, _dir, _handle) = seeded_server(file_name).await;
+
+        create_board(&server, "Beta").await;
+        server
+            .tool_create_column(Parameters(CreateColumnParams {
+                board: "Beta".into(),
+                content: kanban_service::api::CreateColumnRequest {
+                    id: None,
+                    name: "TODO".into(),
+                    wip_limit: None,
+                    default_status: None,
+                },
+            }))
+            .await
+            .unwrap();
+
+        let err = server
+            .tool_get_column(Parameters(GetColumnRequest {
+                column: "TODO".into(),
+            }))
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err.message.contains("is ambiguous"));
+        assert!(err.message.contains("on board 'Alpha'"));
+        assert!(err.message.contains("on board 'Beta'"));
+        assert!(!err.message.contains("(unknown)"));
     }
 
     #[tokio::test]

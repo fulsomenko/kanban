@@ -51,7 +51,8 @@ impl FetchPlan for ToolScope {
         let named_cards = self.cards.iter().any(|r| matches!(r, Ref::Name));
         let wants_board_list = matches!(self.board, Some(Ref::Name))
             || (self.resolved_board.is_some() && self.wants_board_sprints)
-            || matches!(self.sprint, Some(Ref::Name));
+            || matches!(self.sprint, Some(Ref::Name))
+            || global_column;
         FetchRound {
             board_list: wants_board_list && requestable(loaded.board_list()),
             column_list: global_column && requestable(loaded.column_list()),
@@ -339,6 +340,35 @@ mod tests {
         let round = scope.next_round(&Model::default());
         assert!(round.board_list);
         assert!(round.sprint_list);
+    }
+
+    #[test]
+    fn test_a_named_global_column_reference_also_requests_the_board_list() {
+        let scope = ToolScope {
+            column: Some(Ref::Name),
+            ..Default::default()
+        };
+
+        let round = scope.next_round(&Model::default());
+        assert!(round.board_list);
+        assert!(round.column_list);
+    }
+
+    #[test]
+    fn test_a_board_scoped_column_reference_requests_no_board_list() {
+        let scoped = ToolScope {
+            column: Some(Ref::Name),
+            wants_board_columns: true,
+            ..Default::default()
+        }
+        .for_board(Uuid::new_v4());
+        assert!(!scoped.next_round(&Model::default()).board_list);
+
+        let by_id = ToolScope {
+            column: Some(Ref::Id),
+            ..Default::default()
+        };
+        assert!(by_id.next_round(&Model::default()).is_empty());
     }
 
     #[test]
