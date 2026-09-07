@@ -5,7 +5,7 @@
 //! to know the owning board id. Response shape is identical to board-scoped routes.
 
 use axum::http::StatusCode;
-use kanban_domain::KanbanOperations;
+use kanban_domain::{KanbanOperations, LoadState};
 use kanban_server::state::AppState;
 use kanban_server::test_helpers::{json_of, make_state, send};
 use serde_json::json;
@@ -329,6 +329,43 @@ async fn test_get_sprint_flat_missing_returns_404() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let json = json_of(response).await;
     assert_eq!(json["code"], "NOT_FOUND");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_flat_serves_an_archived_card_from_the_per_id_tier_without_stamping_archived_at(
+) {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let card_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        let board_id = ctx
+            .create_board("Board".to_string(), Some("KAN".to_string()))
+            .unwrap()
+            .id;
+        let col = ctx
+            .create_column(board_id, "To Do".to_string(), None)
+            .unwrap();
+        let card = ctx
+            .create_card(board_id, col.id, "Task".to_string(), Default::default())
+            .unwrap();
+        card_id = card.id;
+        ctx.archive_card(card_id).unwrap();
+    }
+
+    let response = send(&state, "GET", &format!("/v1/cards/{card_id}"), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    assert!(
+        json.get("archived_at").is_none(),
+        "flat get_card must not stamp archived_at"
+    );
+
+    let guard = state.ctx.lock().await;
+    assert!(matches!(
+        guard.model.card_id_status(card_id),
+        LoadState::Loaded(_)
+    ));
 }
 
 #[tokio::test(flavor = "multi_thread")]

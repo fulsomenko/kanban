@@ -4,6 +4,7 @@
 //! exists in `FetchRound` at any level, so that route stays a lock-only
 //! read outside this plan.
 
+use kanban_domain::ArchivedFilter;
 use kanban_service::{requestable, FetchPlan, FetchRound, LoadedEntities};
 use uuid::Uuid;
 
@@ -15,6 +16,7 @@ pub enum RouteScope {
     BoardCards {
         board_id: Uuid,
         column_id: Option<Uuid>,
+        archived: ArchivedFilter,
     },
     BoardArchivedCards(Uuid),
     BoardSprints(Uuid),
@@ -56,13 +58,11 @@ impl FetchPlan for RouteScope {
             RouteScope::BoardCards {
                 board_id,
                 column_id,
+                archived,
             } => {
                 want_board(&mut round, loaded, board_id);
                 if requestable(loaded.columns_of_board(board_id)) {
                     round.columns_by_board.push(board_id);
-                }
-                if requestable(loaded.archived_cards_of_board(board_id)) {
-                    round.archived_cards_by_board.push(board_id);
                 }
                 match column_id {
                     Some(column_id) => {
@@ -76,6 +76,18 @@ impl FetchPlan for RouteScope {
                                 if requestable(loaded.cards_of_column(column.id)) {
                                     round.cards_by_column.push(column.id);
                                 }
+                            }
+                        }
+                    }
+                }
+                if archived != ArchivedFilter::LiveOnly {
+                    round.archived_card_list = requestable(loaded.archived_card_list());
+                    if let Some(markers) = loaded.loaded_archived_card_markers() {
+                        for marker in markers {
+                            if marker.context.board_id == board_id
+                                && requestable(loaded.card(marker.entity_id))
+                            {
+                                round.cards.push(marker.entity_id);
                             }
                         }
                     }
@@ -131,7 +143,9 @@ mod tests {
     use std::sync::Arc;
 
     use kanban_domain::resolved::Collection;
-    use kanban_domain::{Board, Column, KanbanError, LoadState, Model, Resolved};
+    use kanban_domain::{
+        ArchivedFilter, Board, Card, Column, KanbanError, LoadState, Model, Resolved,
+    };
     use uuid::Uuid;
 
     use super::*;
@@ -168,12 +182,13 @@ mod tests {
         let round = RouteScope::BoardCards {
             board_id,
             column_id: None,
+            archived: ArchivedFilter::LiveOnly,
         }
         .next_round(&Model::default());
 
         assert_eq!(round.boards, vec![board_id]);
         assert_eq!(round.columns_by_board, vec![board_id]);
-        assert_eq!(round.archived_cards_by_board, vec![board_id]);
+        assert!(round.archived_cards_by_board.is_empty());
         assert!(!round.card_list);
         assert!(!round.board_list);
         assert!(!round.column_list);
@@ -207,6 +222,7 @@ mod tests {
         let scope = RouteScope::BoardCards {
             board_id,
             column_id: None,
+            archived: ArchivedFilter::LiveOnly,
         };
         let round2 = scope.next_round(&model);
         assert_eq!(
@@ -237,12 +253,116 @@ mod tests {
         let round = RouteScope::BoardCards {
             board_id,
             column_id: Some(column_id),
+            archived: ArchivedFilter::LiveOnly,
         }
         .next_round(&Model::default());
 
         assert_eq!(round.cards_by_column, vec![column_id]);
         assert_eq!(round.boards, vec![board_id]);
         assert_eq!(round.columns_by_board, vec![board_id]);
+    }
+
+    #[test]
+    fn test_route_scope_for_board_cards_live_only_plans_no_archived_tier() {
+        let board_id = Uuid::new_v4();
+        let round = RouteScope::BoardCards {
+            board_id,
+            column_id: None,
+            archived: ArchivedFilter::LiveOnly,
+        }
+        .next_round(&Model::default());
+
+        assert_eq!(round.boards, vec![board_id]);
+        assert_eq!(round.columns_by_board, vec![board_id]);
+        assert!(round.archived_cards_by_board.is_empty());
+        assert!(!round.archived_card_list);
+        assert!(round.cards.is_empty());
+        assert!(!round.card_list);
+        assert!(!round.board_list);
+    }
+
+    #[test]
+    fn test_route_scope_for_board_cards_including_archived_walks_global_markers_of_that_board_into_a_card_round(
+    ) {
+        use kanban_domain::ArchivedCard;
+
+        let board_id = Uuid::new_v4();
+        let other_board_id = Uuid::new_v4();
+        let column = Column::new(board_id, "TODO", 0);
+        let column_id = column.id;
+        let marker_for_this_board = ArchivedCard::new(Uuid::new_v4(), board_id);
+        let marker_for_other_board = ArchivedCard::new(Uuid::new_v4(), other_board_id);
+        let this_board_entity_id = marker_for_this_board.entity_id;
+
+        let scope = RouteScope::BoardCards {
+            board_id,
+            column_id: None,
+            archived: ArchivedFilter::Include,
+        };
+
+        let round1 = scope.next_round(&Model::default());
+        assert!(round1.archived_card_list);
+        assert!(round1.cards.is_empty());
+
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            boards: Collection {
+                by_id: [(
+                    board_id,
+                    LoadState::Loaded(Board::new("Kanban", None::<String>)),
+                )]
+                .into(),
+                ..Default::default()
+            },
+            columns: Collection {
+                by_parent: [(board_id, LoadState::Loaded(vec![column]))].into(),
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                all: LoadState::Loaded(vec![marker_for_this_board, marker_for_other_board]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let round2 = scope.next_round(&model);
+        assert_eq!(round2.cards, vec![this_board_entity_id]);
+        assert_eq!(round2.cards_by_column, vec![column_id]);
+
+        let mut model2 = model;
+        let _ = model2.apply_resolved(Resolved {
+            cards: Collection {
+                by_id: [(
+                    this_board_entity_id,
+                    LoadState::Loaded(Card::new(board_id, column_id, "archived", 0)),
+                )]
+                .into(),
+                by_parent: [(column_id, LoadState::Loaded(vec![]))].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let round3 = scope.next_round(&model2);
+        assert!(round3.is_empty());
+    }
+
+    #[test]
+    fn test_route_scope_for_board_cards_archived_only_plans_the_same_rounds_as_include() {
+        let board_id = Uuid::new_v4();
+        let include_round = RouteScope::BoardCards {
+            board_id,
+            column_id: None,
+            archived: ArchivedFilter::Include,
+        }
+        .next_round(&Model::default());
+        let archived_only_round = RouteScope::BoardCards {
+            board_id,
+            column_id: None,
+            archived: ArchivedFilter::ArchivedOnly,
+        }
+        .next_round(&Model::default());
+
+        assert_eq!(include_round, archived_only_round);
     }
 
     #[test]
