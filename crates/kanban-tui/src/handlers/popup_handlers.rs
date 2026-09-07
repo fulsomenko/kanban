@@ -998,10 +998,10 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_relationship_popup_search_with_a_not_loaded_cards_tier_shows_no_matches_without_a_banner(
-    ) {
+    fn test_relationship_search_with_not_loaded_cards_tier_banners_and_preserves_list() {
         let mut app = App::test_default();
         let (_board_id, _card_id) = seed_relationship_dialog(&mut app);
+        app.relationship.selection.set(Some(0));
 
         let _ = app
             .model
@@ -1014,12 +1014,23 @@ mod tests {
 
         assert_eq!(
             app.relationship.selection.get(),
-            None,
-            "a NotLoaded cards tier must filter to zero matches, clearing the selection"
+            Some(0),
+            "a NotLoaded cards tier must not clear a staged selection"
         );
+        assert_eq!(
+            app.relationship.card_ids.len(),
+            1,
+            "a NotLoaded cards tier must not empty the candidate list"
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("a NotLoaded cards tier must banner rather than silently show no matches");
         assert!(
-            app.ui_state.banner.is_none(),
-            "the per-keystroke search filter must degrade silently, not spam a banner per character"
+            banner.message.to_lowercase().contains("not loaded"),
+            "banner should explain the cards tier is not loaded, got: {}",
+            banner.message
         );
     }
 

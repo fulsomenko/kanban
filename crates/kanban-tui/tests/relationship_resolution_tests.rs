@@ -290,7 +290,7 @@ fn test_manage_children_refuses_to_open_when_the_graph_is_not_loaded() {
 }
 
 #[test]
-fn test_manage_children_from_list_refuses_to_open_when_the_graph_is_not_loaded() {
+fn test_manage_children_from_list_repopulates_and_opens_when_the_graph_is_not_loaded() {
     let mut app = App::test_default();
     let (board_id, column_id) = create_board_and_column(&mut app, "Board");
     let subject = create_card(&mut app, board_id, column_id, "Subject");
@@ -311,10 +311,12 @@ fn test_manage_children_from_list_refuses_to_open_when_the_graph_is_not_loaded()
 
     app.handle_manage_children_from_list();
 
-    let banner = app.ui_state.banner.expect("expected an error banner");
-    let message = banner.message.to_lowercase();
-    assert!(message.contains("relationship") || message.contains("loading"));
-    assert_ne!(app.mode, AppMode::Dialog(DialogMode::ManageChildren));
+    assert_eq!(
+        app.mode,
+        AppMode::Dialog(DialogMode::ManageChildren),
+        "opening the dialog first lets the mode-transition populate repair the graph, so the handler no longer dead-ends"
+    );
+    assert!(app.ui_state.banner.is_none());
 }
 
 #[test]
