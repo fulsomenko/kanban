@@ -325,7 +325,6 @@ macro_rules! delegate_data_store {
     };
 }
 
-/// Delegates to `inner` except `DataStore::snapshot`, which always errors.
 struct HostileSourceBackend {
     inner: std::sync::Arc<dyn kanban_backend::KanbanBackend>,
 }
@@ -388,7 +387,6 @@ impl kanban_backend::KanbanBackend for HostileSourceBackend {
     }
 }
 
-/// Delegates to `inner` except `DataStore::apply_snapshot`, which always errors.
 struct HostileTargetBackend {
     inner: std::sync::Arc<dyn kanban_backend::KanbanBackend>,
 }

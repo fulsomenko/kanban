@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 /// Reads a whole workspace through per-entity `DataStore` calls rather than
-/// `DataStore::snapshot`.
+/// a single whole-store read.
 ///
 /// Archived boards are absent from `list_boards`, so their heads are recovered
 /// individually through the unfiltered `get_board`. Archived cards are likewise
@@ -56,7 +56,7 @@ pub fn read_full_snapshot(store: &dyn DataStore) -> KanbanResult<Snapshot> {
 }
 
 /// Writes a whole workspace through per-entity `DataStore` calls rather than
-/// `DataStore::apply_snapshot`. The caller supplies the transaction.
+/// a single whole-store write. The caller supplies the transaction.
 ///
 /// Order is load-bearing on a relational backend, which checks foreign keys as
 /// each row lands: sprints precede cards because `cards.sprint_id` references

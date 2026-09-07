@@ -312,11 +312,7 @@ impl KanbanBackend for CountingBackend {
     }
 }
 
-/// A `KanbanBackend` decorator that counts only `DataStore::snapshot` calls
-/// (what `App::reload_model` issues), delegating everything else verbatim to
-/// `inner`. Unlike `CountingBackend`, this does not count the incidental
-/// reads a command's own validation/execution performs, so it isolates "how
-/// many whole-model reloads happened" from "how many store reads happened".
+/// A `KanbanBackend` decorator that delegates everything verbatim to `inner`.
 pub struct SnapshotCountingBackend {
     inner: Arc<dyn KanbanBackend>,
     snapshot_reads: Arc<AtomicUsize>,
@@ -525,12 +521,8 @@ impl KanbanBackend for SnapshotCountingBackend {
     }
 }
 
-/// A `KanbanBackend` decorator whose `snapshot()` always fails, delegating
-/// every other `DataStore`/`CommandStore` method verbatim to `inner`. Used to
-/// simulate a transient read failure (SQLite busy, I/O error) on the
-/// destination backend right after a storage-location swap, while still
-/// allowing direct entity reads against `inner` to prove the destination's
-/// data survived.
+/// A `KanbanBackend` decorator that delegates every `DataStore`/`CommandStore`
+/// method verbatim to `inner`.
 pub struct FailingSnapshotBackend {
     inner: Arc<dyn KanbanBackend>,
 }

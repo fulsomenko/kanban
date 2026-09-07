@@ -1080,10 +1080,8 @@ mod tests {
         assert_eq!(boards2[0].name, "ConcurrentBoard");
     }
 
-    // Characterization test for KAN-1070: `ensure_loaded`/`do_flush` swap onto
-    // `InMemoryStore::apply_snapshot_impl`/`snapshot_impl`. Behaviour-preserving
-    // by construction (`DataStore::apply_snapshot`/`snapshot` already delegate to
-    // these), so this passes identically before and after the swap; it pins the
+    // Characterization test: `ensure_loaded`/`do_flush` swap onto
+    // `InMemoryStore::apply_snapshot_impl`/`snapshot_impl`. Pins the
     // full-graph fidelity so a future change to either path cannot regress it.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_json_backend_load_flush_round_trip_preserves_full_graph() {

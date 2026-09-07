@@ -763,9 +763,9 @@ mod tests {
             .unwrap();
 
         // Feed the model a snapshot with the tied pair's relative order
-        // swapped from canonical, instead of going through the normal
-        // ctx.snapshot() pipeline -- proving handle_move_column_up no longer
-        // depends on the model happening to already be canonically ordered.
+        // swapped from canonical, instead of the normal load pipeline --
+        // proving handle_move_column_up no longer depends on the model
+        // happening to already be canonically ordered.
         let mut snapshot = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         let doing_idx = snapshot
             .columns

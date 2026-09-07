@@ -90,8 +90,6 @@ each query the backend fresh and return an owned, `KanbanResult`-wrapped
 ctx.save() -> KanbanResult<()>                 // async; backend.flush().await
 ctx.reload() -> KanbanResult<Invalidation>     // async; backend.reload().await, clears undo_stack
 ctx.replace_backend(backend: Arc<dyn KanbanBackend>) -> Invalidation  // clears undo_stack, marks clean
-ctx.snapshot() -> KanbanResult<Snapshot>
-ctx.apply_snapshot(snapshot: Snapshot) -> KanbanResult<()>
 ctx.migrate_sprint_logs() -> KanbanResult<(usize, Option<Invalidation>)>  // one-time backfill utility, bypasses undo on purpose
 ```
 
@@ -275,8 +273,8 @@ Returned by the `*_detailed` bulk operation methods.
 
 ## `Snapshot`
 
-There is no `kanban-service`-local snapshot type. `KanbanContext::snapshot()` /
-`apply_snapshot()` and `StoreManager`'s export/migrate helpers all operate
+There is no `kanban-service`-local snapshot type. `store_adapter::read_full_snapshot`
+/ `write_full_snapshot` and `StoreManager`'s export/migrate helpers all operate
 directly on `kanban_domain::Snapshot` (`crates/kanban-domain/src/snapshot.rs`):
 
 ```rust
@@ -288,6 +286,7 @@ pub struct Snapshot {
     pub sprints: Vec<Sprint>,
     pub archived_boards: Vec<ArchivedBoard>,
     pub graph: DependencyGraph,
+    pub prefixes: Vec<Prefix>,
 }
 ```
 
