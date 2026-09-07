@@ -1,26 +1,24 @@
 use crate::state::AppState;
 use kanban_persistence::ChangeDetector;
-use kanban_service::StoreManager;
 use std::path::PathBuf;
 
 /// Watch `locator` for external changes (writes from another process — TUI,
 /// CLI, MCP) and reload `state.ctx` when they happen, broadcasting a change
 /// event afterward so any connected SSE clients see it too.
 ///
-/// No-op for a SQLite locator (queries hit the live DB on every call, no
-/// in-memory cache to go stale) and safe to call with a locator whose file
+/// `is_sqlite` must be the same backend-kind decision the caller used for
+/// `AppState::reset_model_per_request`; a `true` value is a no-op here
+/// because SQLite queries hit the live DB on every call, leaving no
+/// in-memory cache to go stale. Safe to call with a locator whose file
 /// doesn't exist yet — `FileWatcher::start_watching` resolves the parent
 /// directory rather than the file itself, so it can watch for the file's
 /// first creation as well as later external writes.
 pub async fn watch_for_external_changes(
     state: AppState,
     locator: &str,
+    is_sqlite: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sm = StoreManager::new(
-        kanban_persistence::StoreRegistry::new(),
-        kanban_backend::KanbanBackendRegistry::new(),
-    );
-    if sm.is_sqlite(locator) {
+    if is_sqlite {
         return Ok(());
     }
 

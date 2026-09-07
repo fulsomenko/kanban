@@ -47,18 +47,14 @@ async fn run(
     addr: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut config = config;
-    let mut stores = kanban_persistence::StoreRegistry::new();
-    let mut backends = kanban_backend::KanbanBackendRegistry::new();
-    backends.register(Box::new(kanban_persistence_sqlite::SqliteBackendFactory));
-    stores.register(Box::new(kanban_persistence_json::JsonStoreFactory));
-    backends.register(Box::new(kanban_persistence_json::JsonBackendFactory));
-    let sm = kanban_service::StoreManager::new(stores, backends);
+    let sm = kanban_server::stores::registered_store_manager();
     sm.sync_backend_with_file(locator, &mut config);
     let backend = sm.make_backend(locator, &config).await?;
     let ctx = kanban_service::KanbanContext::open(backend, config).await?;
-    let state = AppState::with_reset(ctx, sm.is_sqlite(locator));
+    let is_sqlite = sm.is_sqlite(locator);
+    let state = AppState::with_reset(ctx, is_sqlite);
 
-    kanban_server::watch::watch_for_external_changes(state.clone(), locator).await?;
+    kanban_server::watch::watch_for_external_changes(state.clone(), locator, is_sqlite).await?;
 
     let socket_addr: std::net::SocketAddr = addr.parse().map_err(|_| {
         std::io::Error::new(

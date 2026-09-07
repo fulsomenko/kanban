@@ -9,6 +9,7 @@ pub mod model_read;
 pub mod pagination;
 pub mod scope;
 pub mod state;
+pub mod stores;
 pub mod watch;
 
 #[cfg(feature = "test-helpers")]
