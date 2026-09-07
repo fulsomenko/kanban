@@ -1,9 +1,9 @@
 use kanban_core::ClientId;
-use kanban_domain::Invalidation;
+use kanban_domain::{Invalidation, Model};
 use kanban_service::api::{ChangeEventFrame, ChangeKind, EntityType};
 use kanban_service::{KanbanContext, KanbanResult};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
 
 /// Run a mutation against `ctx`, returning its value and discarding the
@@ -27,6 +27,29 @@ pub(crate) fn mutate_unit(
     Ok(())
 }
 
+/// The context and the Model it feeds live under one guard, so a reader can
+/// never observe a Model that a committed mutation has already invalidated.
+/// `Deref`/`DerefMut` to the context keep every existing `state.ctx.lock()`
+/// call site reading as it did before the Model joined it.
+pub struct Session {
+    pub ctx: KanbanContext,
+    pub model: Model,
+}
+
+impl std::ops::Deref for Session {
+    type Target = KanbanContext;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ctx
+    }
+}
+
+impl std::ops::DerefMut for Session {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ctx
+    }
+}
+
 /// Shared state for every axum handler.
 ///
 /// `tokio::sync::Mutex`, not `RwLock`: `KanbanContext`'s write path is async
@@ -34,19 +57,41 @@ pub(crate) fn mutate_unit(
 /// `.await` would be a `Send`/deadlock hazard.
 #[derive(Clone)]
 pub struct AppState {
-    pub ctx: Arc<Mutex<KanbanContext>>,
+    pub ctx: Arc<Mutex<Session>>,
     pub instance_id: Uuid,
     pub event_tx: tokio::sync::broadcast::Sender<ChangeEventFrame>,
+    /// True for a SQLite locator, where `watch::watch_for_external_changes`
+    /// installs no watcher and an external writer is therefore invisible;
+    /// the Model is cleared on every acquire instead.
+    pub reset_model_per_request: bool,
 }
 
 impl AppState {
     pub fn new(ctx: KanbanContext) -> Self {
+        Self::with_reset(ctx, false)
+    }
+
+    pub fn with_reset(ctx: KanbanContext, reset_model_per_request: bool) -> Self {
         let (event_tx, _) = tokio::sync::broadcast::channel(256);
         Self {
-            ctx: Arc::new(Mutex::new(ctx)),
+            ctx: Arc::new(Mutex::new(Session {
+                ctx,
+                model: Model::default(),
+            })),
             instance_id: Uuid::new_v4(),
             event_tx,
+            reset_model_per_request,
         }
+    }
+
+    /// Acquires the session lock, clearing the Model first when
+    /// `reset_model_per_request` is set.
+    pub async fn lock_session(&self) -> MutexGuard<'_, Session> {
+        let mut guard = self.ctx.lock().await;
+        if self.reset_model_per_request {
+            let _ = guard.model.invalidate(Invalidation::All);
+        }
+        guard
     }
 
     fn emit(

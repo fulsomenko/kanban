@@ -21,7 +21,7 @@ async fn list_sprints(
     ctx.require_board(board_id)
         .map_err(|e| AppError::from(&e))?;
     let sprints = ctx.list_sprints(board_id).map_err(|e| AppError::from(&e))?;
-    let names = resolve_sprint_names(&*ctx, board_id, &sprints).map_err(|e| AppError::from(&e))?;
+    let names = resolve_sprint_names(&**ctx, board_id, &sprints).map_err(|e| AppError::from(&e))?;
     let responses: Vec<SprintResponse> = sprints
         .iter()
         .zip(names)
