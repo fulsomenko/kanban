@@ -164,12 +164,6 @@ fn created_status(created: bool) -> StatusCode {
     }
 }
 
-pub(crate) fn do_get_card(ctx: &kanban_service::KanbanContext, id: Uuid) -> Result<Card, AppError> {
-    ctx.get_card(id)
-        .map_err(|e| AppError::from(&e))?
-        .ok_or_else(|| AppError::from(&KanbanError::not_found("Card", id)))
-}
-
 fn do_update_card(
     ctx: &mut crate::state::Session,
     id: Uuid,
