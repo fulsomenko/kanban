@@ -6,9 +6,10 @@ use std::sync::{Arc, Mutex};
 
 use kanban_backend_memory::InMemoryStore;
 use kanban_core::{AppConfig, Edge};
+use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
 use kanban_domain::{
     Archived, ArchivedBoard, ArchivedCard, Board, Card, Column, CommandBatch, CommandStore,
-    DataStore, KanbanResult, Prefix, Sprint,
+    DataStore, KanbanResult, Prefix, Sprint, SprintLog,
 };
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_persistence_sqlite::SqliteBackend;
@@ -114,6 +115,9 @@ fn seed_rich(store: &dyn DataStore) -> KanbanResult<SeedFixture> {
     card_a2.prefix = "kan".into();
     card_a2.card_number = 2;
     card_a2.sprint_id = Some(sprint_a.id);
+    card_a2
+        .sprint_logs
+        .push(SprintLog::new(sprint_a.id, 1, Some("Sprint 1"), "Active"));
     let mut card_a3 = Card::new(board_a.id, col_a2.id, "A3", 0);
     card_a3.prefix = "kan".into();
     card_a3.card_number = 3;
@@ -584,6 +588,20 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
             .data_store()
             .upsert_sprint(unrelated_sprint.clone())
             .unwrap();
+        let mut unrelated_card_2 = Card::new(unrelated_board.id, unrelated_column.id, "U2", 1);
+        unrelated_card_2.prefix = "unr".into();
+        unrelated_card_2.card_number = 2;
+        dst_ctx
+            .data_store()
+            .upsert_card(unrelated_card_2.clone())
+            .unwrap();
+        dst_ctx
+            .data_store()
+            .modify_graph(Box::new({
+                let (a, b) = (unrelated_card.id, unrelated_card_2.id);
+                move |g| g.set_block(a, b)
+            }))
+            .unwrap();
         dst_ctx.save().await.unwrap();
 
         let src_path = dir.path().join("src.store");
@@ -619,6 +637,19 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
         assert_eq!(
             kept_prefix.card_counter, unrelated_prefix.card_counter,
             "unrelated prefix counter must survive untouched"
+        );
+        let kept_card_2 = store.get_card(unrelated_card_2.id).unwrap().unwrap();
+        assert_full_card(&kept_card_2, &unrelated_card_2);
+        let kept_blocks: Vec<(Uuid, Uuid)> = store
+            .get_graph()
+            .unwrap()
+            .blocks_edges()
+            .iter()
+            .map(|e| (e.source(), e.target()))
+            .collect();
+        assert!(
+            kept_blocks.contains(&(unrelated_card.id, unrelated_card_2.id)),
+            "target's pre-existing block edge must survive the transfer on {dst_name}, got {kept_blocks:?}"
         );
 
         assert_transfer_matches(&fixture, store);
@@ -904,4 +935,39 @@ async fn test_transfer_with_dangling_sprint_id_onto_sqlite_fails_atomically_then
     assert_eq!(cards.len(), 1);
     assert_eq!(cards[0].id, card.id);
     assert_eq!(cards[0].sprint_id, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_transfer_state_to_does_not_copy_the_command_log() {
+    for (dst_name, dst_factory) in backends() {
+        let dir = TempDir::new().unwrap();
+        let src_path = dir.path().join("src.store");
+        let src_ctx = open_ctx(&in_memory_backend_factory(), &src_path).await;
+        seed_rich(src_ctx.data_store()).unwrap();
+
+        let batch = CommandBatch::from(vec![Command::Board(BoardCommand::Create(CreateBoard {
+            id: Uuid::new_v4(),
+            name: "Logged".into(),
+            card_prefix: None,
+            position: 0,
+        }))]);
+        src_ctx.backend().append_batch(&batch).unwrap();
+        assert!(
+            src_ctx.backend().batch_count().unwrap() > 0,
+            "source must have command history before the transfer"
+        );
+
+        let dst_path = dir.path().join("dst.store");
+        let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
+
+        src_ctx
+            .transfer_state_to(&*dst_ctx.backend())
+            .unwrap_or_else(|e| panic!("transfer into {dst_name} failed: {e}"));
+
+        assert_eq!(
+            dst_ctx.backend().batch_count().unwrap(),
+            0,
+            "transfer must not copy the source command log onto {dst_name}"
+        );
+    }
 }
