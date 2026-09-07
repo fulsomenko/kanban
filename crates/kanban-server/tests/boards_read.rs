@@ -5,7 +5,8 @@
 //! against the router directly, with no real TCP socket.
 
 use axum::http::StatusCode;
-use kanban_server::test_helpers::{json_of, make_state, send};
+use kanban_domain::LoadState;
+use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::KanbanOperations;
 use tempfile::tempdir;
 use uuid::Uuid;
@@ -166,4 +167,196 @@ async fn test_get_board_archived_board_response_has_archived_at_stamped() {
         json["archived_at"].is_string(),
         "an archived board's response must be stamped with archived_at, not look live: {json}"
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_boards_populates_the_session_models_board_list_tier() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    {
+        let mut ctx = state.ctx.lock().await;
+        ctx.create_board("Board 1".to_string(), Some("B1".to_string()))
+            .unwrap();
+    }
+
+    let response = send(&state, "GET", "/v1/boards", None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    assert_eq!(json["items"].as_array().unwrap().len(), 1);
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.boards_state(), LoadState::Loaded(_)),
+        "list_boards must sync the session Model's board_list tier"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_board_populates_the_per_id_board_and_archived_marker_tiers_not_the_flat_list() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("My Board".to_string(), Some("MB".to_string()))
+            .unwrap()
+            .id;
+    }
+
+    let response = send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.board_id_status(board_id), LoadState::Loaded(_)),
+        "get_board must sync the per-id board tier"
+    );
+    assert!(
+        matches!(guard.model.archived_boards_state(), LoadState::Loaded(_)),
+        "get_board must sync the archived board marker tier"
+    );
+    assert!(
+        matches!(guard.model.boards_state(), LoadState::NotLoaded),
+        "get_board must not sync the flat board_list tier"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_archived_board_resolves_through_the_per_id_tier_and_stamps_archived_at() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Archived Board".to_string(), Some("AB".to_string()))
+            .unwrap()
+            .id;
+        ctx.archive_board(board_id).unwrap();
+    }
+
+    let response = send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    assert!(json["archived_at"].is_string());
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.board_id_status(board_id), LoadState::Loaded(_)),
+        "the archived head must resolve through the unfiltered per-id tier"
+    );
+    assert!(matches!(
+        guard.model.archived_boards_state(),
+        LoadState::Loaded(_)
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_board_unknown_id_records_missing_on_the_per_id_tier_and_returns_404() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let random_id = Uuid::new_v4();
+    let response = send(&state, "GET", &format!("/v1/boards/{}", random_id), None).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let json = json_of(response).await;
+    assert_eq!(json["code"], "NOT_FOUND");
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.board_id_status(random_id), LoadState::Missing),
+        "an unknown id must be recorded Missing on the per-id tier"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_archived_board_on_a_sqlite_locator_stamps_archived_at_and_syncs_the_per_id_tier()
+{
+    let dir = tempdir().unwrap();
+    let state = make_sqlite_state(&dir.path().join("b.sqlite")).await;
+
+    let board_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Archived Board".to_string(), Some("AB".to_string()))
+            .unwrap()
+            .id;
+        ctx.archive_board(board_id).unwrap();
+    }
+
+    let response = send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    assert!(json["archived_at"].is_string());
+
+    let guard = state.ctx.lock().await;
+    assert!(
+        matches!(guard.model.board_id_status(board_id), LoadState::Loaded(_)),
+        "sqlite: the per-id tier must resolve the archived head"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_boards_after_reading_a_single_archived_board_still_omits_it() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Archived Board".to_string(), Some("AB".to_string()))
+            .unwrap()
+            .id;
+        ctx.archive_board(board_id).unwrap();
+    }
+
+    let first = json_of(send(&state, "GET", "/v1/boards", None).await).await;
+    assert_eq!(first["items"], serde_json::json!([]));
+
+    let get_resp = send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await;
+    assert_eq!(get_resp.status(), StatusCode::OK);
+
+    let second = json_of(send(&state, "GET", "/v1/boards", None).await).await;
+    assert_eq!(
+        second["items"],
+        serde_json::json!([]),
+        "a re-list after reading the archived board by id must not leak it back in"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_board_then_get_board_returns_the_updated_name_across_requests() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Original".to_string(), Some("OG".to_string()))
+            .unwrap()
+            .id;
+    }
+
+    let get1 = send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await;
+    assert_eq!(get1.status(), StatusCode::OK);
+
+    let patch_body = serde_json::json!({ "name": "Renamed" });
+    let patch_resp = send(
+        &state,
+        "PATCH",
+        &format!("/v1/boards/{}", board_id),
+        Some(&patch_body),
+    )
+    .await;
+    assert_eq!(patch_resp.status(), StatusCode::OK);
+
+    let get2 = json_of(send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await).await;
+    assert_eq!(get2["name"], "Renamed");
 }
