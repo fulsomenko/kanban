@@ -511,9 +511,9 @@ mod tests {
                 ..Default::default()
             },
             archived_cards: Collection {
-                all: LoadState::Failed(std::sync::Arc::new(kanban_domain::KanbanError::unsupported(
-                    "boom",
-                ))),
+                all: LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("boom"),
+                )),
                 ..Default::default()
             },
             ..Default::default()
@@ -535,9 +535,9 @@ mod tests {
                 ..Default::default()
             },
             archived_boards: Collection {
-                all: LoadState::Failed(std::sync::Arc::new(kanban_domain::KanbanError::unsupported(
-                    "boom",
-                ))),
+                all: LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("boom"),
+                )),
                 ..Default::default()
             },
             ..Default::default()
