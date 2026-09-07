@@ -101,6 +101,35 @@ impl TuiContext {
         self.with_flush(r)
     }
 
+    pub fn carry_over_sprint_cards_impl(
+        &mut self,
+        from_sprint_id: Uuid,
+        to_sprint_id: Uuid,
+    ) -> KanbanResult<(usize, kanban_domain::Invalidation)> {
+        let r = self
+            .inner
+            .carry_over_sprint_cards_impl(from_sprint_id, to_sprint_id);
+        self.with_flush(r)
+    }
+
+    pub fn attach_children_impl(
+        &mut self,
+        parent: Uuid,
+        children: Vec<Uuid>,
+    ) -> KanbanResult<kanban_domain::Invalidation> {
+        let r = self.inner.attach_children_impl(parent, children);
+        self.with_flush(r)
+    }
+
+    pub fn detach_children_impl(
+        &mut self,
+        parent: Uuid,
+        children: Vec<Uuid>,
+    ) -> KanbanResult<kanban_domain::Invalidation> {
+        let r = self.inner.detach_children_impl(parent, children);
+        self.with_flush(r)
+    }
+
     // --- Delegation: state methods ---
 
     pub fn undo(&mut self) -> KanbanResult<bool> {

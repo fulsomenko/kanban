@@ -60,12 +60,15 @@ impl App {
                             },
                         }));
 
-                        if let Err(e) = self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
-                            tracing::error!("Failed to activate sprint: {}", e);
-                            self.set_error(format!("Failed to activate sprint: {}", e));
-                            return;
-                        }
-                        self.reload_model();
+                        let inv = match self.execute_commands_batch(vec![activate_cmd, board_cmd]) {
+                            Ok(inv) => inv,
+                            Err(e) => {
+                                tracing::error!("Failed to activate sprint: {}", e);
+                                self.set_error(format!("Failed to activate sprint: {}", e));
+                                return;
+                            }
+                        };
+                        self.resolve_after_command(inv);
 
                         tracing::info!("Activated sprint: {}", sprint_name);
                     }
@@ -115,12 +118,15 @@ impl App {
                     },
                 }));
 
-                if let Err(e) = self.execute_commands_batch(vec![complete_cmd, board_cmd]) {
-                    tracing::error!("Failed to complete sprint: {}", e);
-                    self.set_error(format!("Failed to complete sprint: {}", e));
-                    return;
-                }
-                self.reload_model();
+                let inv = match self.execute_commands_batch(vec![complete_cmd, board_cmd]) {
+                    Ok(inv) => inv,
+                    Err(e) => {
+                        tracing::error!("Failed to complete sprint: {}", e);
+                        self.set_error(format!("Failed to complete sprint: {}", e));
+                        return;
+                    }
+                };
+                self.resolve_after_command(inv);
 
                 self.filter.active_sprint_filters.remove(&sprint_id);
 
@@ -232,12 +238,15 @@ impl App {
                 auto_consume_name: true,
             }));
 
-            if let Err(e) = self.execute_command(cmd) {
-                tracing::error!("Failed to create sprint: {}", e);
-                self.set_error(format!("Failed to create sprint: {}", e));
-                return;
-            }
-            self.reload_model();
+            let inv = match self.execute_command(cmd) {
+                Ok(inv) => inv,
+                Err(e) => {
+                    tracing::error!("Failed to create sprint: {}", e);
+                    self.set_error(format!("Failed to create sprint: {}", e));
+                    return;
+                }
+            };
+            self.resolve_after_command(inv);
 
             tracing::info!("Created sprint (id: {})", sprint_id);
 

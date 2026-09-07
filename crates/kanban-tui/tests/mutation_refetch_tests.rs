@@ -714,7 +714,7 @@ fn test_no_converted_card_board_or_column_handler_still_reloads_wholesale() {
     }
 
     assert_eq!(production_reload_model_count(card_handlers), 2);
-    assert_eq!(production_reload_model_count(detail_view_handlers), 2);
+    assert_eq!(production_reload_model_count(detail_view_handlers), 0);
     assert_eq!(production_reload_model_count(board_handlers), 6);
     assert_eq!(production_reload_model_count(column_handlers), 0);
 

@@ -979,28 +979,31 @@ impl App {
                         CardListAction::Complete(card_id) => {
                             if let LoadState::Loaded(cards) = self.model.cards_state() {
                                 if let Some(card) = cards.iter().find(|c| c.id == card_id) {
-                                    use kanban_domain::{CardStatus, CardUpdate, KanbanOperations};
+                                    use kanban_domain::CardStatus;
                                     let new_status = if card.status == CardStatus::Done {
                                         CardStatus::Todo
                                     } else {
                                         CardStatus::Done
                                     };
 
-                                    // Service layer chains the column move automatically.
-                                    if let Err(e) = self.ctx.update_card(
+                                    match self.ctx.update_card_impl(
                                         card_id,
-                                        CardUpdate {
+                                        kanban_domain::CardUpdate {
                                             status: Some(new_status),
                                             ..Default::default()
                                         },
                                     ) {
-                                        tracing::error!("Failed to toggle card completion: {}", e);
-                                        self.set_error(format!(
-                                            "Failed to toggle card completion: {}",
-                                            e
-                                        ));
-                                    } else {
-                                        self.reload_model();
+                                        Ok((_, inv)) => self.resolve_after_command(inv),
+                                        Err(e) => {
+                                            tracing::error!(
+                                                "Failed to toggle card completion: {}",
+                                                e
+                                            );
+                                            self.set_error(format!(
+                                                "Failed to toggle card completion: {}",
+                                                e
+                                            ));
+                                        }
                                     }
                                 }
                             } else {
@@ -1073,16 +1076,16 @@ impl App {
                             };
 
                             if let Some(result) = move_result {
-                                use kanban_domain::KanbanOperations;
-                                // Service layer chains the status flip when the
-                                // move crosses the completion-column boundary.
-                                if let Err(e) =
-                                    self.ctx.move_card(card_id, result.target_column_id, None)
-                                {
-                                    tracing::error!("Failed to move card: {}", e);
-                                    self.set_error(format!("Failed to move card: {}", e));
-                                } else {
-                                    self.reload_model();
+                                match self.ctx.move_card_impl(
+                                    card_id,
+                                    result.target_column_id,
+                                    None,
+                                ) {
+                                    Ok((_, inv)) => self.resolve_after_command(inv),
+                                    Err(e) => {
+                                        tracing::error!("Failed to move card: {}", e);
+                                        self.set_error(format!("Failed to move card: {}", e));
+                                    }
                                 }
                             }
                         }
