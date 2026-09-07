@@ -139,12 +139,14 @@ impl App {
                                 },
                             }));
 
-                            if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
-                                tracing::error!("Failed to move column: {}", e);
-                                self.set_error(format!("Failed to move column: {}", e));
-                                return;
+                            match self.execute_commands_batch(vec![cmd1, cmd2]) {
+                                Ok(inv) => self.resolve_after_command(inv),
+                                Err(e) => {
+                                    tracing::error!("Failed to move column: {}", e);
+                                    self.set_error(format!("Failed to move column: {}", e));
+                                    return;
+                                }
                             }
-                            self.reload_model();
 
                             self.dialog_input
                                 .column_list
@@ -205,12 +207,14 @@ impl App {
                                 },
                             }));
 
-                            if let Err(e) = self.execute_commands_batch(vec![cmd1, cmd2]) {
-                                tracing::error!("Failed to move column: {}", e);
-                                self.set_error(format!("Failed to move column: {}", e));
-                                return;
+                            match self.execute_commands_batch(vec![cmd1, cmd2]) {
+                                Ok(inv) => self.resolve_after_command(inv),
+                                Err(e) => {
+                                    tracing::error!("Failed to move column: {}", e);
+                                    self.set_error(format!("Failed to move column: {}", e));
+                                    return;
+                                }
                             }
-                            self.reload_model();
 
                             let column_count = board_columns.len();
                             self.dialog_input
@@ -282,12 +286,14 @@ impl App {
 
                 let prior_column_count = columns.len();
 
-                if let Err(e) = self.execute_command(cmd) {
-                    tracing::error!("Failed to create column: {}", e);
-                    self.set_error(format!("Failed to create column: {}", e));
-                    return;
+                match self.execute_command(cmd) {
+                    Ok(inv) => self.resolve_after_command(inv),
+                    Err(e) => {
+                        tracing::error!("Failed to create column: {}", e);
+                        self.set_error(format!("Failed to create column: {}", e));
+                        return;
+                    }
                 }
-                self.reload_model();
 
                 tracing::info!("Created column: {} (position: {})", column_name, position);
 
@@ -333,12 +339,14 @@ impl App {
                     },
                 }));
 
-                if let Err(e) = self.execute_command(cmd) {
-                    tracing::error!("Failed to rename column: {}", e);
-                    self.set_error(format!("Failed to rename column: {}", e));
-                    return;
+                match self.execute_command(cmd) {
+                    Ok(inv) => self.resolve_after_command(inv),
+                    Err(e) => {
+                        tracing::error!("Failed to rename column: {}", e);
+                        self.set_error(format!("Failed to rename column: {}", e));
+                        return;
+                    }
                 }
-                self.reload_model();
 
                 tracing::info!("Renamed column to: {}", new_name);
             }
@@ -445,12 +453,14 @@ impl App {
                     column_id,
                 })));
 
-                if let Err(e) = self.execute_commands_batch(commands) {
-                    tracing::error!("Failed to delete column: {}", e);
-                    self.set_error(format!("Failed to delete column: {}", e));
-                    return;
+                match self.execute_commands_batch(commands) {
+                    Ok(inv) => self.resolve_after_command(inv),
+                    Err(e) => {
+                        tracing::error!("Failed to delete column: {}", e);
+                        self.set_error(format!("Failed to delete column: {}", e));
+                        return;
+                    }
                 }
-                self.reload_model();
 
                 tracing::info!("Deleted column: {}", column_name);
 
@@ -611,14 +621,16 @@ impl App {
                                 SetBoardTaskListView { board_id, view },
                             ));
 
-                            if let Err(e) = self.execute_command(cmd) {
-                                tracing::error!("Failed to set task list view: {}", e);
-                                self.set_error(format!("Failed to set task list view: {}", e));
-                                self.pop_mode();
-                                self.dialog_input.task_list_view_selection.clear();
-                                return;
+                            match self.execute_command(cmd) {
+                                Ok(inv) => self.resolve_after_command(inv),
+                                Err(e) => {
+                                    tracing::error!("Failed to set task list view: {}", e);
+                                    self.set_error(format!("Failed to set task list view: {}", e));
+                                    self.pop_mode();
+                                    self.dialog_input.task_list_view_selection.clear();
+                                    return;
+                                }
                             }
-                            self.reload_model();
 
                             self.switch_view_strategy(view);
 

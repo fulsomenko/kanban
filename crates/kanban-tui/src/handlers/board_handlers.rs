@@ -542,17 +542,21 @@ impl App {
 
         // Single batch so undo reverses the whole "create a board"
         // action in one step.
-        if let Err(e) = self.execute_commands_batch(commands) {
-            tracing::error!("Failed to create board: {}", e);
-            self.set_error(format!("Failed to create board: {}", e));
-            return;
-        }
+        let inv = match self.execute_commands_batch(commands) {
+            Ok(inv) => inv,
+            Err(e) => {
+                tracing::error!("Failed to create board: {}", e);
+                self.set_error(format!("Failed to create board: {}", e));
+                return;
+            }
+        };
 
         tracing::info!("Created board: {} (id: {})", board_name, board_id);
 
-        // Resync `board_list` from the store so the new board is present, then
-        // select it by id (known up front — it was generated above).
-        self.reload_model();
+        let prior_active_board_id = self.selection.active_board_id;
+        self.selection.active_board_id = Some(board_id);
+        self.resolve_after_command(inv);
+        self.selection.active_board_id = prior_active_board_id;
         self.prepare_frame();
         self.board_list.select_board(board_id);
         self.switch_view_strategy(TaskListView::default());
@@ -571,13 +575,15 @@ impl App {
                 },
             }));
 
-            if let Err(e) = self.execute_command(cmd) {
-                tracing::error!("Failed to rename board: {}", e);
-                self.set_error(format!("Failed to rename board: {}", e));
-                return;
+            match self.execute_command(cmd) {
+                Ok(inv) => self.resolve_after_command(inv),
+                Err(e) => {
+                    tracing::error!("Failed to rename board: {}", e);
+                    self.set_error(format!("Failed to rename board: {}", e));
+                    return;
+                }
             }
 
-            self.reload_model();
             tracing::info!("Renamed board to: {}", new_name);
         }
     }
