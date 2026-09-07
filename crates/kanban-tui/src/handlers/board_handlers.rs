@@ -135,6 +135,9 @@ impl App {
         if self.focus.active == Focus::Boards {
             if let Some(board_id) = self.board_list.get_selected_board_id() {
                 self.open_dialog(DialogMode::DeleteBoardConfirm);
+                if !self.model.archived_card_markers_absorbed() {
+                    self.reload_model();
+                }
                 // Snapshot the counts once, here, rather than re-scanning the
                 // model on every frame the modal is open.
                 let Some(counts) = self.board_delete_counts(board_id) else {
@@ -175,6 +178,9 @@ impl App {
         let Some(board_id) = self.selected_archived_board_id() else {
             return;
         };
+        if !self.model.archived_card_markers_absorbed() {
+            self.reload_model();
+        }
         let Some(counts) = self.board_delete_counts(board_id) else {
             self.set_error("Board contents are not loaded yet".to_string());
             return;
@@ -270,18 +276,17 @@ impl App {
         let col_ids: std::collections::HashSet<uuid::Uuid> =
             scoped_columns.iter().map(|c| c.id).collect();
         let columns = col_ids.len();
-        let cards = self
-            .controller
-            .live_cards()
-            .loaded()
-            .copied()
-            .unwrap_or(&[])
+        let LoadState::Loaded(cards_all) = self.controller.live_cards() else {
+            return None;
+        };
+        let cards = cards_all
             .iter()
             .filter(|c| col_ids.contains(&c.column_id))
             .count();
-        let archived = self
-            .model
-            .archived_card_markers()
+        let LoadState::Loaded(markers) = self.model.archived_cards_state() else {
+            return None;
+        };
+        let archived = markers
             .iter()
             .filter(|a| a.context.board_id == board_id)
             .count();
@@ -603,7 +608,7 @@ mod tests {
     use crate::App;
     use crossterm::event::KeyCode;
     use kanban_domain::{
-        BoardUpdate, CreateCardOptions, KanbanOperations, SortOrder, TaskListView,
+        BoardUpdate, CreateCardOptions, KanbanOperations, LoadState, SortOrder, TaskListView,
     };
 
     /// Pull the store snapshot into `app.model` and resync `app.board_list` so
@@ -893,6 +898,105 @@ mod tests {
             ])));
 
         assert_eq!(app.board_delete_counts(board_id), None);
+    }
+
+    fn base_resolved(board: &kanban_domain::Board) -> kanban_domain::Resolved {
+        use kanban_domain::resolved::Collection;
+        kanban_domain::Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![board.clone()]),
+                ..Default::default()
+            },
+            graph: LoadState::Loaded(kanban_domain::DependencyGraph::default()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_board_delete_counts_declines_when_the_live_cards_tier_is_not_loaded() {
+        use kanban_domain::resolved::Collection;
+        use kanban_domain::{Board, Column, DerivedProjections, Sprint};
+        use std::collections::HashMap;
+
+        let board = Board::new("Roadmap", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![column]))]),
+            ..Default::default()
+        };
+        resolved.sprints = Collection {
+            by_parent: HashMap::from([(board.id, LoadState::Loaded(Vec::<Sprint>::new()))]),
+            ..Default::default()
+        };
+        resolved.archived_cards = Collection {
+            all: LoadState::Loaded(Vec::new()),
+            ..Default::default()
+        };
+        let changed = app.model.apply_resolved(resolved);
+        app.controller.resync(&app.model, changed);
+
+        assert!(
+            app.model.cards_state().is_not_loaded(),
+            "cards must stay NotLoaded for this fixture to isolate the live-cards gate"
+        );
+        assert_eq!(app.board_delete_counts(board.id), None);
+    }
+
+    #[test]
+    fn test_board_delete_counts_declines_when_the_archived_marker_tier_is_not_absorbed() {
+        use kanban_domain::resolved::Collection;
+        use kanban_domain::{Board, Column, DerivedProjections, Sprint};
+        use std::collections::HashMap;
+
+        let board = Board::new("Roadmap", None::<String>);
+        let column = Column::new(board.id, "Todo", 0);
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![column]))]),
+            ..Default::default()
+        };
+        resolved.sprints = Collection {
+            by_parent: HashMap::from([(board.id, LoadState::Loaded(Vec::<Sprint>::new()))]),
+            ..Default::default()
+        };
+        resolved.cards = Collection {
+            all: LoadState::Loaded(Vec::new()),
+            ..Default::default()
+        };
+        let changed = app.model.apply_resolved(resolved);
+        app.controller.resync(&app.model, changed);
+
+        assert!(
+            !app.model.archived_card_markers_absorbed(),
+            "the archived marker tier must not be absorbed by this fixture"
+        );
+        assert_eq!(app.board_delete_counts(board.id), None);
+
+        let resolved_archived = kanban_domain::Resolved {
+            archived_cards: Collection {
+                all: LoadState::Loaded(Vec::new()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let changed = app.model.apply_resolved(resolved_archived);
+        app.controller.resync(&app.model, changed);
+
+        assert_eq!(
+            app.board_delete_counts(board.id),
+            Some(BoardDeleteCounts {
+                columns: 1,
+                cards: 0,
+                archived: 0,
+                sprints: 0,
+            }),
+            "a Loaded-but-empty archived marker tier must not decline"
+        );
     }
 
     #[test]

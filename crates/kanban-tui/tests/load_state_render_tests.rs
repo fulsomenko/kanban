@@ -492,3 +492,66 @@ fn test_a_loaded_but_genuinely_empty_graph_still_renders_no_parents_and_no_child
     assert!(output.contains("No parents"));
     assert!(output.contains("No children"));
 }
+
+fn app_with_boards_state(state: LoadState<Vec<Board>>) -> App {
+    let mut app = App::test_default();
+    let changed = app.model.apply_resolved(Resolved {
+        boards: Collection {
+            all: state,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    app.controller.resync(&app.model, changed);
+    app
+}
+
+#[test]
+fn test_the_projects_panel_renders_the_not_loaded_marker_instead_of_the_empty_hint() {
+    let mut app = App::test_default();
+    let output = helpers::render_widget_to_string(400, 30, |frame| {
+        kanban_tui::ui::render(&mut app, frame);
+    });
+    assert!(
+        !output.contains("No projects yet"),
+        "a NotLoaded boards tier must not render the empty hint, got:\n{output}"
+    );
+    assert!(
+        output.contains("Projects not loaded yet"),
+        "a NotLoaded boards tier must render the load-state marker, got:\n{output}"
+    );
+}
+
+#[test]
+fn test_the_projects_panel_renders_the_failed_marker_instead_of_the_empty_hint() {
+    let mut app = app_with_boards_state(LoadState::Failed(Arc::new(KanbanError::unsupported(
+        "boom",
+    ))));
+    let output = helpers::render_widget_to_string(400, 30, |frame| {
+        kanban_tui::ui::render(&mut app, frame);
+    });
+    assert!(
+        !output.contains("No projects yet"),
+        "a Failed boards tier must not render the empty hint, got:\n{output}"
+    );
+    assert!(
+        output.contains("Projects failed to load"),
+        "a Failed boards tier must render the load-state marker, got:\n{output}"
+    );
+    assert!(
+        output.contains("boom"),
+        "the marker must include the error detail, got:\n{output}"
+    );
+}
+
+#[test]
+fn test_the_projects_panel_still_renders_the_empty_hint_on_a_loaded_empty_boards_tier() {
+    let mut app = app_with_boards_state(LoadState::Loaded(Vec::new()));
+    let output = helpers::render_widget_to_string(400, 30, |frame| {
+        kanban_tui::ui::render(&mut app, frame);
+    });
+    assert!(
+        output.contains("No projects yet. Press 'n' to create one!"),
+        "a Loaded-but-empty boards tier is a genuine empty state, got:\n{output}"
+    );
+}

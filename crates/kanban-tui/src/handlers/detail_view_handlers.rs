@@ -29,31 +29,31 @@ impl App {
     /// per `FieldSearcher`'s empty-query contract). This is the single
     /// source of truth for both rendering (`ui::board_detail`) and index
     /// resolution in the column handlers, so a filtered list and an
-    /// unfiltered handler can never disagree on what index N means.
-    pub(crate) fn visible_board_columns(&self, board_id: uuid::Uuid) -> Vec<Column> {
-        let columns: &[Column] = match self.model.columns_state() {
-            LoadState::Loaded(columns) => columns,
-            _ => &[],
-        };
-        let ordered = sorted_board_columns(board_id, columns);
-        let query = self.filter.column_search.active_query().unwrap_or("");
-        let searcher = FieldSearcher::new(query, |c: &&Column| c.name.as_str());
-        kanban_view::list_query::search_and_sort(
-            ordered,
-            |c| searcher.matches(c),
-            |a, b| a.position.cmp(&b.position),
-        )
-        .into_iter()
-        .cloned()
-        .collect()
+    /// unfiltered handler can never disagree on what index N means. Prefers
+    /// the board-scoped column tier and falls back to the flat one, per
+    /// `board_columns_view`.
+    pub(crate) fn visible_board_columns(&self, board_id: uuid::Uuid) -> LoadState<Vec<Column>> {
+        self.board_columns_view(board_id).map(|columns| {
+            let ordered = sorted_board_columns(board_id, &columns);
+            let query = self.filter.column_search.active_query().unwrap_or("");
+            let searcher = FieldSearcher::new(query, |c: &&Column| c.name.as_str());
+            kanban_view::list_query::search_and_sort(
+                ordered,
+                |c| searcher.matches(c),
+                |a, b| a.position.cmp(&b.position),
+            )
+            .into_iter()
+            .cloned()
+            .collect()
+        })
     }
 
     fn column_count_for_board(&self, board_id: uuid::Uuid) -> usize {
-        self.visible_board_columns(board_id).len()
+        self.visible_board_columns(board_id).loaded_or_empty().len()
     }
 
     fn enter_column_focus_at_top(&mut self, board_id: uuid::Uuid) {
-        if !self.model.columns_state().is_loaded() {
+        if !self.visible_board_columns(board_id).is_loaded() {
             self.set_error("Columns are not loaded yet");
             return;
         }
@@ -472,7 +472,7 @@ impl App {
                                 let sprint_count = sprints.len();
                                 let current_idx = self.selection.sprint.get().unwrap_or(0);
                                 if sprint_count == 0 || current_idx >= sprint_count - 1 {
-                                    if self.model.columns_state().is_loaded() {
+                                    if self.visible_board_columns(board_id).is_loaded() {
                                         self.focus.board_focus = BoardFocus::Columns;
                                         self.enter_column_focus_at_top(board_id);
                                     } else {
@@ -488,7 +488,7 @@ impl App {
                 }
                 BoardFocus::Columns => {
                     if let Some(board_id) = self.active_board().map(|board| board.id) {
-                        if self.model.columns_state().is_loaded() {
+                        if self.visible_board_columns(board_id).is_loaded() {
                             let column_count = self.column_count_for_board(board_id);
                             self.dialog_input
                                 .column_list
@@ -537,8 +537,10 @@ impl App {
                 }
                 BoardFocus::Columns => {
                     let board_id = self.board_list.get_selected_board_id();
-                    let columns_ready =
-                        board_id.is_none() || self.model.columns_state().is_loaded();
+                    let columns_ready = match board_id {
+                        None => true,
+                        Some(id) => self.visible_board_columns(id).is_loaded(),
+                    };
                     if !columns_ready {
                         self.set_error("Columns are not loaded yet");
                     } else {
@@ -2163,7 +2165,10 @@ mod tests {
             app.filter.column_search.input.insert_char(c);
         }
 
-        let visible = app.visible_board_columns(board_id);
+        let visible = app
+            .visible_board_columns(board_id)
+            .loaded_or_empty()
+            .to_vec();
 
         assert_eq!(
             visible.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
@@ -2186,7 +2191,10 @@ mod tests {
         );
         app.filter.column_search.activate();
 
-        let visible = app.visible_board_columns(board_id);
+        let visible = app
+            .visible_board_columns(board_id)
+            .loaded_or_empty()
+            .to_vec();
 
         assert_eq!(
             visible.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
@@ -2202,7 +2210,10 @@ mod tests {
         app.filter.column_search.activate();
         app.filter.column_search.input.insert_char('a');
 
-        let visible = app.visible_board_columns(board_id);
+        let visible = app
+            .visible_board_columns(board_id)
+            .loaded_or_empty()
+            .to_vec();
 
         assert_eq!(
             visible.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
@@ -2700,5 +2711,89 @@ mod tests {
 
         assert_eq!(app.focus.board_focus, BoardFocus::Sprints);
         assert_eq!(app.selection.sprint.get(), Some(1));
+    }
+}
+
+#[cfg(test)]
+mod visible_board_columns_tests {
+    use crate::App;
+    use kanban_domain::resolved::Collection;
+    use kanban_domain::{Board, Column, DependencyGraph, LoadState, Resolved};
+    use std::collections::HashMap;
+
+    fn base_resolved(board: &Board) -> Resolved {
+        Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![board.clone()]),
+                ..Default::default()
+            },
+            cards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
+            graph: LoadState::Loaded(DependencyGraph::default()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_visible_board_columns_prefers_the_scoped_tier_and_falls_back_to_the_flat_one() {
+        let board = Board::new("B", None::<String>);
+        let other_board = Board::new("Other", None::<String>);
+        let col_a = Column::new(board.id, "A", 1);
+        let col_b = Column::new(board.id, "B", 0);
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            by_parent: HashMap::from([(
+                board.id,
+                LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
+            )]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        match app.visible_board_columns(board.id) {
+            LoadState::Loaded(columns) => {
+                assert_eq!(
+                    columns.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+                    vec!["B", "A"],
+                    "position order wins, sourced from the scoped tier"
+                );
+            }
+            other => panic!("expected the scoped tier, got {other:?}"),
+        }
+
+        let col_other = Column::new(other_board.id, "Other", 0);
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            all: LoadState::Loaded(vec![col_a.clone(), col_other.clone()]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        match app.visible_board_columns(board.id) {
+            LoadState::Loaded(columns) => {
+                assert_eq!(columns, vec![col_a.clone()]);
+            }
+            other => panic!("expected fallback to the flat tier, got {other:?}"),
+        }
+
+        let app = App::test_default();
+        assert!(app.visible_board_columns(board.id).is_not_loaded());
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            by_parent: HashMap::from([(
+                board.id,
+                LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("boom"),
+                )),
+            )]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        assert!(app.visible_board_columns(board.id).is_failed());
     }
 }

@@ -1,7 +1,29 @@
 use super::{App, AppMode};
-use kanban_domain::{LoadState, Sprint};
+use kanban_domain::{Column, LoadState, Sprint};
 
 impl App {
+    /// One column tier per board-scoped feature: the scoped tier when it has
+    /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
+    /// `Loaded` (including an empty one) is authoritative and never falls
+    /// back; only `NotLoaded` triggers the fallback. Unfiltered — callers
+    /// that need the position-ordered, search-narrowed view use
+    /// `visible_board_columns` instead.
+    pub(crate) fn board_columns_view(&self, board_id: uuid::Uuid) -> LoadState<Vec<Column>> {
+        match self.model.board_columns_state(board_id) {
+            LoadState::Loaded(columns) => LoadState::Loaded(columns.to_vec()),
+            LoadState::NotLoaded => match self.model.columns_state() {
+                LoadState::Loaded(all) => LoadState::Loaded(
+                    all.iter()
+                        .filter(|c| c.board_id == board_id)
+                        .cloned()
+                        .collect(),
+                ),
+                _ => LoadState::NotLoaded,
+            },
+            other => other.map(|_| Vec::new()),
+        }
+    }
+
     /// One sprint tier per board-scoped feature: the scoped tier when it has
     /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
     /// `Loaded` (including an empty one) is authoritative and never falls
@@ -142,6 +164,84 @@ mod active_card_index_regression {
             idx, expected_idx,
             "must return A's sprint index, not P's sprint index at A's stale slot"
         );
+    }
+}
+
+#[cfg(test)]
+mod board_columns_view_tests {
+    use crate::App;
+    use kanban_domain::resolved::Collection;
+    use kanban_domain::{Board, Column, DependencyGraph, LoadState, Resolved};
+    use std::collections::HashMap;
+
+    fn base_resolved(board: &Board) -> Resolved {
+        Resolved {
+            boards: Collection {
+                all: LoadState::Loaded(vec![board.clone()]),
+                ..Default::default()
+            },
+            cards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
+            graph: LoadState::Loaded(DependencyGraph::default()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_board_columns_view_prefers_the_scoped_tier_and_falls_back_to_the_flat_one() {
+        let board = Board::new("B", None::<String>);
+        let other_board = Board::new("Other", None::<String>);
+        let col_a = Column::new(board.id, "A", 0);
+        let col_b = Column::new(board.id, "B", 1);
+        let col_other = Column::new(other_board.id, "Other", 0);
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            by_parent: HashMap::from([(
+                board.id,
+                LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
+            )]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        match app.board_columns_view(board.id) {
+            LoadState::Loaded(columns) => {
+                assert_eq!(columns, vec![col_a.clone(), col_b.clone()]);
+            }
+            other => panic!("expected the scoped tier, got {other:?}"),
+        }
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            all: LoadState::Loaded(vec![col_a.clone(), col_other.clone()]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        match app.board_columns_view(board.id) {
+            LoadState::Loaded(columns) => assert_eq!(columns, vec![col_a.clone()]),
+            other => panic!("expected fallback to the flat tier, got {other:?}"),
+        }
+
+        let app = App::test_default();
+        assert!(app.board_columns_view(board.id).is_not_loaded());
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
+            by_parent: HashMap::from([(
+                board.id,
+                LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("boom"),
+                )),
+            )]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        assert!(app.board_columns_view(board.id).is_failed());
     }
 }
 

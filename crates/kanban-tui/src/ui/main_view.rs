@@ -39,9 +39,12 @@ pub(super) fn render_projects_panel(app: &App, frame: &mut Frame, area: Rect) {
     // `displayed_boards()`), rather than flipping to the live set under the modal.
     let archived_view = matches!(app.get_base_mode(), AppMode::ArchivedBoardsView);
     let boards_state = app.displayed_boards();
-    let boards: &[Board] = boards_state.loaded().map(Vec::as_slice).unwrap_or(&[]);
+    let boards_slice = boards_state.as_ref().map(Vec::as_slice);
+    let boards: &[Board] = boards_slice.loaded().copied().unwrap_or(&[]);
 
-    if boards.is_empty() {
+    if let Some(marker) = crate::ui::load_state_body("Projects", &boards_slice) {
+        lines.push(marker);
+    } else if boards.is_empty() {
         let empty = if archived_view {
             "No archived projects."
         } else {

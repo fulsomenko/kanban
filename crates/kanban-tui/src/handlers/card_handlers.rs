@@ -394,10 +394,12 @@ impl App {
                 .map(|b| b.id);
 
             if let Some(bid) = board_info {
-                if !self.model.board_columns_state(bid).is_loaded()
-                    && !self.model.columns_state().is_loaded()
-                {
+                if !self.board_columns_view(bid).is_loaded() {
                     self.set_error("Columns are not loaded yet");
+                    return;
+                }
+                if !self.model.cards_state().is_loaded() {
+                    self.set_error("Cards are not loaded yet");
                     return;
                 }
                 let existing_column = self.create_card_target_column(bid);
@@ -411,7 +413,7 @@ impl App {
                         };
                         let position =
                             kanban_domain::card_lifecycle::next_position_in_column(cards, col.id);
-                        let LoadState::Loaded(columns) = self.model.columns_state() else {
+                        let LoadState::Loaded(columns) = self.board_columns_view(bid) else {
                             self.set_error("Columns are not loaded yet");
                             return;
                         };
@@ -422,7 +424,7 @@ impl App {
                             .copied()
                             .map(|board| {
                                 kanban_domain::card_lifecycle::should_auto_complete_new_card(
-                                    col.id, board, columns,
+                                    col.id, board, &columns,
                                 )
                             })
                             .unwrap_or(false);
@@ -598,7 +600,7 @@ impl App {
             if self.is_kanban_view() {
                 let num_cols = self
                     .active_board()
-                    .map(|b| self.visible_board_columns(b.id).len())
+                    .map(|b| self.visible_board_columns(b.id).loaded_or_empty().len())
                     .unwrap_or(0);
                 self.dialog_input.column_list.update_item_count(num_cols);
                 if let Some(current_col_idx) = self.dialog_input.column_list.get_selected_index() {
@@ -1615,6 +1617,55 @@ mod cards_tier_decline_tests {
         assert!(
             !cards.iter().any(|c| c.title == "New card"),
             "no card should have been created while the cards tier is not loaded"
+        );
+    }
+
+    fn invalidate_columns_tier(app: &mut App) {
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::columns([
+                uuid::Uuid::new_v4(),
+            ])));
+    }
+
+    fn resupply_scoped_columns_only(app: &mut App, board_id: uuid::Uuid) {
+        let columns = app
+            .ctx
+            .data_store()
+            .list_all_columns()
+            .unwrap()
+            .into_iter()
+            .filter(|c| c.board_id == board_id)
+            .collect();
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            columns: kanban_domain::resolved::Collection {
+                by_parent: [(board_id, kanban_domain::LoadState::Loaded(columns))].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        NoProjections.resync(&app.model, changed);
+    }
+
+    #[test]
+    fn test_create_card_creates_when_only_the_scoped_column_tier_is_loaded() {
+        let mut app = App::test_default();
+        let (board_id, _column_id, _card_id) = seed_board_column_card(&mut app);
+        refresh(&mut app);
+        app.selection.active_board_id = Some(board_id);
+
+        invalidate_columns_tier(&mut app);
+        resupply_scoped_columns_only(&mut app, board_id);
+
+        app.input.set("New card".to_string());
+        app.create_card();
+        app.input.clear();
+
+        assert!(app.ui_state.banner.is_none());
+        let cards = app.ctx.data_store().list_all_cards().unwrap();
+        assert!(
+            cards.iter().any(|c| c.title == "New card"),
+            "the card must be created from the scoped-only column tier"
         );
     }
 
