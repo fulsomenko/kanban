@@ -3,7 +3,9 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, Command, CompactColumnPositions, CreateBoard, ImportEntities,
     UpdateBoard,
 };
-use kanban_domain::{BoardUpdate, CardUpdate, KanbanOperations, KanbanResult};
+use kanban_domain::{
+    BoardUpdate, CardUpdate, EntityIds, Invalidation, KanbanOperations, KanbanResult,
+};
 use kanban_service::undo_stack::UndoStack;
 use kanban_service::{read_full_snapshot, write_full_snapshot, KanbanContext};
 use std::sync::Arc;
@@ -613,7 +615,7 @@ async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() -> Ka
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.archive_cards_detailed(vec![c1.id, c2.id]);
+    let (result, _) = ctx.archive_cards_detailed(vec![c1.id, c2.id]);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
@@ -633,7 +635,7 @@ async fn test_archive_cards_detailed_all_valid_creates_single_undo_entry() -> Ka
 async fn test_archive_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
-    let result = ctx.archive_cards_detailed(vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()]);
+    let (result, _) = ctx.archive_cards_detailed(vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()]);
     assert!(result.succeeded.is_empty());
     assert_eq!(result.failed.len(), 2);
     assert!(
@@ -655,7 +657,7 @@ async fn test_detailed_archive_partial_success_is_undoable() -> KanbanResult<()>
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.archive_cards_detailed(vec![card.id, uuid::Uuid::new_v4()]);
+    let (result, _) = ctx.archive_cards_detailed(vec![card.id, uuid::Uuid::new_v4()]);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
     assert!(ctx.is_dirty());
@@ -678,7 +680,7 @@ async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() -> Kanba
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.move_cards_detailed(vec![c1.id, c2.id], col_b.id);
+    let (result, _) = ctx.move_cards_detailed(vec![c1.id, c2.id], col_b.id);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
@@ -697,7 +699,7 @@ async fn test_move_cards_detailed_all_valid_creates_single_undo_entry() -> Kanba
 async fn test_move_cards_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
-    let result = ctx.move_cards_detailed(
+    let (result, _) = ctx.move_cards_detailed(
         vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
         uuid::Uuid::new_v4(),
     );
@@ -723,7 +725,7 @@ async fn test_move_cards_detailed_partial_success_is_undoable() -> KanbanResult<
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.move_cards_detailed(vec![card.id, uuid::Uuid::new_v4()], col_b.id);
+    let (result, _) = ctx.move_cards_detailed(vec![card.id, uuid::Uuid::new_v4()], col_b.id);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
     assert!(ctx.is_dirty());
@@ -746,7 +748,7 @@ async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entr
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result = ctx.assign_cards_to_sprint_detailed(vec![c1.id, c2.id], sprint.id);
+    let (result, _) = ctx.assign_cards_to_sprint_detailed(vec![c1.id, c2.id], sprint.id);
     assert_eq!(result.succeeded.len(), 2);
     assert!(result.failed.is_empty());
     assert!(ctx.is_dirty());
@@ -767,7 +769,7 @@ async fn test_assign_cards_to_sprint_detailed_all_valid_creates_single_undo_entr
 async fn test_assign_cards_to_sprint_detailed_all_fail_does_not_set_dirty() {
     let mut ctx = make_ctx().await;
     ctx.mark_clean();
-    let result = ctx.assign_cards_to_sprint_detailed(
+    let (result, _) = ctx.assign_cards_to_sprint_detailed(
         vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
         uuid::Uuid::new_v4(),
     );
@@ -793,7 +795,7 @@ async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() -> K
     ctx.clear_history()?;
     ctx.mark_clean();
 
-    let result =
+    let (result, _) =
         ctx.assign_cards_to_sprint_detailed(vec![card.id, uuid::Uuid::new_v4()], sprint.id);
     assert_eq!(result.succeeded.len(), 1);
     assert_eq!(result.failed.len(), 1);
@@ -802,6 +804,71 @@ async fn test_assign_cards_to_sprint_detailed_partial_success_is_undoable() -> K
 
     assert!(ctx.undo()?.is_some());
     assert_eq!(ctx.get_card(card.id)?.unwrap().sprint_id, None);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_move_cards_detailed_returns_entity_invalidation_naming_the_moved_cards(
+) -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col_a = ctx.create_column(board.id, "A".into(), None)?;
+    let col_b = ctx.create_column(board.id, "B".into(), None)?;
+    let c1 = ctx.create_card(board.id, col_a.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col_a.id, "Card 2".into(), Default::default())?;
+    ctx.clear_history()?;
+    ctx.mark_clean();
+
+    let (result, invalidation) = ctx.move_cards_detailed(vec![c1.id, c2.id], col_b.id);
+    assert_eq!(result.succeeded.len(), 2);
+    match invalidation {
+        Invalidation::Entities(ids) => {
+            assert_eq!(ids.cards, std::collections::HashSet::from([c1.id, c2.id]));
+        }
+        other => panic!("expected Invalidation::Entities, got {other:?}"),
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_archive_cards_detailed_on_success_returns_all_because_restore_is_unenumerable(
+) -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default())?;
+    let c2 = ctx.create_card(board.id, col.id, "Card 2".into(), Default::default())?;
+    ctx.clear_history()?;
+    ctx.mark_clean();
+
+    let (result, invalidation) = ctx.archive_cards_detailed(vec![c1.id, c2.id]);
+    assert_eq!(result.succeeded.len(), 2);
+    assert_eq!(invalidation, Invalidation::All);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_archive_cards_detailed_all_invalid_returns_empty_invalidation() {
+    let mut ctx = make_ctx().await;
+    let (result, invalidation) =
+        ctx.archive_cards_detailed(vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()]);
+    assert!(result.succeeded.is_empty());
+    assert_eq!(result.failed.len(), 2);
+    assert_eq!(invalidation, Invalidation::Entities(EntityIds::default()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_assign_cards_to_sprint_detailed_missing_sprint_returns_empty_invalidation(
+) -> KanbanResult<()> {
+    let mut ctx = make_ctx().await;
+    let board = ctx.create_board("B".into(), None)?;
+    let col = ctx.create_column(board.id, "C".into(), None)?;
+    let c1 = ctx.create_card(board.id, col.id, "Card 1".into(), Default::default())?;
+
+    let (result, invalidation) =
+        ctx.assign_cards_to_sprint_detailed(vec![c1.id], uuid::Uuid::new_v4());
+    assert_eq!(result.failed.len(), 1);
+    assert_eq!(invalidation, Invalidation::Entities(EntityIds::default()));
     Ok(())
 }
 
