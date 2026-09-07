@@ -697,9 +697,19 @@ fn test_no_converted_card_board_or_column_handler_still_reloads_wholesale() {
     assert_eq!(production_reload_model_count(board_handlers), 6);
     assert_eq!(production_reload_model_count(column_handlers), 0);
 
-    for src in [card_handlers, detail_view_handlers, board_handlers, column_handlers] {
+    let card_handlers_boundary = card_handlers.find("#[cfg(test)]").unwrap_or(card_handlers.len());
+    let entity_ids_count = card_handlers[..card_handlers_boundary].matches("EntityIds").count();
+    assert_eq!(
+        entity_ids_count, 1,
+        "the only production EntityIds construction left is create_card's with_prefixes() extra"
+    );
+
+    for src in [detail_view_handlers, board_handlers, column_handlers] {
         let boundary = src.find("#[cfg(test)]").unwrap_or(src.len());
         assert!(!src[..boundary].contains("EntityIds"), "handler built its own invalidation");
+    }
+    for src in [card_handlers, detail_view_handlers, board_handlers, column_handlers] {
+        let boundary = src.find("#[cfg(test)]").unwrap_or(src.len());
         assert!(
             !src[..boundary].contains("invalidation_from_inverse"),
             "handler built its own invalidation"
