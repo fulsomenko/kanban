@@ -56,7 +56,7 @@ async fn run(
     sm.sync_backend_with_file(locator, &mut config);
     let backend = sm.make_backend(locator, &config).await?;
     let ctx = kanban_service::KanbanContext::open(backend, config).await?;
-    let state = AppState::new(ctx);
+    let state = AppState::with_reset(ctx, sm.is_sqlite(locator));
 
     kanban_server::watch::watch_for_external_changes(state.clone(), locator).await?;
 
