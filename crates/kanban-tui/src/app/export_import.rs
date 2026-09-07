@@ -93,6 +93,8 @@ impl App {
             self.board_list
                 .inner_mut()
                 .set_selected_index(Some(first_new_index));
+            self.resolve_for_view();
+            self.prepare_frame();
             self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
             return Ok(());
         }
@@ -128,6 +130,8 @@ impl App {
         self.board_list
             .inner_mut()
             .set_selected_index(Some(first_new_index));
+        self.resolve_for_view();
+        self.prepare_frame();
         self.switch_view_strategy(kanban_domain::TaskListView::GroupedByColumn);
 
         Ok(())

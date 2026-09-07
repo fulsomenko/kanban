@@ -175,7 +175,6 @@ impl App {
         let Some(board_id) = self.selected_archived_board_id() else {
             return;
         };
-        self.resolve_for_view();
         let Some(counts) = self.board_delete_counts(board_id) else {
             self.set_error("Board contents are not loaded yet".to_string());
             return;
@@ -1592,6 +1591,7 @@ mod tests {
         app.prepare_frame();
         app.focus.active = Focus::Boards;
         app.board_list.inner_mut().set_selected_index(Some(0));
+        app.resolve_for_view();
 
         // `x` opens the confirm dialog rather than deleting immediately.
         app.handle_archived_boards_view_mode(KeyCode::Char('x'));
@@ -1648,6 +1648,7 @@ mod tests {
         app.prepare_frame();
         app.focus.active = Focus::Boards;
         app.board_list.inner_mut().set_selected_index(Some(0));
+        app.resolve_for_view();
 
         app.handle_archived_boards_view_mode(KeyCode::Char('x'));
         app.handle_delete_permanent_board_confirm_popup(KeyCode::Esc);

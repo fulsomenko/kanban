@@ -85,6 +85,14 @@ impl FetchPlan for ViewScope {
             if requestable(loaded.archived_card_list()) {
                 round.archived_card_list = true;
             } else if self.archived_card_bodies {
+                // The per-id body merge only lands in the flat collection
+                // once that collection itself is `Loaded` (`apply_collection`
+                // upserts onto an existing Vec, it never creates one), so a
+                // body walk with no board in scope must still request the
+                // flat card list itself.
+                if !round.card_list && requestable(loaded.card_list()) {
+                    round.card_list = true;
+                }
                 if let Some(markers) = loaded.loaded_archived_card_markers() {
                     let mut ids: Vec<Uuid> = markers
                         .iter()
@@ -101,6 +109,9 @@ impl FetchPlan for ViewScope {
             if requestable(loaded.archived_board_list()) {
                 round.archived_board_list = true;
             } else if self.archived_board_bodies {
+                if !round.board_list && requestable(loaded.board_list()) {
+                    round.board_list = true;
+                }
                 if let Some(markers) = loaded.loaded_archived_board_markers() {
                     let mut ids: Vec<Uuid> = markers
                         .iter()
