@@ -467,9 +467,10 @@ impl App {
                     self.filter.current_sort_field = Some(task_sort_field);
                     self.filter.current_sort_order = Some(task_sort_order);
                     self.switch_view_strategy(task_list_view);
-                    // Populate the tasks panel from the now-active board's subtree
-                    // immediately, so the first item can be selected this tick.
-                    self.prepare_frame();
+                    // Fetch the now-active board's subtree and rebuild the tasks
+                    // panel from it immediately, so the first item can be
+                    // selected this tick.
+                    self.refresh_view();
 
                     if let Some(list) = self.view.strategy.get_active_task_list_mut() {
                         if !list.is_empty() {

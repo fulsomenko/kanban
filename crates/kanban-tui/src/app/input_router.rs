@@ -5,7 +5,21 @@ use std::io;
 use std::time::Instant;
 
 impl App {
-    pub(in crate::app) fn handle_key_event(
+    /// Dispatches `key`, then resolves whatever the resulting view state
+    /// needs. Wraps `dispatch_key_event` rather than folding the resolve into
+    /// it because the dispatcher has six early returns before its main match.
+    pub fn handle_key_event(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        event_handler: &EventHandler,
+    ) -> bool {
+        let should_restart = self.dispatch_key_event(key, terminal, event_handler);
+        self.resolve_for_view();
+        should_restart
+    }
+
+    fn dispatch_key_event(
         &mut self,
         key: crossterm::event::KeyEvent,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
