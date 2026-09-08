@@ -21,6 +21,20 @@ impl kanban_backend::KanbanBackend for HttpBackend {
         self.instance_id
     }
 
+    async fn probe(&self) -> kanban_domain::KanbanResult<()> {
+        let url = format!("{}/health", self.base_url());
+        let resp = self.client().get(&url).send().await.map_err(|e| {
+            kanban_domain::KanbanError::Transport(format!("health probe of '{url}' failed: {e}"))
+        })?;
+        if !resp.status().is_success() {
+            return Err(kanban_domain::KanbanError::Transport(format!(
+                "health probe of '{url}' returned HTTP {}",
+                resp.status()
+            )));
+        }
+        Ok(())
+    }
+
     /// Declines without running the closure. The remote server owns the state,
     /// so there is nothing local to roll back and no way to make the batch
     /// atomic from this side.
