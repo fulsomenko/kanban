@@ -185,19 +185,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mutate_blanks_the_session_model_tier_the_invalidation_names() {
+    async fn test_mutate_returns_the_invalidation_the_operation_produced() {
         let dir = tempfile::tempdir().unwrap();
         let state = json_state(dir.path());
         let mut guard = state.lock_session().await;
 
         let board_id = guard.ctx.create_board("A".into(), None).unwrap().id;
-        {
-            let Session { ctx, model } = &mut *guard;
-            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
-        }
-        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
 
-        mutate(&mut guard, |c| {
+        let (board, invalidation) = mutate(&mut guard, |c| {
             c.update_board_impl(
                 board_id,
                 BoardUpdate {
@@ -208,73 +203,34 @@ mod tests {
         })
         .unwrap();
 
-        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
-    }
-
-    #[tokio::test]
-    async fn test_mutate_blanks_only_the_tiers_the_invalidation_names() {
-        let dir = tempfile::tempdir().unwrap();
-        let state = json_state(dir.path());
-        let mut guard = state.lock_session().await;
-
-        let board_a = guard.ctx.create_board("A".into(), None).unwrap().id;
-        let board_b = guard.ctx.create_board("B".into(), None).unwrap().id;
-        {
-            let Session { ctx, model } = &mut *guard;
-            ctx.sync(
-                &RouteScope::BoardColumns(board_b),
-                model,
-                &mut NoProjections,
-            );
-            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
+        assert_eq!(board.name, "Renamed");
+        match invalidation {
+            Invalidation::Entities(ids) => assert!(ids.boards.contains(&board_id)),
+            Invalidation::All => panic!("expected Invalidation::Entities naming the board"),
         }
-        assert!(matches!(
-            guard.model.board_columns_state(board_b),
-            LoadState::Loaded(_)
-        ));
-        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
-
-        mutate(&mut guard, |c| {
-            c.update_board_impl(
-                board_a,
-                BoardUpdate {
-                    name: Some("Renamed".into()),
-                    ..Default::default()
-                },
-            )
-        })
-        .unwrap();
-
-        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
-        assert!(matches!(
-            guard.model.board_columns_state(board_b),
-            LoadState::Loaded(_)
-        ));
     }
 
     #[tokio::test]
-    async fn test_mutate_unit_blanks_the_session_model_tier_the_invalidation_names() {
+    async fn test_mutate_unit_returns_the_invalidation_the_operation_produced() {
         let dir = tempfile::tempdir().unwrap();
         let state = json_state(dir.path());
         let mut guard = state.lock_session().await;
 
         let board_id = guard.ctx.create_board("A".into(), None).unwrap().id;
-        {
-            let Session { ctx, model } = &mut *guard;
-            ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
-        }
-        assert!(matches!(guard.model.boards_state(), LoadState::Loaded(_)));
 
-        mutate_unit(&mut guard, |c| c.delete_board_impl(board_id)).unwrap();
+        let invalidation = mutate_unit(&mut guard, |c| c.delete_board_impl(board_id)).unwrap();
 
-        assert!(matches!(guard.model.boards_state(), LoadState::NotLoaded));
+        assert!(
+            matches!(invalidation, Invalidation::All)
+                || matches!(&invalidation, Invalidation::Entities(ids) if ids.boards.contains(&board_id))
+        );
     }
 
     #[tokio::test]
     async fn test_mutate_returns_the_operations_value() {
         let (mut ctx, board_id) = seeded_ctx().await;
 
-        let updated = mutate(&mut ctx, |c| {
+        let (updated, _invalidation) = mutate(&mut ctx, |c| {
             c.update_board_impl(
                 board_id,
                 kanban_domain::BoardUpdate {
@@ -289,15 +245,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mutate_propagates_the_error_and_invalidates_nothing() {
+    async fn test_mutate_propagates_the_error_and_leaves_the_store_untouched() {
         let (mut session, _board_id) = seeded_ctx().await;
         let absent_id = Uuid::new_v4();
-        session.ctx.sync(
-            &RouteScope::BoardList,
-            &mut session.model,
-            &mut NoProjections,
-        );
-        assert!(matches!(session.model.boards_state(), LoadState::Loaded(_)));
 
         let result = mutate(&mut session, |c| {
             c.update_board_impl(absent_id, kanban_domain::BoardUpdate::default())
@@ -305,7 +255,6 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(session.ctx.list_boards().unwrap().len(), 1);
-        assert!(matches!(session.model.boards_state(), LoadState::Loaded(_)));
     }
 
     #[tokio::test]

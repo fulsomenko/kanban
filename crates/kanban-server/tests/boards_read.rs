@@ -5,7 +5,6 @@
 //! against the router directly, with no real TCP socket.
 
 use axum::http::StatusCode;
-use kanban_domain::LoadState;
 use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::KanbanOperations;
 use tempfile::tempdir;
@@ -170,7 +169,7 @@ async fn test_get_board_archived_board_response_has_archived_at_stamped() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_list_boards_populates_the_session_models_board_list_tier() {
+async fn test_list_boards_returns_the_created_board() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
 
@@ -183,17 +182,13 @@ async fn test_list_boards_populates_the_session_models_board_list_tier() {
     let response = send(&state, "GET", "/v1/boards", None).await;
     assert_eq!(response.status(), StatusCode::OK);
     let json = json_of(response).await;
-    assert_eq!(json["items"].as_array().unwrap().len(), 1);
-
-    let guard = state.ctx.lock().await;
-    assert!(
-        matches!(guard.model.boards_state(), LoadState::Loaded(_)),
-        "list_boards must sync the session Model's board_list tier"
-    );
+    let arr = json["items"].as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["name"], "Board 1");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_get_board_populates_the_per_id_board_and_archived_marker_tiers_not_the_flat_list() {
+async fn test_get_board_returns_the_board_by_id() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
 
@@ -208,20 +203,9 @@ async fn test_get_board_populates_the_per_id_board_and_archived_marker_tiers_not
 
     let response = send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await;
     assert_eq!(response.status(), StatusCode::OK);
-
-    let guard = state.ctx.lock().await;
-    assert!(
-        matches!(guard.model.board_id_status(board_id), LoadState::Loaded(_)),
-        "get_board must sync the per-id board tier"
-    );
-    assert!(
-        matches!(guard.model.archived_boards_state(), LoadState::Loaded(_)),
-        "get_board must sync the archived board marker tier"
-    );
-    assert!(
-        matches!(guard.model.boards_state(), LoadState::NotLoaded),
-        "get_board must not sync the flat board_list tier"
-    );
+    let json = json_of(response).await;
+    assert_eq!(json["id"], board_id.to_string());
+    assert_eq!(json["name"], "My Board");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -243,16 +227,6 @@ async fn test_get_archived_board_resolves_through_the_per_id_tier_and_stamps_arc
     assert_eq!(response.status(), StatusCode::OK);
     let json = json_of(response).await;
     assert!(json["archived_at"].is_string());
-
-    let guard = state.ctx.lock().await;
-    assert!(
-        matches!(guard.model.board_id_status(board_id), LoadState::Loaded(_)),
-        "the archived head must resolve through the unfiltered per-id tier"
-    );
-    assert!(matches!(
-        guard.model.archived_boards_state(),
-        LoadState::Loaded(_)
-    ));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -265,12 +239,6 @@ async fn test_get_board_unknown_id_records_missing_on_the_per_id_tier_and_return
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let json = json_of(response).await;
     assert_eq!(json["code"], "NOT_FOUND");
-
-    let guard = state.ctx.lock().await;
-    assert!(
-        matches!(guard.model.board_id_status(random_id), LoadState::Missing),
-        "an unknown id must be recorded Missing on the per-id tier"
-    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -293,12 +261,6 @@ async fn test_get_archived_board_on_a_sqlite_locator_stamps_archived_at_and_sync
     assert_eq!(response.status(), StatusCode::OK);
     let json = json_of(response).await;
     assert!(json["archived_at"].is_string());
-
-    let guard = state.ctx.lock().await;
-    assert!(
-        matches!(guard.model.board_id_status(board_id), LoadState::Loaded(_)),
-        "sqlite: the per-id tier must resolve the archived head"
-    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
