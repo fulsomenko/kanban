@@ -11,6 +11,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouteScope {
     BoardList,
+    ArchivedBoardList,
     Board(Uuid),
     BoardColumns(Uuid),
     BoardCards {
@@ -44,6 +45,9 @@ impl FetchPlan for RouteScope {
         match *self {
             RouteScope::BoardList => {
                 round.board_list = requestable(loaded.board_list());
+            }
+            RouteScope::ArchivedBoardList => {
+                round.archived_board_list = requestable(loaded.archived_board_list());
             }
             RouteScope::Board(id) => {
                 want_board(&mut round, loaded, id);
