@@ -586,4 +586,3 @@ async fn test_get_sprint_after_lifecycle_write_reads_fresh_status_and_resolved_n
     assert_eq!(json["status"], "active");
     assert_eq!(json["name"], "Alpha");
 }
-

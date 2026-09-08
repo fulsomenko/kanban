@@ -199,7 +199,9 @@ mod tests {
 
     #[test]
     fn test_activate_request_validated_duration_accepts_none_and_in_range() {
-        let req = ActivateSprintRequest { duration_days: None };
+        let req = ActivateSprintRequest {
+            duration_days: None,
+        };
         assert_eq!(req.validated_duration_days().unwrap(), None);
 
         let req = ActivateSprintRequest {

@@ -13,7 +13,9 @@ async fn activate_sprint_route(
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     AppJson(req): AppJson<ActivateSprintRequest>,
 ) -> Result<Json<SprintResponse>, AppError> {
-    let duration_days = req.validated_duration_days().map_err(|e| AppError::from(&e))?;
+    let duration_days = req
+        .validated_duration_days()
+        .map_err(|e| AppError::from(&e))?;
     let body = {
         let mut ctx = state.ctx.lock().await;
         require_sprint_in_board(&ctx, board_id, id)?;
@@ -37,8 +39,9 @@ async fn complete_sprint_route(
     let body = {
         let mut ctx = state.ctx.lock().await;
         require_sprint_in_board(&ctx, board_id, id)?;
-        let (sprint, _invalidation) = crate::state::mutate(&mut ctx, |c| c.complete_sprint_impl(id))
-            .map_err(|e| AppError::from(&e))?;
+        let (sprint, _invalidation) =
+            crate::state::mutate(&mut ctx, |c| c.complete_sprint_impl(id))
+                .map_err(|e| AppError::from(&e))?;
         let body = respond(&ctx, &sprint)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Updated)
