@@ -6,6 +6,7 @@
 //! `main.rs`, owning the entrypoint while reusing all CLI plumbing.
 
 pub(crate) mod app;
+pub mod capabilities;
 pub(crate) mod cli;
 pub(crate) mod context;
 pub(crate) mod error;

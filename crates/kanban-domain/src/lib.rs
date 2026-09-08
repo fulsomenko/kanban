@@ -5,6 +5,7 @@ pub mod archived_board;
 pub mod archived_card;
 pub mod board;
 pub mod board_factory;
+pub mod capabilities;
 pub mod card;
 pub mod card_factory;
 pub mod card_lifecycle;
@@ -55,6 +56,7 @@ pub use board::{
     DEFAULT_BOARD_SORT_LIVE,
 };
 pub use board_factory::{BoardRecord, NewBoard};
+pub use capabilities::{capability_violations, CAPABILITY_MANIFEST};
 pub use card::{
     AnimationType, Card, CardId, CardPriority, CardStatus, CardSummary, CardUpdate,
     CreateCardOptions,

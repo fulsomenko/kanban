@@ -4,6 +4,7 @@
 //! cards extend it rather than building their own.
 
 pub mod app;
+pub mod capabilities;
 pub mod error;
 pub mod model_read;
 pub mod pagination;
