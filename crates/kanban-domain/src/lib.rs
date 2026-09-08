@@ -43,6 +43,7 @@ pub mod sprint_factory;
 pub mod sprint_log;
 pub mod tag;
 pub mod task_list_view;
+pub mod undo_operations;
 pub mod wip;
 
 pub use archival::{ArchiveMetadata, Archived, ArchivedEntity, NoContext};
