@@ -154,6 +154,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_mutate_seam_accepts_a_mutation_operations_closure() {
+        let (mut session, board_id) = seeded_ctx().await;
+
+        let (board, _inv) = mutate(&mut session, |c: &mut dyn kanban_domain::MutationOperations| {
+            c.update_board_impl(
+                board_id,
+                BoardUpdate {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap();
+        assert_eq!(board.name, "Renamed");
+
+        let _inv = mutate_unit(&mut session, |c: &mut dyn kanban_domain::MutationOperations| {
+            c.delete_board_impl(board_id)
+        })
+        .unwrap();
+    }
+
+    #[tokio::test]
     async fn test_mutate_returns_the_invalidation_the_operation_produced() {
         let dir = tempfile::tempdir().unwrap();
         let state = json_state(dir.path());

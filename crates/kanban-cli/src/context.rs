@@ -544,6 +544,20 @@ mod tests {
     }
 
     #[test]
+    fn test_mutate_seam_accepts_a_mutation_operations_closure() -> KanbanResult<()> {
+        let mut ctx = seam_context();
+        let board = ctx.mutate(|c: &mut dyn kanban_domain::MutationOperations| {
+            c.create_board_impl("Seam".to_string(), None)
+        })?;
+        assert_eq!(board.name, "Seam");
+        ctx.mutate_unit(|c: &mut dyn kanban_domain::MutationOperations| {
+            c.archive_board_impl(board.id)
+        })?;
+        assert!(ctx.list_boards()?.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn test_mutate_returns_the_operations_value() -> KanbanResult<()> {
         let mut ctx = seam_context();
         let board = ctx.mutate(|c| c.create_board_impl("Seam".to_string(), None))?;

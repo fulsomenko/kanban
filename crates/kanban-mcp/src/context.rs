@@ -507,6 +507,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_mutate_seam_accepts_a_mutation_operations_closure() {
+        let (mut ctx, _dir) = test_context().await;
+
+        let (board, _inv) = ctx
+            .mutate(|c: &mut dyn kanban_domain::MutationOperations| {
+                c.create_board_impl("Seam".to_string(), None)
+            })
+            .unwrap();
+        assert_eq!(board.name, "Seam");
+
+        ctx.mutate_unit(|c: &mut dyn kanban_domain::MutationOperations| {
+            c.delete_board_impl(board.id)
+        })
+        .unwrap();
+        assert!(ctx.list_boards().unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn test_mutate_returns_the_operations_value_and_invalidation() {
         let (mut ctx, _dir) = test_context().await;
 
