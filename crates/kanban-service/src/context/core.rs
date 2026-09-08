@@ -38,12 +38,12 @@ impl KanbanContext {
         self.session_id
     }
 
-    /// Wraps `backend` and forces a lazy backend's I/O so any
-    /// deserialization or read failure surfaces here, before the
-    /// caller starts mutating.
+    /// Wraps `backend` and awaits [`KanbanBackend::probe`], so a lazy
+    /// backend's load failure or a remote backend's unreachable server
+    /// surfaces here, before the caller starts mutating.
     pub async fn open(backend: Arc<dyn KanbanBackend>, config: AppConfig) -> KanbanResult<Self> {
         let ctx = Self::open_deferred(backend, config);
-        ctx.backend.batch_count()?;
+        ctx.backend.probe().await?;
         Ok(ctx)
     }
 

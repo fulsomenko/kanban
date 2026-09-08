@@ -49,8 +49,10 @@ ctx.with_app_type(app_type: AppType) -> Self
 ```
 
 `open_deferred` is zero-I/O — it just wraps `backend`. `open` is async and
-additionally calls `backend.batch_count()` so a lazy backend's load/parse
-errors surface at construction time rather than on first use. `with_app_type`
+additionally awaits `backend.probe()` so a lazy backend's load/parse errors,
+or a remote backend's unreachable server, surface at construction time
+rather than on first use. The default `probe()` reads the command log;
+`HttpBackend` overrides it with a `GET /health` liveness check. `with_app_type`
 is a builder call made right after `open_deferred`/`open` to record which
 surface (CLI, MCP, TUI) owns the context, for command attribution.
 
