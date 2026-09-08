@@ -1,7 +1,7 @@
 use crate::app::{App, AppMode};
 use crossterm::event::KeyCode;
 use kanban_domain::commands::{ColumnCommand, Command, UpdateColumn};
-use kanban_domain::{ColumnUpdate, LoadState, SortOrder};
+use kanban_domain::{ColumnUpdate, LoadState, MutationOperations, SortOrder};
 
 const PRIORITY_COUNT: usize = 4;
 const DEFAULT_STATUS_COUNT: usize = 5;

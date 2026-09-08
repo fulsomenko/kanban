@@ -4,7 +4,7 @@ use kanban_domain::commands::{
     BoardCommand, CardCommand, ColumnCommand, Command, CreateCard, CreateColumn, RestoreCard,
     SetBoardTaskSort, UpdateCard,
 };
-use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, LoadState};
+use kanban_domain::{ArchivedCard, CardStatus, CardUpdate, LoadState, MutationOperations};
 use kanban_view::card_list::CardListId;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;

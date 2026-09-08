@@ -1,5 +1,5 @@
 use kanban_core::ClientId;
-use kanban_domain::Invalidation;
+use kanban_domain::{Invalidation, MutationOperations};
 use kanban_service::api::{ChangeEventFrame, ChangeKind, EntityType};
 use kanban_service::{KanbanContext, KanbanResult};
 use std::sync::Arc;
@@ -32,7 +32,7 @@ impl std::ops::DerefMut for Session {
 /// describe the change with.
 pub(crate) fn mutate<T>(
     session: &mut Session,
-    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<(T, Invalidation)>,
+    op: impl FnOnce(&mut dyn MutationOperations) -> KanbanResult<(T, Invalidation)>,
 ) -> KanbanResult<(T, Invalidation)> {
     op(&mut session.ctx)
 }
@@ -40,7 +40,7 @@ pub(crate) fn mutate<T>(
 /// Like [`mutate`], for operations that return only an `Invalidation`.
 pub(crate) fn mutate_unit(
     session: &mut Session,
-    op: impl FnOnce(&mut KanbanContext) -> KanbanResult<Invalidation>,
+    op: impl FnOnce(&mut dyn MutationOperations) -> KanbanResult<Invalidation>,
 ) -> KanbanResult<Invalidation> {
     op(&mut session.ctx)
 }
@@ -151,6 +151,32 @@ mod tests {
         )));
         let ctx = KanbanContext::open_deferred(backend, AppConfig::default());
         AppState::new(ctx)
+    }
+
+    #[tokio::test]
+    async fn test_mutate_seam_accepts_a_mutation_operations_closure() {
+        let (mut session, board_id) = seeded_ctx().await;
+
+        let (board, _inv) = mutate(
+            &mut session,
+            |c: &mut dyn kanban_domain::MutationOperations| {
+                c.update_board_impl(
+                    board_id,
+                    BoardUpdate {
+                        name: Some("Renamed".into()),
+                        ..Default::default()
+                    },
+                )
+            },
+        )
+        .unwrap();
+        assert_eq!(board.name, "Renamed");
+
+        let _inv = mutate_unit(
+            &mut session,
+            |c: &mut dyn kanban_domain::MutationOperations| c.delete_board_impl(board_id),
+        )
+        .unwrap();
     }
 
     #[tokio::test]
