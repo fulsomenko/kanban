@@ -50,10 +50,11 @@ On startup the server opens (or creates) the board file, binds the configured ad
 | `KANBAN_SHUTDOWN_GRACE_SECS` | `10` | Seconds to wait after a shutdown signal for in-flight responses to complete before remaining connections are closed. Open SSE streams never end on their own, so this is what bounds shutdown. An unparseable value falls back to the default. |
 | `RUST_LOG` | unset (⇒ `error` only) | Standard `tracing-subscriber` env filter. Set to `info` to see the startup log line. Per-request access logging comes from tower-http's TraceLayer; set `tower_http=debug` (or `debug`) to see one span per request with method, path, status and latency. |
 | `KANBAN_CORS_ORIGINS` | unset (no CORS layer, same-origin only) | Comma-separated list of allowed browser origins. Unset means no CORS headers are sent at all. A single `*` allows any origin and is intended for local development only. A list allows exactly those origins with the GET/POST/PUT/PATCH/DELETE methods and the content-type and x-kanban-client-id request headers. |
+| `KANBAN_REQUEST_TIMEOUT_SECS` | `30` | Seconds a single request may take before the server answers 408 Request Timeout. `0` disables the timeout entirely. An unparseable value falls back to the default. |
 
 The bind address can also be set with the `--addr` flag or the `server_addr` key in the kanban config file (`~/.config/kanban/config.toml`); the resolution order is `--addr` > `KANBAN_ADDR` > `server_addr` > the `127.0.0.1:0` default.
 
-Request bodies are capped at 2 MiB by default. A request over the cap is rejected with 413 Payload Too Large before it reaches the handler.
+Request bodies are capped at 2 MiB by default. A request over the cap is rejected with 413 Payload Too Large before it reaches the handler. The request timeout bounds the time to the response, not the lifetime of a streaming body, so an open `GET /v1/events` SSE stream is unaffected and stays connected indefinitely. The timeout also does not remove write serialization: every handler acquires one shared `tokio::sync::Mutex`, so a slow store still queues every other request behind the in-flight one, and the timeout only bounds how long a queued client waits before failing fast.
 
 ### Example
 
