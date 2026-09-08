@@ -10,8 +10,8 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use kanban_domain::{Model, NoProjections};
 use kanban_service::api::{
-    BoardResponse, ChangeKind, CreateBoardRequest, EntityType, Page, PageParams,
-    ReplaceBoardRequest, UpdateBoardRequest,
+    ArchivedBoardResponse, BoardResponse, ChangeKind, CreateBoardRequest, EntityType, Page,
+    PageParams, ReplaceBoardRequest, UpdateBoardRequest,
 };
 use uuid::Uuid;
 
@@ -29,26 +29,49 @@ async fn list_boards(
     )
 }
 
-async fn get_board(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<Json<BoardResponse>, AppError> {
-    let guard = state.lock_session().await;
+fn board_response(session: &crate::state::Session, id: Uuid) -> Result<BoardResponse, AppError> {
     let mut model = Model::default();
-    guard.sync(&RouteScope::Board(id), &mut model, &mut NoProjections);
+    session.sync(&RouteScope::Board(id), &mut model, &mut NoProjections);
     let board = require_loaded_entity(model.board_id_status(id), "Board", id)?;
     let markers = require_loaded(model.archived_boards_state(), "archived board list")?;
     let archived_at = markers
         .iter()
         .find(|marker| marker.entity_id == id)
         .map(|marker| marker.metadata.archived_at);
-    Ok(Json(BoardResponse::with_archived_at(board, archived_at)))
+    Ok(BoardResponse::with_archived_at(board, archived_at))
+}
+
+async fn get_board(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<BoardResponse>, AppError> {
+    let guard = state.lock_session().await;
+    Ok(Json(board_response(&guard, id)?))
+}
+
+async fn list_archived_boards(
+    State(state): State<AppState>,
+    Query(params): Query<PageParams>,
+) -> Result<Json<Page<ArchivedBoardResponse>>, AppError> {
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(
+        &RouteScope::ArchivedBoardList,
+        &mut model,
+        &mut NoProjections,
+    );
+    let markers = require_loaded(model.archived_boards_state(), "archived board list")?;
+    paginate_response(
+        markers.iter().map(ArchivedBoardResponse::from).collect(),
+        &params,
+    )
 }
 
 pub fn read_router() -> Router<AppState> {
     Router::new()
         .route("/v1/boards", get(list_boards))
         .route("/v1/boards/{id}", get(get_board))
+        .route("/v1/archived-boards", get(list_archived_boards))
 }
 
 async fn post_board(
@@ -129,9 +152,43 @@ async fn delete_board(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn archive_board(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<BoardResponse>, AppError> {
+    let mut guard = state.lock_session().await;
+    let _invalidation = crate::state::mutate_unit(&mut guard, |c| c.archive_board_impl(id))
+        .map_err(|e| AppError::from(&e))?;
+    let response = board_response(&guard, id)?;
+    state
+        .persist_and_broadcast(&guard, EntityType::Board, id, ChangeKind::Updated)
+        .await
+        .map_err(|e| AppError::from(&e))?;
+    Ok(Json(response))
+}
+
+async fn restore_board(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<BoardResponse>, AppError> {
+    let mut guard = state.lock_session().await;
+    let _invalidation = crate::state::mutate_unit(&mut guard, |c| c.restore_board_impl(id))
+        .map_err(|e| AppError::from(&e))?;
+    let response = board_response(&guard, id)?;
+    state
+        .persist_and_broadcast(&guard, EntityType::Board, id, ChangeKind::Updated)
+        .await
+        .map_err(|e| AppError::from(&e))?;
+    Ok(Json(response))
+}
+
 pub fn write_router() -> Router<AppState> {
-    Router::new().route("/v1/boards", post(post_board)).route(
-        "/v1/boards/{id}",
-        put(put_board).patch(patch_board).delete(delete_board),
-    )
+    Router::new()
+        .route("/v1/boards", post(post_board))
+        .route(
+            "/v1/boards/{id}",
+            put(put_board).patch(patch_board).delete(delete_board),
+        )
+        .route("/v1/boards/{id}/archive", post(archive_board))
+        .route("/v1/boards/{id}/restore", post(restore_board))
 }

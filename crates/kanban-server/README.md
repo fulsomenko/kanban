@@ -142,7 +142,7 @@ curl -s http://127.0.0.1:58548/v1/boards/00000000-0000-0000-0000-000000000000 | 
 
 ## Endpoints
 
-All request/response bodies are JSON. Errors share one envelope (see [Error Handling](#error-handling)). The four collection `GET`s (`/v1/boards`, `/v1/boards/{board_id}/columns`, `/v1/boards/{board_id}/cards`, `/v1/boards/{board_id}/sprints`) accept `?page=&page_size=` and return a `Page<T>` envelope; see [Pagination](#pagination).
+All request/response bodies are JSON. Errors share one envelope (see [Error Handling](#error-handling)). The paginated collection `GET`s (`/v1/boards`, `/v1/archived-boards`, `/v1/boards/{board_id}/columns`, `/v1/boards/{board_id}/cards`, `/v1/boards/{board_id}/sprints`) accept `?page=&page_size=` and return a `Page<T>` envelope; see [Pagination](#pagination).
 
 ### Health
 
@@ -160,6 +160,9 @@ All request/response bodies are JSON. Errors share one envelope (see [Error Hand
 | `PUT` | `/v1/boards/{id}` | Full replace (RFC 9110 §9.3.4) — creates the board at `id` if absent (`201`), otherwise replaces it in full (`200`). All non-nullable fields are required; a partial body is a 400. | `ReplaceBoardRequest` |
 | `PATCH` | `/v1/boards/{id}` | Partial update — JSON Merge Patch (RFC 7386): an absent field is no change, `null` clears it, a value sets it. | `UpdateBoardRequest` |
 | `DELETE` | `/v1/boards/{id}` | Delete a board and everything under it. `204 No Content`. | — |
+| `POST` | `/v1/boards/{id}/archive` | Archive a board reversibly. `200 OK` with the board stamped with `archived_at`; the subtree stays reachable. Re-archiving succeeds and refreshes the stamp. | — |
+| `POST` | `/v1/boards/{id}/restore` | Restore an archived board. `200 OK`; `archived_at` is absent. 404 if the board is not archived. | — |
+| `GET` | `/v1/archived-boards` | List archived-board markers (`entity_id` + `archived_at`). Returns `Page<ArchivedBoardResponse>`; accepts `?page=&page_size=`. | — |
 
 ### Columns
 
@@ -210,7 +213,7 @@ Every write route (`POST`/`PUT`/`PATCH`) broadcasts a change event naming the en
 
 ## Pagination
 
-`GET /v1/boards`, `GET /v1/boards/{board_id}/columns`, `GET /v1/boards/{board_id}/cards` and `GET /v1/boards/{board_id}/sprints` accept `?page=` (1-based) and `?page_size=`, both optional, and return a `Page<T>` envelope:
+`GET /v1/boards`, `GET /v1/archived-boards`, `GET /v1/boards/{board_id}/columns`, `GET /v1/boards/{board_id}/cards` and `GET /v1/boards/{board_id}/sprints` accept `?page=` (1-based) and `?page_size=`, both optional, and return a `Page<T>` envelope:
 
 ```json
 { "items": [...], "total": 42, "page": 1, "page_size": 50, "total_pages": 1 }
