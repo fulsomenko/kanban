@@ -2,12 +2,12 @@ use crate::error::{AppError, AppJson};
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
-use crate::state::{AppState, Session};
+use crate::state::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{NoProjections, Sprint};
+use kanban_domain::{Model, NoProjections, Sprint};
 use kanban_service::api::{ChangeKind, EntityType, Page, PageParams, SprintResponse};
 use kanban_service::{resolve_sprint_name, KanbanError, KanbanOperations, SprintUpdate};
 use uuid::Uuid;
@@ -17,20 +17,15 @@ async fn list_sprints(
     Path(board_id): Path<Uuid>,
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<SprintResponse>>, AppError> {
-    let mut guard = state.lock_session().await;
-    {
-        let Session { ctx, model } = &mut *guard;
-        ctx.sync(
-            &RouteScope::BoardSprints(board_id),
-            model,
-            &mut NoProjections,
-        );
-    }
-    let board = require_loaded_entity(guard.model.board_id_status(board_id), "Board", board_id)?;
-    let sprints = require_loaded(
-        guard.model.board_sprints_state(board_id),
-        "sprints of board",
-    )?;
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(
+        &RouteScope::BoardSprints(board_id),
+        &mut model,
+        &mut NoProjections,
+    );
+    let board = require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
+    let sprints = require_loaded(model.board_sprints_state(board_id), "sprints of board")?;
     let responses: Vec<SprintResponse> = sprints
         .iter()
         .map(|s| SprintResponse::new(s, s.get_name(board).map(str::to_string)))
@@ -42,23 +37,21 @@ async fn get_sprint(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<SprintResponse>, AppError> {
-    let mut guard = state.lock_session().await;
-    {
-        let Session { ctx, model } = &mut *guard;
-        ctx.sync(
-            &RouteScope::Sprint {
-                board_id: Some(board_id),
-                sprint_id: id,
-            },
-            model,
-            &mut NoProjections,
-        );
-    }
-    let sprint = require_loaded_entity(guard.model.sprint_by_id_state(id), "Sprint", id)?;
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(
+        &RouteScope::Sprint {
+            board_id: Some(board_id),
+            sprint_id: id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    let sprint = require_loaded_entity(model.sprint_by_id_state(id), "Sprint", id)?;
     if sprint.board_id != board_id {
         return Err(AppError::from(&KanbanError::not_found("Sprint", id)));
     }
-    let board = require_loaded_entity(guard.model.board_id_status(board_id), "Board", board_id)?;
+    let board = require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
     Ok(Json(SprintResponse::new(
         sprint,
         sprint.get_name(board).map(str::to_string),
@@ -90,11 +83,15 @@ fn do_update_sprint(
     id: Uuid,
     updates: SprintUpdate,
 ) -> Result<Sprint, AppError> {
-    crate::state::mutate(ctx, |c| c.update_sprint_impl(id, updates)).map_err(|e| AppError::from(&e))
+    crate::state::mutate(ctx, |c| c.update_sprint_impl(id, updates))
+        .map(|(value, _invalidation)| value)
+        .map_err(|e| AppError::from(&e))
 }
 
 fn do_delete_sprint(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
-    crate::state::mutate_unit(ctx, |c| c.delete_sprint_impl(id)).map_err(|e| AppError::from(&e))
+    crate::state::mutate_unit(ctx, |c| c.delete_sprint_impl(id))
+        .map(|_invalidation| ())
+        .map_err(|e| AppError::from(&e))
 }
 
 fn require_sprint_in_board(
@@ -215,32 +212,27 @@ async fn get_sprint_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<SprintResponse>, AppError> {
-    let mut guard = state.lock_session().await;
-    {
-        let Session { ctx, model } = &mut *guard;
-        ctx.sync(
-            &RouteScope::Sprint {
-                board_id: None,
-                sprint_id: id,
-            },
-            model,
-            &mut NoProjections,
-        );
-    }
-    let sprint = require_loaded_entity(guard.model.sprint_by_id_state(id), "Sprint", id)?.clone();
-    {
-        let Session { ctx, model } = &mut *guard;
-        ctx.sync(
-            &RouteScope::Sprint {
-                board_id: Some(sprint.board_id),
-                sprint_id: id,
-            },
-            model,
-            &mut NoProjections,
-        );
-    }
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(
+        &RouteScope::Sprint {
+            board_id: None,
+            sprint_id: id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    let sprint = require_loaded_entity(model.sprint_by_id_state(id), "Sprint", id)?.clone();
+    guard.sync(
+        &RouteScope::Sprint {
+            board_id: Some(sprint.board_id),
+            sprint_id: id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
     let board = require_loaded_entity(
-        guard.model.board_id_status(sprint.board_id),
+        model.board_id_status(sprint.board_id),
         "Board",
         sprint.board_id,
     )?;

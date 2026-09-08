@@ -6,14 +6,13 @@ HTTP API server for kanban project management. Wraps `kanban-service` behind a R
 
 ## Architecture
 
-`kanban-server` holds a `Session` (a `KanbanContext` alongside the shared `kanban_domain::Model` it feeds) in memory behind a `tokio::sync::Mutex`, shared across all handlers via axum's `State`. For a SQLite locator, where the file watcher installs no watcher and an external writer is invisible, `AppState::lock_session` clears the Model on every acquire instead.
+`kanban-server` holds a `Session` (just a `KanbanContext`) in memory behind a `tokio::sync::Mutex`, shared across all handlers via axum's `State`. No `kanban_domain::Model` is retained between requests: each read handler builds its own `Model::default()` for the duration of its own request and syncs it against the locked context, so every request sees the current state of the store regardless of backend.
 
 ```mermaid
 graph TD
     CLIENT[HTTP client] -->|JSON over HTTP| SRV[kanban-server<br/>axum Router]
     SRV --> STATE[AppState<br/>Arc/Mutex-wrapped Session]
     STATE --> SVC[KanbanContext<br/>kanban-service]
-    STATE --> MODEL[kanban_domain::Model]
     SVC --> STORE[PersistenceStore]
     STORE --> STORAGE[*.json / *.sqlite]
 ```

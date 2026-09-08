@@ -5,7 +5,7 @@
 //! to know the owning board id. Response shape is identical to board-scoped routes.
 
 use axum::http::StatusCode;
-use kanban_domain::{KanbanOperations, LoadState};
+use kanban_domain::KanbanOperations;
 use kanban_server::state::AppState;
 use kanban_server::test_helpers::{json_of, make_state, send};
 use serde_json::json;
@@ -360,12 +360,6 @@ async fn test_get_card_flat_serves_an_archived_card_from_the_per_id_tier_without
         json.get("archived_at").is_none(),
         "flat get_card must not stamp archived_at"
     );
-
-    let guard = state.ctx.lock().await;
-    assert!(matches!(
-        guard.model.card_id_status(card_id),
-        LoadState::Loaded(_)
-    ));
 }
 
 #[tokio::test(flavor = "multi_thread")]

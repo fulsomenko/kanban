@@ -21,7 +21,6 @@ fn make_ctx(path: &std::path::Path) -> Session {
         Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(path))));
     Session {
         ctx: KanbanContext::open_deferred(backend, AppConfig::default()),
-        model: Default::default(),
     }
 }
 

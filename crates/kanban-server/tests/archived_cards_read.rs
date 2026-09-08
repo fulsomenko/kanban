@@ -1,7 +1,6 @@
 #![cfg(feature = "test-helpers")]
 
 use axum::http::StatusCode;
-use kanban_domain::LoadState;
 use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::api::{ArchivedCardResponse, Page};
 use kanban_service::KanbanOperations;
@@ -113,16 +112,6 @@ async fn test_get_board_archived_cards_404s_an_unknown_board_from_the_board_tier
     .await;
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-
-    let guard = state.ctx.lock().await;
-    assert!(matches!(
-        guard.model.board_id_status(random_board_id),
-        LoadState::Missing
-    ));
-    match guard.model.board_archived_cards_state(random_board_id) {
-        LoadState::Loaded(markers) => assert!(markers.is_empty()),
-        other => panic!("expected Loaded([]), got {other:?}"),
-    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -183,18 +172,5 @@ async fn test_get_board_archived_cards_serves_the_markers_from_the_board_scoped_
     let page: Page<ArchivedCardResponse> = serde_json::from_value(json)
         .expect("body should deserialize as Page<ArchivedCardResponse>");
     assert_eq!(page.items.len(), 1);
-
-    let guard = state.ctx.lock().await;
-    match guard.model.board_archived_cards_state(board_a_id) {
-        LoadState::Loaded(markers) => assert_eq!(markers.len(), 1),
-        other => panic!("expected Loaded, got {other:?}"),
-    }
-    assert!(matches!(
-        guard.model.board_id_status(board_a_id),
-        LoadState::Loaded(_)
-    ));
-    assert!(matches!(
-        guard.model.archived_cards_state(),
-        LoadState::NotLoaded
-    ));
+    assert_eq!(page.items[0].board_id, board_a_id);
 }

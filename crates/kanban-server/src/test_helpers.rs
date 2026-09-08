@@ -29,9 +29,7 @@ pub fn make_state(path: &std::path::Path) -> AppState {
     AppState::new(ctx)
 }
 
-/// Like [`make_state`], but over a real `SqliteBackend` and with
-/// `reset_model_per_request` set, matching how `main.rs` wires a SQLite
-/// locator.
+/// Like [`make_state`], but over a real `SqliteBackend`.
 pub async fn make_sqlite_state(path: &std::path::Path) -> AppState {
     let backend: Arc<dyn KanbanBackend> = Arc::new(
         kanban_persistence_sqlite::SqliteBackend::open(path.to_str().unwrap())
@@ -41,7 +39,7 @@ pub async fn make_sqlite_state(path: &std::path::Path) -> AppState {
     let ctx = KanbanContext::open(backend, AppConfig::default())
         .await
         .unwrap();
-    AppState::with_reset(ctx, true)
+    AppState::new(ctx)
 }
 
 /// Drive one request through `app::router` via `oneshot`, JSON-encoding `body` when present.

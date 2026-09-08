@@ -3,12 +3,12 @@ use crate::handlers::boards::{create_board, create_or_replace_board};
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
-use crate::state::{AppState, Session};
+use crate::state::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
-use kanban_domain::NoProjections;
+use kanban_domain::{Model, NoProjections};
 use kanban_service::api::{
     BoardResponse, ChangeKind, CreateBoardRequest, EntityType, Page, PageParams,
     ReplaceBoardRequest, UpdateBoardRequest,
@@ -19,12 +19,10 @@ async fn list_boards(
     State(state): State<AppState>,
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<BoardResponse>>, AppError> {
-    let mut guard = state.lock_session().await;
-    {
-        let Session { ctx, model } = &mut *guard;
-        ctx.sync(&RouteScope::BoardList, model, &mut NoProjections);
-    }
-    let boards = require_loaded(guard.model.live_boards_state(), "board list")?;
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(&RouteScope::BoardList, &mut model, &mut NoProjections);
+    let boards = require_loaded(model.live_boards_state(), "board list")?;
     paginate_response(
         boards.iter().map(|b| BoardResponse::from(*b)).collect(),
         &params,
@@ -35,13 +33,11 @@ async fn get_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<BoardResponse>, AppError> {
-    let mut guard = state.lock_session().await;
-    {
-        let Session { ctx, model } = &mut *guard;
-        ctx.sync(&RouteScope::Board(id), model, &mut NoProjections);
-    }
-    let board = require_loaded_entity(guard.model.board_id_status(id), "Board", id)?;
-    let markers = require_loaded(guard.model.archived_boards_state(), "archived board list")?;
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(&RouteScope::Board(id), &mut model, &mut NoProjections);
+    let board = require_loaded_entity(model.board_id_status(id), "Board", id)?;
+    let markers = require_loaded(model.archived_boards_state(), "archived board list")?;
     let archived_at = markers
         .iter()
         .find(|marker| marker.entity_id == id)
@@ -105,8 +101,9 @@ async fn patch_board(
 ) -> Result<Json<BoardResponse>, AppError> {
     let board = {
         let mut ctx = state.ctx.lock().await;
-        let board = crate::state::mutate(&mut ctx, |c| c.update_board_impl(id, req.into()))
-            .map_err(|e| AppError::from(&e))?;
+        let (board, _invalidation) =
+            crate::state::mutate(&mut ctx, |c| c.update_board_impl(id, req.into()))
+                .map_err(|e| AppError::from(&e))?;
         state
             .persist_and_broadcast(&ctx, EntityType::Board, id, ChangeKind::Updated)
             .await
@@ -122,7 +119,7 @@ async fn delete_board(
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.ctx.lock().await;
-        crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
+        let _invalidation = crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
             .map_err(|e| AppError::from(&e))?;
         state
             .persist_and_broadcast(&ctx, EntityType::Board, id, ChangeKind::Deleted)
