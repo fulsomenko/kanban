@@ -3,7 +3,8 @@ use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardListFilter, BoardSortField, BoardUpdate, Card, CardListFilter,
     CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, GraphOperations,
-    Invalidation, KanbanOperations, SortOrder, Sprint, SprintUpdate, DEFAULT_BOARD_SORT_LIVE,
+    Invalidation, KanbanOperations, MutationOperations, SortOrder, Sprint, SprintUpdate,
+    DEFAULT_BOARD_SORT_LIVE,
 };
 use kanban_service::{AppType, KanbanContext, StoreManager};
 use std::str::FromStr;
@@ -169,7 +170,7 @@ impl McpContext {
     /// response is built entirely from `value`.
     pub(crate) fn mutate<T>(
         &mut self,
-        op: impl FnOnce(&mut KanbanContext) -> KanbanResult<(T, Invalidation)>,
+        op: impl FnOnce(&mut dyn MutationOperations) -> KanbanResult<(T, Invalidation)>,
     ) -> KanbanResult<(T, Invalidation)> {
         op(&mut self.inner)
     }
@@ -178,7 +179,7 @@ impl McpContext {
     /// `Invalidation`, with no separate result value.
     pub(crate) fn mutate_unit(
         &mut self,
-        op: impl FnOnce(&mut KanbanContext) -> KanbanResult<Invalidation>,
+        op: impl FnOnce(&mut dyn MutationOperations) -> KanbanResult<Invalidation>,
     ) -> KanbanResult<Invalidation> {
         op(&mut self.inner)
     }
@@ -517,10 +518,11 @@ mod tests {
             .unwrap();
         assert_eq!(board.name, "Seam");
 
-        ctx.mutate_unit(|c: &mut dyn kanban_domain::MutationOperations| {
-            c.delete_board_impl(board.id)
-        })
-        .unwrap();
+        let _inv = ctx
+            .mutate_unit(|c: &mut dyn kanban_domain::MutationOperations| {
+                c.delete_board_impl(board.id)
+            })
+            .unwrap();
         assert!(ctx.list_boards().unwrap().is_empty());
     }
 
