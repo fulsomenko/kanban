@@ -5,6 +5,7 @@ pub mod archived_board;
 pub mod archived_card;
 pub mod board;
 pub mod board_factory;
+pub mod capabilities;
 pub mod card;
 pub mod card_factory;
 pub mod card_lifecycle;
