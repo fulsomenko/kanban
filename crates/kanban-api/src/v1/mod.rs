@@ -32,6 +32,6 @@ pub use pagination::{Page, PageParams};
 pub use patch::Patch;
 pub use prefixes::PrefixResponse;
 pub use sprints::{
-    CreateSprintParts, CreateSprintRequest, ReplaceSprintRequest, SprintResponse,
-    UpdateSprintRequest,
+    ActivateSprintRequest, CarryOverRequest, CarryOverResponse, CreateSprintParts,
+    CreateSprintRequest, ReplaceSprintRequest, SprintResponse, UpdateSprintRequest,
 };
