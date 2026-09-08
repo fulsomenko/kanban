@@ -414,6 +414,35 @@ mod tests {
     }
 
     #[test]
+    fn test_route_scope_for_board_cards_with_search_plans_the_board_sprint_tier() {
+        let board_id = Uuid::new_v4();
+        let round = RouteScope::BoardCards {
+            board_id,
+            column_id: None,
+            archived: ArchivedFilter::LiveOnly,
+            search: true,
+        }
+        .next_round(&Model::default());
+
+        assert_eq!(round.sprints_by_board, vec![board_id]);
+    }
+
+    #[test]
+    fn test_route_scope_for_board_cards_without_search_plans_no_sprint_tier() {
+        let board_id = Uuid::new_v4();
+        let round = RouteScope::BoardCards {
+            board_id,
+            column_id: None,
+            archived: ArchivedFilter::LiveOnly,
+            search: false,
+        }
+        .next_round(&Model::default());
+
+        assert!(round.sprints_by_board.is_empty());
+        assert!(!round.sprint_list);
+    }
+
+    #[test]
     fn test_route_scope_for_board_archived_cards_requests_the_board_and_its_markers() {
         let board_id = Uuid::new_v4();
         let round = RouteScope::BoardArchivedCards(board_id).next_round(&Model::default());
