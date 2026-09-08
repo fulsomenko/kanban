@@ -5,10 +5,11 @@
 //! against the router directly, with no real TCP socket.
 
 use axum::http::StatusCode;
-use kanban_domain::{CardPriority, CardUpdate, CreateCardOptions};
+use kanban_domain::{CardPriority, CardStatus, CardUpdate, CreateCardOptions};
 use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::api::CardResponse;
 use kanban_service::KanbanOperations;
+use std::collections::HashSet;
 use tempfile::tempdir;
 use uuid::Uuid;
 
@@ -1002,4 +1003,653 @@ async fn test_list_cards_with_a_column_from_another_board_returns_an_empty_page_
             "query {query:?} should return no cards from another board's column"
         );
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_sprint_ids_csv_filters_any_of() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let sprint_a: Uuid;
+    let sprint_b: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        sprint_a = ctx.create_sprint(board_id, None, None).unwrap().id;
+        sprint_b = ctx.create_sprint(board_id, None, None).unwrap().id;
+        let sprint_c = ctx.create_sprint(board_id, None, None).unwrap().id;
+
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Card A".to_string(),
+            CreateCardOptions {
+                sprint_id: Some(sprint_a),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Card B".to_string(),
+            CreateCardOptions {
+                sprint_id: Some(sprint_b),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Card C".to_string(),
+            CreateCardOptions {
+                sprint_id: Some(sprint_c),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!(
+            "/v1/boards/{}/cards?sprint_ids={},{}",
+            board_id, sprint_a, sprint_b
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    let sprint_ids: HashSet<String> = items
+        .iter()
+        .map(|c| c["sprint_id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(items.len(), 2, "items: {items:?}");
+    assert_eq!(
+        sprint_ids,
+        HashSet::from([sprint_a.to_string(), sprint_b.to_string()])
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_sprint_id_and_sprint_ids_union() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let sprint_a: Uuid;
+    let sprint_b: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        sprint_a = ctx.create_sprint(board_id, None, None).unwrap().id;
+        sprint_b = ctx.create_sprint(board_id, None, None).unwrap().id;
+
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Card A".to_string(),
+            CreateCardOptions {
+                sprint_id: Some(sprint_a),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Card B".to_string(),
+            CreateCardOptions {
+                sprint_id: Some(sprint_b),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!(
+            "/v1/boards/{}/cards?sprint_id={}&sprint_ids={}",
+            board_id, sprint_a, sprint_b
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    let sprint_ids: HashSet<String> = items
+        .iter()
+        .map(|c| c["sprint_id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(items.len(), 2, "items: {items:?}");
+    assert_eq!(
+        sprint_ids,
+        HashSet::from([sprint_a.to_string(), sprint_b.to_string()])
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_filters_by_status() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let done_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        let _todo_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Todo Card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        done_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Done Card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        ctx.update_card(
+            done_id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?status=done", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "items: {items:?}");
+    assert_eq!(items[0]["id"], done_id.to_string());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_unknown_status_value_returns_400() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id = {
+        let mut ctx = state.ctx.lock().await;
+        ctx.create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id
+    };
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?status=bogus", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_search_matches_title_case_insensitive() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let needle_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        needle_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "needle in title".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        ctx.create_card(
+            board_id,
+            col_id,
+            "unrelated".to_string(),
+            Default::default(),
+        )
+        .unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?search=NEEdle", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "items: {items:?}");
+    assert_eq!(items[0]["id"], needle_id.to_string());
+}
+
+async fn search_matches_sprint_branch_segment(sqlite: bool) {
+    let dir = tempdir().unwrap();
+    let state = if sqlite {
+        make_sqlite_state(&dir.path().join("s.sqlite")).await
+    } else {
+        make_state(&dir.path().join("s.json"))
+    };
+
+    let board_id: Uuid;
+    let card_x_id: Uuid;
+    let query: String;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        let sprint = ctx
+            .create_sprint(board_id, Some("zed".to_string()), Some("S".to_string()))
+            .unwrap();
+        query = format!(
+            "{}-{}",
+            sprint.prefix.as_deref().unwrap(),
+            sprint.sprint_number
+        );
+
+        card_x_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "card x".to_string(),
+                CreateCardOptions {
+                    sprint_id: Some(sprint.id),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .id;
+        ctx.create_card(board_id, col_id, "card y".to_string(), Default::default())
+            .unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?search={}", board_id, query),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "items: {items:?}");
+    assert_eq!(items[0]["id"], card_x_id.to_string());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_search_matches_the_sprint_segment_of_the_branch_name() {
+    search_matches_sprint_branch_segment(false).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_search_over_a_sqlite_locator_matches_the_sprint_branch_segment() {
+    search_matches_sprint_branch_segment(true).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_hide_assigned_excludes_sprint_members() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let unassigned_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        let sprint_id = ctx.create_sprint(board_id, None, None).unwrap().id;
+        ctx.create_card(
+            board_id,
+            col_id,
+            "Assigned".to_string(),
+            CreateCardOptions {
+                sprint_id: Some(sprint_id),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        unassigned_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Unassigned".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?hide_assigned=true", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "items: {items:?}");
+    assert_eq!(items[0]["id"], unassigned_id.to_string());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_sort_by_priority_descending() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let low_id: Uuid;
+    let critical_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        low_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Low".to_string(),
+                CreateCardOptions {
+                    priority: Some(CardPriority::Low),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .id;
+        critical_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Critical".to_string(),
+                CreateCardOptions {
+                    priority: Some(CardPriority::Critical),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .id;
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!(
+            "/v1/boards/{}/cards?sort=priority&sort_order=descending",
+            board_id
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    let ids: Vec<String> = items
+        .iter()
+        .map(|c| c["id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, vec![critical_id.to_string(), low_id.to_string()]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_status_and_column_and_search_compose() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let col1_id: Uuid;
+    let target_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        col1_id = ctx
+            .create_column(board_id, "Column 1".to_string(), None)
+            .unwrap()
+            .id;
+        let col2_id = ctx
+            .create_column(board_id, "Column 2".to_string(), None)
+            .unwrap()
+            .id;
+
+        let wrong_status = ctx
+            .create_card(
+                board_id,
+                col1_id,
+                "keyword card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        let wrong_search = ctx
+            .create_card(
+                board_id,
+                col1_id,
+                "unrelated card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        let wrong_column = ctx
+            .create_card(
+                board_id,
+                col2_id,
+                "keyword card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        target_id = ctx
+            .create_card(
+                board_id,
+                col1_id,
+                "keyword card".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+
+        for id in [wrong_search, wrong_column, target_id] {
+            ctx.update_card(
+                id,
+                CardUpdate {
+                    status: Some(CardStatus::Done),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        let _ = wrong_status;
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!(
+            "/v1/boards/{}/cards?column_id={}&status=done&search=keyword",
+            board_id, col1_id
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "items: {items:?}");
+    assert_eq!(items[0]["id"], target_id.to_string());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_archived_include_with_status_filters_dangling_column_archived_cards() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id: Uuid;
+    let todo_id: Uuid;
+    {
+        let mut ctx = state.ctx.lock().await;
+        board_id = ctx
+            .create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "Column".to_string(), None)
+            .unwrap()
+            .id;
+        todo_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Todo Archived".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        let done_id = ctx
+            .create_card(
+                board_id,
+                col_id,
+                "Done Archived".to_string(),
+                Default::default(),
+            )
+            .unwrap()
+            .id;
+        ctx.update_card(
+            done_id,
+            CardUpdate {
+                status: Some(CardStatus::Done),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        ctx.archive_card(todo_id).unwrap();
+        ctx.archive_card(done_id).unwrap();
+        ctx.delete_column(col_id).unwrap();
+    }
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?archived=include&status=todo", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_of(response).await;
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "items: {items:?}");
+    assert_eq!(items[0]["id"], todo_id.to_string());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_malformed_sprint_ids_returns_400() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id = {
+        let mut ctx = state.ctx.lock().await;
+        ctx.create_board("Test Board".to_string(), Some("TB".to_string()))
+            .unwrap()
+            .id
+    };
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards?sprint_ids=notauuid", board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let valid = Uuid::new_v4();
+    let response = send(
+        &state,
+        "GET",
+        &format!(
+            "/v1/boards/{}/cards?sprint_ids={},notauuid",
+            board_id, valid
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
