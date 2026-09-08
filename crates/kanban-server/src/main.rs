@@ -68,7 +68,11 @@ async fn run(
 
     let mut graceful_rx = shutdown_rx.clone();
     let mut drain_rx = shutdown_rx;
-    let serve = axum::serve(listener, app::router(state)).with_graceful_shutdown(async move {
+    let serve = axum::serve(
+        listener,
+        app::router_with(state, kanban_server::layers::LayerConfig::from_env()),
+    )
+    .with_graceful_shutdown(async move {
         let _ = graceful_rx.changed().await;
     });
     tokio::select! {

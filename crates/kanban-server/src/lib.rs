@@ -6,6 +6,7 @@
 pub mod app;
 pub mod capabilities;
 pub mod error;
+pub mod layers;
 pub mod model_read;
 pub mod pagination;
 pub mod scope;
