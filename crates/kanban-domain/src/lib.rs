@@ -43,6 +43,7 @@ pub mod sprint_factory;
 pub mod sprint_log;
 pub mod tag;
 pub mod task_list_view;
+pub mod undo_operations;
 pub mod wip;
 
 pub use archival::{ArchiveMetadata, Archived, ArchivedEntity, NoContext};
@@ -119,6 +120,7 @@ pub use sprint_factory::{NewSprint, SprintRecord};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
+pub use undo_operations::UndoOperations;
 pub use wip::check_wip_limit;
 
 pub use command_batch::CommandBatch;

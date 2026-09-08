@@ -11,7 +11,9 @@
 //! the stack-aware base mode (correct under a modal underlay).
 
 use crossterm::event::KeyCode;
-use kanban_domain::{AnimationType, CardPriority, CreateCardOptions, KanbanOperations};
+use kanban_domain::{
+    AnimationType, CardPriority, CreateCardOptions, KanbanOperations, UndoOperations,
+};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::AppMode;
 use kanban_tui::keybindings::card_list::CardListProvider;
@@ -309,7 +311,10 @@ fn test_d_in_the_archived_cards_view_leaves_the_card_archived_after_undo() {
         !app.ctx.can_undo(),
         "`d` on an already-archived card must not push an undo entry"
     );
-    assert!(!app.ctx.undo().unwrap(), "there must be nothing to undo");
+    assert!(
+        app.ctx.undo().unwrap().is_none(),
+        "there must be nothing to undo"
+    );
     app.reload_model();
     app.prepare_frame();
     assert!(

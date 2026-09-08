@@ -1,5 +1,5 @@
 use crossterm::event::KeyCode;
-use kanban_domain::{CardStatus, KanbanOperations};
+use kanban_domain::{CardStatus, KanbanOperations, UndoOperations};
 use kanban_tui::app::dialog_input::CreateCardFocus;
 use kanban_tui::app::focus::Focus;
 use kanban_tui::view_strategy::UnifiedViewStrategy;

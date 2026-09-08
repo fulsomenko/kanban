@@ -2,7 +2,7 @@ use kanban_backend_memory::InMemoryStore;
 use kanban_domain::{
     BoardUpdate, Card, CardUpdate, DataStore, EntityIds, GraphOperations, Invalidation,
     KanbanOperations, KanbanResult, Model, NewBoard, NewCard, NewColumn, Prefix, RelatesKind,
-    Severity, Sprint,
+    Severity, Sprint, UndoOperations,
 };
 use kanban_service::{FetchPlan, FetchRound, KanbanContext, LoadedEntities};
 use std::collections::HashSet;

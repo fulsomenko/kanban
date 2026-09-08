@@ -4,7 +4,7 @@ use kanban_core::AppConfig;
 use kanban_domain::board::{SortField, SortOrder};
 use kanban_domain::task_list_view::TaskListView;
 use kanban_domain::{
-    BoardUpdate, EntityIds, FieldUpdate, Invalidation, KanbanOperations, NewBoard,
+    BoardUpdate, EntityIds, FieldUpdate, Invalidation, KanbanOperations, NewBoard, UndoOperations,
 };
 use tempfile::TempDir;
 

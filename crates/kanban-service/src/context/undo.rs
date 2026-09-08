@@ -2,7 +2,7 @@ use super::KanbanContext;
 use kanban_core::{ClientId, KANBAN_VERSION};
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
-    invalidation_from_inverse, DataStore, Invalidation, KanbanError, KanbanResult,
+    invalidation_from_inverse, DataStore, Invalidation, KanbanError, KanbanResult, UndoOperations,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -101,10 +101,27 @@ impl KanbanContext {
         Ok(invalidation)
     }
 
+    /// Drop the per-session undo/redo history. The audit log is
+    /// append-only and is not touched.
+    pub fn clear_history(&mut self) -> KanbanResult<()> {
+        self.undo_stack.clear();
+        Ok(())
+    }
+
+    pub fn undo_depth(&self) -> usize {
+        self.undo_stack.undo_depth()
+    }
+
+    pub fn redo_depth(&self) -> usize {
+        self.undo_stack.redo_depth()
+    }
+}
+
+impl UndoOperations for KanbanContext {
     /// Undo the most recent batch via inverse-command execution.
     /// The cursor advances only if the inverse commits successfully —
     /// a failed undo leaves the stack ready to retry the same entry.
-    pub fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
         let inverse = match self.undo_stack.peek_undo() {
             Some(entry) => entry.inverse.clone(),
             None => return Ok(None),
@@ -124,7 +141,7 @@ impl KanbanContext {
     /// Redo the next undone batch via forward-command execution.
     /// The cursor advances only if the forward batch commits — a failed
     /// redo leaves the stack ready to retry the same entry.
-    pub fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
         let forward = match self.undo_stack.peek_redo() {
             Some(entry) => entry.forward.clone(),
             None => return Ok(None),
@@ -141,27 +158,12 @@ impl KanbanContext {
         Ok(Some(invalidation))
     }
 
-    pub fn can_undo(&self) -> bool {
+    fn can_undo(&self) -> bool {
         self.undo_stack.can_undo()
     }
 
-    pub fn can_redo(&self) -> bool {
+    fn can_redo(&self) -> bool {
         self.undo_stack.can_redo()
-    }
-
-    /// Drop the per-session undo/redo history. The audit log is
-    /// append-only and is not touched.
-    pub fn clear_history(&mut self) -> KanbanResult<()> {
-        self.undo_stack.clear();
-        Ok(())
-    }
-
-    pub fn undo_depth(&self) -> usize {
-        self.undo_stack.undo_depth()
-    }
-
-    pub fn redo_depth(&self) -> usize {
-        self.undo_stack.redo_depth()
     }
 }
 

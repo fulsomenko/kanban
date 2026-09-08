@@ -7,7 +7,7 @@
 
 use kanban_core::AppConfig;
 use kanban_domain::commands::{CardCommand, Command, CreateCard};
-use kanban_domain::{CreateCardOptions, KanbanOperations, Prefix};
+use kanban_domain::{CreateCardOptions, KanbanOperations, Prefix, UndoOperations};
 use kanban_service::KanbanContext;
 use std::sync::Arc;
 use tempfile::TempDir;

@@ -9,7 +9,7 @@
 //! destination already ahead of the import must not be rolled backwards, or the
 //! collision simply happens from the other side.
 
-use kanban_domain::{CreateCardOptions, KanbanOperations, KanbanResult, Prefix};
+use kanban_domain::{CreateCardOptions, KanbanOperations, KanbanResult, Prefix, UndoOperations};
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_persistence_sqlite::SqliteBackend;
 use kanban_service::{read_full_snapshot, AppConfig, KanbanBackend, KanbanContext};

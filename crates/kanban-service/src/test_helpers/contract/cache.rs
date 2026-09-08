@@ -7,7 +7,7 @@ use kanban_core::graph::Edge as _;
 use kanban_core::AppConfig;
 use kanban_domain::{
     CardUpdate, DependencyGraph, DerivedProjections, EntityIds, Invalidation, KanbanOperations,
-    Model, NoProjections, Resolved, Severity,
+    Model, NoProjections, Resolved, Severity, UndoOperations,
 };
 use tempfile::TempDir;
 use uuid::Uuid;

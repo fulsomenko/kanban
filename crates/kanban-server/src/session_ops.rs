@@ -1,12 +1,13 @@
-//! `Session`'s own capability surface: adding a method to `KanbanOperations`
-//! or `GraphOperations` must be answered here, not silently inherited
-//! through `Deref` to `KanbanContext`.
+//! `Session`'s own capability surface: adding a method to `KanbanOperations`,
+//! `GraphOperations`, or `UndoOperations` must be answered here, not
+//! silently inherited through `Deref` to `KanbanContext`.
 
 use crate::state::{mutate, mutate_unit, Session};
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, BoardListFilter, BoardUpdate, Card, CardListFilter,
     CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, GraphOperations,
-    KanbanOperations, KanbanResult, RelatesKind, Severity, Sprint, SprintUpdate,
+    Invalidation, KanbanError, KanbanOperations, KanbanResult, RelatesKind, Severity, Sprint,
+    SprintUpdate, UndoOperations,
 };
 use uuid::Uuid;
 
@@ -230,5 +231,59 @@ impl GraphOperations for Session {
     }
     fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.ctx.list_related_to(card)
+    }
+}
+
+impl UndoOperations for Session {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "sessions are shared across clients",
+        ))
+    }
+
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "sessions are shared across clients",
+        ))
+    }
+
+    fn can_undo(&self) -> bool {
+        false
+    }
+
+    fn can_redo(&self) -> bool {
+        false
+    }
+}
+
+#[cfg(all(test, feature = "test-helpers"))]
+mod tests {
+    use super::*;
+    use kanban_backend_memory::InMemoryStore;
+    use kanban_domain::UndoOperations;
+    use kanban_service::{AppConfig, KanbanBackend, KanbanContext};
+    use std::sync::Arc;
+
+    async fn seeded_ctx() -> Session {
+        let backend: Arc<dyn KanbanBackend> = Arc::new(InMemoryStore::new());
+        let mut ctx = KanbanContext::open(backend, AppConfig::default())
+            .await
+            .unwrap();
+        ctx.create_board("Board1".into(), None).unwrap();
+        Session { ctx }
+    }
+
+    #[tokio::test]
+    async fn test_session_undo_declines_with_unsupported() {
+        let mut session = seeded_ctx().await;
+
+        assert!(UndoOperations::can_undo(&session.ctx));
+
+        let undo_err = UndoOperations::undo(&mut session).unwrap_err();
+        assert!(undo_err.is_unsupported());
+        let redo_err = UndoOperations::redo(&mut session).unwrap_err();
+        assert!(redo_err.is_unsupported());
+        assert!(!UndoOperations::can_undo(&session));
+        assert!(!UndoOperations::can_redo(&session));
     }
 }

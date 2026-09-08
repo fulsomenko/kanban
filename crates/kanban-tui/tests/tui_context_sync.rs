@@ -1,5 +1,5 @@
 use kanban_domain::{
-    CreateCardOptions, KanbanOperations, Model, MutationOperations, NoProjections,
+    CreateCardOptions, KanbanOperations, Model, MutationOperations, NoProjections, UndoOperations,
 };
 use kanban_service::{
     fetch_plan::{requestable, FetchPlan, FetchRound, LoadedEntities},
@@ -207,5 +207,71 @@ async fn test_tui_context_mutation_operations_queues_a_flush() {
     assert!(
         save_rx.try_recv().is_ok(),
         "MutationOperations::update_card_impl must queue a save flush"
+    );
+}
+
+#[test]
+fn test_tui_context_has_no_inherent_undo_forwarders() {
+    let src = include_str!("../src/tui_context.rs");
+    for name in [
+        "pub fn undo(",
+        "pub fn redo(",
+        "pub fn can_undo(",
+        "pub fn can_redo(",
+    ] {
+        assert!(
+            !src.contains(name),
+            "TuiContext must not carry a hand-written inherent forwarder for {name}; it should come from impl UndoOperations for TuiContext instead"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_tui_undo_returns_the_invalidation_and_queues_flush() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("undo.json");
+    let sm = test_store_manager();
+    let backend = sm
+        .make_backend(path.to_str().unwrap(), &AppConfig::default())
+        .await
+        .unwrap();
+    let ctx = KanbanContext::open(backend, AppConfig::default())
+        .await
+        .unwrap();
+    let (mut tui_ctx, save_rx, _completion_rx) = TuiContext::new(ctx).unwrap();
+    let mut save_rx = save_rx.expect("json backend must provide a save channel");
+
+    let board = tui_ctx
+        .create_board("Board".into(), Some("BRD".into()))
+        .unwrap();
+    let column = tui_ctx.create_column(board.id, "Col".into(), None).unwrap();
+    tui_ctx
+        .create_card(
+            board.id,
+            column.id,
+            "Card".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+
+    while save_rx.try_recv().is_ok() {}
+
+    let inv = UndoOperations::undo(&mut tui_ctx).unwrap();
+    assert!(inv.is_some(), "undo of a real batch must return Some");
+    assert!(
+        save_rx.try_recv().is_ok(),
+        "an applied undo must queue a save flush"
+    );
+
+    while UndoOperations::can_undo(&tui_ctx) {
+        UndoOperations::undo(&mut tui_ctx).unwrap();
+    }
+    while save_rx.try_recv().is_ok() {}
+
+    let inv = UndoOperations::undo(&mut tui_ctx).unwrap();
+    assert!(inv.is_none(), "undo on an empty stack must return None");
+    assert!(
+        save_rx.try_recv().is_err(),
+        "a no-op undo must not queue a save flush"
     );
 }

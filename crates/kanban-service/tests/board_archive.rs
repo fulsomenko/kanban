@@ -1,5 +1,5 @@
 use kanban_backend_memory::InMemoryStore;
-use kanban_domain::{KanbanOperations, KanbanResult};
+use kanban_domain::{KanbanOperations, KanbanResult, UndoOperations};
 use kanban_service::{read_full_snapshot, KanbanContext};
 use std::sync::Arc;
 use uuid::Uuid;

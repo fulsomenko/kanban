@@ -619,6 +619,7 @@ mod tests {
     use crossterm::event::KeyCode;
     use kanban_domain::{
         BoardUpdate, CreateCardOptions, KanbanOperations, LoadState, SortOrder, TaskListView,
+        UndoOperations,
     };
 
     /// Pull the store snapshot into `app.model` and resync `app.board_list` so
@@ -732,7 +733,7 @@ mod tests {
         let mut app = App::test_default();
         create_named_board(&mut app, "Roadmap");
 
-        assert!(app.ctx.undo().unwrap(), "undo applies");
+        assert!(app.ctx.undo().unwrap().is_some(), "undo applies");
         assert!(
             app.ctx.data_store().list_boards().unwrap().is_empty(),
             "the whole creation batch reverses in one step"
@@ -748,7 +749,7 @@ mod tests {
         let mut app = App::test_default();
         create_named_board(&mut app, "Roadmap");
 
-        assert!(app.ctx.undo().unwrap(), "undo applies");
+        assert!(app.ctx.undo().unwrap().is_some(), "undo applies");
         assert!(
             app.ctx.data_store().list_all_columns().unwrap().is_empty(),
             "the whole creation batch, including the seeded columns, reverses in one step"

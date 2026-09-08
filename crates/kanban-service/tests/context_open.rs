@@ -4,7 +4,7 @@
 /// SQLite tests use `#[tokio::test(flavor = "multi_thread")]` because sqlx
 /// connection pools spawn background tasks that deadlock on single-threaded
 /// runtimes. JSON tests no longer require `multi_thread`.
-use kanban_domain::DataStore;
+use kanban_domain::{DataStore, UndoOperations};
 use kanban_persistence::PersistenceStore;
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_service::{AppConfig, KanbanBackend, KanbanContext, KanbanOperations, KanbanResult};

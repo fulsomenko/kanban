@@ -5,7 +5,7 @@ use kanban_core::AppConfig;
 use kanban_domain::archival::ArchivedEntity;
 use kanban_domain::card::CardPriority;
 use kanban_domain::{
-    CardListFilter, CreateCardOptions, GraphOperations, KanbanOperations, Severity,
+    CardListFilter, CreateCardOptions, GraphOperations, KanbanOperations, Severity, UndoOperations,
 };
 use std::collections::{HashMap, HashSet};
 use tempfile::TempDir;

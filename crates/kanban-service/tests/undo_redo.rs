@@ -5,6 +5,7 @@ use kanban_domain::commands::{
 };
 use kanban_domain::{
     BoardUpdate, CardUpdate, EntityIds, Invalidation, KanbanOperations, KanbanResult,
+    UndoOperations,
 };
 use kanban_service::undo_stack::UndoStack;
 use kanban_service::{read_full_snapshot, write_full_snapshot, KanbanContext};

@@ -1,5 +1,5 @@
 use kanban_core::AppConfig;
-use kanban_domain::{Invalidation, KanbanOperations, KanbanResult};
+use kanban_domain::{Invalidation, KanbanOperations, KanbanResult, UndoOperations};
 use kanban_mcp::context::McpContext;
 use kanban_service::{KanbanContext, StoreManager};
 use tempfile::TempDir;

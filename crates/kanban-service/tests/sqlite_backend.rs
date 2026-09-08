@@ -1,4 +1,6 @@
-use kanban_domain::{Board, CardListFilter, KanbanOperations, KanbanResult, Snapshot};
+use kanban_domain::{
+    Board, CardListFilter, KanbanOperations, KanbanResult, Snapshot, UndoOperations,
+};
 use kanban_service::{AppConfig, KanbanContext};
 use tempfile::TempDir;
 

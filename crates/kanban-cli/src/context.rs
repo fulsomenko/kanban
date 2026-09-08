@@ -3,7 +3,8 @@ use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardListFilter, BoardSortField, BoardUpdate, Card, CardListFilter,
     CardStatus, CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, GraphOperations,
-    Invalidation, KanbanOperations, MutationOperations, NewColumn, SortOrder, Sprint, SprintUpdate,
+    Invalidation, KanbanError, KanbanOperations, MutationOperations, NewColumn, SortOrder, Sprint,
+    SprintUpdate, UndoOperations,
 };
 use kanban_service::{AppType, KanbanContext, StoreManager};
 use uuid::Uuid;
@@ -529,6 +530,28 @@ impl GraphOperations for CliContext {
     }
 }
 
+impl UndoOperations for CliContext {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "undo: the CLI opens a fresh context per invocation, so the per-process undo history is always empty",
+        ))
+    }
+
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "redo: the CLI opens a fresh context per invocation, so the per-process undo history is always empty",
+        ))
+    }
+
+    fn can_undo(&self) -> bool {
+        false
+    }
+
+    fn can_redo(&self) -> bool {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -828,6 +851,21 @@ mod tests {
         let result = ctx.archive_cards_detailed(vec![Uuid::new_v4()]);
         assert!(result.succeeded.is_empty());
         assert_eq!(ctx.list_children_of(parent.id)?, vec![child.id]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cli_undo_declines_with_unsupported() -> KanbanResult<()> {
+        let mut ctx = seam_context();
+        ctx.mutate(|c| c.create_board_impl("Seam".to_string(), None))?;
+
+        let undo_err = UndoOperations::undo(&mut ctx).unwrap_err();
+        assert!(undo_err.is_unsupported());
+        let redo_err = UndoOperations::redo(&mut ctx).unwrap_err();
+        assert!(redo_err.is_unsupported());
+        assert!(!UndoOperations::can_undo(&ctx));
+        assert!(!UndoOperations::can_redo(&ctx));
 
         Ok(())
     }

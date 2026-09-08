@@ -1,4 +1,4 @@
-use kanban_domain::KanbanOperations;
+use kanban_domain::{KanbanOperations, UndoOperations};
 use kanban_service::{AppConfig, KanbanContext, StoreManager};
 use kanban_tui::tui_context::TuiContext;
 use tempfile::TempDir;
@@ -35,7 +35,7 @@ async fn test_undo_queues_flush_signal_to_save_coordinator() {
     // drain the post-create flush signal
     save_rx.try_recv().ok();
 
-    assert!(ctx.undo().unwrap());
+    assert!(ctx.undo().unwrap().is_some());
     save_rx
         .try_recv()
         .expect("undo should queue a flush signal to the save coordinator");
@@ -50,11 +50,11 @@ async fn test_redo_queues_flush_signal_to_save_coordinator() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
     ctx.create_board("Board".into(), None).unwrap();
-    assert!(ctx.undo().unwrap());
+    assert!(ctx.undo().unwrap().is_some());
     // drain setup flush signals (create + undo)
     while save_rx.try_recv().is_ok() {}
 
-    assert!(ctx.redo().unwrap());
+    assert!(ctx.redo().unwrap().is_some());
     save_rx
         .try_recv()
         .expect("redo should queue a flush signal to the save coordinator");
@@ -69,7 +69,7 @@ async fn test_redo_queues_flush_signal_to_save_coordinator() {
 async fn test_undo_when_nothing_to_undo_does_not_queue_flush_signal() {
     let (mut ctx, mut save_rx, _dir) = make_ctx_with_persistence().await;
 
-    assert!(!ctx.undo().unwrap());
+    assert!(ctx.undo().unwrap().is_none());
     assert!(
         save_rx.try_recv().is_err(),
         "failed undo should not queue a flush signal"

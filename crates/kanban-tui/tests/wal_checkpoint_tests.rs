@@ -1,4 +1,4 @@
-use kanban_domain::{KanbanOperations, KanbanResult};
+use kanban_domain::{KanbanOperations, KanbanResult, UndoOperations};
 use kanban_service::{AppConfig, KanbanContext, StoreManager};
 use kanban_tui::tui_context::TuiContext;
 use tempfile::TempDir;
@@ -78,7 +78,7 @@ async fn test_tui_undo_checkpoints_wal_on_sqlite_path() {
         .unwrap();
     let (mut tui_ctx, _, _) = TuiContext::new(ctx).unwrap();
     tui_ctx.create_board("B".to_string(), None).unwrap();
-    assert!(tui_ctx.undo().unwrap());
+    assert!(tui_ctx.undo().unwrap().is_some());
     tui_ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }
@@ -93,8 +93,8 @@ async fn test_tui_redo_checkpoints_wal_on_sqlite_path() {
         .unwrap();
     let (mut tui_ctx, _, _) = TuiContext::new(ctx).unwrap();
     tui_ctx.create_board("B".to_string(), None).unwrap();
-    assert!(tui_ctx.undo().unwrap());
-    assert!(tui_ctx.redo().unwrap());
+    assert!(tui_ctx.undo().unwrap().is_some());
+    assert!(tui_ctx.redo().unwrap().is_some());
     tui_ctx.save().await.unwrap();
     assert_wal_empty(&path);
 }

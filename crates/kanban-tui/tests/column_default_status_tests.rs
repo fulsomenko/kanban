@@ -1,5 +1,7 @@
 use crossterm::event::KeyCode;
-use kanban_domain::{CardStatus, ColumnUpdate, CreateCardOptions, KanbanOperations};
+use kanban_domain::{
+    CardStatus, ColumnUpdate, CreateCardOptions, KanbanOperations, UndoOperations,
+};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::{AppMode, BoardFocus, DialogMode};
 use kanban_tui::App;
@@ -288,7 +290,7 @@ fn test_column_default_status_change_is_undoable() {
     assert_eq!(column.default_status, Some(CardStatus::Blocked));
 
     assert!(app.ctx.can_undo(), "the change must ride a command");
-    assert!(app.ctx.undo().unwrap(), "undo must succeed");
+    assert!(app.ctx.undo().unwrap().is_some(), "undo must succeed");
 
     let restored = app.ctx.get_column(doing).unwrap().unwrap();
     assert_eq!(
@@ -408,7 +410,7 @@ fn test_moving_card_into_default_status_column_updates_status_in_tui() {
     );
 
     assert!(app.ctx.can_undo());
-    assert!(app.ctx.undo().unwrap());
+    assert!(app.ctx.undo().unwrap().is_some());
     let restored = app.ctx.get_card(card.id).unwrap().unwrap();
     assert_eq!(restored.column_id, todo);
     assert_eq!(restored.status, CardStatus::Todo);

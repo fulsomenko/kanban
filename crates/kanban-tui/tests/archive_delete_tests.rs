@@ -1,7 +1,7 @@
 mod helpers;
 
 use helpers::warm_archived_card_markers;
-use kanban_domain::{CreateCardOptions, KanbanOperations};
+use kanban_domain::{CreateCardOptions, KanbanOperations, UndoOperations};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::AppMode;
 use kanban_tui::App;
@@ -224,7 +224,7 @@ fn test_archive_animation_completion_is_a_single_undo_step() {
         "card must be archived (marked) after animation completion"
     );
 
-    assert!(app.ctx.undo().unwrap(), "first undo must succeed");
+    assert!(app.ctx.undo().unwrap().is_some(), "first undo must succeed");
     app.reload_model();
     app.prepare_frame();
     warm_archived_card_markers(&mut app);
