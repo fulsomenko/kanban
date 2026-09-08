@@ -285,7 +285,13 @@ async fn test_dissociate_returns_204_and_removes_the_relates_edge(state: AppStat
     )
     .await;
 
-    let response = send(&state, "DELETE", &format!("/v1/cards/{b}/related/{a}"), None).await;
+    let response = send(
+        &state,
+        "DELETE",
+        &format!("/v1/cards/{b}/related/{a}"),
+        None,
+    )
+    .await;
     assert_eq!(response.status(), 204);
 
     for id in [a, b] {

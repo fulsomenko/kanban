@@ -252,7 +252,9 @@ mod tests {
             [edge.source, edge.target].into_iter().collect();
         assert_eq!(
             endpoints,
-            [subject, other].into_iter().collect::<std::collections::HashSet<Uuid>>()
+            [subject, other]
+                .into_iter()
+                .collect::<std::collections::HashSet<Uuid>>()
         );
         assert_eq!(edge.kind, crate::v1::enums::RelatesKindDto::Duplicates);
     }

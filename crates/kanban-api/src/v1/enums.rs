@@ -482,10 +482,7 @@ mod tests {
             serde_json::to_string(&SeverityDto::Critical).unwrap(),
             "\"critical\""
         );
-        assert_eq!(
-            serde_json::to_string(&SeverityDto::Low).unwrap(),
-            "\"low\""
-        );
+        assert_eq!(serde_json::to_string(&SeverityDto::Low).unwrap(), "\"low\"");
         assert_eq!(
             serde_json::to_string(&SeverityDto::Medium).unwrap(),
             "\"medium\""

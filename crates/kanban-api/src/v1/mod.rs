@@ -27,7 +27,10 @@ pub use enums::{
 };
 pub use error::{ApiError, ErrorCode};
 pub use events::{ChangeEventFrame, ChangeKind, EntityType};
-pub use graph::{BlockEdgeDto, CardGraphResponse, RelatedEdgeDto};
+pub use graph::{
+    AddBlockRequest, AddRelatedRequest, AttachChildrenRequest, BlockEdgeDto, CardGraphResponse,
+    RelatedEdgeDto,
+};
 pub use pagination::{Page, PageParams};
 pub use patch::Patch;
 pub use prefixes::PrefixResponse;
