@@ -3,7 +3,7 @@ use kanban_domain::KanbanResult;
 use kanban_domain::{
     ArchivedCard, Board, BoardListFilter, BoardSortField, BoardUpdate, Card, CardListFilter,
     CardStatus, CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, GraphOperations,
-    Invalidation, KanbanOperations, NewColumn, SortOrder, Sprint, SprintUpdate,
+    Invalidation, KanbanOperations, MutationOperations, NewColumn, SortOrder, Sprint, SprintUpdate,
 };
 use kanban_service::{AppType, KanbanContext, StoreManager};
 use uuid::Uuid;
@@ -97,7 +97,7 @@ impl CliContext {
     /// invalidates nothing.
     pub(crate) fn mutate<T>(
         &mut self,
-        op: impl FnOnce(&mut KanbanContext) -> KanbanResult<(T, Invalidation)>,
+        op: impl FnOnce(&mut dyn MutationOperations) -> KanbanResult<(T, Invalidation)>,
     ) -> KanbanResult<T> {
         let (value, invalidation) = op(&mut self.inner)?;
         self.apply_invalidation(invalidation);
@@ -108,7 +108,7 @@ impl CliContext {
     /// `Invalidation`.
     pub(crate) fn mutate_unit(
         &mut self,
-        op: impl FnOnce(&mut KanbanContext) -> KanbanResult<Invalidation>,
+        op: impl FnOnce(&mut dyn MutationOperations) -> KanbanResult<Invalidation>,
     ) -> KanbanResult<()> {
         let invalidation = op(&mut self.inner)?;
         self.apply_invalidation(invalidation);
@@ -193,21 +193,19 @@ impl CliContext {
         match position {
             Some(position) => {
                 let id = Uuid::new_v4();
-                self.mutate(|c| {
-                    let invalidation =
-                        c.execute(vec![Command::Column(ColumnCommand::Create(CreateColumn {
-                            id,
-                            board_id,
-                            name,
-                            position,
-                            default_status,
-                        }))])?;
-                    let column = KanbanOperations::get_column(c, id)?.ok_or_else(|| {
-                        kanban_domain::KanbanError::Internal(
-                            "Column creation succeeded but column not found".into(),
-                        )
-                    })?;
-                    Ok((column, invalidation))
+                self.mutate_unit(|c| {
+                    c.execute(vec![Command::Column(ColumnCommand::Create(CreateColumn {
+                        id,
+                        board_id,
+                        name,
+                        position,
+                        default_status,
+                    }))])
+                })?;
+                KanbanOperations::get_column(self, id)?.ok_or_else(|| {
+                    kanban_domain::KanbanError::Internal(
+                        "Column creation succeeded but column not found".into(),
+                    )
                 })
             }
             None => self.mutate(|c| {
