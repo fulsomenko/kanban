@@ -71,6 +71,22 @@ async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_grace_defaults_to_ten_seconds_when_unset() {
+        assert_eq!(parse_grace(None), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_grace_parses_env_value_as_seconds() {
+        assert_eq!(parse_grace(Some("3".into())), Duration::from_secs(3));
+    }
+
+    #[test]
+    fn test_grace_falls_back_to_default_on_unparseable_value() {
+        assert_eq!(parse_grace(Some("soon".into())), Duration::from_secs(10));
+    }
 
     #[test]
     fn test_addr_defaults_to_none_without_flag_or_env() {
