@@ -7,7 +7,8 @@ use crossterm::event::KeyCode;
 use kanban_core::Editable;
 use kanban_domain::card_lifecycle::sorted_board_columns;
 use kanban_domain::{
-    BoardSettingsDto, CardMetadataDto, Column, FieldSearcher, LoadState, Searcher,
+    BoardSettingsDto, CardMetadataDto, Column, FieldSearcher, LoadState, MutationOperations,
+    Searcher,
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
