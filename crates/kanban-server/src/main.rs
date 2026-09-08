@@ -63,9 +63,67 @@ async fn run(
         )
     })?;
     let listener = tokio::net::TcpListener::bind(socket_addr).await?;
+    let shutdown_rx = install_shutdown_watch()?;
     tracing::info!(addr = %listener.local_addr()?, "kanban-server listening");
-    axum::serve(listener, app::router(state)).await?;
+
+    let mut graceful_rx = shutdown_rx.clone();
+    let mut drain_rx = shutdown_rx;
+    let serve = axum::serve(listener, app::router(state)).with_graceful_shutdown(async move {
+        let _ = graceful_rx.changed().await;
+    });
+    tokio::select! {
+        r = serve => r?,
+        _ = async {
+            let _ = drain_rx.changed().await;
+            tokio::time::sleep(drain_grace()).await;
+        } => {
+            tracing::warn!("shutdown drain window elapsed; closing remaining connections");
+        }
+    }
     Ok(())
+}
+
+const DEFAULT_SHUTDOWN_GRACE_SECS: u64 = 10;
+
+fn parse_grace(raw: Option<String>) -> std::time::Duration {
+    raw.and_then(|v| v.parse().ok())
+        .map(std::time::Duration::from_secs)
+        .unwrap_or_else(|| std::time::Duration::from_secs(DEFAULT_SHUTDOWN_GRACE_SECS))
+}
+
+fn drain_grace() -> std::time::Duration {
+    parse_grace(std::env::var("KANBAN_SHUTDOWN_GRACE_SECS").ok())
+}
+
+/// Installs the shutdown signal handlers and returns a receiver that flips
+/// to `true` once one fires.
+#[cfg(unix)]
+fn install_shutdown_watch() -> std::io::Result<tokio::sync::watch::Receiver<bool>> {
+    use tokio::signal::unix::{signal, SignalKind};
+
+    let mut term = signal(SignalKind::terminate())?;
+    let mut int = signal(SignalKind::interrupt())?;
+    let (tx, rx) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = int.recv() => {}
+        }
+        let _ = tx.send(true);
+    });
+    Ok(rx)
+}
+
+/// Installs the shutdown signal handlers and returns a receiver that flips
+/// to `true` once one fires.
+#[cfg(not(unix))]
+fn install_shutdown_watch() -> std::io::Result<tokio::sync::watch::Receiver<bool>> {
+    let (tx, rx) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        let _ = tx.send(true);
+    });
+    Ok(rx)
 }
 
 #[cfg(test)]
