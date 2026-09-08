@@ -11,7 +11,9 @@
 //! 3. Single undo unit: one `undo()` reverses every chained command across every
 //!    card in the multi-select
 
-use kanban_domain::{CardStatus, ColumnUpdate, CreateCardOptions, KanbanOperations, UndoOperations};
+use kanban_domain::{
+    CardStatus, ColumnUpdate, CreateCardOptions, KanbanOperations, UndoOperations,
+};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::App;
 

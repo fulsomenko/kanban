@@ -1,5 +1,7 @@
 use crossterm::event::KeyCode;
-use kanban_domain::{CardStatus, ColumnUpdate, CreateCardOptions, KanbanOperations, UndoOperations};
+use kanban_domain::{
+    CardStatus, ColumnUpdate, CreateCardOptions, KanbanOperations, UndoOperations,
+};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::{AppMode, BoardFocus, DialogMode};
 use kanban_tui::App;
