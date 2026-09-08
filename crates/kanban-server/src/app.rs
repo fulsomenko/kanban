@@ -1,8 +1,11 @@
+use crate::layers::LayerConfig;
 use crate::state::AppState;
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
+use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::trace::TraceLayer;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -20,7 +23,16 @@ async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
 /// The single `Router` composition point. Entity route cards extend this via
 /// `.merge`/`.nest` rather than building their own `Router`.
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    router_with(state, LayerConfig::default())
+}
+
+/// Like [`router`], but with an explicit [`LayerConfig`].
+///
+/// `.layer()` wraps outside-in on the LAST call, so calling body-limit then
+/// cors then trace here makes Trace the outermost layer and BodyLimit the
+/// innermost.
+pub fn router_with(state: AppState, config: LayerConfig) -> Router {
+    let router = Router::new()
         .route("/health", get(health))
         .merge(crate::routes::boards::read_router())
         .merge(crate::routes::boards::write_router())
@@ -38,6 +50,11 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::routes::sprints::write_router())
         .merge(crate::routes::sprints::flat_read_router())
         .merge(crate::routes::sprints::flat_write_router())
-        .merge(crate::routes::events::router())
-        .with_state(state)
+        .merge(crate::routes::events::router());
+
+    let mut router = router.layer(RequestBodyLimitLayer::new(config.body_limit_bytes));
+    if let Some(cors) = config.cors.into_layer() {
+        router = router.layer(cors);
+    }
+    router.layer(TraceLayer::new_for_http()).with_state(state)
 }
