@@ -70,6 +70,7 @@ impl CorsPolicy {
 
 pub const DEFAULT_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
+pub const IMPORT_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct LayerConfig {
@@ -77,6 +78,8 @@ pub struct LayerConfig {
     pub cors: CorsPolicy,
     /// `None` applies no timeout layer at all.
     pub timeout: Option<Duration>,
+    /// Cap for `POST /v1/import` only. Must not be lower than `body_limit_bytes`.
+    pub import_body_limit_bytes: usize,
 }
 
 impl Default for LayerConfig {
@@ -85,6 +88,7 @@ impl Default for LayerConfig {
             body_limit_bytes: DEFAULT_BODY_LIMIT_BYTES,
             cors: CorsPolicy::Disabled,
             timeout: Some(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
+            import_body_limit_bytes: IMPORT_BODY_LIMIT_BYTES,
         }
     }
 }

@@ -9,6 +9,7 @@ const SOURCES: &[&str] = &[
     include_str!("../src/routes/columns.rs"),
     include_str!("../src/routes/sprints.rs"),
     include_str!("../src/routes/sprints_lifecycle.rs"),
+    include_str!("../src/routes/transfer.rs"),
     include_str!("../src/routes/graph.rs"),
     include_str!("../src/routes/prefixes.rs"),
     include_str!("../src/handlers/boards.rs"),

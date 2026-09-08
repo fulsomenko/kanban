@@ -1,6 +1,6 @@
 use crate::layers::LayerConfig;
 use crate::state::AppState;
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
@@ -32,7 +32,9 @@ pub fn router(state: AppState) -> Router {
 ///
 /// `.layer()` wraps outside-in on the LAST call, so calling body-limit then
 /// timeout then cors then trace here makes Trace the outermost layer and
-/// BodyLimit the innermost.
+/// BodyLimit the innermost. The import route is merged in AFTER the global
+/// body-limit layer, so `.layer()` never wraps it; it carries its own,
+/// larger `RequestBodyLimitLayer` instead.
 pub fn router_with(state: AppState, config: LayerConfig) -> Router {
     let router = Router::new()
         .route("/health", get(health))
@@ -55,9 +57,16 @@ pub fn router_with(state: AppState, config: LayerConfig) -> Router {
         .merge(crate::routes::sprints::flat_read_router())
         .merge(crate::routes::sprints::flat_write_router())
         .merge(crate::routes::sprints_lifecycle::write_router())
+        .merge(crate::routes::transfer::read_router())
         .merge(crate::routes::events::router());
 
-    let mut router = router.layer(RequestBodyLimitLayer::new(config.body_limit_bytes));
+    let mut router = router
+        .layer(RequestBodyLimitLayer::new(config.body_limit_bytes))
+        .merge(
+            crate::routes::transfer::write_router()
+                .layer(DefaultBodyLimit::disable())
+                .layer(RequestBodyLimitLayer::new(config.import_body_limit_bytes)),
+        );
     if let Some(timeout) = config.timeout {
         router = router.layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
