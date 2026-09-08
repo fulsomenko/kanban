@@ -2,12 +2,12 @@ use crate::error::{AppError, AppJson};
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
-use crate::state::{AppState, Session};
+use crate::state::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Column, NoProjections};
+use kanban_domain::{Column, Model, NoProjections};
 use kanban_service::api::{ChangeKind, ColumnResponse, EntityType, Page, PageParams};
 use kanban_service::{ColumnUpdate, KanbanError, KanbanOperations};
 use uuid::Uuid;
@@ -17,10 +17,10 @@ async fn list_columns(
     Path(board_id): Path<Uuid>,
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<ColumnResponse>>, AppError> {
-    let mut session = state.lock_session().await;
+    let session = state.lock_session().await;
     let scope = RouteScope::BoardColumns(board_id);
-    let Session { ctx, model } = &mut *session;
-    ctx.sync(&scope, model, &mut NoProjections);
+    let mut model = Model::default();
+    session.sync(&scope, &mut model, &mut NoProjections);
     require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
     let cols = require_loaded(model.board_columns_state(board_id), "columns")?;
     paginate_response(cols.iter().map(ColumnResponse::from).collect(), &params)
@@ -30,10 +30,10 @@ async fn get_column(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<ColumnResponse>, AppError> {
-    let mut session = state.lock_session().await;
+    let session = state.lock_session().await;
     let scope = RouteScope::Column(id);
-    let Session { ctx, model } = &mut *session;
-    ctx.sync(&scope, model, &mut NoProjections);
+    let mut model = Model::default();
+    session.sync(&scope, &mut model, &mut NoProjections);
     let column = require_loaded_entity(model.column_id_status(id), "Column", id)?;
     if column.board_id != board_id {
         return Err(AppError::from(&KanbanError::not_found("Column", id)));
@@ -60,11 +60,15 @@ fn do_update_column(
     id: Uuid,
     updates: ColumnUpdate,
 ) -> Result<Column, AppError> {
-    crate::state::mutate(ctx, |c| c.update_column_impl(id, updates)).map_err(|e| AppError::from(&e))
+    crate::state::mutate(ctx, |c| c.update_column_impl(id, updates))
+        .map(|(value, _invalidation)| value)
+        .map_err(|e| AppError::from(&e))
 }
 
 fn do_delete_column(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
-    crate::state::mutate_unit(ctx, |c| c.delete_column_impl(id)).map_err(|e| AppError::from(&e))
+    crate::state::mutate_unit(ctx, |c| c.delete_column_impl(id))
+        .map(|_invalidation| ())
+        .map_err(|e| AppError::from(&e))
 }
 
 /// Fetch a column and 404 unless it belongs to `board_id`, needed because
@@ -173,8 +177,9 @@ async fn reorder_column_route(
     let col = {
         let mut ctx = state.ctx.lock().await;
         require_column_in_board(&ctx, board_id, id)?;
-        let col = crate::state::mutate(&mut ctx, |c| c.reorder_column_impl(id, position))
-            .map_err(|e| AppError::from(&e))?;
+        let (col, _invalidation) =
+            crate::state::mutate(&mut ctx, |c| c.reorder_column_impl(id, position))
+                .map_err(|e| AppError::from(&e))?;
         state
             .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Updated)
             .await
@@ -203,10 +208,10 @@ async fn get_column_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ColumnResponse>, AppError> {
-    let mut session = state.lock_session().await;
+    let session = state.lock_session().await;
     let scope = RouteScope::Column(id);
-    let Session { ctx, model } = &mut *session;
-    ctx.sync(&scope, model, &mut NoProjections);
+    let mut model = Model::default();
+    session.sync(&scope, &mut model, &mut NoProjections);
     let column = require_loaded_entity(model.column_id_status(id), "Column", id)?;
     Ok(Json(ColumnResponse::from(column)))
 }

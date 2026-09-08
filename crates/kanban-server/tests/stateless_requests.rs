@@ -83,15 +83,9 @@ async fn test_a_board_renamed_between_two_requests_is_served_fresh_by_id() {
     let board_id: Uuid;
     {
         let mut ctx = state.ctx.lock().await;
-        board_id = ctx
-            .create_board("Original".to_string(), None)
-            .unwrap()
-            .id;
+        board_id = ctx.create_board("Original".to_string(), None).unwrap().id;
     }
-    let first = json_of(
-        send(&state, "GET", &format!("/v1/boards/{board_id}"), None).await,
-    )
-    .await;
+    let first = json_of(send(&state, "GET", &format!("/v1/boards/{board_id}"), None).await).await;
     assert_eq!(first["name"].as_str().unwrap(), "Original");
 
     {
@@ -105,10 +99,7 @@ async fn test_a_board_renamed_between_two_requests_is_served_fresh_by_id() {
         )
         .unwrap();
     }
-    let second = json_of(
-        send(&state, "GET", &format!("/v1/boards/{board_id}"), None).await,
-    )
-    .await;
+    let second = json_of(send(&state, "GET", &format!("/v1/boards/{board_id}"), None).await).await;
     assert_eq!(second["name"].as_str().unwrap(), "Renamed");
 }
 

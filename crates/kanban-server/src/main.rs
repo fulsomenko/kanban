@@ -52,7 +52,7 @@ async fn run(
     let backend = sm.make_backend(locator, &config).await?;
     let ctx = kanban_service::KanbanContext::open(backend, config).await?;
     let is_sqlite = sm.is_sqlite(locator);
-    let state = AppState::with_reset(ctx, is_sqlite);
+    let state = AppState::new(ctx);
 
     kanban_server::watch::watch_for_external_changes(state.clone(), locator, is_sqlite).await?;
 

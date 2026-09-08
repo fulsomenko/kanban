@@ -2,13 +2,15 @@ use crate::error::{AppError, AppJson};
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
-use crate::state::{AppState, Session};
+use crate::state::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
-use kanban_domain::{filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, NoProjections};
+use kanban_domain::{
+    filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, Model, NoProjections,
+};
 use kanban_service::api::ArchivedCardResponse;
 use kanban_service::api::ArchivedFilterDto;
 use kanban_service::api::CardResponse;
@@ -51,9 +53,9 @@ async fn list_cards(
         archived,
     };
 
-    let mut guard = state.lock_session().await;
-    let Session { ctx, model } = &mut *guard;
-    ctx.sync(&scope, model, &mut NoProjections);
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(&scope, &mut model, &mut NoProjections);
 
     let board = require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
     let columns = require_loaded(model.board_columns_state(board_id), "columns of board")?;
@@ -115,9 +117,9 @@ async fn get_card(
     Path((board_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<CardResponse>, AppError> {
     let scope = RouteScope::Card(id);
-    let mut guard = state.lock_session().await;
-    let Session { ctx, model } = &mut *guard;
-    ctx.sync(&scope, model, &mut NoProjections);
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(&scope, &mut model, &mut NoProjections);
 
     let card = require_loaded_entity(model.card_by_id_state(id), "Card", id)?;
     if card.board_id != board_id {
@@ -132,9 +134,9 @@ async fn list_archived_cards(
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<ArchivedCardResponse>>, AppError> {
     let scope = RouteScope::BoardArchivedCards(board_id);
-    let mut guard = state.lock_session().await;
-    let Session { ctx, model } = &mut *guard;
-    ctx.sync(&scope, model, &mut NoProjections);
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(&scope, &mut model, &mut NoProjections);
 
     require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
     let markers = require_loaded(
@@ -169,11 +171,15 @@ fn do_update_card(
     id: Uuid,
     updates: CardUpdate,
 ) -> Result<Card, AppError> {
-    crate::state::mutate(ctx, |c| c.update_card_impl(id, updates)).map_err(|e| AppError::from(&e))
+    crate::state::mutate(ctx, |c| c.update_card_impl(id, updates))
+        .map(|(value, _invalidation)| value)
+        .map_err(|e| AppError::from(&e))
 }
 
 fn do_delete_card(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
-    crate::state::mutate_unit(ctx, |c| c.delete_card_impl(id)).map_err(|e| AppError::from(&e))
+    crate::state::mutate_unit(ctx, |c| c.delete_card_impl(id))
+        .map(|_invalidation| ())
+        .map_err(|e| AppError::from(&e))
 }
 
 /// Fetch a card and 404 unless it belongs to `board_id`, since
@@ -287,9 +293,9 @@ async fn get_card_flat(
     Path(id): Path<Uuid>,
 ) -> Result<Json<CardResponse>, AppError> {
     let scope = RouteScope::Card(id);
-    let mut guard = state.lock_session().await;
-    let Session { ctx, model } = &mut *guard;
-    ctx.sync(&scope, model, &mut NoProjections);
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(&scope, &mut model, &mut NoProjections);
 
     let card = require_loaded_entity(model.card_by_id_state(id), "Card", id)?;
     Ok(Json(CardResponse::from(card)))

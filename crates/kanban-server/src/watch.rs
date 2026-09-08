@@ -6,13 +6,11 @@ use std::path::PathBuf;
 /// CLI, MCP) and reload `state.ctx` when they happen, broadcasting a change
 /// event afterward so any connected SSE clients see it too.
 ///
-/// `is_sqlite` must be the same backend-kind decision the caller used for
-/// `AppState::reset_model_per_request`; a `true` value is a no-op here
-/// because SQLite queries hit the live DB on every call, leaving no
-/// in-memory cache to go stale. Safe to call with a locator whose file
-/// doesn't exist yet — `FileWatcher::start_watching` resolves the parent
-/// directory rather than the file itself, so it can watch for the file's
-/// first creation as well as later external writes.
+/// `is_sqlite` is a no-op here because SQLite queries hit the live DB on
+/// every call, so there is nothing to watch a file for. Safe to call with a
+/// locator whose file doesn't exist yet — `FileWatcher::start_watching`
+/// resolves the parent directory rather than the file itself, so it can
+/// watch for the file's first creation as well as later external writes.
 pub async fn watch_for_external_changes(
     state: AppState,
     locator: &str,
@@ -35,8 +33,7 @@ pub async fn watch_for_external_changes(
             let mut ctx = state.ctx.lock().await;
             let reloaded = ctx.reload().await;
             match reloaded {
-                Ok(inv) => {
-                    let _ = ctx.model.invalidate(inv);
+                Ok(_inv) => {
                     drop(ctx);
                     state.broadcast_unscoped_change();
                     tracing::info!("Reloaded state from external file change");

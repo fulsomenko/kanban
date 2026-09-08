@@ -31,7 +31,7 @@ pub fn create_sprint(
     // already exists is a conflict (`AlreadyExists` -> 409), not a silent
     // replace. `create_sprint_from_spec` mints the id when absent and rejects a
     // collision before any side effect.
-    let sprint = crate::state::mutate(ctx, |c| {
+    let (sprint, _invalidation) = crate::state::mutate(ctx, |c| {
         c.create_sprint_from_spec(board_id, req.id, req.name, req.prefix, false)
     })
     .map_err(|e| ApiError::from(&e))?;
@@ -66,7 +66,7 @@ pub fn create_or_replace_sprint(
         prefix,
         card_prefix: _,
     } = req;
-    let outcome = crate::state::mutate(ctx, |c| {
+    let (outcome, _invalidation) = crate::state::mutate(ctx, |c| {
         c.create_or_replace_sprint(board_id, id, name, prefix, false)
     })
     .map_err(|e| ApiError::from(&e))?;
