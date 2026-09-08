@@ -114,6 +114,10 @@ mod tests {
 
     #[test]
     fn test_card_graph_response_serde_round_trip() {
+        let blocker = Uuid::new_v4();
+        let blocked = Uuid::new_v4();
+        let source = Uuid::new_v4();
+        let target = Uuid::new_v4();
         let response = CardGraphResponse {
             card_id: Uuid::new_v4(),
             parents: vec![Uuid::new_v4()],
@@ -121,6 +125,16 @@ mod tests {
             blocked_by: vec![Uuid::new_v4()],
             blocks: vec![Uuid::new_v4()],
             related: vec![Uuid::new_v4()],
+            block_edges: vec![BlockEdgeDto {
+                blocker,
+                blocked,
+                severity: crate::v1::enums::SeverityDto::Critical,
+            }],
+            related_edges: vec![RelatedEdgeDto {
+                source,
+                target,
+                kind: crate::v1::enums::RelatesKindDto::Duplicates,
+            }],
         };
 
         let value = serde_json::to_value(&response).unwrap();
@@ -132,17 +146,105 @@ mod tests {
             "blocked_by",
             "blocks",
             "related",
+            "block_edges",
+            "related_edges",
         ] {
             assert!(obj.get(key).is_some(), "missing key {key}");
         }
         assert_eq!(
             obj.len(),
-            6,
+            8,
             "unexpected keys: {:?}",
             obj.keys().collect::<Vec<_>>()
         );
 
         let round_tripped: CardGraphResponse = serde_json::from_value(value).unwrap();
         assert_eq!(round_tripped, response);
+    }
+
+    #[test]
+    fn test_card_graph_response_block_edges_carry_severity() {
+        let blocker = Uuid::new_v4();
+        let subject = Uuid::new_v4();
+
+        let mut g = DependencyGraph::new();
+        g.set_block_with_severity(blocker, subject, Severity::Critical)
+            .unwrap();
+
+        let r = CardGraphResponse::from_graph(subject, &g);
+        assert_eq!(
+            r.block_edges,
+            vec![BlockEdgeDto {
+                blocker,
+                blocked: subject,
+                severity: crate::v1::enums::SeverityDto::Critical,
+            }]
+        );
+    }
+
+    #[test]
+    fn test_card_graph_response_related_edges_carry_kind() {
+        let subject = Uuid::new_v4();
+        let other = Uuid::new_v4();
+
+        let mut g = DependencyGraph::new();
+        g.relate_with_kind(subject, other, RelatesKind::Duplicates)
+            .unwrap();
+
+        let r = CardGraphResponse::from_graph(subject, &g);
+        assert_eq!(r.related_edges.len(), 1);
+        let edge = &r.related_edges[0];
+        let endpoints: std::collections::HashSet<Uuid> =
+            [edge.source, edge.target].into_iter().collect();
+        assert_eq!(
+            endpoints,
+            [subject, other].into_iter().collect::<std::collections::HashSet<Uuid>>()
+        );
+        assert_eq!(edge.kind, crate::v1::enums::RelatesKindDto::Duplicates);
+    }
+
+    #[test]
+    fn test_card_graph_response_new_edge_fields_exclude_archived_and_foreign_edges() {
+        let subject = Uuid::new_v4();
+        let archived_blocker = Uuid::new_v4();
+        let archived_rel = Uuid::new_v4();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let incident_blocker = Uuid::new_v4();
+
+        let mut g = DependencyGraph::new();
+        g.add_archived_blocks(archived_blocker, subject, Severity::High)
+            .unwrap();
+        g.add_archived_relates(subject, archived_rel, RelatesKind::Duplicates)
+            .unwrap();
+        g.set_block_with_severity(a, b, Severity::Low).unwrap();
+        g.relate_with_kind(a, b, RelatesKind::General).unwrap();
+
+        let r = CardGraphResponse::from_graph(subject, &g);
+        assert!(r.block_edges.is_empty());
+        assert!(r.related_edges.is_empty());
+
+        g.set_block_with_severity(incident_blocker, subject, Severity::Medium)
+            .unwrap();
+        let r = CardGraphResponse::from_graph(subject, &g);
+        assert_eq!(r.block_edges.len(), 1);
+        assert_eq!(r.block_edges[0].blocker, incident_blocker);
+    }
+
+    #[test]
+    fn test_card_graph_response_deserializes_payload_without_edge_fields() {
+        let card_id = Uuid::new_v4();
+        let value = serde_json::json!({
+            "card_id": card_id,
+            "parents": [],
+            "children": [],
+            "blocked_by": [],
+            "blocks": [],
+            "related": [],
+        });
+
+        let response: CardGraphResponse = serde_json::from_value(value).unwrap();
+        assert!(response.block_edges.is_empty());
+        assert!(response.related_edges.is_empty());
     }
 }

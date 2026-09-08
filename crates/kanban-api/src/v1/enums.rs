@@ -4,7 +4,8 @@
 //! — a renamed or added domain variant fails to compile here (the drift guard).
 
 use kanban_domain::{
-    ArchivedFilter, CardPriority, CardStatus, SortField, SortOrder, SprintStatus, TaskListView,
+    ArchivedFilter, CardPriority, CardStatus, RelatesKind, Severity, SortField, SortOrder,
+    SprintStatus, TaskListView,
 };
 use serde::{Deserialize, Serialize};
 
@@ -408,6 +409,61 @@ mod tests {
             let domain: CardStatus = dto.into();
             assert_eq!(CardStatusDto::from(domain), dto);
         }
+    }
+
+    #[test]
+    fn test_severity_and_relates_kind_dtos_serialize_as_snake_case() {
+        assert_eq!(
+            serde_json::to_string(&SeverityDto::Critical).unwrap(),
+            "\"critical\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SeverityDto::Low).unwrap(),
+            "\"low\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SeverityDto::Medium).unwrap(),
+            "\"medium\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SeverityDto::High).unwrap(),
+            "\"high\""
+        );
+        assert_eq!(
+            serde_json::to_string(&RelatesKindDto::MentionedIn).unwrap(),
+            "\"mentioned_in\""
+        );
+        assert_eq!(
+            serde_json::to_string(&RelatesKindDto::Duplicates).unwrap(),
+            "\"duplicates\""
+        );
+        assert_eq!(
+            serde_json::to_string(&RelatesKindDto::General).unwrap(),
+            "\"general\""
+        );
+    }
+
+    #[test]
+    fn test_severity_and_relates_kind_dtos_round_trip_through_domain() {
+        for dto in [
+            SeverityDto::Low,
+            SeverityDto::Medium,
+            SeverityDto::High,
+            SeverityDto::Critical,
+        ] {
+            let domain: Severity = dto.into();
+            assert_eq!(SeverityDto::from(domain), dto);
+        }
+        for dto in [
+            RelatesKindDto::General,
+            RelatesKindDto::Duplicates,
+            RelatesKindDto::MentionedIn,
+        ] {
+            let domain: RelatesKind = dto.into();
+            assert_eq!(RelatesKindDto::from(domain), dto);
+        }
+        assert_eq!(SeverityDto::default(), SeverityDto::Medium);
+        assert_eq!(RelatesKindDto::default(), RelatesKindDto::General);
     }
 
     #[test]
