@@ -96,6 +96,44 @@ impl LayerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_default_layer_config_request_timeout_is_thirty_seconds() {
+        assert_eq!(
+            LayerConfig::default().timeout,
+            Some(Duration::from_secs(30))
+        );
+    }
+
+    #[test]
+    fn test_request_timeout_secs_unset_yields_the_default() {
+        assert_eq!(
+            parse_request_timeout(None),
+            Some(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS))
+        );
+    }
+
+    #[test]
+    fn test_request_timeout_secs_parses_as_whole_seconds() {
+        assert_eq!(
+            parse_request_timeout(Some("5")),
+            Some(Duration::from_secs(5))
+        );
+    }
+
+    #[test]
+    fn test_request_timeout_secs_zero_disables_the_timeout() {
+        assert_eq!(parse_request_timeout(Some("0")), None);
+    }
+
+    #[test]
+    fn test_request_timeout_secs_unparseable_falls_back_to_the_default() {
+        assert_eq!(
+            parse_request_timeout(Some("soon")),
+            Some(Duration::from_secs(30))
+        );
+    }
 
     #[test]
     fn test_cors_origins_star_yields_permissive_policy() {
