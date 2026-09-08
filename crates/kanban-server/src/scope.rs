@@ -152,6 +152,36 @@ mod tests {
     use kanban_service::FetchPlan;
 
     #[test]
+    fn test_route_scope_for_archived_board_list_requests_only_the_marker_tier() {
+        let round = RouteScope::ArchivedBoardList.next_round(&Model::default());
+
+        assert_eq!(
+            round,
+            FetchRound {
+                archived_board_list: true,
+                ..Default::default()
+            }
+        );
+        assert!(!round.board_list);
+        assert!(round.boards.is_empty());
+    }
+
+    #[test]
+    fn test_route_scope_for_archived_board_list_halts_once_the_markers_are_loaded() {
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            archived_boards: Collection {
+                all: LoadState::Loaded(vec![]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let round = RouteScope::ArchivedBoardList.next_round(&model);
+        assert!(round.is_empty());
+    }
+
+    #[test]
     fn test_route_scope_for_board_list_requests_only_the_board_list() {
         let round = RouteScope::BoardList.next_round(&Model::default());
 
