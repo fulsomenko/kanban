@@ -54,7 +54,7 @@ On startup the server opens (or creates) the board file, binds the configured ad
 
 The bind address can also be set with the `--addr` flag or the `server_addr` key in the kanban config file (`~/.config/kanban/config.toml`); the resolution order is `--addr` > `KANBAN_ADDR` > `server_addr` > the `127.0.0.1:0` default.
 
-Request bodies are capped at 2 MiB by default. A request over the cap is rejected with 413 Payload Too Large before it reaches the handler. The request timeout bounds the time to the response, not the lifetime of a streaming body, so an open `GET /v1/events` SSE stream is unaffected and stays connected indefinitely. The timeout also does not remove write serialization: every handler acquires one shared `tokio::sync::Mutex`, so a slow store still queues every other request behind the in-flight one, and the timeout only bounds how long a queued client waits before failing fast.
+Request bodies are capped at 2 MiB by default. A request over the cap is rejected with 413 Payload Too Large before it reaches the handler. `POST /v1/import` is the exception: it is capped at 32 MiB instead, since a full board export can exceed the default cap. The request timeout bounds the time to the response, not the lifetime of a streaming body, so an open `GET /v1/events` SSE stream is unaffected and stays connected indefinitely. The timeout also does not remove write serialization: every handler acquires one shared `tokio::sync::Mutex`, so a slow store still queues every other request behind the in-flight one, and the timeout only bounds how long a queued client waits before failing fast.
 
 ### Example
 
@@ -217,6 +217,14 @@ The remaining card routes (get/create/replace/update/delete, and the flat `/v1/c
 | `DELETE` | `/v1/cards/{id}/blocks/{blocked_id}` | Remove the blocking edge from `id` to `blocked_id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
 | `POST` | `/v1/cards/{id}/related` | Add an undirected relates edge between `id` and `other`. `200` with the updated `CardGraphResponse`. `kind` defaults to `general`. 409 `DUPLICATE_EDGE` if the edge already exists. | `{"other": uuid, "kind"?: "general"\|"duplicates"\|"mentioned_in"}` |
 | `DELETE` | `/v1/cards/{id}/related/{other_id}` | Remove the relates edge between `id` and `other_id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
+
+### Transfer
+
+| Method | Path | Description | Body |
+|---|---|---|---|
+| `GET` | `/v1/boards/{board_id}/export` | Export a single board's full subtree (board, columns, live and archived cards, sprints, dependency graph, prefixes) as a bare `Snapshot` JSON document, byte-compatible with `kanban export`. No `version`/`metadata`/`data` envelope. 404 if `board_id` doesn't exist; still 200 for an archived board (the head and its `archived_boards` marker are both carried). | — |
+| `GET` | `/v1/export` | Export every board in the workspace, in the same bare `Snapshot` shape. | — |
+| `POST` | `/v1/import` | Import a `Snapshot` document (from either export route, or `kanban export`) unmodified. `201` with the imported `BoardResponse`. Import is create-only: any board, column, card, archived card or sprint id already present in the target returns 422 `VALIDATION_FAILED` with a "Duplicate ..." message and imports nothing. A document with no board, a dangling column reference, or a body that fails to parse as a `Snapshot` (invalid JSON, or a wrong-typed field) also returns 422 `VALIDATION_FAILED`, never a 500. Capped at 32 MiB rather than the server's default 2 MiB body limit (see [Configuration](#configuration)). | `Snapshot` (bare JSON, no envelope) |
 
 ### Events
 
