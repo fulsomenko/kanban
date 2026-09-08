@@ -163,7 +163,11 @@ mod tests {
         );
     }
 
-    struct StubBackend;
+    #[derive(Default)]
+    struct StubBackend {
+        batch_count_calls: std::sync::atomic::AtomicUsize,
+        batch_count_fails: bool,
+    }
 
     impl DataStore for StubBackend {
         fn get_prefix(&self, _name: &str) -> KanbanResult<Option<kanban_domain::Prefix>> {
@@ -289,7 +293,13 @@ mod tests {
             unimplemented!()
         }
         fn batch_count(&self) -> KanbanResult<u64> {
-            unimplemented!()
+            self.batch_count_calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if self.batch_count_fails {
+                Err(KanbanError::Internal("stub batch_count boom".into()))
+            } else {
+                Ok(0)
+            }
         }
         fn load_batches(&self, _offset: u64, _limit: u64) -> KanbanResult<Vec<CommandBatch>> {
             unimplemented!()
@@ -307,15 +317,51 @@ mod tests {
 
     #[test]
     fn test_backend_without_local_persistence_returns_none() {
-        let backend = StubBackend;
+        let backend = StubBackend::default();
         let backend: &dyn KanbanBackend = &backend;
         assert!(backend.local_persistence().is_none());
     }
 
     #[test]
     fn test_mark_dirty_is_callable_on_a_backend_that_does_not_override_it() {
-        let backend = StubBackend;
+        let backend = StubBackend::default();
         let backend: &dyn KanbanBackend = &backend;
         backend.mark_dirty();
+    }
+
+    #[tokio::test]
+    async fn test_default_probe_delegates_to_batch_count() {
+        let backend = StubBackend::default();
+        let b: &dyn KanbanBackend = &backend;
+
+        let result = b.probe().await;
+
+        assert!(result.is_ok(), "expected probe() to succeed, got: {result:?}");
+        assert_eq!(
+            backend
+                .batch_count_calls
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "expected the default probe to call batch_count exactly once"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_default_probe_propagates_a_batch_count_error() {
+        let backend = StubBackend {
+            batch_count_fails: true,
+            ..Default::default()
+        };
+        let b: &dyn KanbanBackend = &backend;
+
+        let result = b.probe().await;
+
+        match result {
+            Err(e) => assert!(
+                e.to_string().contains("stub batch_count boom"),
+                "expected the batch_count error to propagate, got: {e}"
+            ),
+            Ok(_) => panic!("expected probe() to propagate the batch_count failure"),
+        }
     }
 }
