@@ -183,6 +183,10 @@ Column writes (create/update/delete) aren't implemented yet.
 | `PUT` | `/v1/boards/{board_id}/sprints/{id}` | Full replace (RFC 9110 §9.3.4) — creates the sprint at `id` if absent (`201`), otherwise replaces it in full (`200`). 404s if `id` belongs to a different board. | `ReplaceSprintRequest` |
 | `PATCH` | `/v1/boards/{board_id}/sprints/{id}` | Partial update — JSON Merge Patch (RFC 7386). 404s if the sprint belongs to a different board. | `UpdateSprintRequest` |
 | `DELETE` | `/v1/boards/{board_id}/sprints/{id}` | Delete a sprint. `204 No Content`. 404s if the sprint belongs to a different board. | — |
+| `POST` | `/v1/boards/{board_id}/sprints/{id}/activate` | Activate a sprint, setting `start_date` to now and `end_date` to `start_date + duration_days`. `duration_days` defaults to 14 when omitted; values outside `0..=36500` are a `422`. Re-activating an already-active sprint resets both dates. 404s if the sprint belongs to a different board. | `ActivateSprintRequest` |
+| `POST` | `/v1/boards/{board_id}/sprints/{id}/complete` | Mark a sprint completed. 404s if the sprint belongs to a different board. | — |
+| `POST` | `/v1/boards/{board_id}/sprints/{id}/cancel` | Mark a sprint cancelled. 404s if the sprint belongs to a different board. | — |
+| `POST` | `/v1/boards/{board_id}/sprints/{id}/carry-over` | Move every uncompleted card from this sprint to `to_sprint_id`. `422` unless this sprint is completed or cancelled and `to_sprint_id` is in planning. 404s if either sprint belongs to a different board. Returns `CarryOverResponse` with the moved count. | `CarryOverRequest` |
 | `GET` | `/v1/sprints/{id}` | Flat alias for the board-scoped `GET`. | — |
 | `PATCH` | `/v1/sprints/{id}` | Flat alias for the board-scoped `PATCH`. | `UpdateSprintRequest` |
 | `DELETE` | `/v1/sprints/{id}` | Flat alias for the board-scoped `DELETE`. | — |
