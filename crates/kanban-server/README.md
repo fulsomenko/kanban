@@ -189,6 +189,8 @@ Column writes (create/update/delete) aren't implemented yet.
 | Method | Path | Description | Body |
 |---|---|---|---|
 | `GET` | `/v1/boards/{board_id}/cards` | List a board's cards. 404s if `board_id` doesn't exist (does not collapse into an empty list). Supports `?column_id=`, `?sprint_id=` and `?archived=` filters alongside pagination. Returns `Page<CardResponse>`; accepts `?page=&page_size=`. | — |
+| `POST` | `/v1/cards/{id}/archive` | Archive a card. `200` with `CardResponse` (`archived_at` set). 404 if the card is unknown or already archived. | — |
+| `POST` | `/v1/cards/{id}/restore` | Restore an archived card. `200` with the live `CardResponse` (no `archived_at`). Accepts `?column_id=` to redirect it to a different column; otherwise it stays in its current column. 404 if the card is not archived, or if `column_id` names an unknown column. | — |
 
 The remaining card routes (get/create/replace/update/delete, and the flat `/v1/cards/{id}` aliases) exist but aren't documented in this table yet.
 
