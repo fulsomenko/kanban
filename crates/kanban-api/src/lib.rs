@@ -5,8 +5,9 @@
 //! callers into an explicit version path.
 mod v1;
 pub use v1::{
-    ApiError, ArchivedBoardResponse, ArchivedCardResponse, ArchivedFilterDto, BoardResponse,
-    CardGraphResponse, CardPriorityDto, CardResponse, CardStatusDto, ChangeEventFrame, ChangeKind,
+    ActivateSprintRequest, ApiError, ArchivedBoardResponse, ArchivedCardResponse,
+    ArchivedFilterDto, BoardResponse, CardGraphResponse, CardPriorityDto, CardResponse,
+    CardStatusDto, CarryOverRequest, CarryOverResponse, ChangeEventFrame, ChangeKind,
     ColumnResponse, CreateBoardRequest, CreateCardRequest, CreateColumnRequest, CreateSprintParts,
     CreateSprintRequest, EntityType, ErrorCode, Page, PageParams, Patch, PrefixResponse,
     ReorderColumnRequest, ReplaceBoardRequest, ReplaceCardRequest, ReplaceColumnRequest,
