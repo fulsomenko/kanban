@@ -1,3 +1,25 @@
+use chrono::{DateTime, Utc};
+use kanban_domain::ArchivedBoard;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Response body for an archived-board marker. A board is a scoping root, so
+/// unlike `ArchivedCardResponse` there is no restore context (no `board_id`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArchivedBoardResponse {
+    pub entity_id: Uuid,
+    pub archived_at: DateTime<Utc>,
+}
+
+impl From<&ArchivedBoard> for ArchivedBoardResponse {
+    fn from(ab: &ArchivedBoard) -> Self {
+        Self {
+            entity_id: ab.entity_id,
+            archived_at: ab.metadata.archived_at,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::ArchivedBoardResponse;
@@ -15,7 +37,10 @@ mod tests {
         let value = serde_json::to_value(&resp).unwrap();
         assert!(value.get("entity_id").is_some());
         assert!(value.get("archived_at").is_some());
-        assert!(value.get("metadata").is_none(), "metadata must not be nested");
+        assert!(
+            value.get("metadata").is_none(),
+            "metadata must not be nested"
+        );
         assert!(value.get("context").is_none(), "context must not be nested");
         assert!(
             value.get("board_id").is_none(),
