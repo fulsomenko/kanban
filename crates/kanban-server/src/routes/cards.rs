@@ -30,6 +30,11 @@ pub struct CardQuery {
     pub archived: ArchivedFilterDto,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RestoreCardQuery {
+    pub column_id: Option<Uuid>,
+}
+
 fn optional_card<'a>(
     state: kanban_domain::LoadState<&'a Card>,
     what: &str,
@@ -179,6 +184,22 @@ fn do_update_card(
 fn do_delete_card(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
     crate::state::mutate_unit(ctx, |c| c.delete_card_impl(id))
         .map(|_invalidation| ())
+        .map_err(|e| AppError::from(&e))
+}
+
+fn do_archive_card(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
+    crate::state::mutate(ctx, |c| c.archive_card_impl(id))
+        .map(|((), _invalidation)| ())
+        .map_err(|e| AppError::from(&e))
+}
+
+fn do_restore_card(
+    ctx: &mut crate::state::Session,
+    id: Uuid,
+    column_id: Option<Uuid>,
+) -> Result<Card, AppError> {
+    crate::state::mutate(ctx, |c| c.restore_card_impl(id, column_id))
+        .map(|(card, _invalidation)| card)
         .map_err(|e| AppError::from(&e))
 }
 
@@ -334,13 +355,54 @@ async fn delete_card_route_flat(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn archive_card_route(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<CardResponse>, AppError> {
+    let (card, archived_at) = {
+        let mut ctx = state.ctx.lock().await;
+        do_archive_card(&mut ctx, id)?;
+        let card = ctx
+            .get_card(id)
+            .map_err(|e| AppError::from(&e))?
+            .ok_or_else(|| AppError::from(&KanbanError::not_found("Card", id)))?;
+        let archived_at = ctx.card_archived_at(id).map_err(|e| AppError::from(&e))?;
+        state
+            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .await
+            .map_err(|e| AppError::from(&e))?;
+        (card, archived_at)
+    };
+    Ok(Json(CardResponse::with_archived_at(&card, archived_at)))
+}
+
+async fn restore_card_route(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(q): Query<RestoreCardQuery>,
+) -> Result<Json<CardResponse>, AppError> {
+    let card = {
+        let mut ctx = state.ctx.lock().await;
+        let card = do_restore_card(&mut ctx, id, q.column_id)?;
+        state
+            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .await
+            .map_err(|e| AppError::from(&e))?;
+        card
+    };
+    Ok(Json(CardResponse::from(&card)))
+}
+
 pub fn flat_read_router() -> Router<AppState> {
     Router::new().route("/v1/cards/{id}", get(get_card_flat))
 }
 
 pub fn flat_write_router() -> Router<AppState> {
-    Router::new().route(
-        "/v1/cards/{id}",
-        patch(update_card_route_flat).delete(delete_card_route_flat),
-    )
+    Router::new()
+        .route(
+            "/v1/cards/{id}",
+            patch(update_card_route_flat).delete(delete_card_route_flat),
+        )
+        .route("/v1/cards/{id}/archive", post(archive_card_route))
+        .route("/v1/cards/{id}/restore", post(restore_card_route))
 }
