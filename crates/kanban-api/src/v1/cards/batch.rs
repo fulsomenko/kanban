@@ -1,3 +1,68 @@
+use super::requests::UpdateCardRequest;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct BatchArchiveRequest {
+    pub ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct BatchMoveRequest {
+    pub ids: Vec<Uuid>,
+    pub column_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct BatchAssignSprintRequest {
+    pub ids: Vec<Uuid>,
+    pub sprint_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchUpdateItem {
+    pub id: Uuid,
+    #[serde(flatten)]
+    pub update: UpdateCardRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchUpdateRequest {
+    pub updates: Vec<BatchUpdateItem>,
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchFailure {
+    pub id: Uuid,
+    pub error: String,
+}
+
+impl BatchFailure {
+    pub fn new(id: Uuid, error: impl Into<String>) -> Self {
+        Self {
+            id,
+            error: error.into(),
+        }
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchOperationResponse {
+    pub succeeded: Vec<Uuid>,
+    pub failed: Vec<BatchFailure>,
+}
+
+impl BatchOperationResponse {
+    pub fn new(succeeded: Vec<Uuid>, failed: Vec<BatchFailure>) -> Self {
+        Self { succeeded, failed }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

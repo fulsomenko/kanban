@@ -15,7 +15,9 @@ pub use boards::{
     UpdateBoardRequest,
 };
 pub use cards::{
-    ArchivedCardResponse, CardResponse, CreateCardRequest, ReplaceCardRequest, UpdateCardRequest,
+    ArchivedCardResponse, BatchArchiveRequest, BatchAssignSprintRequest, BatchFailure,
+    BatchMoveRequest, BatchOperationResponse, BatchUpdateItem, BatchUpdateRequest, CardResponse,
+    CreateCardRequest, ReplaceCardRequest, UpdateCardRequest,
 };
 pub use columns::{
     ColumnResponse, CreateColumnRequest, ReorderColumnRequest, ReplaceColumnRequest,
