@@ -5,25 +5,25 @@ use kanban_domain::{
     CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, KanbanOperations,
     KanbanResult, Sprint, SprintUpdate,
 };
+pub use kanban_domain::{
+    BoardCreateOutcome, CardCreateOutcome, ColumnCreateOutcome, SprintCreateOutcome,
+};
 use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
 mod boards;
-pub use boards::BoardCreateOutcome;
 mod cards;
-pub use cards::CardCreateOutcome;
 mod cards_batch;
 mod cards_batch_detailed;
 mod columns;
-pub use columns::ColumnCreateOutcome;
 mod core;
 mod filters;
 mod graph;
 pub use graph::BoardRelations;
+mod mutation_ops;
 mod persistence;
 mod sprints;
-pub use sprints::SprintCreateOutcome;
 mod sync;
 mod undo;
 

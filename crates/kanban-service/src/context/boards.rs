@@ -3,22 +3,13 @@ use chrono::{DateTime, Utc};
 use kanban_domain::commands::{ArchiveBoards, BoardCommand, Command, ImportEntities, RestoreBoard};
 use kanban_domain::{
     filter_and_sort_boards, resolve_board_sort, ArchivedBoard, ArchivedFilter, Board,
-    BoardListFilter, BoardSortField, BoardUpdate, FieldUpdate, Invalidation, KanbanError,
-    KanbanResult, NewBoard, SortOrder, DEFAULT_ARCHIVED_BOARD_SORT, DEFAULT_BOARD_SORT_LIVE,
+    BoardCreateOutcome, BoardListFilter, BoardSortField, BoardUpdate, FieldUpdate, Invalidation,
+    KanbanError, KanbanResult, NewBoard, SortOrder, DEFAULT_ARCHIVED_BOARD_SORT,
+    DEFAULT_BOARD_SORT_LIVE,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
-
-/// Result of an idempotent PUT-create ([`KanbanContext::create_or_replace_board`]):
-/// the resulting board plus whether this call created it (`true`, HTTP 201) or
-/// replaced an existing one (`false`, HTTP 200). The HTTP binding lives in the
-/// server seam; the service tier only reports which arm ran.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BoardCreateOutcome {
-    pub board: Board,
-    pub created: bool,
-}
 
 impl KanbanContext {
     /// Create a board from a full `NewBoard` spec plus an optional client-supplied

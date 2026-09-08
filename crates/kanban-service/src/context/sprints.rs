@@ -5,20 +5,10 @@ use kanban_domain::commands::{Command, SprintCommand};
 use kanban_domain::export::{AllBoardsExport, BoardImporter};
 use kanban_domain::{
     invalidation_from_inverse, Board, DataStore, FieldUpdate, Invalidation, KanbanError,
-    KanbanResult, Snapshot, Sprint, SprintUpdate,
+    KanbanResult, Snapshot, Sprint, SprintCreateOutcome, SprintUpdate,
 };
 use kanban_persistence::PersistenceError;
 use uuid::Uuid;
-
-/// Result of an idempotent PUT-create ([`KanbanContext::create_or_replace_sprint`]):
-/// the resulting sprint plus whether this call created it (`true`, HTTP 201) or
-/// replaced an existing one (`false`, HTTP 200). The HTTP binding lives in the
-/// server seam; the service tier only reports which arm ran.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SprintCreateOutcome {
-    pub sprint: Sprint,
-    pub created: bool,
-}
 
 impl KanbanContext {
     pub fn carry_over_sprint_cards_impl(
