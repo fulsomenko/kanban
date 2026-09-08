@@ -1,6 +1,29 @@
-pub const CAPABILITY_MANIFEST: &[&str] = &[];
+pub const CAPABILITY_MANIFEST: &[&str] = &[
+    "create_board",
+    "list_boards",
+    "get_board",
+    "update_board",
+    "delete_board",
+    "create_card",
+    "list_cards",
+    "get_card",
+    "update_card",
+    "delete_card",
+    "list_columns",
+    "get_column",
+    "update_column",
+    "delete_column",
+    "reorder_column",
+    "create_sprint",
+    "list_sprints",
+    "get_sprint",
+    "update_sprint",
+    "delete_sprint",
+    "undo",
+    "redo",
+];
 
-fn strip_test_modules(src: &str) -> String {
+pub fn strip_test_modules(src: &str) -> String {
     let mut kept = Vec::new();
     let mut skipping = false;
     for line in src.lines() {
