@@ -8,6 +8,7 @@ pub mod error;
 pub mod model_read;
 pub mod pagination;
 pub mod scope;
+mod session_ops;
 pub mod state;
 pub mod stores;
 pub mod watch;

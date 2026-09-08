@@ -186,7 +186,7 @@ fn do_delete_card(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppEr
 /// `KanbanOperations::{update_card, delete_card}` key on the global card id
 /// alone with no board scoping of their own.
 fn require_card_in_board(
-    ctx: &kanban_service::KanbanContext,
+    ctx: &crate::state::Session,
     board_id: Uuid,
     id: Uuid,
 ) -> Result<(), AppError> {

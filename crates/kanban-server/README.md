@@ -6,7 +6,7 @@ HTTP API server for kanban project management. Wraps `kanban-service` behind a R
 
 ## Architecture
 
-`kanban-server` holds a `Session` (just a `KanbanContext`) in memory behind a `tokio::sync::Mutex`, shared across all handlers via axum's `State`. No `kanban_domain::Model` is retained between requests: each read handler builds its own `Model::default()` for the duration of its own request and syncs it against the locked context, so every request sees the current state of the store regardless of backend.
+`kanban-server` holds a `Session` in memory behind a `tokio::sync::Mutex`, shared across all handlers via axum's `State`. `Session` wraps a `KanbanContext` and implements `KanbanOperations`/`GraphOperations` itself (mutators routed through a `state::mutate`/`state::mutate_unit` seam), while still `Deref`ing to `KanbanContext` for non-trait access. No `kanban_domain::Model` is retained between requests: each read handler builds its own `Model::default()` for the duration of its own request and syncs it against the locked context, so every request sees the current state of the store regardless of backend.
 
 ```mermaid
 graph TD
