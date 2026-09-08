@@ -157,8 +157,17 @@ async fn test_activate_already_active_sprint_succeeds_and_resets_dates() {
     assert_eq!(second.status(), StatusCode::OK);
     let second_json = json_of(second).await;
     let second_start = parse_date(&second_json["start_date"]);
+    let first_end = parse_date(&first_json["end_date"]);
+    let second_end = parse_date(&second_json["end_date"]);
 
-    assert!(second_start >= first_start);
+    assert!(
+        second_start > first_start,
+        "re-activating must reset start_date: {first_start} -> {second_start}"
+    );
+    assert!(
+        second_end > first_end,
+        "re-activating must reset end_date: {first_end} -> {second_end}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
