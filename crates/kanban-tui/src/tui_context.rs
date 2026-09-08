@@ -2,11 +2,10 @@ use crate::state::SaveCoordinator;
 use kanban_domain::commands::Command;
 use kanban_domain::KanbanResult;
 use kanban_domain::{
-    ArchivedCard, Board, BoardCreateOutcome, BoardListFilter, BoardUpdate, Card,
-    CardCreateOutcome, CardListFilter, CardSummary, CardUpdate, Column, ColumnCreateOutcome,
-    ColumnUpdate, CreateCardOptions, GraphOperations, Invalidation, KanbanOperations,
-    MutationOperations, NewBoard, NewCard, NewColumn, RelatesKind, Severity, Sprint,
-    SprintCreateOutcome, SprintUpdate,
+    ArchivedCard, Board, BoardCreateOutcome, BoardListFilter, BoardUpdate, Card, CardCreateOutcome,
+    CardListFilter, CardSummary, CardUpdate, Column, ColumnCreateOutcome, ColumnUpdate,
+    CreateCardOptions, GraphOperations, Invalidation, KanbanOperations, MutationOperations,
+    NewBoard, NewCard, NewColumn, RelatesKind, Severity, Sprint, SprintCreateOutcome, SprintUpdate,
 };
 use kanban_service::backend::KanbanBackend;
 use kanban_service::KanbanContext;
@@ -253,7 +252,9 @@ impl MutationOperations for TuiContext {
         title: String,
         options: CreateCardOptions,
     ) -> KanbanResult<(Card, Invalidation)> {
-        let r = self.inner.create_card_impl(board_id, column_id, title, options);
+        let r = self
+            .inner
+            .create_card_impl(board_id, column_id, title, options);
         self.with_flush(r)
     }
     fn update_card_impl(
@@ -297,7 +298,10 @@ impl MutationOperations for TuiContext {
         let r = self.inner.assign_card_to_sprint_impl(card_id, sprint_id);
         self.with_flush(r)
     }
-    fn unassign_card_from_sprint_impl(&mut self, card_id: Uuid) -> KanbanResult<(Card, Invalidation)> {
+    fn unassign_card_from_sprint_impl(
+        &mut self,
+        card_id: Uuid,
+    ) -> KanbanResult<(Card, Invalidation)> {
         let r = self.inner.unassign_card_from_sprint_impl(card_id);
         self.with_flush(r)
     }
