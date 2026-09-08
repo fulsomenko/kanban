@@ -245,6 +245,71 @@ impl From<ArchivedFilter> for ArchivedFilterDto {
     }
 }
 
+/// Wire mirror of [`kanban_domain::Severity`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum SeverityDto {
+    Low,
+    #[default]
+    Medium,
+    High,
+    Critical,
+}
+
+impl From<SeverityDto> for Severity {
+    fn from(value: SeverityDto) -> Self {
+        match value {
+            SeverityDto::Low => Self::Low,
+            SeverityDto::Medium => Self::Medium,
+            SeverityDto::High => Self::High,
+            SeverityDto::Critical => Self::Critical,
+        }
+    }
+}
+
+impl From<Severity> for SeverityDto {
+    fn from(value: Severity) -> Self {
+        match value {
+            Severity::Low => Self::Low,
+            Severity::Medium => Self::Medium,
+            Severity::High => Self::High,
+            Severity::Critical => Self::Critical,
+        }
+    }
+}
+
+/// Wire mirror of [`kanban_domain::RelatesKind`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum RelatesKindDto {
+    #[default]
+    General,
+    Duplicates,
+    MentionedIn,
+}
+
+impl From<RelatesKindDto> for RelatesKind {
+    fn from(value: RelatesKindDto) -> Self {
+        match value {
+            RelatesKindDto::General => Self::General,
+            RelatesKindDto::Duplicates => Self::Duplicates,
+            RelatesKindDto::MentionedIn => Self::MentionedIn,
+        }
+    }
+}
+
+impl From<RelatesKind> for RelatesKindDto {
+    fn from(value: RelatesKind) -> Self {
+        match value {
+            RelatesKind::General => Self::General,
+            RelatesKind::Duplicates => Self::Duplicates,
+            RelatesKind::MentionedIn => Self::MentionedIn,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

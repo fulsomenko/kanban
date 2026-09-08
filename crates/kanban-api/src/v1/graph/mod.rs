@@ -1,3 +1,3 @@
 mod response;
 
-pub use response::CardGraphResponse;
+pub use response::{BlockEdgeDto, CardGraphResponse, RelatedEdgeDto};

@@ -1,12 +1,34 @@
+use crate::v1::enums::{RelatesKindDto, SeverityDto};
 use kanban_domain::DependencyGraph;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+/// A blocking edge incident to the requested card, carrying its severity.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BlockEdgeDto {
+    pub blocker: Uuid,
+    pub blocked: Uuid,
+    pub severity: SeverityDto,
+}
+
+/// An undirected relates edge incident to the requested card, carrying its
+/// kind. `source`/`target` preserve whichever orientation created the edge;
+/// callers that only care about the other endpoint should compare against
+/// both.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RelatedEdgeDto {
+    pub source: Uuid,
+    pub target: Uuid,
+    pub kind: RelatesKindDto,
+}
 
 /// A card's dependency edges, scoped to that card and split by direction.
 /// `parents`/`children` are the Spawns edges that spawned it / that it
 /// spawned; `blocked_by`/`blocks` are the Blocks edges pointing into it /
 /// out of it; `related` is its undirected Relates neighbors. Only active
-/// edges are reported; archived edges are excluded.
+/// edges are reported; archived edges are excluded. `block_edges` and
+/// `related_edges` carry the same active-only, incident-only scoping as the
+/// id arrays, plus each edge's metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CardGraphResponse {
     pub card_id: Uuid,
@@ -15,10 +37,40 @@ pub struct CardGraphResponse {
     pub blocked_by: Vec<Uuid>,
     pub blocks: Vec<Uuid>,
     pub related: Vec<Uuid>,
+    #[serde(default)]
+    pub block_edges: Vec<BlockEdgeDto>,
+    #[serde(default)]
+    pub related_edges: Vec<RelatedEdgeDto>,
 }
 
 impl CardGraphResponse {
     pub fn from_graph(card_id: Uuid, graph: &DependencyGraph) -> Self {
+        let block_edges = graph
+            .blocks_edges()
+            .iter()
+            .filter(|e| {
+                e.base.archived_at.is_none()
+                    && (e.base.source == card_id || e.base.target == card_id)
+            })
+            .map(|e| BlockEdgeDto {
+                blocker: e.base.source,
+                blocked: e.base.target,
+                severity: e.severity.into(),
+            })
+            .collect();
+        let related_edges = graph
+            .relates_edges()
+            .iter()
+            .filter(|e| {
+                e.base.archived_at.is_none()
+                    && (e.base.source == card_id || e.base.target == card_id)
+            })
+            .map(|e| RelatedEdgeDto {
+                source: e.base.source,
+                target: e.base.target,
+                kind: e.kind.into(),
+            })
+            .collect();
         Self {
             card_id,
             parents: graph.parents(card_id),
@@ -26,6 +78,8 @@ impl CardGraphResponse {
             blocked_by: graph.blockers(card_id),
             blocks: graph.blocked(card_id),
             related: graph.related(card_id),
+            block_edges,
+            related_edges,
         }
     }
 }
