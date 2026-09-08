@@ -5,6 +5,7 @@ const SOURCES: &[&str] = &[
     include_str!("../src/app.rs"),
     include_str!("../src/routes/boards.rs"),
     include_str!("../src/routes/cards.rs"),
+    include_str!("../src/routes/cards_batch.rs"),
     include_str!("../src/routes/columns.rs"),
     include_str!("../src/routes/sprints.rs"),
     include_str!("../src/routes/sprints_lifecycle.rs"),
