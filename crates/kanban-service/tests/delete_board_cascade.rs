@@ -5,7 +5,7 @@
 
 use kanban_domain::{
     commands::{Command, MoveCard},
-    ArchivedCard, Board, Card, Column, Sprint,
+    ArchivedCard, Board, Card, Column, Sprint, UndoOperations,
 };
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_persistence_sqlite::SqliteBackend;

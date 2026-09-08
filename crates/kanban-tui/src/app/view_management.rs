@@ -2,7 +2,7 @@ use super::{App, AppMode, ViewScope};
 use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::{
     filter_and_sort_boards, Board, BoardListFilter, Card, DerivedProjections, Invalidation,
-    KanbanResult, LoadState, Resolved, Snapshot,
+    KanbanResult, LoadState, Resolved, Snapshot, UndoOperations,
 };
 use kanban_view::view_strategy::{ViewRefreshContext, ViewStrategy};
 use std::collections::HashMap;
@@ -233,7 +233,7 @@ impl App {
 
     /// Undo the last action
     pub fn undo(&mut self) -> KanbanResult<()> {
-        if self.ctx.undo()? {
+        if self.ctx.undo()?.is_some() {
             self.reload_model();
             self.needs_redraw = true;
         } else {
@@ -244,7 +244,7 @@ impl App {
 
     /// Redo the last undone action
     pub fn redo(&mut self) -> KanbanResult<()> {
-        if self.ctx.redo()? {
+        if self.ctx.redo()?.is_some() {
             self.reload_model();
             self.needs_redraw = true;
         } else {

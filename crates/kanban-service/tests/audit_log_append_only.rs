@@ -5,7 +5,7 @@
 use kanban_backend_memory::InMemoryStore;
 use kanban_core::AppConfig;
 use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
-use kanban_domain::KanbanResult;
+use kanban_domain::{KanbanResult, UndoOperations};
 use kanban_service::KanbanContext;
 use std::sync::Arc;
 use uuid::Uuid;

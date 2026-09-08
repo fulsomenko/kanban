@@ -1,12 +1,13 @@
-//! `Session`'s own capability surface: adding a method to `KanbanOperations`
-//! or `GraphOperations` must be answered here, not silently inherited
-//! through `Deref` to `KanbanContext`.
+//! `Session`'s own capability surface: adding a method to `KanbanOperations`,
+//! `GraphOperations`, or `UndoOperations` must be answered here, not
+//! silently inherited through `Deref` to `KanbanContext`.
 
 use crate::state::{mutate, mutate_unit, Session};
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, BoardListFilter, BoardUpdate, Card, CardListFilter,
     CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, GraphOperations,
-    KanbanOperations, KanbanResult, RelatesKind, Severity, Sprint, SprintUpdate,
+    Invalidation, KanbanError, KanbanOperations, KanbanResult, RelatesKind, Severity, Sprint,
+    SprintUpdate, UndoOperations,
 };
 use uuid::Uuid;
 
@@ -230,6 +231,28 @@ impl GraphOperations for Session {
     }
     fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.ctx.list_related_to(card)
+    }
+}
+
+impl UndoOperations for Session {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "sessions are shared across clients",
+        ))
+    }
+
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "sessions are shared across clients",
+        ))
+    }
+
+    fn can_undo(&self) -> bool {
+        false
+    }
+
+    fn can_redo(&self) -> bool {
+        false
     }
 }
 

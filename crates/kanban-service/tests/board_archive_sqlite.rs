@@ -4,7 +4,7 @@
 //! store-only test would miss the `SqliteBackend` forwards and the
 //! `RestoreBoard` command ordering.
 
-use kanban_domain::{KanbanOperations, KanbanResult};
+use kanban_domain::{KanbanOperations, KanbanResult, UndoOperations};
 use kanban_service::{AppConfig, KanbanContext};
 use tempfile::TempDir;
 use uuid::Uuid;

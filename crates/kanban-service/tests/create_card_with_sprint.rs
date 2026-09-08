@@ -1,4 +1,6 @@
-use kanban_domain::{CreateCardOptions, DomainError, KanbanError, KanbanOperations, KanbanResult};
+use kanban_domain::{
+    CreateCardOptions, DomainError, KanbanError, KanbanOperations, KanbanResult, UndoOperations,
+};
 use kanban_service::{AppConfig, KanbanContext};
 use tempfile::TempDir;
 use uuid::Uuid;

@@ -530,6 +530,28 @@ impl GraphOperations for CliContext {
     }
 }
 
+impl UndoOperations for CliContext {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "undo: the CLI opens a fresh context per invocation, so the per-process undo history is always empty",
+        ))
+    }
+
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        Err(KanbanError::unsupported(
+            "redo: the CLI opens a fresh context per invocation, so the per-process undo history is always empty",
+        ))
+    }
+
+    fn can_undo(&self) -> bool {
+        false
+    }
+
+    fn can_redo(&self) -> bool {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

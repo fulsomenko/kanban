@@ -1,7 +1,9 @@
 //! KAN-394: status ↔ completion-column auto-sync orchestrated at the service layer.
 
 use kanban_backend_memory::InMemoryStore;
-use kanban_domain::{CardStatus, CardUpdate, ColumnUpdate, KanbanOperations, KanbanResult};
+use kanban_domain::{
+    CardStatus, CardUpdate, ColumnUpdate, KanbanOperations, KanbanResult, UndoOperations,
+};
 use kanban_service::KanbanContext;
 use std::sync::Arc;
 use uuid::Uuid;

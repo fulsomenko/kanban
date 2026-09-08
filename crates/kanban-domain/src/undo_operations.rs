@@ -1,3 +1,20 @@
+use crate::{Invalidation, KanbanResult};
+
+/// The undo/redo capability surface every application answers.
+///
+/// `undo`/`redo` return `None` when there is nothing to undo/redo, and
+/// `Some(invalidation)` naming what the inverse execution touched;
+/// implementers must not discard it. `can_undo`/`can_redo` are cheap
+/// capability probes.
+///
+/// Object-safe by construction: no default bodies, no generic methods.
+pub trait UndoOperations {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>>;
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>>;
+    fn can_undo(&self) -> bool;
+    fn can_redo(&self) -> bool;
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

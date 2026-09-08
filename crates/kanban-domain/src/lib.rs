@@ -120,6 +120,7 @@ pub use sprint_factory::{NewSprint, SprintRecord};
 pub use sprint_log::SprintLog;
 pub use tag::{Tag, TagId};
 pub use task_list_view::TaskListView;
+pub use undo_operations::UndoOperations;
 pub use wip::check_wip_limit;
 
 pub use command_batch::CommandBatch;

@@ -14,7 +14,7 @@ use kanban_domain::commands::{
 };
 use kanban_domain::{
     BoardUpdate, CardPriority, CardStatus, CardUpdate, ColumnUpdate, FieldUpdate, KanbanOperations,
-    KanbanResult, SortField, SortOrder, SprintStatus, SprintUpdate, TaskListView,
+    KanbanResult, SortField, SortOrder, SprintStatus, SprintUpdate, TaskListView, UndoOperations,
 };
 use kanban_service::{read_full_snapshot, KanbanContext};
 use std::sync::Arc;

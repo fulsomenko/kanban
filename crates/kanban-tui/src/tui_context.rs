@@ -6,6 +6,7 @@ use kanban_domain::{
     CardListFilter, CardSummary, CardUpdate, Column, ColumnCreateOutcome, ColumnUpdate,
     CreateCardOptions, GraphOperations, Invalidation, KanbanOperations, MutationOperations,
     NewBoard, NewCard, NewColumn, RelatesKind, Severity, Sprint, SprintCreateOutcome, SprintUpdate,
+    UndoOperations,
 };
 use kanban_service::backend::KanbanBackend;
 use kanban_service::KanbanContext;
@@ -76,30 +77,6 @@ impl TuiContext {
     }
 
     // --- Delegation: state methods ---
-
-    pub fn undo(&mut self) -> KanbanResult<bool> {
-        let applied = self.inner.undo()?.is_some();
-        if applied && self.save_coordinator.has_save_channel() {
-            self.save_coordinator.queue_flush();
-        }
-        Ok(applied)
-    }
-
-    pub fn redo(&mut self) -> KanbanResult<bool> {
-        let applied = self.inner.redo()?.is_some();
-        if applied && self.save_coordinator.has_save_channel() {
-            self.save_coordinator.queue_flush();
-        }
-        Ok(applied)
-    }
-
-    pub fn can_undo(&self) -> bool {
-        self.inner.can_undo()
-    }
-
-    pub fn can_redo(&self) -> bool {
-        self.inner.can_redo()
-    }
 
     pub fn transfer_state_to(&self, target: &dyn KanbanBackend) -> KanbanResult<()> {
         self.inner.transfer_state_to(target)
@@ -533,6 +510,32 @@ impl MutationOperations for TuiContext {
     fn execute(&mut self, commands: Vec<Command>) -> KanbanResult<Invalidation> {
         let r = self.inner.execute(commands);
         self.with_flush(r)
+    }
+}
+
+impl UndoOperations for TuiContext {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        let inv = self.inner.undo()?;
+        if inv.is_some() && self.save_coordinator.has_save_channel() {
+            self.save_coordinator.queue_flush();
+        }
+        Ok(inv)
+    }
+
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        let inv = self.inner.redo()?;
+        if inv.is_some() && self.save_coordinator.has_save_channel() {
+            self.save_coordinator.queue_flush();
+        }
+        Ok(inv)
+    }
+
+    fn can_undo(&self) -> bool {
+        self.inner.can_undo()
+    }
+
+    fn can_redo(&self) -> bool {
+        self.inner.can_redo()
     }
 }
 

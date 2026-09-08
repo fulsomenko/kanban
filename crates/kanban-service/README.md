@@ -106,13 +106,19 @@ entity ids from before the reload may no longer exist.
 ctx.execute(commands: Vec<Command>) -> KanbanResult<Invalidation>
 ctx.execute_with(build: impl FnOnce(&dyn DataStore) -> KanbanResult<Vec<Command>>) -> KanbanResult<Invalidation>
 ctx.execute_with_extra(extra: EntityIds, build: impl FnOnce(&dyn DataStore) -> KanbanResult<Vec<Command>>) -> KanbanResult<Invalidation>
-ctx.undo() -> KanbanResult<Option<Invalidation>>   // None if there was nothing to undo
-ctx.redo() -> KanbanResult<Option<Invalidation>>   // None if there was nothing to redo
-ctx.can_undo() -> bool
-ctx.can_redo() -> bool
 ctx.undo_depth() -> usize
 ctx.redo_depth() -> usize
 ctx.clear_history() -> KanbanResult<()>
+```
+
+`undo`/`redo`/`can_undo`/`can_redo` come from the `UndoOperations` trait
+(`kanban-domain`), which `KanbanContext` implements:
+
+```rust
+UndoOperations::undo(&mut ctx) -> KanbanResult<Option<Invalidation>>   // None if there was nothing to undo
+UndoOperations::redo(&mut ctx) -> KanbanResult<Option<Invalidation>>   // None if there was nothing to redo
+UndoOperations::can_undo(&ctx) -> bool
+UndoOperations::can_redo(&ctx) -> bool
 ```
 
 Every undoable command captures an inverse at `execute` time; the

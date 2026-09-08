@@ -3,7 +3,7 @@ use crate::helpers::{kanban_err_to_mcp, locked_read, locked_write, to_call_tool_
 use crate::requests::transfer::{ExportBoardRequest, ImportBoardRequest};
 use crate::scope::{Ref, ToolScope, ToolScoped};
 use crate::KanbanMcpServer;
-use kanban_domain::KanbanOperations;
+use kanban_domain::{KanbanOperations, UndoOperations};
 use kanban_service::api::BoardResponse;
 use rmcp::{
     handler::server::wrapper::Parameters,

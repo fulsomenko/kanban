@@ -1,4 +1,4 @@
-use kanban_domain::KanbanOperations;
+use kanban_domain::{KanbanOperations, UndoOperations};
 use kanban_service::{AppConfig, KanbanContext, StoreManager};
 use kanban_tui::tui_context::TuiContext;
 use tempfile::TempDir;

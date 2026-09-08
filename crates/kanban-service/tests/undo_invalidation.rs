@@ -1,5 +1,7 @@
 use kanban_backend_memory::InMemoryStore;
-use kanban_domain::{CardUpdate, EntityIds, Invalidation, KanbanOperations, KanbanResult};
+use kanban_domain::{
+    CardUpdate, EntityIds, Invalidation, KanbanOperations, KanbanResult, UndoOperations,
+};
 use kanban_service::KanbanContext;
 use std::collections::HashSet;
 use std::sync::Arc;

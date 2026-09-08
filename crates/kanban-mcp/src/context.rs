@@ -4,7 +4,7 @@ use kanban_domain::{
     ArchivedCard, Board, BoardListFilter, BoardSortField, BoardUpdate, Card, CardListFilter,
     CardSummary, CardUpdate, Column, ColumnUpdate, CreateCardOptions, GraphOperations,
     Invalidation, KanbanOperations, MutationOperations, SortOrder, Sprint, SprintUpdate,
-    DEFAULT_BOARD_SORT_LIVE,
+    UndoOperations, DEFAULT_BOARD_SORT_LIVE,
 };
 use kanban_service::{AppType, KanbanContext, StoreManager};
 use std::str::FromStr;
@@ -100,22 +100,6 @@ impl McpContext {
 
     pub fn clear_history(&mut self) -> KanbanResult<()> {
         self.inner.clear_history()
-    }
-
-    pub fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
-        self.inner.undo()
-    }
-
-    pub fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
-        self.inner.redo()
-    }
-
-    pub fn can_undo(&self) -> bool {
-        self.inner.can_undo()
-    }
-
-    pub fn can_redo(&self) -> bool {
-        self.inner.can_redo()
     }
 
     pub async fn save(&self) -> KanbanResult<()> {
@@ -474,6 +458,24 @@ impl GraphOperations for McpContext {
     }
     fn list_related_to(&self, card: Uuid) -> KanbanResult<Vec<Uuid>> {
         self.inner.list_related_to(card)
+    }
+}
+
+impl UndoOperations for McpContext {
+    fn undo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        self.inner.undo()
+    }
+
+    fn redo(&mut self) -> KanbanResult<Option<Invalidation>> {
+        self.inner.redo()
+    }
+
+    fn can_undo(&self) -> bool {
+        self.inner.can_undo()
+    }
+
+    fn can_redo(&self) -> bool {
+        self.inner.can_redo()
     }
 }
 
