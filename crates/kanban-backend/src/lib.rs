@@ -42,6 +42,14 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         Ok(())
     }
 
+    /// Forces one cheap I/O so a broken backend fails at construction
+    /// instead of on first use. The default reads the command log, which
+    /// every local backend loads lazily; a remote backend overrides this
+    /// with a network liveness check.
+    async fn probe(&self) -> KanbanResult<()> {
+        self.batch_count().map(|_| ())
+    }
+
     /// Marks the backend dirty without performing a write, so a subsequent
     /// `flush()` (or `needs_save_worker()`-driven background flush) picks it
     /// up. No-op by default for write-through backends that have no dirty
