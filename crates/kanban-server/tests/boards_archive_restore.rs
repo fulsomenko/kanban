@@ -9,7 +9,6 @@ use kanban_domain::{FieldUpdate, GraphOperations, Severity};
 use kanban_server::state::AppState;
 use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::{ColumnUpdate, KanbanOperations};
-use serde_json::Value;
 use tempfile::tempdir;
 use uuid::Uuid;
 
@@ -38,7 +37,9 @@ async fn archive_returns_200_with_archived_at_stamped_case(state: AppState) {
     let list_json = json_of(list_response).await;
     let items = list_json["items"].as_array().unwrap();
     assert!(
-        items.iter().all(|b| b["id"] != Value::from(board_id.to_string())),
+        items
+            .iter()
+            .all(|b| b["id"] != board_id.to_string()),
         "archived board must not appear in the live list"
     );
 
@@ -90,20 +91,10 @@ async fn seed_nontrivial_graph(state: &AppState) -> SeededGraph {
     )
     .unwrap();
     let card1 = ctx
-        .create_card(
-            board_id,
-            col1.id,
-            "Card 1".to_string(),
-            Default::default(),
-        )
+        .create_card(board_id, col1.id, "Card 1".to_string(), Default::default())
         .unwrap();
     let card2 = ctx
-        .create_card(
-            board_id,
-            col2.id,
-            "Card 2".to_string(),
-            Default::default(),
-        )
+        .create_card(board_id, col2.id, "Card 2".to_string(), Default::default())
         .unwrap();
     let sprint_id = ctx
         .create_sprint(board_id, Some("SPR".to_string()), Some("Alpha".to_string()))
@@ -145,16 +136,8 @@ async fn archive_board_keeps_subtree_reachable_case(state: AppState) {
     .await;
     assert_eq!(columns_json["items"].as_array().unwrap().len(), 2);
 
-    let cards_json = json_of(
-        send(
-            &state,
-            "GET",
-            &format!("/v1/boards/{board_id}/cards"),
-            None,
-        )
-        .await,
-    )
-    .await;
+    let cards_json =
+        json_of(send(&state, "GET", &format!("/v1/boards/{board_id}/cards"), None).await).await;
     assert_eq!(cards_json["items"].as_array().unwrap().len(), 2);
 
     let sprints_json = json_of(
@@ -179,7 +162,16 @@ async fn archive_board_keeps_subtree_reachable_case(state: AppState) {
         .await,
     )
     .await;
-    assert!(graph_json["cards"].as_array().unwrap().len() >= 2);
+    assert_eq!(
+        graph_json["children"].as_array().unwrap().len(),
+        1,
+        "the spawns edge must survive the board archive"
+    );
+    assert_eq!(
+        graph_json["blocks"].as_array().unwrap().len(),
+        1,
+        "the blocks edge must survive the board archive"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -210,16 +202,8 @@ async fn restore_board_returns_the_full_subtree_over_the_wire_case(state: AppSta
         .await,
     )
     .await;
-    let cards_before = json_of(
-        send(
-            &state,
-            "GET",
-            &format!("/v1/boards/{board_id}/cards"),
-            None,
-        )
-        .await,
-    )
-    .await;
+    let cards_before =
+        json_of(send(&state, "GET", &format!("/v1/boards/{board_id}/cards"), None).await).await;
     let sprints_before = json_of(
         send(
             &state,
@@ -274,16 +258,8 @@ async fn restore_board_returns_the_full_subtree_over_the_wire_case(state: AppSta
         .await,
     )
     .await;
-    let cards_after = json_of(
-        send(
-            &state,
-            "GET",
-            &format!("/v1/boards/{board_id}/cards"),
-            None,
-        )
-        .await,
-    )
-    .await;
+    let cards_after =
+        json_of(send(&state, "GET", &format!("/v1/boards/{board_id}/cards"), None).await).await;
     let sprints_after = json_of(
         send(
             &state,
@@ -479,12 +455,13 @@ async fn list_archived_boards_route_reflects_archive_and_restore_case(state: App
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["entity_id"], board_id.to_string());
     assert!(items[0]["archived_at"].is_string());
-    let keys: std::collections::BTreeSet<&str> =
-        items[0].as_object().unwrap().keys().map(|s| s.as_str()).collect();
-    assert_eq!(
-        keys,
-        ["entity_id", "archived_at"].into_iter().collect()
-    );
+    let keys: std::collections::BTreeSet<&str> = items[0]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|s| s.as_str())
+        .collect();
+    assert_eq!(keys, ["entity_id", "archived_at"].into_iter().collect());
 
     send(
         &state,
@@ -596,7 +573,7 @@ async fn archive_is_visible_to_subsequent_reads_case(state: AppState) {
     let before_items = before["items"].as_array().unwrap();
     assert!(before_items
         .iter()
-        .any(|b| b["id"] == Value::from(board_id.to_string())));
+        .any(|b| b["id"] == board_id.to_string()));
 
     let archive_response = send(
         &state,
@@ -611,7 +588,7 @@ async fn archive_is_visible_to_subsequent_reads_case(state: AppState) {
     let after_items = after["items"].as_array().unwrap();
     assert!(after_items
         .iter()
-        .all(|b| b["id"] != Value::from(board_id.to_string())));
+        .all(|b| b["id"] != board_id.to_string()));
 }
 
 #[tokio::test(flavor = "multi_thread")]
