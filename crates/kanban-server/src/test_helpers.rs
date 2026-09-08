@@ -78,13 +78,25 @@ impl TestServer {
     /// are valid the moment start() returns -- no race with a test hitting
     /// the port before bind completes).
     pub async fn start() -> Self {
-        Self::start_with(|_| {}).await
+        Self::start_full(|_| {}, crate::layers::LayerConfig::default()).await
     }
 
     /// Like [`Self::start`], but runs `seed` against the fresh `KanbanContext`
     /// before the router starts serving, so a test can put the context in a
     /// state (e.g. an archived card) that no HTTP write route can reach.
     pub async fn start_with(seed: impl FnOnce(&mut KanbanContext)) -> Self {
+        Self::start_full(seed, crate::layers::LayerConfig::default()).await
+    }
+
+    /// Like [`Self::start`], but with an explicit [`crate::layers::LayerConfig`].
+    pub async fn start_with_layers(config: crate::layers::LayerConfig) -> Self {
+        Self::start_full(|_| {}, config).await
+    }
+
+    async fn start_full(
+        seed: impl FnOnce(&mut KanbanContext),
+        config: crate::layers::LayerConfig,
+    ) -> Self {
         let backend: Arc<dyn KanbanBackend> = Arc::new(InMemoryStore::new());
         let mut ctx = KanbanContext::open(backend, AppConfig::default())
             .await
@@ -96,7 +108,7 @@ impl TestServer {
         let addr = listener.local_addr().unwrap();
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        let router = app::router(state);
+        let router = app::router_with(state, config);
         let handle = tokio::spawn(async move {
             axum::serve(listener, router)
                 .with_graceful_shutdown(async {

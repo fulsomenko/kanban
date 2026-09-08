@@ -1,10 +1,12 @@
 use crate::layers::LayerConfig;
 use crate::state::AppState;
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
 #[derive(Serialize)]
@@ -29,8 +31,8 @@ pub fn router(state: AppState) -> Router {
 /// Like [`router`], but with an explicit [`LayerConfig`].
 ///
 /// `.layer()` wraps outside-in on the LAST call, so calling body-limit then
-/// cors then trace here makes Trace the outermost layer and BodyLimit the
-/// innermost.
+/// timeout then cors then trace here makes Trace the outermost layer and
+/// BodyLimit the innermost.
 pub fn router_with(state: AppState, config: LayerConfig) -> Router {
     let router = Router::new()
         .route("/health", get(health))
@@ -55,6 +57,12 @@ pub fn router_with(state: AppState, config: LayerConfig) -> Router {
         .merge(crate::routes::events::router());
 
     let mut router = router.layer(RequestBodyLimitLayer::new(config.body_limit_bytes));
+    if let Some(timeout) = config.timeout {
+        router = router.layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            timeout,
+        ));
+    }
     if let Some(cors) = config.cors.into_layer() {
         router = router.layer(cors);
     }

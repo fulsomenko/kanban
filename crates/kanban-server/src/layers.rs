@@ -1,4 +1,5 @@
 use axum::http::{header, HeaderName, HeaderValue, Method};
+use std::time::Duration;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 /// Cross-origin policy for browser clients. `Disabled` sends no CORS headers
@@ -68,11 +69,14 @@ impl CorsPolicy {
 }
 
 pub const DEFAULT_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
+pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Debug, Clone)]
 pub struct LayerConfig {
     pub body_limit_bytes: usize,
     pub cors: CorsPolicy,
+    /// `None` applies no timeout layer at all.
+    pub timeout: Option<Duration>,
 }
 
 impl Default for LayerConfig {
@@ -80,7 +84,18 @@ impl Default for LayerConfig {
         Self {
             body_limit_bytes: DEFAULT_BODY_LIMIT_BYTES,
             cors: CorsPolicy::Disabled,
+            timeout: Some(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
         }
+    }
+}
+
+/// Parses `KANBAN_REQUEST_TIMEOUT_SECS`. `0` disables the timeout; an unset
+/// or unparseable value falls back to [`DEFAULT_REQUEST_TIMEOUT_SECS`].
+pub fn parse_request_timeout(raw: Option<&str>) -> Option<Duration> {
+    match raw.and_then(|v| v.parse::<u64>().ok()) {
+        Some(0) => None,
+        Some(secs) => Some(Duration::from_secs(secs)),
+        None => Some(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
     }
 }
 
@@ -88,6 +103,9 @@ impl LayerConfig {
     pub fn from_env() -> Self {
         Self {
             cors: CorsPolicy::parse(std::env::var("KANBAN_CORS_ORIGINS").ok().as_deref()),
+            timeout: parse_request_timeout(
+                std::env::var("KANBAN_REQUEST_TIMEOUT_SECS").ok().as_deref(),
+            ),
             ..Self::default()
         }
     }
