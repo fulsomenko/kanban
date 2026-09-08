@@ -1,4 +1,6 @@
-use kanban_domain::{CreateCardOptions, KanbanOperations, Model, MutationOperations, NoProjections};
+use kanban_domain::{
+    CreateCardOptions, KanbanOperations, Model, MutationOperations, NoProjections,
+};
 use kanban_service::{
     fetch_plan::{requestable, FetchPlan, FetchRound, LoadedEntities},
     AppConfig, KanbanContext, StoreManager,
