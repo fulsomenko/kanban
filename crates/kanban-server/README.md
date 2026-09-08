@@ -48,9 +48,12 @@ On startup the server opens (or creates) the board file, binds the configured ad
 | `KANBAN_FILE` | `kanban.json` (in the working directory) | Storage locator, resolved through the same backend registry as the CLI/TUI/MCP server — a `.json` path uses the JSON backend, a `.sqlite`/`.db` path (or existing SQLite file) uses the SQLite backend. |
 | `KANBAN_ADDR` | `127.0.0.1:0` (ephemeral loopback) | Address the HTTP server binds, as `host:port` where host is an IP literal (`127.0.0.1`, `0.0.0.0`, `[::1]`); hostnames such as `localhost` are not resolved. Resolved with the same layered precedence as `KANBAN_FILE`: the `--addr` flag wins, then `KANBAN_ADDR`, then the `server_addr` key in the config file, then the default. Set `0.0.0.0:<port>` to accept non-loopback connections (e.g. behind a reverse proxy). |
 | `KANBAN_SHUTDOWN_GRACE_SECS` | `10` | Seconds to wait after a shutdown signal for in-flight responses to complete before remaining connections are closed. Open SSE streams never end on their own, so this is what bounds shutdown. An unparseable value falls back to the default. |
-| `RUST_LOG` | unset (⇒ `error` only) | Standard `tracing-subscriber` env filter. Set to `info` to see the startup log line; there is no per-request access logging. |
+| `RUST_LOG` | unset (⇒ `error` only) | Standard `tracing-subscriber` env filter. Set to `info` to see the startup log line. Per-request access logging comes from tower-http's TraceLayer; set `tower_http=debug` (or `debug`) to see one span per request with method, path, status and latency. |
+| `KANBAN_CORS_ORIGINS` | unset (no CORS layer, same-origin only) | Comma-separated list of allowed browser origins. Unset means no CORS headers are sent at all. A single `*` allows any origin and is intended for local development only. A list allows exactly those origins with the GET/POST/PUT/PATCH/DELETE methods and the content-type and x-kanban-client-id request headers. |
 
 The bind address can also be set with the `--addr` flag or the `server_addr` key in the kanban config file (`~/.config/kanban/config.toml`); the resolution order is `--addr` > `KANBAN_ADDR` > `server_addr` > the `127.0.0.1:0` default.
+
+Request bodies are capped at 2 MiB by default. A request over the cap is rejected with 413 Payload Too Large before it reaches the handler.
 
 ### Example
 
