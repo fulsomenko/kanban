@@ -26,6 +26,7 @@ pub mod routes {
     pub mod graph;
     pub mod prefixes;
     pub mod sprints;
+    pub mod sprints_lifecycle;
 }
 
 pub mod handlers {

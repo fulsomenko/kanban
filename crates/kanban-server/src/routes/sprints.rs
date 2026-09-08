@@ -94,7 +94,7 @@ fn do_delete_sprint(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), App
         .map_err(|e| AppError::from(&e))
 }
 
-fn require_sprint_in_board(
+pub(crate) fn require_sprint_in_board(
     ctx: &crate::state::Session,
     board_id: Uuid,
     id: Uuid,
@@ -106,7 +106,10 @@ fn require_sprint_in_board(
     Ok(())
 }
 
-fn respond(ctx: &crate::state::Session, sprint: &Sprint) -> Result<SprintResponse, AppError> {
+pub(crate) fn respond(
+    ctx: &crate::state::Session,
+    sprint: &Sprint,
+) -> Result<SprintResponse, AppError> {
     let name = resolve_sprint_name(ctx, sprint).map_err(|e| AppError::from(&e))?;
     Ok(SprintResponse::new(sprint, name))
 }
