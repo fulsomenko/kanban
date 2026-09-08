@@ -16,6 +16,7 @@ pub mod commands;
 pub mod completion_derivation;
 pub mod controller;
 pub mod counter_derivation;
+pub mod create_outcome;
 pub mod data_store;
 pub mod dependencies;
 pub mod editable;
@@ -26,6 +27,7 @@ pub mod graph_operations;
 pub mod invalidation;
 pub mod load_state;
 pub mod model;
+pub mod mutation_operations;
 pub mod operations;
 pub mod prefix;
 pub mod prefix_backfill;
@@ -62,6 +64,9 @@ pub use column_factory::{ColumnRecord, NewColumn};
 pub use counter_derivation::{
     counters_implied_by, merge_counter_rows, namespaces_addressed_by, stamp_card_prefix,
 };
+pub use create_outcome::{
+    BoardCreateOutcome, CardCreateOutcome, ColumnCreateOutcome, SprintCreateOutcome,
+};
 pub use dependencies::{
     BlocksEdge, CardEdgeType, DependencyGraph, RelatesEdge, RelatesKind, Severity, SpawnsEdge,
 };
@@ -75,6 +80,7 @@ pub use load_state::LoadState;
 #[cfg(any(test, feature = "test-helpers"))]
 pub use model::ModelLoadStates;
 pub use model::{DerivedProjections, Model, ModelChanged, NoProjections};
+pub use mutation_operations::MutationOperations;
 pub use operations::KanbanOperations;
 pub use prefix::{
     allocate_card_number, allocate_sprint_number, effective_card_prefix, effective_prefixes,
