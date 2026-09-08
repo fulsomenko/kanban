@@ -32,7 +32,9 @@ fn board_spec(name: &str) -> NewBoard {
 #[tokio::test]
 async fn test_mutation_operations_delegates_to_the_inherent_mutators() {
     let mut ctx = make_ctx().await;
-    let (board, _inv) = ctx.create_board_from_spec(None, board_spec("Alpha")).unwrap();
+    let (board, _inv) = ctx
+        .create_board_from_spec(None, board_spec("Alpha"))
+        .unwrap();
 
     let updates = BoardUpdate {
         name: Some("Renamed".into()),
@@ -62,17 +64,17 @@ async fn test_mutation_operations_delegates_to_the_inherent_mutators() {
     );
 
     let unit_inv = MutationOperations::delete_board_impl(&mut ctx, board.id).unwrap();
-    assert_eq!(unit_inv, Invalidation::Entities(EntityIds::boards([board.id])));
+    assert_eq!(
+        unit_inv,
+        Invalidation::Entities(EntityIds::boards([board.id]).with_prefixes())
+    );
     assert!(ctx.get_board(board.id).unwrap().is_none());
 
     let fresh_id = Uuid::new_v4();
     let (outcome1, _inv) =
         MutationOperations::create_or_replace_board(&mut ctx, fresh_id, board_spec("Beta"))
             .unwrap();
-    assert!(matches!(
-        outcome1,
-        BoardCreateOutcome { created: true, .. }
-    ));
+    assert!(matches!(outcome1, BoardCreateOutcome { created: true, .. }));
 
     let (outcome2, _inv) =
         MutationOperations::create_or_replace_board(&mut ctx, fresh_id, board_spec("Beta v2"))
@@ -86,7 +88,9 @@ async fn test_mutation_operations_delegates_to_the_inherent_mutators() {
 #[tokio::test]
 async fn test_mutation_operations_trait_object_reaches_the_store() {
     let mut ctx = make_ctx().await;
-    let (board, _inv) = ctx.create_board_from_spec(None, board_spec("Gamma")).unwrap();
+    let (board, _inv) = ctx
+        .create_board_from_spec(None, board_spec("Gamma"))
+        .unwrap();
 
     let ops: &mut dyn MutationOperations = &mut ctx;
     let (column, _inv) = ops
@@ -108,7 +112,7 @@ async fn test_mutation_operations_trait_object_reaches_the_store() {
             kanban_domain::CreateCardOptions::default(),
         )
         .unwrap();
-    ops.attach_children_impl(parent.id, vec![child.id]).unwrap();
+    let _ = ops.attach_children_impl(parent.id, vec![child.id]).unwrap();
 
     assert!(ctx.get_column(column.id).unwrap().is_some());
     let relations = ctx.list_relations_for_board(board.id).unwrap();

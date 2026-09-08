@@ -2,19 +2,10 @@ use super::KanbanContext;
 use chrono::Utc;
 use kanban_domain::commands::{BoardCommand, ColumnCommand, Command, ImportEntities};
 use kanban_domain::{
-    Column, ColumnUpdate, FieldUpdate, Invalidation, KanbanError, KanbanResult, NewColumn,
+    Column, ColumnCreateOutcome, ColumnUpdate, FieldUpdate, Invalidation, KanbanError,
+    KanbanResult, NewColumn,
 };
 use uuid::Uuid;
-
-/// Result of an idempotent PUT-create ([`KanbanContext::create_or_replace_column`]):
-/// the resulting column plus whether this call created it (`true`, HTTP 201) or
-/// replaced an existing one (`false`, HTTP 200). The HTTP binding lives in the
-/// server seam; the service tier only reports which arm ran.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ColumnCreateOutcome {
-    pub column: Column,
-    pub created: bool,
-}
 
 impl KanbanContext {
     /// Create a column from a full `NewColumn` spec plus an optional

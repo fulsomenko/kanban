@@ -1,21 +1,11 @@
 use super::KanbanContext;
 use kanban_domain::commands::{CardCommand, Command};
 use kanban_domain::{
-    ArchivedCard, ArchivedEntity, Card, CardListFilter, CardSummary, CardUpdate, Column,
-    CreateCardOptions, DomainError, FieldUpdate, Invalidation, KanbanError, KanbanResult, NewCard,
-    Sprint,
+    ArchivedCard, ArchivedEntity, Card, CardCreateOutcome, CardListFilter, CardSummary, CardUpdate,
+    Column, CreateCardOptions, DomainError, FieldUpdate, Invalidation, KanbanError, KanbanResult,
+    NewCard, Sprint,
 };
 use uuid::Uuid;
-
-/// Result of an idempotent PUT-create ([`KanbanContext::create_or_replace_card`]):
-/// the resulting card plus whether this call created it (`true`, HTTP 201) or
-/// replaced an existing one (`false`, HTTP 200). The HTTP binding lives in the
-/// server seam; the service tier only reports which arm ran.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CardCreateOutcome {
-    pub card: Card,
-    pub created: bool,
-}
 
 impl KanbanContext {
     /// The archival marker's `archived_at` for a card, or `None` if the card is
