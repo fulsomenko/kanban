@@ -9,7 +9,7 @@ use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use kanban_domain::{
-    filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, Model, NoProjections,
+    filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, Model, NoProjections, Sprint,
 };
 use kanban_service::api::ArchivedCardResponse;
 use kanban_service::api::ArchivedFilterDto;
@@ -17,17 +17,62 @@ use kanban_service::api::CardResponse;
 use kanban_service::api::{
     ChangeKind, CreateCardRequest, EntityType, Page, PageParams, UpdateCardRequest,
 };
+use kanban_service::api::{CardStatusDto, SortFieldDto, SortOrderDto};
 use kanban_service::{CardUpdate, KanbanError, KanbanOperations};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
+/// Comma-separated UUID list; blank segments are skipped, an all-blank value
+/// yields `None`.
+fn uuid_csv<'de, D>(deserializer: D) -> Result<Option<HashSet<Uuid>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = String::deserialize(deserializer)?;
+    let mut ids = HashSet::new();
+    for part in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        ids.insert(Uuid::parse_str(part).map_err(serde::de::Error::custom)?);
+    }
+    Ok(if ids.is_empty() { None } else { Some(ids) })
+}
+
+#[derive(Debug, Default, Deserialize)]
 pub struct CardQuery {
     pub column_id: Option<Uuid>,
     pub sprint_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "uuid_csv")]
+    pub sprint_ids: Option<HashSet<Uuid>>,
+    #[serde(default)]
+    pub hide_assigned: bool,
+    pub status: Option<CardStatusDto>,
+    pub search: Option<String>,
+    pub sort: Option<SortFieldDto>,
+    pub sort_order: Option<SortOrderDto>,
     #[serde(default)]
     pub archived: ArchivedFilterDto,
+}
+
+fn card_query_filter(q: &CardQuery, board_id: Uuid, archived: ArchivedFilter) -> CardListFilter {
+    let mut sprint_ids = q.sprint_ids.clone();
+    if let Some(sprint_id) = q.sprint_id {
+        sprint_ids.get_or_insert_with(HashSet::new).insert(sprint_id);
+    }
+    CardListFilter {
+        board_id: if archived == ArchivedFilter::LiveOnly {
+            Some(board_id)
+        } else {
+            None
+        },
+        column_id: q.column_id,
+        sprint_ids,
+        hide_assigned: q.hide_assigned,
+        status: q.status.map(Into::into),
+        search: q.search.clone(),
+        sort: q.sort.map(Into::into),
+        sort_order: q.sort_order.map(Into::into),
+        archived,
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,10 +97,12 @@ async fn list_cards(
     Query(params): Query<PageParams>,
 ) -> Result<Json<Page<CardResponse>>, AppError> {
     let archived: ArchivedFilter = q.archived.into();
+    let searching = q.search.as_deref().is_some_and(|s| !s.is_empty());
     let scope = RouteScope::BoardCards {
         board_id,
         column_id: q.column_id,
         archived,
+        search: searching,
     };
 
     let guard = state.lock_session().await;
@@ -98,18 +145,13 @@ async fn list_cards(
         }
     }
 
-    let filter = CardListFilter {
-        board_id: if archived == ArchivedFilter::LiveOnly {
-            Some(board_id)
-        } else {
-            None
-        },
-        column_id: q.column_id,
-        sprint_ids: q.sprint_id.map(|id| HashSet::from([id])),
-        archived,
-        ..Default::default()
+    let filter = card_query_filter(&q, board_id, archived);
+    let sprints: &[Sprint] = if searching {
+        require_loaded(model.board_sprints_state(board_id), "sprints of board")?
+    } else {
+        &[]
     };
-    let filtered = filter_and_sort_cards(&cards, columns, &[], Some(board), &[], &filter);
+    let filtered = filter_and_sort_cards(&cards, columns, sprints, Some(board), &[], &filter);
     let responses: Vec<CardResponse> = filtered
         .iter()
         .map(|c| CardResponse::with_archived_at(c, archived_at.get(&c.id).copied()))

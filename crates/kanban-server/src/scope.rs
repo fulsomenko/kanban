@@ -18,6 +18,9 @@ pub enum RouteScope {
         board_id: Uuid,
         column_id: Option<Uuid>,
         archived: ArchivedFilter,
+        /// Plans the board's sprint tier, which the search predicate reads
+        /// to match a card's branch name.
+        search: bool,
     },
     BoardArchivedCards(Uuid),
     BoardSprints(Uuid),
@@ -63,6 +66,7 @@ impl FetchPlan for RouteScope {
                 board_id,
                 column_id,
                 archived,
+                search,
             } => {
                 want_board(&mut round, loaded, board_id);
                 if requestable(loaded.columns_of_board(board_id)) {
@@ -95,6 +99,9 @@ impl FetchPlan for RouteScope {
                             }
                         }
                     }
+                }
+                if search && requestable(loaded.sprints_of_board(board_id)) {
+                    round.sprints_by_board.push(board_id);
                 }
             }
             RouteScope::BoardArchivedCards(board_id) => {
@@ -217,6 +224,7 @@ mod tests {
             board_id,
             column_id: None,
             archived: ArchivedFilter::LiveOnly,
+            search: false,
         }
         .next_round(&Model::default());
 
@@ -257,6 +265,7 @@ mod tests {
             board_id,
             column_id: None,
             archived: ArchivedFilter::LiveOnly,
+            search: false,
         };
         let round2 = scope.next_round(&model);
         assert_eq!(
@@ -288,6 +297,7 @@ mod tests {
             board_id,
             column_id: Some(column_id),
             archived: ArchivedFilter::LiveOnly,
+            search: false,
         }
         .next_round(&Model::default());
 
@@ -303,6 +313,7 @@ mod tests {
             board_id,
             column_id: None,
             archived: ArchivedFilter::LiveOnly,
+            search: false,
         }
         .next_round(&Model::default());
 
@@ -332,6 +343,7 @@ mod tests {
             board_id,
             column_id: None,
             archived: ArchivedFilter::Include,
+            search: false,
         };
 
         let round1 = scope.next_round(&Model::default());
@@ -387,12 +399,14 @@ mod tests {
             board_id,
             column_id: None,
             archived: ArchivedFilter::Include,
+            search: false,
         }
         .next_round(&Model::default());
         let archived_only_round = RouteScope::BoardCards {
             board_id,
             column_id: None,
             archived: ArchivedFilter::ArchivedOnly,
+            search: false,
         }
         .next_round(&Model::default());
 
