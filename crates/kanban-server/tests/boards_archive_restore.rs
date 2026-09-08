@@ -37,9 +37,7 @@ async fn archive_returns_200_with_archived_at_stamped_case(state: AppState) {
     let list_json = json_of(list_response).await;
     let items = list_json["items"].as_array().unwrap();
     assert!(
-        items
-            .iter()
-            .all(|b| b["id"] != board_id.to_string()),
+        items.iter().all(|b| b["id"] != board_id.to_string()),
         "archived board must not appear in the live list"
     );
 
@@ -571,9 +569,7 @@ async fn archive_is_visible_to_subsequent_reads_case(state: AppState) {
 
     let before = json_of(send(&state, "GET", "/v1/boards", None).await).await;
     let before_items = before["items"].as_array().unwrap();
-    assert!(before_items
-        .iter()
-        .any(|b| b["id"] == board_id.to_string()));
+    assert!(before_items.iter().any(|b| b["id"] == board_id.to_string()));
 
     let archive_response = send(
         &state,
@@ -586,9 +582,7 @@ async fn archive_is_visible_to_subsequent_reads_case(state: AppState) {
 
     let after = json_of(send(&state, "GET", "/v1/boards", None).await).await;
     let after_items = after["items"].as_array().unwrap();
-    assert!(after_items
-        .iter()
-        .all(|b| b["id"] != board_id.to_string()));
+    assert!(after_items.iter().all(|b| b["id"] != board_id.to_string()));
 }
 
 #[tokio::test(flavor = "multi_thread")]
