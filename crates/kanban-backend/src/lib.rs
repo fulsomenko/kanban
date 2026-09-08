@@ -344,7 +344,10 @@ mod tests {
 
         let result = b.probe().await;
 
-        assert!(result.is_ok(), "expected probe() to succeed, got: {result:?}");
+        assert!(
+            result.is_ok(),
+            "expected probe() to succeed, got: {result:?}"
+        );
         assert_eq!(
             backend
                 .batch_count_calls

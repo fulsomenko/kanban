@@ -7,8 +7,7 @@ use std::sync::Arc;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_open_over_http_backend_against_live_server_succeeds() {
     let server = TestServer::start().await;
-    let backend: Arc<dyn KanbanBackend> =
-        Arc::new(HttpBackend::new(&server.base_url()).unwrap());
+    let backend: Arc<dyn KanbanBackend> = Arc::new(HttpBackend::new(&server.base_url()).unwrap());
 
     let result = KanbanContext::open(Arc::clone(&backend), AppConfig::default()).await;
 
@@ -29,8 +28,7 @@ async fn test_open_over_http_backend_against_live_server_succeeds() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_open_over_http_backend_against_dead_server_fails_with_transport_error() {
-    let backend: Arc<dyn KanbanBackend> =
-        Arc::new(HttpBackend::new("http://127.0.0.1:1").unwrap());
+    let backend: Arc<dyn KanbanBackend> = Arc::new(HttpBackend::new("http://127.0.0.1:1").unwrap());
 
     let result = KanbanContext::open(Arc::clone(&backend), AppConfig::default()).await;
 
