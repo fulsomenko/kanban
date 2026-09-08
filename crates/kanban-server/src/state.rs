@@ -157,21 +157,25 @@ mod tests {
     async fn test_mutate_seam_accepts_a_mutation_operations_closure() {
         let (mut session, board_id) = seeded_ctx().await;
 
-        let (board, _inv) = mutate(&mut session, |c: &mut dyn kanban_domain::MutationOperations| {
-            c.update_board_impl(
-                board_id,
-                BoardUpdate {
-                    name: Some("Renamed".into()),
-                    ..Default::default()
-                },
-            )
-        })
+        let (board, _inv) = mutate(
+            &mut session,
+            |c: &mut dyn kanban_domain::MutationOperations| {
+                c.update_board_impl(
+                    board_id,
+                    BoardUpdate {
+                        name: Some("Renamed".into()),
+                        ..Default::default()
+                    },
+                )
+            },
+        )
         .unwrap();
         assert_eq!(board.name, "Renamed");
 
-        let _inv = mutate_unit(&mut session, |c: &mut dyn kanban_domain::MutationOperations| {
-            c.delete_board_impl(board_id)
-        })
+        let _inv = mutate_unit(
+            &mut session,
+            |c: &mut dyn kanban_domain::MutationOperations| c.delete_board_impl(board_id),
+        )
         .unwrap();
     }
 
