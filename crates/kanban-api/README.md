@@ -16,14 +16,15 @@ Re-exported from `src/lib.rs` (`pub use v1::{ ... }`):
 
 ```rust
 pub use v1::{
-    ActivateSprintRequest, ApiError, ArchivedFilterDto, BoardResponse, CardGraphResponse,
-    CardPriorityDto, CardResponse, CardStatusDto, CarryOverRequest, CarryOverResponse,
-    ChangeEventFrame, ChangeKind, ColumnResponse, CreateBoardRequest, CreateCardRequest,
-    CreateColumnRequest, CreateSprintParts, CreateSprintRequest, EntityType, ErrorCode, Page,
-    PageParams, Patch, PrefixResponse, ReorderColumnRequest, ReplaceBoardRequest,
-    ReplaceCardRequest, ReplaceColumnRequest, ReplaceSprintRequest, SortFieldDto, SortOrderDto,
-    SprintResponse, SprintStatusDto, TaskListViewDto, UpdateBoardRequest, UpdateCardRequest,
-    UpdateColumnRequest, UpdateSprintRequest,
+    ActivateSprintRequest, AddBlockRequest, AddRelatedRequest, ApiError, ArchivedFilterDto,
+    AttachChildrenRequest, BlockEdgeDto, BoardResponse, CardGraphResponse, CardPriorityDto,
+    CardResponse, CardStatusDto, CarryOverRequest, CarryOverResponse, ChangeEventFrame,
+    ChangeKind, ColumnResponse, CreateBoardRequest, CreateCardRequest, CreateColumnRequest,
+    CreateSprintParts, CreateSprintRequest, EntityType, ErrorCode, Page, PageParams, Patch,
+    PrefixResponse, RelatedEdgeDto, RelatesKindDto, ReorderColumnRequest, ReplaceBoardRequest,
+    ReplaceCardRequest, ReplaceColumnRequest, ReplaceSprintRequest, SeverityDto, SortFieldDto,
+    SortOrderDto, SprintResponse, SprintStatusDto, TaskListViewDto, UpdateBoardRequest,
+    UpdateCardRequest, UpdateColumnRequest, UpdateSprintRequest,
 };
 ```
 

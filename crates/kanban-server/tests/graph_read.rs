@@ -168,6 +168,8 @@ async fn test_get_card_graph_existing_card_with_no_edges_returns_200_empty_array
             "blocked_by": [],
             "blocks": [],
             "related": [],
+            "block_edges": [],
+            "related_edges": [],
         })
     );
 }

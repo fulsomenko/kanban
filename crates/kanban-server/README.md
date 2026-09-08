@@ -205,7 +205,13 @@ The remaining card routes (get/create/replace/update/delete, and the flat `/v1/c
 
 | Method | Path | Description | Body |
 |---|---|---|---|
-| `GET` | `/v1/cards/{id}/graph` | The card's dependency edges, scoped to that card: parents/children (spawns), blocked_by/blocks and related. Only active edges; archived edges are omitted. 404s if the card does not exist, rather than returning empty arrays. | — |
+| `GET` | `/v1/cards/{id}/graph` | The card's dependency edges, scoped to that card: parents/children (spawns), blocked_by/blocks and related, plus `block_edges`/`related_edges` carrying each edge's severity/kind. Only active edges; archived edges are omitted. 404s if the card does not exist, rather than returning empty arrays. | — |
+| `POST` | `/v1/cards/{id}/children` | Attach cards as spawned children of `id`. `200` with the updated `CardGraphResponse`. 404 if `id` or any child is unknown; 409 `CYCLE_DETECTED` if the edge would create a cycle. | `{"children": [uuid, ...]}` |
+| `DELETE` | `/v1/cards/{id}/children/{child_id}` | Detach `child_id` as a spawned child of `id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
+| `POST` | `/v1/cards/{id}/blocks` | Add a blocking edge from `id` to `blocked`. `200` with the updated `CardGraphResponse`. `severity` defaults to `medium`. 422 `SELF_REFERENCE` if `blocked == id`; 409 `DUPLICATE_EDGE` if the edge already exists. | `{"blocked": uuid, "severity"?: "low"\|"medium"\|"high"\|"critical"}` |
+| `DELETE` | `/v1/cards/{id}/blocks/{blocked_id}` | Remove the blocking edge from `id` to `blocked_id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
+| `POST` | `/v1/cards/{id}/related` | Add an undirected relates edge between `id` and `other`. `200` with the updated `CardGraphResponse`. `kind` defaults to `general`. 409 `DUPLICATE_EDGE` if the edge already exists. | `{"other": uuid, "kind"?: "general"\|"duplicates"\|"mentioned_in"}` |
+| `DELETE` | `/v1/cards/{id}/related/{other_id}` | Remove the relates edge between `id` and `other_id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
 
 ### Events
 

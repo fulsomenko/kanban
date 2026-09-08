@@ -5,13 +5,14 @@
 //! callers into an explicit version path.
 mod v1;
 pub use v1::{
-    ActivateSprintRequest, ApiError, ArchivedBoardResponse, ArchivedCardResponse,
-    ArchivedFilterDto, BoardResponse, CardGraphResponse, CardPriorityDto, CardResponse,
-    CardStatusDto, CarryOverRequest, CarryOverResponse, ChangeEventFrame, ChangeKind,
-    ColumnResponse, CreateBoardRequest, CreateCardRequest, CreateColumnRequest, CreateSprintParts,
-    CreateSprintRequest, EntityType, ErrorCode, Page, PageParams, Patch, PrefixResponse,
+    ActivateSprintRequest, AddBlockRequest, AddRelatedRequest, ApiError, ArchivedBoardResponse,
+    ArchivedCardResponse, ArchivedFilterDto, AttachChildrenRequest, BlockEdgeDto, BoardResponse,
+    CardGraphResponse, CardPriorityDto, CardResponse, CardStatusDto, CarryOverRequest,
+    CarryOverResponse, ChangeEventFrame, ChangeKind, ColumnResponse, CreateBoardRequest,
+    CreateCardRequest, CreateColumnRequest, CreateSprintParts, CreateSprintRequest, EntityType,
+    ErrorCode, Page, PageParams, Patch, PrefixResponse, RelatedEdgeDto, RelatesKindDto,
     ReorderColumnRequest, ReplaceBoardRequest, ReplaceCardRequest, ReplaceColumnRequest,
-    ReplaceSprintRequest, SortFieldDto, SortOrderDto, SprintResponse, SprintStatusDto,
+    ReplaceSprintRequest, SeverityDto, SortFieldDto, SortOrderDto, SprintResponse, SprintStatusDto,
     TaskListViewDto, UpdateBoardRequest, UpdateCardRequest, UpdateColumnRequest,
     UpdateSprintRequest,
 };

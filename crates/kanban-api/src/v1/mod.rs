@@ -22,12 +22,15 @@ pub use columns::{
     UpdateColumnRequest,
 };
 pub use enums::{
-    ArchivedFilterDto, CardPriorityDto, CardStatusDto, SortFieldDto, SortOrderDto, SprintStatusDto,
-    TaskListViewDto,
+    ArchivedFilterDto, CardPriorityDto, CardStatusDto, RelatesKindDto, SeverityDto, SortFieldDto,
+    SortOrderDto, SprintStatusDto, TaskListViewDto,
 };
 pub use error::{ApiError, ErrorCode};
 pub use events::{ChangeEventFrame, ChangeKind, EntityType};
-pub use graph::CardGraphResponse;
+pub use graph::{
+    AddBlockRequest, AddRelatedRequest, AttachChildrenRequest, BlockEdgeDto, CardGraphResponse,
+    RelatedEdgeDto,
+};
 pub use pagination::{Page, PageParams};
 pub use patch::Patch;
 pub use prefixes::PrefixResponse;
