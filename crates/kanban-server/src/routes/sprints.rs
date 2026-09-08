@@ -72,7 +72,7 @@ fn created_status(created: bool) -> StatusCode {
     }
 }
 
-fn do_get_sprint(ctx: &kanban_service::KanbanContext, id: Uuid) -> Result<Sprint, AppError> {
+fn do_get_sprint(ctx: &crate::state::Session, id: Uuid) -> Result<Sprint, AppError> {
     ctx.get_sprint(id)
         .map_err(|e| AppError::from(&e))?
         .ok_or_else(|| AppError::from(&KanbanError::not_found("Sprint", id)))
@@ -95,7 +95,7 @@ fn do_delete_sprint(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), App
 }
 
 fn require_sprint_in_board(
-    ctx: &kanban_service::KanbanContext,
+    ctx: &crate::state::Session,
     board_id: Uuid,
     id: Uuid,
 ) -> Result<(), AppError> {
@@ -106,10 +106,7 @@ fn require_sprint_in_board(
     Ok(())
 }
 
-fn respond(
-    ctx: &kanban_service::KanbanContext,
-    sprint: &Sprint,
-) -> Result<SprintResponse, AppError> {
+fn respond(ctx: &crate::state::Session, sprint: &Sprint) -> Result<SprintResponse, AppError> {
     let name = resolve_sprint_name(ctx, sprint).map_err(|e| AppError::from(&e))?;
     Ok(SprintResponse::new(sprint, name))
 }

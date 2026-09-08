@@ -9,7 +9,7 @@
 //! (created) vs 200 (replaced).
 
 use kanban_service::api::{ApiError, ColumnResponse, CreateColumnRequest, ReplaceColumnRequest};
-use kanban_service::{KanbanContext, KanbanError, KanbanOperations};
+use kanban_service::{KanbanError, KanbanOperations};
 use uuid::Uuid;
 
 /// `POST /v1/boards/:board_id/columns`: append-create a column under the
@@ -63,7 +63,7 @@ pub fn create_or_replace_column(
 /// when `id` doesn't exist yet (the create arm) or already belongs to
 /// `board_id`.
 fn require_column_in_board_if_present(
-    ctx: &KanbanContext,
+    ctx: &crate::state::Session,
     id: Uuid,
     board_id: Uuid,
 ) -> Result<(), ApiError> {

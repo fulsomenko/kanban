@@ -6,7 +6,9 @@
 //! traits are satisfied, plus behavioral checks that the delegation actually
 //! reaches the store and the `sync` path sees the result.
 
-use kanban_domain::{BoardUpdate, GraphOperations, KanbanOperations, LoadState, Model, NoProjections};
+use kanban_domain::{
+    BoardUpdate, GraphOperations, KanbanOperations, LoadState, Model, NoProjections,
+};
 use kanban_server::scope::RouteScope;
 use kanban_server::state::Session;
 use kanban_server::test_helpers::{make_sqlite_state, make_state};
@@ -120,7 +122,10 @@ async fn test_session_graph_mutator_commits_through_the_seam() {
             .ctx
             .create_board("Board".into(), Some("KAN".into()))
             .unwrap();
-        let column = guard.ctx.create_column(board.id, "Todo".into(), None).unwrap();
+        let column = guard
+            .ctx
+            .create_column(board.id, "Todo".into(), None)
+            .unwrap();
         let parent = guard
             .ctx
             .create_card(board.id, column.id, "Parent".into(), Default::default())
@@ -142,7 +147,11 @@ async fn test_session_graph_mutator_commits_through_the_seam() {
     {
         let guard = state.lock_session().await;
         let mut model = Model::default();
-        guard.sync(&RouteScope::CardGraph(parent), &mut model, &mut NoProjections);
+        guard.sync(
+            &RouteScope::CardGraph(parent),
+            &mut model,
+            &mut NoProjections,
+        );
         match model.graph_state() {
             LoadState::Loaded(g) => {
                 assert_eq!(g.children(parent), vec![child]);

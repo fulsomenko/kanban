@@ -75,7 +75,7 @@ fn do_delete_column(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), App
 /// `KanbanOperations::{update_column, delete_column, reorder_column}` key on
 /// the global column id with no board scoping of their own.
 fn require_column_in_board(
-    ctx: &kanban_service::KanbanContext,
+    ctx: &crate::state::Session,
     board_id: Uuid,
     id: Uuid,
 ) -> Result<(), AppError> {

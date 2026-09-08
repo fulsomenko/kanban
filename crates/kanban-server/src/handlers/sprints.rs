@@ -14,7 +14,7 @@
 //! [`SprintResponse`] via `kanban_service::resolve_sprint_name`.
 
 use kanban_service::api::{ApiError, CreateSprintRequest, ReplaceSprintRequest, SprintResponse};
-use kanban_service::{resolve_sprint_name, KanbanContext, KanbanError, KanbanOperations};
+use kanban_service::{resolve_sprint_name, KanbanError, KanbanOperations};
 use uuid::Uuid;
 
 /// `POST /v1/boards/:board_id/sprints`: create a sprint under the path-supplied
@@ -76,7 +76,7 @@ pub fn create_or_replace_sprint(
 /// Project the created/replaced domain sprint onto its wire response with
 /// its `name` resolved by the service.
 fn project(
-    ctx: &KanbanContext,
+    ctx: &crate::state::Session,
     sprint: kanban_service::Sprint,
     created: bool,
 ) -> Result<(SprintResponse, bool), ApiError> {

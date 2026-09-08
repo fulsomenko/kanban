@@ -10,7 +10,7 @@
 //! answer 201 (created) vs 200 (replaced).
 
 use kanban_service::api::{ApiError, CardResponse, CreateCardRequest};
-use kanban_service::{KanbanContext, KanbanError, KanbanOperations};
+use kanban_service::{KanbanError, KanbanOperations};
 use uuid::Uuid;
 
 /// `POST /v1/columns/:column_id/cards`: append-create a card under the
@@ -63,7 +63,7 @@ pub fn create_or_replace_card(
 /// 404s when `id` already refers to a card outside `column_id`. A no-op when
 /// `id` doesn't exist yet (the create arm) or already belongs to `column_id`.
 fn require_card_in_column_if_present(
-    ctx: &KanbanContext,
+    ctx: &crate::state::Session,
     id: Uuid,
     column_id: Uuid,
 ) -> Result<(), ApiError> {
