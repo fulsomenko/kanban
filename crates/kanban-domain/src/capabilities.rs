@@ -1,3 +1,74 @@
+pub const CAPABILITY_MANIFEST: &[&str] = &[];
+
+fn strip_test_modules(src: &str) -> String {
+    let mut kept = Vec::new();
+    let mut skipping = false;
+    for line in src.lines() {
+        if skipping {
+            if line == "}" {
+                skipping = false;
+            }
+            continue;
+        }
+        if line.trim() == "#[cfg(test)]" {
+            skipping = true;
+            continue;
+        }
+        kept.push(line);
+    }
+    kept.join("\n")
+}
+
+fn contains_capability(src: &str, name: &str) -> bool {
+    let bytes = src.as_bytes();
+    for pattern in [format!("{name}("), format!("{name}_impl(")] {
+        let plen = pattern.len();
+        if plen > bytes.len() {
+            continue;
+        }
+        for start in 0..=bytes.len() - plen {
+            if &bytes[start..start + plen] == pattern.as_bytes() {
+                let boundary_ok = start == 0 || !(bytes[start - 1] as char).is_ascii_alphanumeric();
+                if boundary_ok {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+pub fn capability_violations(
+    manifest: &[&str],
+    wiring_sources: &[&str],
+    declined: &[(&str, &str)],
+) -> Vec<String> {
+    let stripped: Vec<String> = wiring_sources
+        .iter()
+        .map(|s| strip_test_modules(s))
+        .collect();
+    let mut violations = Vec::new();
+    for &name in manifest {
+        let wired = stripped.iter().any(|s| contains_capability(s, name));
+        let decline = declined.iter().find(|(n, _)| *n == name);
+        match (wired, decline) {
+            (true, Some(_)) => {
+                violations.push(format!(
+                    "{name}: declined but wired; remove the stale decline"
+                ));
+            }
+            (false, Some((_, reason))) if reason.trim().is_empty() => {
+                violations.push(format!("{name}: declined with an empty reason; state why"));
+            }
+            (false, None) => {
+                violations.push(format!("{name}: not wired in any source and not declined"));
+            }
+            _ => {}
+        }
+    }
+    violations
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,18 +141,14 @@ mod tests {
 
     #[test]
     fn test_declined_entry_with_empty_reason_is_reported() {
-        let violations =
-            capability_violations(&["undo"], &["fn nothing() {}"], &[("undo", "")]);
+        let violations = capability_violations(&["undo"], &["fn nothing() {}"], &[("undo", "")]);
         assert!(violations.iter().any(|v| v.contains("undo")));
     }
 
     #[test]
     fn test_declined_but_wired_entry_is_reported() {
-        let violations = capability_violations(
-            &["undo"],
-            &["c.undo()"],
-            &[("undo", "sessions are shared")],
-        );
+        let violations =
+            capability_violations(&["undo"], &["c.undo()"], &[("undo", "sessions are shared")]);
         assert!(violations.iter().any(|v| v.contains("undo")));
     }
 }

@@ -56,6 +56,7 @@ pub use board::{
     DEFAULT_BOARD_SORT_LIVE,
 };
 pub use board_factory::{BoardRecord, NewBoard};
+pub use capabilities::{capability_violations, CAPABILITY_MANIFEST};
 pub use card::{
     AnimationType, Card, CardId, CardPriority, CardStatus, CardSummary, CardUpdate,
     CreateCardOptions,
