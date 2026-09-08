@@ -6,13 +6,14 @@
 mod v1;
 pub use v1::{
     ActivateSprintRequest, AddBlockRequest, AddRelatedRequest, ApiError, ArchivedBoardResponse,
-    ArchivedCardResponse, ArchivedFilterDto, AttachChildrenRequest, BlockEdgeDto, BoardResponse,
-    CardGraphResponse, CardPriorityDto, CardResponse, CardStatusDto, CarryOverRequest,
-    CarryOverResponse, ChangeEventFrame, ChangeKind, ColumnResponse, CreateBoardRequest,
-    CreateCardRequest, CreateColumnRequest, CreateSprintParts, CreateSprintRequest, EntityType,
-    ErrorCode, Page, PageParams, Patch, PrefixResponse, RelatedEdgeDto, RelatesKindDto,
-    ReorderColumnRequest, ReplaceBoardRequest, ReplaceCardRequest, ReplaceColumnRequest,
-    ReplaceSprintRequest, SeverityDto, SortFieldDto, SortOrderDto, SprintResponse, SprintStatusDto,
-    TaskListViewDto, UpdateBoardRequest, UpdateCardRequest, UpdateColumnRequest,
-    UpdateSprintRequest,
+    ArchivedCardResponse, ArchivedFilterDto, AttachChildrenRequest, BatchArchiveRequest,
+    BatchAssignSprintRequest, BatchFailure, BatchMoveRequest, BatchOperationResponse,
+    BatchUpdateItem, BatchUpdateRequest, BlockEdgeDto, BoardResponse, CardGraphResponse,
+    CardPriorityDto, CardResponse, CardStatusDto, CarryOverRequest, CarryOverResponse,
+    ChangeEventFrame, ChangeKind, ColumnResponse, CreateBoardRequest, CreateCardRequest,
+    CreateColumnRequest, CreateSprintParts, CreateSprintRequest, EntityType, ErrorCode, Page,
+    PageParams, Patch, PrefixResponse, RelatedEdgeDto, RelatesKindDto, ReorderColumnRequest,
+    ReplaceBoardRequest, ReplaceCardRequest, ReplaceColumnRequest, ReplaceSprintRequest,
+    SeverityDto, SortFieldDto, SortOrderDto, SprintResponse, SprintStatusDto, TaskListViewDto,
+    UpdateBoardRequest, UpdateCardRequest, UpdateColumnRequest, UpdateSprintRequest,
 };

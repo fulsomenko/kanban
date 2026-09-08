@@ -198,6 +198,10 @@ Column writes (create/update/delete) aren't implemented yet.
 | `GET` | `/v1/boards/{board_id}/cards` | List a board's cards. 404s if `board_id` doesn't exist (does not collapse into an empty list). Supports `?column_id=`, `?sprint_id=` and `?archived=` filters alongside pagination. Returns `Page<CardResponse>`; accepts `?page=&page_size=`. | — |
 | `POST` | `/v1/cards/{id}/archive` | Archive a card. `200` with `CardResponse` (`archived_at` set). 404 if the card is unknown or already archived. | — |
 | `POST` | `/v1/cards/{id}/restore` | Restore an archived card. `200` with the live `CardResponse` (no `archived_at`). Accepts `?column_id=` to redirect it to a different column; otherwise it stays in its current column. 404 if the card is not archived, or if `column_id` names an unknown column. | — |
+| `POST` | `/v1/cards/batch/archive` | Archive up to N cards. `200` with `BatchOperationResponse`: each id lands in `succeeded` or `failed` (with an error message) independently; an unknown id never fails the whole request. | `BatchArchiveRequest` (`{"ids": [uuid, ...]}`) |
+| `POST` | `/v1/cards/batch/move` | Move up to N cards into `column_id`. `200` with `BatchOperationResponse`. If moving would violate the target column's WIP limit, every id in the request fails with no card moved. | `BatchMoveRequest` (`{"ids": [uuid, ...], "column_id": uuid}`) |
+| `POST` | `/v1/cards/batch/assign-sprint` | Assign up to N cards to `sprint_id`. `200` with `BatchOperationResponse`. An unknown sprint id fails every card id. | `BatchAssignSprintRequest` (`{"ids": [uuid, ...], "sprint_id": uuid}`) |
+| `POST` | `/v1/cards/batch/update` | Apply a per-card `UpdateCardRequest`-shaped patch to each id, all-or-nothing. `200` with `BatchOperationResponse` (`failed` always empty) on full success; an unknown id or any other execution error is an ordinary `ApiError` envelope and no card is modified. | `BatchUpdateRequest` (`{"updates": [{"id": uuid, ...UpdateCardRequest fields}, ...]}`) |
 
 The remaining card routes (get/create/replace/update/delete, and the flat `/v1/cards/{id}` aliases) exist but aren't documented in this table yet.
 

@@ -21,6 +21,7 @@ pub mod test_helpers;
 pub mod routes {
     pub mod boards;
     pub mod cards;
+    pub mod cards_batch;
     pub mod columns;
     pub mod events;
     pub mod graph;
