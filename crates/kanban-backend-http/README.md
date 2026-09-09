@@ -49,7 +49,9 @@ slash off `base_url`, builds a `reqwest::Client`, and spins up a dedicated
 multi-thread Tokio runtime — every synchronous `DataStore`/`CommandStore`
 call bridges onto that runtime via a private `block_on` helper rather than
 assuming an ambient one, since `KanbanBackend`'s inherent methods are
-synchronous but the HTTP calls underneath are async.
+synchronous but the HTTP calls underneath are async. That runtime is handed to
+`shutdown_background()` when the backend is dropped, so a caller that drops it
+from inside its own async context does not abort.
 
 `HttpBackendFactory::matches_locator` claims a locator only when its scheme is
 `http` or `https`, so it is safe to register alongside `JsonBackendFactory`

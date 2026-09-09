@@ -10,8 +10,19 @@ pub use backend_factory::HttpBackendFactory;
 pub struct HttpBackend {
     base_url: String,
     client: reqwest::Client,
-    runtime: tokio::runtime::Runtime,
+    runtime: Option<tokio::runtime::Runtime>,
     instance_id: uuid::Uuid,
+}
+
+/// Dropping a `tokio::runtime::Runtime` blocks the current thread, and
+/// blocking is forbidden on a thread already inside another runtime -- which
+/// is where every application drops this backend.
+impl Drop for HttpBackend {
+    fn drop(&mut self) {
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -71,7 +82,7 @@ impl HttpBackend {
         Ok(Self {
             base_url,
             client,
-            runtime,
+            runtime: Some(runtime),
             instance_id: uuid::Uuid::new_v4(),
         })
     }
@@ -82,7 +93,10 @@ impl HttpBackend {
     /// start a runtime from within a runtime". An async caller reaches this
     /// through `tokio::task::spawn_blocking`.
     pub(crate) fn block_on<F: std::future::Future>(&self, fut: F) -> F::Output {
-        self.runtime.block_on(fut)
+        self.runtime
+            .as_ref()
+            .expect("the runtime is taken only while dropping")
+            .block_on(fut)
     }
 
     pub(crate) fn base_url(&self) -> &str {
