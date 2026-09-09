@@ -33,7 +33,11 @@ async fn seed_board_and_column(state: &AppState) -> (Uuid, Uuid) {
     (board_id, col.id)
 }
 
-async fn card_write_routes(state: &AppState, client: Uuid, mut rx: broadcast::Receiver<ChangeEventFrame>) {
+async fn card_write_routes(
+    state: &AppState,
+    client: Uuid,
+    mut rx: broadcast::Receiver<ChangeEventFrame>,
+) {
     let headers = [("x-kanban-client-id", client.to_string())];
     let headers: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
