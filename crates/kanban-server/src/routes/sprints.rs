@@ -1,3 +1,4 @@
+use crate::client_ident::ClientIdent;
 use crate::error::{AppError, AppJson};
 use crate::etag;
 use crate::model_read::{require_loaded, require_loaded_entity};
@@ -120,10 +121,11 @@ pub(crate) fn respond(
 async fn create_sprint_route(
     State(state): State<AppState>,
     Path(board_id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::CreateSprintRequest>,
 ) -> Result<(StatusCode, Json<SprintResponse>), AppError> {
     let (resp, created) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let result = crate::handlers::sprints::create_sprint(&mut ctx, board_id, req)
             .map_err(AppError::from)?;
         state
@@ -143,10 +145,11 @@ async fn create_sprint_route(
 async fn put_sprint_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::ReplaceSprintRequest>,
 ) -> Result<(StatusCode, Json<SprintResponse>), AppError> {
     let (resp, created) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let result =
             crate::handlers::sprints::create_or_replace_sprint(&mut ctx, board_id, id, req)
                 .map_err(AppError::from)?;
@@ -167,11 +170,12 @@ async fn put_sprint_route(
 async fn update_sprint_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::UpdateSprintRequest>,
 ) -> Result<Json<SprintResponse>, AppError> {
     let updates = SprintUpdate::from(req);
     let body = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
         let sprint = do_update_sprint(&mut ctx, id, updates)?;
         let body = respond(&ctx, &sprint)?;
@@ -187,9 +191,10 @@ async fn update_sprint_route(
 async fn delete_sprint_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<StatusCode, AppError> {
     {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
         do_delete_sprint(&mut ctx, id)?;
         state
@@ -249,11 +254,12 @@ async fn get_sprint_flat(
 async fn update_sprint_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::UpdateSprintRequest>,
 ) -> Result<Json<SprintResponse>, AppError> {
     let updates = SprintUpdate::from(req);
     let body = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         do_get_sprint(&ctx, id)?;
         let sprint = do_update_sprint(&mut ctx, id, updates)?;
         let body = respond(&ctx, &sprint)?;
@@ -269,9 +275,10 @@ async fn update_sprint_route_flat(
 async fn delete_sprint_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<StatusCode, AppError> {
     {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         do_get_sprint(&ctx, id)?;
         do_delete_sprint(&mut ctx, id)?;
         state

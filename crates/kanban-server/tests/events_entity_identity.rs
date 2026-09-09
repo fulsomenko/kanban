@@ -416,9 +416,8 @@ async fn test_client_identity_does_not_leak_between_requests() {
     let frame = next_frame(&mut rx).await;
     assert_eq!(frame.issued_by, ClientId::from(client));
 
-    // The second write goes through cards.rs's still-raw `state.ctx.lock()`
-    // seam, so this pins that `lock_for_write`'s identity does not survive
-    // past its own guard into a request that never acquires it.
+    // The second write sends no header, so it acquires lock_for_write with a
+    // nil client id; no earlier request's identity survives into it.
     let response = send(
         &state,
         "POST",

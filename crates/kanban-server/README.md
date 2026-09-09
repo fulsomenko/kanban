@@ -147,7 +147,7 @@ Send `X-Kanban-Client-Id: <uuid>` on a write request to attribute it to that cli
 
 The header is a client-generated UUID, stable for the client's lifetime; omit it and the write is recorded and broadcast with a nil `issued_by`. A value that does not parse as a UUID is rejected with `422 VALIDATION_FAILED` before the request reaches the store. The identity is unauthenticated: any client can send any UUID, so it identifies provenance for echo suppression and auditing, not authorization.
 
-Today only the board write routes (`POST`/`PUT`/`PATCH`/`DELETE /v1/boards*`, `POST /v1/boards/{id}/archive`, `POST /v1/boards/{id}/restore`) and `POST /v1/import` honour the header. Every other write route still records and broadcasts a nil `issued_by`.
+Every write route honours the header. Frames whose origin is an external file writer detected by the watcher carry a nil `issued_by`, since no client issued them.
 
 ## Endpoints
 

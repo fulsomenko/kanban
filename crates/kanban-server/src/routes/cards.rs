@@ -1,3 +1,4 @@
+use crate::client_ident::ClientIdent;
 use crate::error::{AppError, AppJson};
 use crate::etag;
 use crate::model_read::{require_loaded, require_loaded_entity};
@@ -268,10 +269,11 @@ fn require_card_in_board(
 async fn create_card_route(
     State(state): State<AppState>,
     Path(column_id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<CreateCardRequest>,
 ) -> Result<(StatusCode, Json<CardResponse>), AppError> {
     let (resp, created) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let result = crate::handlers::cards::create_card(&mut ctx, column_id, req)
             .map_err(AppError::from)?;
         state
@@ -291,10 +293,11 @@ async fn create_card_route(
 async fn put_card_route(
     State(state): State<AppState>,
     Path((column_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<CreateCardRequest>,
 ) -> Result<(StatusCode, Json<CardResponse>), AppError> {
     let (resp, created) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let result = crate::handlers::cards::create_or_replace_card(&mut ctx, column_id, id, req)
             .map_err(AppError::from)?;
         state
@@ -314,11 +317,12 @@ async fn put_card_route(
 async fn update_card_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<UpdateCardRequest>,
 ) -> Result<Json<CardResponse>, AppError> {
     let updates = CardUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let card = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         require_card_in_board(&ctx, board_id, id)?;
         let card = do_update_card(&mut ctx, id, updates)?;
         state
@@ -333,9 +337,10 @@ async fn update_card_route(
 async fn delete_card_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<StatusCode, AppError> {
     {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         require_card_in_board(&ctx, board_id, id)?;
         do_delete_card(&mut ctx, id)?;
         state
@@ -373,11 +378,12 @@ async fn get_card_flat(
 async fn update_card_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<UpdateCardRequest>,
 ) -> Result<Json<CardResponse>, AppError> {
     let updates = CardUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let card = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let card = do_update_card(&mut ctx, id, updates)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
@@ -391,9 +397,10 @@ async fn update_card_route_flat(
 async fn delete_card_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<StatusCode, AppError> {
     {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         do_delete_card(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Deleted)
@@ -406,9 +413,10 @@ async fn delete_card_route_flat(
 async fn archive_card_route(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<Json<CardResponse>, AppError> {
     let (card, archived_at) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         do_archive_card(&mut ctx, id)?;
         let card = ctx
             .get_card(id)
@@ -428,9 +436,10 @@ async fn restore_card_route(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     Query(q): Query<RestoreCardQuery>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<Json<CardResponse>, AppError> {
     let card = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let card = do_restore_card(&mut ctx, id, q.column_id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)

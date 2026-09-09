@@ -1,3 +1,4 @@
+use crate::client_ident::ClientIdent;
 use crate::error::{AppError, AppJson};
 use crate::etag;
 use crate::model_read::{require_loaded, require_loaded_entity};
@@ -92,10 +93,11 @@ fn require_column_in_board(
 async fn create_column_route(
     State(state): State<AppState>,
     Path(board_id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::CreateColumnRequest>,
 ) -> Result<(StatusCode, Json<ColumnResponse>), AppError> {
     let (resp, created) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let result = crate::handlers::columns::create_column(&mut ctx, board_id, req)
             .map_err(AppError::from)?;
         state
@@ -115,10 +117,11 @@ async fn create_column_route(
 async fn put_column_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::ReplaceColumnRequest>,
 ) -> Result<(StatusCode, Json<ColumnResponse>), AppError> {
     let (resp, created) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let result =
             crate::handlers::columns::create_or_replace_column(&mut ctx, board_id, id, req)
                 .map_err(AppError::from)?;
@@ -139,11 +142,12 @@ async fn put_column_route(
 async fn update_column_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::UpdateColumnRequest>,
 ) -> Result<Json<ColumnResponse>, AppError> {
     let updates = ColumnUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let col = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
         let col = do_update_column(&mut ctx, id, updates)?;
         state
@@ -158,9 +162,10 @@ async fn update_column_route(
 async fn delete_column_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<StatusCode, AppError> {
     {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
         do_delete_column(&mut ctx, id)?;
         state
@@ -174,11 +179,12 @@ async fn delete_column_route(
 async fn reorder_column_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::ReorderColumnRequest>,
 ) -> Result<Json<ColumnResponse>, AppError> {
     let position = req.validated_position().map_err(|e| AppError::from(&e))?;
     let col = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
         let (col, _invalidation) =
             crate::state::mutate(&mut ctx, |c| c.reorder_column_impl(id, position))
@@ -223,11 +229,12 @@ async fn get_column_flat(
 async fn update_column_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::UpdateColumnRequest>,
 ) -> Result<Json<ColumnResponse>, AppError> {
     let updates = ColumnUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let col = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let col = do_update_column(&mut ctx, id, updates)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Updated)
@@ -241,9 +248,10 @@ async fn update_column_route_flat(
 async fn delete_column_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<StatusCode, AppError> {
     {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         do_delete_column(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Deleted)
