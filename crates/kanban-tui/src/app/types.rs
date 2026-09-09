@@ -23,7 +23,30 @@ pub(in crate::app) fn default_store_manager() -> StoreManager {
     backends.register(Box::new(kanban_persistence_sqlite::SqliteBackendFactory));
     registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
     backends.register(Box::new(kanban_persistence_json::JsonBackendFactory));
+    backends.register(Box::new(kanban_backend_http::HttpBackendFactory));
     StoreManager::new(registry, backends)
+}
+
+pub(in crate::app) fn storage_location_for(save_file: &str) -> String {
+    if kanban_core::is_remote_locator(save_file) {
+        return save_file.to_string();
+    }
+    let path = std::path::Path::new(save_file);
+    let resolved = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    };
+    dunce::canonicalize(&resolved)
+        .unwrap_or(resolved)
+        .display()
+        .to_string()
+}
+
+pub(in crate::app) fn watcher_target(save_file: &str) -> Option<&str> {
+    (!kanban_core::is_remote_locator(save_file)).then_some(save_file)
 }
 
 pub struct App {
@@ -209,10 +232,7 @@ mod tests {
             manager.detect_backend("https://example.com/boards"),
             Some("http".to_string())
         );
-        assert_eq!(
-            manager.backend_names(),
-            vec!["sqlite", "json", "http"]
-        );
+        assert_eq!(manager.backend_names(), vec!["sqlite", "json", "http"]);
     }
 
     #[test]

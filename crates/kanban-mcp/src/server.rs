@@ -35,9 +35,10 @@ impl Default for McpServer {
 }
 
 impl McpServer {
-    /// Returns an `McpServer` pre-configured with both built-in backends.
-    /// SQLite is registered first so content-sniffing prefers it; JSON is
-    /// registered as the catch-all fallback.
+    /// Returns an `McpServer` pre-configured with all built-in backends.
+    /// SQLite is registered first so content-sniffing prefers it, JSON next
+    /// as the catch-all fallback, and http last since it only ever claims a
+    /// remote locator.
     pub fn with_defaults() -> Self {
         let mut registry = kanban_persistence::StoreRegistry::new();
         let mut backends = kanban_backend::KanbanBackendRegistry::new();
@@ -49,6 +50,10 @@ impl McpServer {
         {
             registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
             backends.register(Box::new(kanban_persistence_json::JsonBackendFactory));
+        }
+        #[cfg(feature = "http")]
+        {
+            backends.register(Box::new(kanban_backend_http::HttpBackendFactory));
         }
         Self {
             registry,

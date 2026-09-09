@@ -110,7 +110,9 @@ fn test_cli_app_with_defaults_populates_both_registries() {
 fn test_cli_defaults_route_an_http_locator_to_the_http_backend() {
     let app = CliApp::with_defaults();
     assert_eq!(
-        app.backends().for_locator("http://127.0.0.1:9").map(|f| f.name()),
+        app.backends()
+            .for_locator("http://127.0.0.1:9")
+            .map(|f| f.name()),
         Some("http")
     );
     assert_eq!(
