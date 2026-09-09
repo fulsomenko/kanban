@@ -61,8 +61,11 @@ impl CorsPolicy {
                     ])
                     .allow_headers([
                         header::CONTENT_TYPE,
+                        header::IF_MATCH,
+                        header::IF_NONE_MATCH,
                         HeaderName::from_static(crate::client_ident::CLIENT_ID_HEADER),
-                    ]),
+                    ])
+                    .expose_headers([header::ETAG]),
             ),
         }
     }
