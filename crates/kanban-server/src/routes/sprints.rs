@@ -1,10 +1,12 @@
 use crate::error::{AppError, AppJson};
+use crate::etag;
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use kanban_domain::{Model, NoProjections, Sprint};
@@ -35,8 +37,9 @@ async fn list_sprints(
 
 async fn get_sprint(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<SprintResponse>, AppError> {
+) -> Result<Response, AppError> {
     let guard = state.lock_session().await;
     let mut model = Model::default();
     guard.sync(
@@ -52,10 +55,10 @@ async fn get_sprint(
         return Err(AppError::from(&KanbanError::not_found("Sprint", id)));
     }
     let board = require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
-    Ok(Json(SprintResponse::new(
-        sprint,
-        sprint.get_name(board).map(str::to_string),
-    )))
+    etag::json_with_etag(
+        &headers,
+        &SprintResponse::new(sprint, sprint.get_name(board).map(str::to_string)),
+    )
 }
 
 pub fn read_router() -> Router<AppState> {
@@ -210,8 +213,9 @@ pub fn write_router() -> Router<AppState> {
 
 async fn get_sprint_flat(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<Json<SprintResponse>, AppError> {
+) -> Result<Response, AppError> {
     let guard = state.lock_session().await;
     let mut model = Model::default();
     guard.sync(
@@ -236,10 +240,10 @@ async fn get_sprint_flat(
         "Board",
         sprint.board_id,
     )?;
-    Ok(Json(SprintResponse::new(
-        &sprint,
-        sprint.get_name(board).map(str::to_string),
-    )))
+    etag::json_with_etag(
+        &headers,
+        &SprintResponse::new(&sprint, sprint.get_name(board).map(str::to_string)),
+    )
 }
 
 async fn update_sprint_route_flat(
