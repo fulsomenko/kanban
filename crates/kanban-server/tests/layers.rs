@@ -5,6 +5,7 @@ use axum::http::{HeaderValue, Request, StatusCode};
 use kanban_server::app;
 use kanban_server::layers::{CorsPolicy, LayerConfig};
 use kanban_server::test_helpers::make_state;
+use kanban_service::KanbanOperations;
 use tempfile::tempdir;
 use tower::ServiceExt;
 
@@ -152,4 +153,61 @@ async fn test_cors_allowed_origin_preflight_echoes_origin() {
         .to_str()
         .unwrap();
     assert!(allow_headers.contains("content-type"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cors_preflight_allows_if_match_and_response_exposes_etag() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let router = app::router_with(
+        state.clone(),
+        LayerConfig {
+            cors: CorsPolicy::Origins(vec![HeaderValue::from_static("http://localhost:5173")]),
+            ..Default::default()
+        },
+    );
+
+    let preflight = Request::builder()
+        .method("OPTIONS")
+        .uri("/v1/boards/00000000-0000-0000-0000-000000000000")
+        .header("origin", "http://localhost:5173")
+        .header("access-control-request-method", "PATCH")
+        .body(Body::empty())
+        .unwrap();
+    let preflight_response = router.clone().oneshot(preflight).await.unwrap();
+    let allow_headers = preflight_response
+        .headers()
+        .get("access-control-allow-headers")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_lowercase();
+    assert!(
+        allow_headers.contains("if-match"),
+        "allow-headers: {allow_headers}"
+    );
+
+    let board = {
+        let mut ctx = state.ctx.lock().await;
+        ctx.create_board("B".to_string(), Some("KAN".to_string()))
+            .unwrap()
+    };
+    let get = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/boards/{}", board.id))
+        .header("origin", "http://localhost:5173")
+        .body(Body::empty())
+        .unwrap();
+    let get_response = router.oneshot(get).await.unwrap();
+    let expose_headers = get_response
+        .headers()
+        .get("access-control-expose-headers")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_lowercase();
+    assert!(
+        expose_headers.contains("etag"),
+        "expose-headers: {expose_headers}"
+    );
 }
