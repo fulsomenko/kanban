@@ -114,6 +114,16 @@ struct InitFileResult<'a> {
     file: &'a str,
 }
 
+fn reject_remote_locator(locator: &str, command: &str) -> anyhow::Result<()> {
+    if kanban_core::is_remote_locator(locator) {
+        anyhow::bail!(
+            "'{locator}' is a remote server; {command} manages local files. \
+             Point it at a file path, or manage the server's own storage on the server."
+        );
+    }
+    Ok(())
+}
+
 async fn create_empty_storage_file(
     store_manager: &StoreManager,
     file: &str,
@@ -188,9 +198,10 @@ impl Default for CliApp {
 
 impl CliApp {
     /// Returns a `CliApp` pre-configured with all backends compiled in.
-    /// SQLite is registered first so content-sniffing prefers it; JSON is
-    /// registered as the catch-all fallback. When no backend features are
-    /// active both registries are empty (same as [`Default`]).
+    /// SQLite is registered first so content-sniffing prefers it, JSON next
+    /// as the catch-all fallback, and http last since it only ever claims a
+    /// remote locator. When no backend features are active both registries
+    /// are empty (same as [`Default`]).
     pub fn with_defaults() -> Self {
         let mut registry = kanban_persistence::StoreRegistry::new();
         let mut backends = kanban_backend::KanbanBackendRegistry::new();
@@ -202,6 +213,10 @@ impl CliApp {
         {
             registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
             backends.register(Box::new(kanban_persistence_json::JsonBackendFactory));
+        }
+        #[cfg(feature = "http")]
+        {
+            backends.register(Box::new(kanban_backend_http::HttpBackendFactory));
         }
         Self {
             registry,
@@ -361,7 +376,10 @@ Provide the file path in one of these ways:
                 // KANBAN_FILE env var resolves into validated_file via clap's env attribute.
                 let has_explicit_file =
                     validated_file.is_some() || config.storage_location.is_some();
-                if has_explicit_file && !std::path::Path::new(&effective_file).exists() {
+                if has_explicit_file
+                    && !kanban_core::is_remote_locator(&effective_file)
+                    && !std::path::Path::new(&effective_file).exists()
+                {
                     create_empty_storage_file(&store_manager, &effective_file, &config).await?;
                 }
                 use std::io::IsTerminal;
@@ -387,10 +405,15 @@ Provide the file path in one of these ways:
             Some(Commands::Completions { .. }) => unreachable!(),
             Some(Commands::Migrate(args)) => {
                 init_tracing_cli();
+                reject_remote_locator(&args.source, "`migrate`")?;
+                if let Some(ref output) = args.output {
+                    reject_remote_locator(output, "`migrate`")?;
+                }
                 handlers::migrate::handle(&store_manager, args).await?;
             }
             Some(Commands::Init { board }) => {
                 init_tracing_cli();
+                reject_remote_locator(&effective_file, "`init`")?;
                 match board {
                     Some(name) => {
                         let mut ctx =
@@ -419,7 +442,9 @@ Provide the file path in one of these ways:
                         "board set-sort requires at least one of --sort and/or --order",
                     );
                 }
-                if !std::path::Path::new(&effective_file).exists() {
+                if !kanban_core::is_remote_locator(&effective_file)
+                    && !std::path::Path::new(&effective_file).exists()
+                {
                     create_empty_storage_file(&store_manager, &effective_file, &config).await?;
                 }
                 // Route through the service helper (R3): persist-first, no
@@ -439,7 +464,9 @@ Provide the file path in one of these ways:
             }
             Some(cmd) => {
                 init_tracing_cli();
-                if !std::path::Path::new(&effective_file).exists() {
+                if !kanban_core::is_remote_locator(&effective_file)
+                    && !std::path::Path::new(&effective_file).exists()
+                {
                     return crate::output::output_error(&format!(
                         "Board file not found: '{}'",
                         effective_file

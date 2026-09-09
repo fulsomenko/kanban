@@ -46,49 +46,55 @@ impl App {
 
         let mut terminal = setup_terminal()?;
 
-        // Initialize file watching if a save file is configured
-        if let Some(ref save_file) = self.persistence.save_file {
-            use kanban_persistence::ChangeDetector;
-            tracing::info!("Initializing file watcher for: {}", save_file);
-            let watcher = kanban_persistence::FileWatcher::new();
-            watcher.set_own_instance_id(self.ctx.backend().instance_id());
-            let rx = watcher.subscribe();
-            self.persistence.file_change_rx = Some(rx);
-            tracing::debug!("File change broadcast receiver subscribed");
+        let save_file = self.persistence.save_file.clone();
+        let deferred_watch_path = match save_file.as_deref().and_then(super::types::watcher_target)
+        {
+            Some(local) => {
+                use kanban_persistence::ChangeDetector;
+                tracing::info!("Initializing file watcher for: {}", local);
+                let watcher = kanban_persistence::FileWatcher::new();
+                watcher.set_own_instance_id(self.ctx.backend().instance_id());
+                let rx = watcher.subscribe();
+                self.persistence.file_change_rx = Some(rx);
+                tracing::debug!("File change broadcast receiver subscribed");
 
-            let path = std::path::PathBuf::from(save_file);
-            let deferred_watch_path = if path.exists() {
-                if let Err(e) = watcher.start_watching(path.clone()).await {
-                    tracing::warn!(
-                        "Failed to start file watching for {}: {}",
-                        path.display(),
-                        e
-                    );
+                let path = std::path::PathBuf::from(local);
+                let deferred_watch_path = if path.exists() {
+                    if let Err(e) = watcher.start_watching(path.clone()).await {
+                        tracing::warn!(
+                            "Failed to start file watching for {}: {}",
+                            path.display(),
+                            e
+                        );
+                    } else {
+                        tracing::info!("File watcher started for: {}", path.display());
+                    }
+                    None
                 } else {
-                    tracing::info!("File watcher started for: {}", path.display());
+                    tracing::debug!(
+                        "File does not exist yet, deferring file watching until first save: {}",
+                        path.display()
+                    );
+                    Some(path)
+                };
+
+                // Store the watcher to keep the background task alive
+                self.persistence.file_watcher = Some(watcher.clone());
+                let watcher_arc = std::sync::Arc::new(watcher);
+                self.ctx.save_coordinator.set_file_watcher(watcher_arc);
+
+                deferred_watch_path
+            }
+            None => {
+                if let Some(ref f) = save_file {
+                    tracing::info!("Remote storage location; skipping file watcher: {f}");
                 }
                 None
-            } else {
-                tracing::debug!(
-                    "File does not exist yet, deferring file watching until first save: {}",
-                    path.display()
-                );
-                Some(path)
-            };
-
-            // Store the watcher to keep the background task alive
-            self.persistence.file_watcher = Some(watcher.clone());
-            let watcher_arc = std::sync::Arc::new(watcher);
-            self.ctx.save_coordinator.set_file_watcher(watcher_arc);
-
-            // Spawn async save worker if save channel is configured
-            if let Some(rx) = save_rx {
-                self.spawn_save_worker(rx, deferred_watch_path);
-            } else {
-                tracing::debug!("No save channel receiver - no saves will be processed");
             }
-        } else if let Some(rx) = save_rx {
-            self.spawn_save_worker(rx, None);
+        };
+
+        if let Some(rx) = save_rx {
+            self.spawn_save_worker(rx, deferred_watch_path);
         } else {
             tracing::debug!("No save channel receiver - no saves will be processed");
         }

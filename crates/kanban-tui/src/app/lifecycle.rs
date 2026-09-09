@@ -49,16 +49,7 @@ impl App {
         // written to disk.
         let has_explicit_file = save_file.is_some() || original_storage_location.is_some();
         if let Some(ref file) = save_file {
-            let path = std::path::Path::new(file);
-            let resolved = if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                std::env::current_dir()
-                    .map(|cwd| cwd.join(path))
-                    .unwrap_or_else(|_| path.to_path_buf())
-            };
-            let canonical = dunce::canonicalize(&resolved).unwrap_or(resolved);
-            app_config.storage_location = Some(canonical.display().to_string());
+            app_config.storage_location = Some(super::types::storage_location_for(file));
             // File arg is the source of truth — ignore config's storage_backend
             app_config.storage_backend = None;
         }
