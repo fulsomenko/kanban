@@ -199,6 +199,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_tui_store_manager_routes_an_http_locator_to_the_http_backend() {
+        let manager = default_store_manager();
+        assert_eq!(
+            manager.detect_backend("http://127.0.0.1:9"),
+            Some("http".to_string())
+        );
+        assert_eq!(
+            manager.detect_backend("https://example.com/boards"),
+            Some("http".to_string())
+        );
+        assert_eq!(
+            manager.backend_names(),
+            vec!["sqlite", "json", "http"]
+        );
+    }
+
+    #[test]
+    fn test_a_remote_save_file_keeps_its_scheme_in_the_storage_location() {
+        assert_eq!(
+            storage_location_for("http://127.0.0.1:3000"),
+            "http://127.0.0.1:3000"
+        );
+        let out = storage_location_for("boards.json");
+        assert!(std::path::Path::new(&out).is_absolute());
+    }
+
+    #[test]
+    fn test_a_remote_save_file_has_no_file_watcher_target() {
+        assert!(watcher_target("http://127.0.0.1:3000").is_none());
+        assert!(watcher_target("https://example.com/boards").is_none());
+        assert_eq!(watcher_target("/tmp/boards.json"), Some("/tmp/boards.json"));
+    }
+
+    #[test]
     fn test_swap_known_extension_table() {
         let cases = [
             // Primary swap
