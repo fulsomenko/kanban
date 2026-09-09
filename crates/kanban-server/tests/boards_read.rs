@@ -359,6 +359,13 @@ async fn test_get_board_carries_etag_header() {
     let response = send(&state, "GET", &format!("/v1/boards/{}", board_id), None).await;
 
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/json")
+    );
     let tag = etag_of(&response);
     assert!(
         is_quoted_32_hex(&tag),
