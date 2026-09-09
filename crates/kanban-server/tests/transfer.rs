@@ -292,6 +292,58 @@ async fn test_export_then_import_round_trips_the_full_graph_on_sqlite() {
         serde_json::from_value(json_of(response).await).unwrap();
     assert_eq!(archived.items.len(), 1);
     assert_eq!(archived.items[0].entity_id, ids.card3);
+
+    let response = send(
+        &state_b,
+        "GET",
+        &format!("/v1/boards/{}/columns", ids.board),
+        None,
+    )
+    .await;
+    let columns: Value = json_of(response).await;
+    let column_ids: Vec<Uuid> = columns["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap().parse().unwrap())
+        .collect();
+    assert!(column_ids.contains(&ids.column_a));
+    assert!(column_ids.contains(&ids.column_b));
+
+    let response = send(
+        &state_b,
+        "GET",
+        &format!("/v1/boards/{}/sprints", ids.board),
+        None,
+    )
+    .await;
+    let sprints: Value = json_of(response).await;
+    assert!(sprints["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["id"].as_str().unwrap() == ids.sprint.to_string()));
+
+    let response = send(
+        &state_b,
+        "GET",
+        &format!("/v1/cards/{}/graph", ids.card1),
+        None,
+    )
+    .await;
+    let graph: Value = json_of(response).await;
+    let blocks: Vec<String> = graph["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    assert!(blocks.contains(&ids.card2.to_string()));
+    let block_edges = graph["block_edges"].as_array().unwrap();
+    assert_eq!(block_edges[0]["severity"].as_str().unwrap(), "medium");
+
+    let response = send(&state_b, "GET", "/v1/prefixes?name=RT", None).await;
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test(flavor = "multi_thread")]
