@@ -41,7 +41,9 @@ impl ChangeKind {
 }
 
 /// SSE frame emitted by kanban-server on every successful mutation.
-/// Clients filter by `writer_instance_id` to ignore their own writes.
+/// A client suppresses its own echoes by skipping frames whose `issued_by`
+/// equals the UUID it sends in `X-Kanban-Client-Id`; a client that sends no
+/// header instead falls back to filtering on `writer_instance_id`.
 ///
 /// `entity_type`/`entity_id`/`kind` are `None` when the emitter cannot name
 /// what changed (an external process wrote the file). Otherwise they name the
