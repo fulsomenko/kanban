@@ -535,7 +535,12 @@ async fn test_patch_card_with_stale_if_match_returns_412_and_leaves_card_unchang
             .create_column(board_id, "To Do".to_string(), None)
             .unwrap();
         let card = ctx
-            .create_card(board_id, col.id, "Original Title".to_string(), Default::default())
+            .create_card(
+                board_id,
+                col.id,
+                "Original Title".to_string(),
+                Default::default(),
+            )
             .unwrap();
         (board_id, card.id)
     };
@@ -553,7 +558,10 @@ async fn test_patch_card_with_stale_if_match_returns_412_and_leaves_card_unchang
     assert_eq!(json_of(response).await["code"], "PRECONDITION_FAILED");
 
     let ctx = state.ctx.lock().await;
-    assert_eq!(ctx.get_card(card_id).unwrap().unwrap().title, "Original Title");
+    assert_eq!(
+        ctx.get_card(card_id).unwrap().unwrap().title,
+        "Original Title"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -571,7 +579,12 @@ async fn test_patch_card_with_the_get_etag_succeeds_then_the_reused_etag_returns
             .create_column(board_id, "To Do".to_string(), None)
             .unwrap();
         let card = ctx
-            .create_card(board_id, col.id, "Original Title".to_string(), Default::default())
+            .create_card(
+                board_id,
+                col.id,
+                "Original Title".to_string(),
+                Default::default(),
+            )
             .unwrap();
         (board_id, card.id)
     };

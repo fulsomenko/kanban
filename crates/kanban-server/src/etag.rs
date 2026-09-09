@@ -241,10 +241,7 @@ mod tests {
         assert!(result.is_ok());
 
         let mut headers = HeaderMap::new();
-        headers.insert(
-            "if-match",
-            format!("W/{tag}, \"yyy\"").parse().unwrap(),
-        );
+        headers.insert("if-match", format!("W/{tag}, \"yyy\"").parse().unwrap());
         let result = check_if_match(&headers, || Ok(Some(Dto { a: 1 })));
         assert!(result.is_err());
     }

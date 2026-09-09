@@ -861,7 +861,10 @@ async fn test_patch_column_with_stale_if_match_returns_412_and_leaves_column_unc
     assert_eq!(json_of(response).await["code"], "PRECONDITION_FAILED");
 
     let ctx = state.ctx.lock().await;
-    assert_eq!(ctx.get_column(col_id).unwrap().unwrap().name, "Original Name");
+    assert_eq!(
+        ctx.get_column(col_id).unwrap().unwrap().name,
+        "Original Name"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
