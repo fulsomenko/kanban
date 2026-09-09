@@ -1,3 +1,65 @@
+use crate::error::AppError;
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::response::{IntoResponse, Response};
+use kanban_service::api::{ApiError, ErrorCode};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+
+const HEX: [u8; 16] = *b"0123456789abcdef";
+
+pub fn etag_for(body: &[u8]) -> String {
+    let digest = Sha256::digest(body);
+    let mut tag = String::with_capacity(34);
+    tag.push('"');
+    for byte in &digest[..16] {
+        tag.push(HEX[(byte >> 4) as usize] as char);
+        tag.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    tag.push('"');
+    tag
+}
+
+fn strong(tag: &str) -> &str {
+    tag.strip_prefix("W/").unwrap_or(tag)
+}
+
+pub fn if_none_match_matches(headers: &HeaderMap, etag: &str) -> bool {
+    let ours = strong(etag);
+    headers
+        .get_all(header::IF_NONE_MATCH)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .map(str::trim)
+        .any(|candidate| candidate == "*" || strong(candidate) == ours)
+}
+
+fn serialization_failed() -> AppError {
+    AppError(ApiError::new(
+        ErrorCode::SerializationError,
+        "failed to serialize response",
+    ))
+}
+
+pub fn json_with_etag<T: Serialize>(headers: &HeaderMap, value: &T) -> Result<Response, AppError> {
+    let body = serde_json::to_vec(value).map_err(|_| serialization_failed())?;
+    let tag = etag_for(&body);
+    let tag_value = HeaderValue::try_from(tag).map_err(|_| serialization_failed())?;
+
+    let mut response = if if_none_match_matches(headers, tag_value.to_str().unwrap_or_default()) {
+        StatusCode::NOT_MODIFIED.into_response()
+    } else {
+        let mut response = body.into_response();
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        response
+    };
+    response.headers_mut().insert(header::ETAG, tag_value);
+    Ok(response)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
