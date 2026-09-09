@@ -38,6 +38,7 @@ pub struct HttpBackendFactory;
 impl kanban_backend::KanbanBackendFactory for HttpBackendFactory {
     fn name(&self) -> &str { "http" }
     fn matches_locator(&self, locator: &str, _header: &[u8]) -> bool;
+    fn is_remote(&self) -> bool { true }
     async fn create(&self, locator: &str, config: &kanban_core::AppConfig)
         -> kanban_domain::KanbanResult<std::sync::Arc<dyn kanban_backend::KanbanBackend>>;
 }
