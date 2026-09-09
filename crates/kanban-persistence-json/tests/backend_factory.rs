@@ -36,7 +36,7 @@ async fn test_json_factory_creates_backend_without_touching_disk() {
 }
 
 #[test]
-fn test_json_backend_factory_matches_locator_as_catch_all() {
+fn test_json_backend_factory_matches_any_local_locator() {
     assert!(JsonBackendFactory.matches_locator("board.json", b"{\"boards\":[]}"));
     assert!(JsonBackendFactory.matches_locator("board.txt", b"[1,2,3]"));
     assert!(JsonBackendFactory.matches_locator("board.json", b"   {\"boards\":[]}"));
