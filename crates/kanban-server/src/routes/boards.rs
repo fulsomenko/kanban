@@ -1,3 +1,4 @@
+use crate::client_ident::ClientIdent;
 use crate::error::{AppError, AppJson};
 use crate::handlers::boards::{create_board, create_or_replace_board};
 use crate::model_read::{require_loaded, require_loaded_entity};
@@ -76,10 +77,11 @@ pub fn read_router() -> Router<AppState> {
 
 async fn post_board(
     State(state): State<AppState>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<CreateBoardRequest>,
 ) -> Result<(StatusCode, Json<BoardResponse>), AppError> {
     let resp = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let resp = create_board(&mut ctx, req).map_err(AppError::from)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Board, resp.id, ChangeKind::Created)
@@ -93,10 +95,11 @@ async fn post_board(
 async fn put_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<ReplaceBoardRequest>,
 ) -> Result<(StatusCode, Json<BoardResponse>), AppError> {
     let (resp, created) = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let (resp, created) = create_or_replace_board(&mut ctx, id, req).map_err(AppError::from)?;
         state
             .persist_and_broadcast(
@@ -120,10 +123,11 @@ async fn put_board(
 async fn patch_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<UpdateBoardRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
     let board = {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let (board, _invalidation) =
             crate::state::mutate(&mut ctx, |c| c.update_board_impl(id, req.into()))
                 .map_err(|e| AppError::from(&e))?;
@@ -139,9 +143,10 @@ async fn patch_board(
 async fn delete_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<StatusCode, AppError> {
     {
-        let mut ctx = state.ctx.lock().await;
+        let mut ctx = state.lock_for_write(client).await;
         let _invalidation = crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
             .map_err(|e| AppError::from(&e))?;
         state
@@ -155,8 +160,9 @@ async fn delete_board(
 async fn archive_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<Json<BoardResponse>, AppError> {
-    let mut guard = state.lock_session().await;
+    let mut guard = state.lock_for_write(client).await;
     let _invalidation = crate::state::mutate_unit(&mut guard, |c| c.archive_board_impl(id))
         .map_err(|e| AppError::from(&e))?;
     let response = board_response(&guard, id)?;
@@ -170,8 +176,9 @@ async fn archive_board(
 async fn restore_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    ClientIdent(client): ClientIdent,
 ) -> Result<Json<BoardResponse>, AppError> {
-    let mut guard = state.lock_session().await;
+    let mut guard = state.lock_for_write(client).await;
     let _invalidation = crate::state::mutate_unit(&mut guard, |c| c.restore_board_impl(id))
         .map_err(|e| AppError::from(&e))?;
     let response = board_response(&guard, id)?;

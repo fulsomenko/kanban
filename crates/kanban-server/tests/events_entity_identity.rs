@@ -400,6 +400,7 @@ async fn test_mutation_frame_carries_header_client_id() {
 async fn test_client_identity_does_not_leak_between_requests() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, column_id) = seed_board_and_column(&state).await;
     let mut rx = state.event_tx.subscribe();
     let client = Uuid::new_v4();
 
@@ -415,11 +416,14 @@ async fn test_client_identity_does_not_leak_between_requests() {
     let frame = next_frame(&mut rx).await;
     assert_eq!(frame.issued_by, ClientId::from(client));
 
+    // The second write goes through cards.rs's still-raw `state.ctx.lock()`
+    // seam, so this pins that `lock_for_write`'s identity does not survive
+    // past its own guard into a request that never acquires it.
     let response = send(
         &state,
         "POST",
-        "/v1/boards",
-        Some(&json!({"name": "Board B", "card_prefix": "BBB"})),
+        &format!("/v1/columns/{column_id}/cards"),
+        Some(&json!({"title": "Task 1"})),
     )
     .await;
     assert_eq!(response.status(), StatusCode::CREATED);

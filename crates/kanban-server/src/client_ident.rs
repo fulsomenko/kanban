@@ -1,8 +1,45 @@
+use crate::error::AppError;
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
+use kanban_core::ClientId;
+use kanban_service::api::{ApiError, ErrorCode};
+use uuid::Uuid;
+
+pub const CLIENT_ID_HEADER: &str = "x-kanban-client-id";
+
+/// Unauthenticated, client-supplied identity carried on `X-Kanban-Client-Id`.
+/// Absent header resolves to [`ClientId::nil`]; a malformed value rejects
+/// with a 422 rather than defaulting.
+#[derive(Debug)]
+pub struct ClientIdent(pub ClientId);
+
+impl<S: Send + Sync> FromRequestParts<S> for ClientIdent {
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        match parts.headers.get(CLIENT_ID_HEADER) {
+            None => Ok(ClientIdent(ClientId::nil())),
+            Some(value) => value
+                .to_str()
+                .ok()
+                .and_then(|s| Uuid::parse_str(s).ok())
+                .map(|uuid| ClientIdent(ClientId::from(uuid)))
+                .ok_or_else(|| {
+                    AppError(ApiError::new(
+                        ErrorCode::ValidationFailed,
+                        format!("{CLIENT_ID_HEADER} must be a UUID"),
+                    ))
+                }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::client_ident::{ClientIdent, CLIENT_ID_HEADER};
     use axum::extract::FromRequestParts;
     use axum::http::{HeaderValue, Request};
+    use axum::response::IntoResponse;
     use kanban_core::ClientId;
     use uuid::Uuid;
 
@@ -15,7 +52,10 @@ mod tests {
             .into_parts()
             .0;
         let result = ClientIdent::from_request_parts(&mut parts, &()).await;
-        assert_eq!(result.unwrap().0, ClientId::nil());
+        match result {
+            Ok(ClientIdent(id)) => assert_eq!(id, ClientId::nil()),
+            Err(_) => panic!("expected Ok"),
+        }
     }
 
     #[tokio::test]
@@ -29,7 +69,10 @@ mod tests {
             .into_parts()
             .0;
         let result = ClientIdent::from_request_parts(&mut parts, &()).await;
-        assert_eq!(result.unwrap().0, ClientId::from(uuid));
+        match result {
+            Ok(ClientIdent(id)) => assert_eq!(id, ClientId::from(uuid)),
+            Err(_) => panic!("expected Ok"),
+        }
     }
 
     #[tokio::test]
@@ -44,7 +87,6 @@ mod tests {
         let result = ClientIdent::from_request_parts(&mut parts, &()).await;
         let err = result.unwrap_err();
         assert_eq!(err.0.code, kanban_service::api::ErrorCode::ValidationFailed);
-        use axum::response::IntoResponse;
         assert_eq!(err.into_response().status(), 422);
     }
 

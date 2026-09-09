@@ -61,7 +61,7 @@ impl CorsPolicy {
                     ])
                     .allow_headers([
                         header::CONTENT_TYPE,
-                        HeaderName::from_static("x-kanban-client-id"),
+                        HeaderName::from_static(crate::client_ident::CLIENT_ID_HEADER),
                     ]),
             ),
         }
