@@ -12,7 +12,8 @@ use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use kanban_domain::{
-    filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, Model, NoProjections, Sprint,
+    filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, LoadState, Model, NoProjections,
+    Sprint,
 };
 use kanban_service::api::ArchivedCardResponse;
 use kanban_service::api::ArchivedFilterDto;
@@ -162,6 +163,20 @@ async fn list_cards(
         .map(|c| CardResponse::with_archived_at(c, archived_at.get(&c.id).copied()))
         .collect();
     paginate_response(responses, &params)
+}
+
+fn card_current(
+    session: &crate::state::Session,
+    id: Uuid,
+) -> Result<Option<CardResponse>, AppError> {
+    let scope = RouteScope::Card(id);
+    let mut model = Model::default();
+    session.sync(&scope, &mut model, &mut NoProjections);
+    let card = match model.card_by_id_state(id) {
+        LoadState::Missing => return Ok(None),
+        status => require_loaded_entity(status, "Card", id)?,
+    };
+    Ok(Some(CardResponse::from(card)))
 }
 
 async fn get_card(

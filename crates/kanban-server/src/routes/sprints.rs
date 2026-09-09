@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Model, NoProjections, Sprint};
+use kanban_domain::{LoadState, Model, NoProjections, Sprint};
 use kanban_service::api::{ChangeKind, EntityType, Page, PageParams, SprintResponse};
 use kanban_service::{resolve_sprint_name, KanbanError, KanbanOperations, SprintUpdate};
 use uuid::Uuid;
@@ -116,6 +116,42 @@ pub(crate) fn respond(
 ) -> Result<SprintResponse, AppError> {
     let name = resolve_sprint_name(ctx, sprint).map_err(|e| AppError::from(&e))?;
     Ok(SprintResponse::new(sprint, name))
+}
+
+fn sprint_current(
+    session: &crate::state::Session,
+    id: Uuid,
+) -> Result<Option<SprintResponse>, AppError> {
+    let mut model = Model::default();
+    session.sync(
+        &RouteScope::Sprint {
+            board_id: None,
+            sprint_id: id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    let sprint = match model.sprint_by_id_state(id) {
+        LoadState::Missing => return Ok(None),
+        status => require_loaded_entity(status, "Sprint", id)?.clone(),
+    };
+    session.sync(
+        &RouteScope::Sprint {
+            board_id: Some(sprint.board_id),
+            sprint_id: id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    let board = require_loaded_entity(
+        model.board_id_status(sprint.board_id),
+        "Board",
+        sprint.board_id,
+    )?;
+    Ok(Some(SprintResponse::new(
+        &sprint,
+        sprint.get_name(board).map(str::to_string),
+    )))
 }
 
 async fn create_sprint_route(

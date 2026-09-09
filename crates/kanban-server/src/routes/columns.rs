@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Column, Model, NoProjections};
+use kanban_domain::{Column, LoadState, Model, NoProjections};
 use kanban_service::api::{ChangeKind, ColumnResponse, EntityType, Page, PageParams};
 use kanban_service::{ColumnUpdate, KanbanError, KanbanOperations};
 use uuid::Uuid;
@@ -27,6 +27,20 @@ async fn list_columns(
     require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
     let cols = require_loaded(model.board_columns_state(board_id), "columns")?;
     paginate_response(cols.iter().map(ColumnResponse::from).collect(), &params)
+}
+
+fn column_current(
+    session: &crate::state::Session,
+    id: Uuid,
+) -> Result<Option<ColumnResponse>, AppError> {
+    let scope = RouteScope::Column(id);
+    let mut model = Model::default();
+    session.sync(&scope, &mut model, &mut NoProjections);
+    let column = match model.column_id_status(id) {
+        LoadState::Missing => return Ok(None),
+        status => require_loaded_entity(status, "Column", id)?,
+    };
+    Ok(Some(ColumnResponse::from(column)))
 }
 
 async fn get_column(
