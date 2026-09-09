@@ -7,10 +7,29 @@
 use axum::http::StatusCode;
 use kanban_domain::KanbanOperations;
 use kanban_server::state::AppState;
-use kanban_server::test_helpers::{json_of, make_state, send};
+use kanban_server::test_helpers::{json_of, make_state, send, send_with_headers};
 use serde_json::json;
 use tempfile::tempdir;
 use uuid::Uuid;
+
+fn etag_of(response: &axum::response::Response) -> String {
+    response
+        .headers()
+        .get("etag")
+        .expect("etag header")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn is_quoted_32_hex(tag: &str) -> bool {
+    tag.len() == 34
+        && tag.starts_with('"')
+        && tag.ends_with('"')
+        && tag[1..33]
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+}
 
 async fn seed_board_column_and_card(state: &AppState) -> (Uuid, Uuid, Uuid) {
     let mut ctx = state.ctx.lock().await;
@@ -378,4 +397,67 @@ async fn test_delete_sprint_flat_unknown_id_returns_404() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let json = json_of(response).await;
     assert_eq!(json["code"], "NOT_FOUND");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_flat_carries_etag_header_and_matching_if_none_match_returns_304() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, card_id) = seed_board_and_card(&state).await;
+
+    let uri = format!("/v1/cards/{card_id}");
+    let first = send(&state, "GET", &uri, None).await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let tag = etag_of(&first);
+    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+
+    let second = send_with_headers(&state, "GET", &uri, None, &[("if-none-match", &tag)]).await;
+    assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(etag_of(&second), tag);
+    let bytes = axum::body::to_bytes(second.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(bytes.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_column_flat_carries_etag_header_and_matching_if_none_match_returns_304() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, col_id) = seed_board_and_column(&state).await;
+
+    let uri = format!("/v1/columns/{col_id}");
+    let first = send(&state, "GET", &uri, None).await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let tag = etag_of(&first);
+    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+
+    let second = send_with_headers(&state, "GET", &uri, None, &[("if-none-match", &tag)]).await;
+    assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(etag_of(&second), tag);
+    let bytes = axum::body::to_bytes(second.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(bytes.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_sprint_flat_carries_etag_header_and_matching_if_none_match_returns_304() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, sprint_id) = seed_board_and_sprint(&state, "Alpha").await;
+
+    let uri = format!("/v1/sprints/{sprint_id}");
+    let first = send(&state, "GET", &uri, None).await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let tag = etag_of(&first);
+    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+
+    let second = send_with_headers(&state, "GET", &uri, None, &[("if-none-match", &tag)]).await;
+    assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(etag_of(&second), tag);
+    let bytes = axum::body::to_bytes(second.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(bytes.is_empty());
 }
