@@ -28,6 +28,20 @@ fn test_cli_subcommand_on_a_url_locator_is_not_a_missing_file_error() {
         .stderr(predicate::str::contains("/http:/").not());
 }
 
+#[cfg(feature = "http")]
+#[test]
+fn test_cli_on_an_unreachable_url_locator_exits_with_a_transport_error_not_a_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    kanban_no_config(dir.path())
+        .args(["http://127.0.0.1:1", "board", "list"])
+        .timeout(Duration::from_secs(60))
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("transport error"))
+        .stderr(predicate::str::contains("health probe"))
+        .stderr(predicate::str::contains("Cannot drop a runtime").not());
+}
+
 #[test]
 fn test_cli_init_on_a_url_locator_is_rejected_with_guidance() {
     let dir = tempfile::tempdir().unwrap();

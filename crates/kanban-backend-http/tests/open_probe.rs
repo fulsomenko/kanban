@@ -16,12 +16,8 @@ async fn test_open_over_http_backend_against_live_server_succeeds() {
         Err(e) => panic!("expected open() to succeed against a live server, got: {e}"),
     };
 
-    tokio::task::spawn_blocking(move || {
-        drop(ctx);
-        drop(backend);
-    })
-    .await
-    .unwrap();
+    drop(ctx);
+    drop(backend);
 
     server.shutdown().await;
 }
@@ -43,7 +39,5 @@ async fn test_open_over_http_backend_against_dead_server_fails_with_transport_er
         Ok(_) => panic!("expected open() to fail against an unreachable server"),
     }
 
-    tokio::task::spawn_blocking(move || drop(backend))
-        .await
-        .unwrap();
+    drop(backend);
 }
