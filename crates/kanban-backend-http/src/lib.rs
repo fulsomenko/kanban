@@ -1,3 +1,4 @@
+mod backend_factory;
 mod command_store;
 mod conversions;
 mod data_store;
@@ -183,6 +184,21 @@ mod tests {
              mutations with no transaction around them"
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_http_backend_new_rejects_a_locator_without_a_scheme() {
+        let result = HttpBackend::new("boards.json");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("boards.json"), "Got: {err}");
+        assert!(err.contains("http"), "Got: {err}");
+    }
+
+    #[test]
+    fn test_http_backend_new_rejects_a_non_http_scheme() {
+        assert!(HttpBackend::new("ftp://example.com").is_err());
+        assert!(HttpBackend::new("notes://draft.json").is_err());
     }
 
     #[test]

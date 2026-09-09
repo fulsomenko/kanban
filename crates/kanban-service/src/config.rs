@@ -833,6 +833,33 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_storage_location_passes_a_remote_locator_through() {
+        let config = AppConfig {
+            storage_location: Some("http://127.0.0.1:3000".into()),
+            ..Default::default()
+        };
+        assert_eq!(resolve_storage_location(&config), "http://127.0.0.1:3000");
+    }
+
+    #[test]
+    fn test_validate_accepts_a_remote_storage_location() {
+        let config = AppConfig {
+            storage_location: Some("http://127.0.0.1:3000".into()),
+            ..Default::default()
+        };
+        validate(&config).unwrap();
+    }
+
+    #[test]
+    fn test_validate_accepts_a_remote_storage_location_containing_a_dotdot_segment() {
+        let config = AppConfig {
+            storage_location: Some("http://example.com/a/../b".into()),
+            ..Default::default()
+        };
+        validate(&config).unwrap();
+    }
+
+    #[test]
     fn test_validate_storage_location_none_is_valid() {
         let config = AppConfig {
             storage_location: None,

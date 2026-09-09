@@ -42,3 +42,10 @@ fn test_json_backend_factory_matches_locator_as_catch_all() {
     assert!(JsonBackendFactory.matches_locator("board.json", b"   {\"boards\":[]}"));
     assert!(JsonBackendFactory.matches_locator("/nonexistent/board.json", &[]));
 }
+
+#[test]
+fn test_json_factory_declines_a_remote_locator() {
+    assert!(!JsonBackendFactory.matches_locator("http://127.0.0.1:3000", &[]));
+    assert!(!JsonBackendFactory.matches_locator("https://example.com/boards", &[]));
+    assert!(!JsonBackendFactory.matches_locator("notes://draft.json", &[]));
+}

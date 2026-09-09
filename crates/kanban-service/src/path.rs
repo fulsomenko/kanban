@@ -115,6 +115,22 @@ mod tests {
     }
 
     #[test]
+    fn test_a_remote_locator_is_not_cwd_joined() {
+        let dir = TempDir::new().unwrap();
+        let result =
+            validate_path_with_cwd(Path::new("http://127.0.0.1:3000"), dir.path()).unwrap();
+        assert_eq!(result, PathBuf::from("http://127.0.0.1:3000"));
+        assert!(result.to_string_lossy().contains("://"));
+    }
+
+    #[test]
+    fn test_a_remote_locator_passes_through_the_public_entry_point() -> KanbanResult<()> {
+        let result = validate_path(Path::new("https://example.com/boards"))?;
+        assert_eq!(result, PathBuf::from("https://example.com/boards"));
+        Ok(())
+    }
+
+    #[test]
     fn test_validate_path_absolute_existing_file_returns_non_unc() -> KanbanResult<()> {
         let dir = TempDir::new().unwrap();
         let cwd = dunce::canonicalize(dir.path()).unwrap();
