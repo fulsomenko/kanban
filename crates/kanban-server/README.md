@@ -141,6 +141,14 @@ curl -s http://127.0.0.1:58548/v1/boards/00000000-0000-0000-0000-000000000000 | 
 }
 ```
 
+### Client identity
+
+Send `X-Kanban-Client-Id: <uuid>` on a write request to attribute it to that client. The server stamps the value onto the audit log entry the write produces and onto the `ChangeEventFrame` broadcast on `/v1/events`, so a client can filter its own writes back out of the SSE stream by comparing `issued_by` to the UUID it sent, instead of relying on `writer_instance_id`.
+
+The header is a client-generated UUID, stable for the client's lifetime; omit it and the write is recorded and broadcast with a nil `issued_by`. A value that does not parse as a UUID is rejected with `422 VALIDATION_FAILED` before the request reaches the store. The identity is unauthenticated: any client can send any UUID, so it identifies provenance for echo suppression and auditing, not authorization.
+
+Today only the board write routes (`POST`/`PUT`/`PATCH`/`DELETE /v1/boards*`, `POST /v1/boards/{id}/archive`, `POST /v1/boards/{id}/restore`) and `POST /v1/import` honour the header. Every other write route still records and broadcasts a nil `issued_by`.
+
 ## Endpoints
 
 All request/response bodies are JSON. Errors share one envelope (see [Error Handling](#error-handling)). The paginated collection `GET`s (`/v1/boards`, `/v1/archived-boards`, `/v1/boards/{board_id}/columns`, `/v1/boards/{board_id}/cards`, `/v1/boards/{board_id}/sprints`) accept `?page=&page_size=` and return a `Page<T>` envelope; see [Pagination](#pagination).
@@ -230,7 +238,7 @@ The remaining card routes (get/create/replace/update/delete, and the flat `/v1/c
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/events` | Server-Sent Events stream of `ChangeEventFrame`s, one per successful mutation (or per detected external write). Each frame carries `entity_type`/`entity_id`/`kind`, all absent when the emitter cannot name what changed. |
+| `GET` | `/v1/events` | Server-Sent Events stream of `ChangeEventFrame`s, one per successful mutation (or per detected external write). Each frame carries `entity_type`/`entity_id`/`kind`, all absent when the emitter cannot name what changed, and `issued_by` (see [Client identity](#client-identity)) for per-client echo suppression. |
 
 Every write route (`POST`/`PUT`/`PATCH`) broadcasts a change event naming the entity it touched and, per the persistence layer's normal save path, durably writes to the configured store before responding.
 

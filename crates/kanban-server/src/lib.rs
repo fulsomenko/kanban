@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod capabilities;
+pub mod client_ident;
 pub mod error;
 pub mod layers;
 pub mod model_read;

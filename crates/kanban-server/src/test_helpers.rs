@@ -58,6 +58,31 @@ pub async fn send(state: &AppState, method: &str, uri: &str, body: Option<&Value
         .unwrap()
 }
 
+/// Like [`send`], but with extra request headers.
+pub async fn send_with_headers(
+    state: &AppState,
+    method: &str,
+    uri: &str,
+    body: Option<&Value>,
+    headers: &[(&str, &str)],
+) -> Response {
+    let mut builder = Request::builder().method(method).uri(uri);
+    let body = match body {
+        Some(v) => {
+            builder = builder.header("content-type", "application/json");
+            Body::from(serde_json::to_string(v).unwrap())
+        }
+        None => Body::empty(),
+    };
+    for (k, v) in headers {
+        builder = builder.header(*k, *v);
+    }
+    app::router(state.clone())
+        .oneshot(builder.body(body).unwrap())
+        .await
+        .unwrap()
+}
+
 pub async fn json_of(response: Response) -> Value {
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await

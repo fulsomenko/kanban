@@ -1,7 +1,7 @@
 use super::KanbanContext;
 use crate::backend::KanbanBackend;
 use crate::fetch_plan::{FetchPlan, LoadedEntities};
-use kanban_core::{AppConfig, AppType};
+use kanban_core::{AppConfig, AppType, ClientId};
 use kanban_domain::{
     ArchivedCard, Board, Card, Column, DataStore, DependencyGraph, Invalidation, KanbanResult,
     Resolved, Sprint,
@@ -22,6 +22,7 @@ impl KanbanContext {
             conflict_pending: false,
             session_id: Uuid::new_v4(),
             app_type: AppType::Unknown,
+            issued_by: ClientId::nil(),
         }
     }
 
@@ -29,6 +30,14 @@ impl KanbanContext {
     pub fn with_app_type(mut self, app_type: AppType) -> Self {
         self.app_type = app_type;
         self
+    }
+
+    pub fn set_issued_by(&mut self, id: ClientId) {
+        self.issued_by = id;
+    }
+
+    pub fn issued_by(&self) -> ClientId {
+        self.issued_by
     }
 
     /// The session ID, stable for this context's lifetime. Each surface

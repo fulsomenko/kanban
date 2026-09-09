@@ -72,8 +72,19 @@ impl AppState {
         self.ctx.lock().await
     }
 
+    /// Like [`lock_session`][Self::lock_session], but stamps the context with
+    /// `client` for the lifetime of the returned guard. The identity resets
+    /// to nil when the guard drops, so it never survives past the request
+    /// that set it.
+    pub async fn lock_for_write(&self, client: ClientId) -> WriteSession<'_> {
+        let mut guard = self.lock_session().await;
+        guard.ctx.set_issued_by(client);
+        WriteSession { guard }
+    }
+
     fn emit(
         &self,
+        issued_by: ClientId,
         entity_type: Option<EntityType>,
         entity_id: Option<Uuid>,
         kind: Option<ChangeKind>,
@@ -81,7 +92,7 @@ impl AppState {
         let _ = self.event_tx.send(ChangeEventFrame::for_entity(
             self.instance_id,
             Uuid::new_v4(),
-            ClientId::nil(),
+            issued_by,
             entity_type,
             entity_id,
             kind,
@@ -93,15 +104,21 @@ impl AppState {
     /// call after the context lock guard has been dropped. A missing
     /// subscriber (no SSE consumer connected yet) is not an error, hence the
     /// discarded result.
-    pub fn broadcast_change(&self, entity_type: EntityType, entity_id: Uuid, kind: ChangeKind) {
-        self.emit(Some(entity_type), Some(entity_id), Some(kind));
+    pub fn broadcast_change(
+        &self,
+        issued_by: ClientId,
+        entity_type: EntityType,
+        entity_id: Uuid,
+        kind: ChangeKind,
+    ) {
+        self.emit(issued_by, Some(entity_type), Some(entity_id), Some(kind));
     }
 
     /// Broadcast a change event whose origin is outside this process (an
     /// external writer changed the file), so the specific entity touched is
     /// unknowable.
     pub fn broadcast_unscoped_change(&self) {
-        self.emit(None, None, None);
+        self.emit(ClientId::nil(), None, None, None);
     }
 
     /// Durably persist any pending changes, then broadcast that `entity_id`
@@ -122,8 +139,37 @@ impl AppState {
         kind: ChangeKind,
     ) -> KanbanResult<()> {
         ctx.save().await?;
-        self.broadcast_change(entity_type, entity_id, kind);
+        self.broadcast_change(ctx.issued_by(), entity_type, entity_id, kind);
         Ok(())
+    }
+}
+
+/// A [`Session`] lock scoped to one client's write request. Deref/DerefMut
+/// forward to `Session` exactly like `lock_session`'s guard; dropping this
+/// guard resets `KanbanContext::issued_by` to nil so the identity cannot
+/// leak into a later request that acquires the lock without going through
+/// `lock_for_write`.
+pub struct WriteSession<'a> {
+    guard: MutexGuard<'a, Session>,
+}
+
+impl std::ops::Deref for WriteSession<'_> {
+    type Target = Session;
+
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl std::ops::DerefMut for WriteSession<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
+impl Drop for WriteSession<'_> {
+    fn drop(&mut self) {
+        self.guard.ctx.set_issued_by(ClientId::nil());
     }
 }
 

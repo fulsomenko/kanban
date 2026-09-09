@@ -1,3 +1,4 @@
+use crate::client_ident::ClientIdent;
 use crate::error::AppError;
 use crate::state::AppState;
 use axum::extract::{Path, State};
@@ -38,6 +39,7 @@ pub fn read_router() -> Router<AppState> {
 
 async fn import_route(
     State(state): State<AppState>,
+    ClientIdent(client): ClientIdent,
     body: String,
 ) -> Result<(StatusCode, Json<BoardResponse>), AppError> {
     serde_json::from_str::<Snapshot>(&body).map_err(|e| {
@@ -47,7 +49,7 @@ async fn import_route(
         ))
     })?;
 
-    let mut guard = state.lock_session().await;
+    let mut guard = state.lock_for_write(client).await;
     let board = guard.import_board(&body).map_err(|e| AppError::from(&e))?;
     state
         .persist_and_broadcast(&guard, EntityType::Board, board.id, ChangeKind::Created)

@@ -7,7 +7,7 @@
 use axum::http::StatusCode;
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_server::state::AppState;
-use kanban_server::test_helpers::{json_of, make_state, send};
+use kanban_server::test_helpers::{json_of, make_state, send, send_with_headers};
 use kanban_service::{AppConfig, KanbanBackend, KanbanContext, KanbanOperations};
 use serde_json::json;
 use std::sync::Arc;
@@ -494,4 +494,27 @@ async fn test_put_board_rejects_a_legacy_singular_completion_column_id_key() {
         message.contains("completion_column_id"),
         "the error must name the key sent: {body}"
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_malformed_client_id_header_returns_422() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let response = send_with_headers(
+        &state,
+        "POST",
+        "/v1/boards",
+        Some(&json!({"name": "B", "card_prefix": "KAN"})),
+        &[("x-kanban-client-id", "not-a-uuid")],
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = json_of(response).await;
+    assert_eq!(body["code"], "VALIDATION_FAILED");
+
+    let response = send(&state, "GET", "/v1/boards", None).await;
+    let body = json_of(response).await;
+    assert_eq!(body["total"], 0);
 }

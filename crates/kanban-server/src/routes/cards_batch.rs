@@ -29,7 +29,7 @@ async fn run_detailed(
     let result = op(&mut ctx);
     ctx.save().await.map_err(|e| AppError::from(&e))?;
     for id in &result.succeeded {
-        state.broadcast_change(EntityType::Card, *id, ChangeKind::Updated);
+        state.broadcast_change(ctx.issued_by(), EntityType::Card, *id, ChangeKind::Updated);
     }
     Ok(to_wire(&result))
 }
@@ -81,7 +81,7 @@ async fn batch_update_route(
         .map_err(|e| AppError::from(&e))?;
     ctx.save().await.map_err(|e| AppError::from(&e))?;
     for id in &ids {
-        state.broadcast_change(EntityType::Card, *id, ChangeKind::Updated);
+        state.broadcast_change(ctx.issued_by(), EntityType::Card, *id, ChangeKind::Updated);
     }
     Ok(Json(BatchOperationResponse::new(ids, vec![])))
 }

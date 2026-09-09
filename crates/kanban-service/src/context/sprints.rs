@@ -1,6 +1,6 @@
 use super::KanbanContext;
 use crate::backend::KanbanBackend;
-use kanban_core::{ClientId, KANBAN_VERSION};
+use kanban_core::KANBAN_VERSION;
 use kanban_domain::commands::{Command, SprintCommand};
 use kanban_domain::export::{AllBoardsExport, BoardImporter};
 use kanban_domain::{
@@ -460,7 +460,7 @@ impl KanbanContext {
             let batch = kanban_domain::CommandBatch {
                 commands: cmds.clone(),
                 correlation_id: Uuid::new_v4(),
-                issued_by: ClientId::nil(),
+                issued_by: self.issued_by,
                 timestamp: chrono::Utc::now(),
                 app_type: self.app_type,
                 app_version: KANBAN_VERSION.to_string(),
