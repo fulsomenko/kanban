@@ -298,7 +298,7 @@ async fn test_graph_write_routes_stamp_the_header_client_id() {
         &state,
         "POST",
         &format!("/v1/cards/{a}/related"),
-        Some(&json!({"other": b, "kind": "duplicate"})),
+        Some(&json!({"other": b, "kind": "duplicates"})),
         &headers,
     )
     .await;
@@ -352,7 +352,7 @@ async fn test_column_write_routes_stamp_the_header_client_id() {
         &state,
         "PUT",
         &format!("/v1/boards/{board_id}/columns/{new_id}"),
-        Some(&json!({"name": "Doing"})),
+        Some(&json!({"name": "Doing", "position": 1})),
         &headers,
     )
     .await;
