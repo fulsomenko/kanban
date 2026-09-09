@@ -41,6 +41,50 @@ fn serialization_failed() -> AppError {
     ))
 }
 
+fn precondition_failed() -> AppError {
+    AppError(ApiError::new(
+        ErrorCode::PreconditionFailed,
+        "the representation this request was conditioned on is no longer current",
+    ))
+}
+
+fn if_match_matches(headers: &HeaderMap, current: Option<&str>) -> bool {
+    let Some(current) = current else {
+        return false;
+    };
+    headers
+        .get_all(header::IF_MATCH)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .map(str::trim)
+        .any(|candidate| candidate == "*" || candidate == current)
+}
+
+/// RFC 9110 13.1.1 `If-Match`: strong comparison, so a `W/`-prefixed tag never
+/// matches; `*` matches any current representation. An absent header proceeds
+/// without calling `current`. `None` from `current` means the target has no
+/// representation yet, which fails every `If-Match`, including `*`.
+pub fn check_if_match<T: Serialize>(
+    headers: &HeaderMap,
+    current: impl FnOnce() -> Result<Option<T>, AppError>,
+) -> Result<(), AppError> {
+    if !headers.contains_key(header::IF_MATCH) {
+        return Ok(());
+    }
+    let tag = match current()? {
+        Some(value) => Some(etag_for(
+            &serde_json::to_vec(&value).map_err(|_| serialization_failed())?,
+        )),
+        None => None,
+    };
+    if if_match_matches(headers, tag.as_deref()) {
+        Ok(())
+    } else {
+        Err(precondition_failed())
+    }
+}
+
 pub fn json_with_etag<T: Serialize>(headers: &HeaderMap, value: &T) -> Result<Response, AppError> {
     let body = serde_json::to_vec(value).map_err(|_| serialization_failed())?;
     let tag = etag_for(&body);
