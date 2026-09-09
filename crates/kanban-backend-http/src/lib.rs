@@ -1,8 +1,11 @@
+mod backend_factory;
 mod command_store;
 mod conversions;
 mod data_store;
 mod http;
 mod remote_writes;
+
+pub use backend_factory::HttpBackendFactory;
 
 pub struct HttpBackend {
     base_url: String,
@@ -48,6 +51,11 @@ impl kanban_backend::KanbanBackend for HttpBackend {
 
 impl HttpBackend {
     pub fn new(base_url: &str) -> kanban_domain::KanbanResult<Self> {
+        if !matches!(kanban_core::scheme_of(base_url), Some("http" | "https")) {
+            return Err(kanban_domain::KanbanError::validation(format!(
+                "HttpBackend requires an http:// or https:// URL, got '{base_url}'"
+            )));
+        }
         let base_url = base_url.trim_end_matches('/').to_string();
         let client = reqwest::Client::builder().build().map_err(|e| {
             kanban_domain::KanbanError::Internal(format!("failed to build http client: {e}"))
@@ -183,6 +191,23 @@ mod tests {
              mutations with no transaction around them"
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_http_backend_new_rejects_a_locator_without_a_scheme() {
+        let result = HttpBackend::new("boards.json");
+        let Err(err) = result else {
+            panic!("expected an error for a schemeless locator");
+        };
+        let err = err.to_string();
+        assert!(err.contains("boards.json"), "Got: {err}");
+        assert!(err.contains("http"), "Got: {err}");
+    }
+
+    #[test]
+    fn test_http_backend_new_rejects_a_non_http_scheme() {
+        assert!(HttpBackend::new("ftp://example.com").is_err());
+        assert!(HttpBackend::new("notes://draft.json").is_err());
     }
 
     #[test]

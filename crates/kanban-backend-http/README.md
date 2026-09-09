@@ -32,14 +32,29 @@ impl kanban_backend::KanbanBackend for HttpBackend {
     fn as_data_store(&self) -> &dyn kanban_domain::DataStore { self }
     fn instance_id(&self) -> uuid::Uuid { self.instance_id }
 }
+
+pub struct HttpBackendFactory;
+
+impl kanban_backend::KanbanBackendFactory for HttpBackendFactory {
+    fn name(&self) -> &str { "http" }
+    fn matches_locator(&self, locator: &str, _header: &[u8]) -> bool;
+    async fn create(&self, locator: &str, config: &kanban_core::AppConfig)
+        -> kanban_domain::KanbanResult<std::sync::Arc<dyn kanban_backend::KanbanBackend>>;
+}
 ```
 
-`HttpBackend::new` normalizes a trailing slash off `base_url`, builds a
-`reqwest::Client`, and spins up a dedicated multi-thread Tokio runtime — every
-synchronous `DataStore`/`CommandStore` call bridges onto that runtime via a
-private `block_on` helper rather than assuming an ambient one, since
-`KanbanBackend`'s inherent methods are synchronous but the HTTP calls
-underneath are async.
+`HttpBackend::new` rejects a locator that does not carry an `http://` or
+`https://` scheme (`kanban_core::scheme_of`), then normalizes a trailing
+slash off `base_url`, builds a `reqwest::Client`, and spins up a dedicated
+multi-thread Tokio runtime — every synchronous `DataStore`/`CommandStore`
+call bridges onto that runtime via a private `block_on` helper rather than
+assuming an ambient one, since `KanbanBackend`'s inherent methods are
+synchronous but the HTTP calls underneath are async.
+
+`HttpBackendFactory::matches_locator` claims a locator only when its scheme is
+`http` or `https`, so it is safe to register alongside `JsonBackendFactory`
+and `SqliteBackendFactory` in any registration order — both of those decline
+a remote locator before their own content/suffix checks run.
 
 ## Position in the workspace
 
@@ -82,4 +97,11 @@ test-only and omitted from the diagram above. See the
 
 ## Related crates
 
-Used by: none yet — no crate in the workspace currently registers `HttpBackend` as a `KanbanBackendFactory`. [kanban-server](../kanban-server/README.md) depends on this crate only in reverse, as a dev-dependency (feature `test-helpers`) to spin up a real server for this crate's own integration tests.
+`HttpBackendFactory` is exported from this crate's root for an application to
+register in its own `kanban_backend::KanbanBackendRegistry`. No consumer
+registers it yet — `kanban-cli`, `kanban-tui`, and `kanban-mcp` still resolve
+every locator through their local `json`/`sqlite` registries only. Wiring an
+application to accept an `http://`/`https://` locator end to end is follow-up
+work. [kanban-server](../kanban-server/README.md) depends on this crate only
+in reverse, as a dev-dependency (feature `test-helpers`) to spin up a real
+server for this crate's own integration tests.
