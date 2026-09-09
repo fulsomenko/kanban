@@ -123,4 +123,85 @@ mod tests {
         assert!(!if_none_match_matches(&headers, "\"\""));
         assert!(!if_none_match_matches(&headers, "\"abc\""));
     }
+
+    #[derive(Serialize)]
+    struct Dto {
+        a: u32,
+    }
+
+    #[test]
+    fn test_absent_if_match_passes_without_building_the_representation() {
+        let headers = HeaderMap::new();
+        let result = check_if_match(&headers, || -> Result<Option<Dto>, AppError> {
+            panic!("representation must not be built")
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_matching_if_match_passes() {
+        let mut headers = HeaderMap::new();
+        let tag = etag_for(b"{\"a\":1}");
+        headers.insert("if-match", tag.parse().unwrap());
+        let result = check_if_match(&headers, || Ok(Some(Dto { a: 1 })));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_stale_if_match_fails_with_precondition_failed() {
+        let mut headers = HeaderMap::new();
+        headers.insert("if-match", "\"not-the-current-tag\"".parse().unwrap());
+        let result = check_if_match(&headers, || Ok(Some(Dto { a: 1 })));
+        let err = result.expect_err("stale tag must fail");
+        assert_eq!(err.0.code, ErrorCode::PreconditionFailed);
+        assert_eq!(err.0.code.http_status(), 412);
+    }
+
+    #[test]
+    fn test_star_if_match_passes_when_a_representation_exists() {
+        let mut headers = HeaderMap::new();
+        headers.insert("if-match", "*".parse().unwrap());
+        let result = check_if_match(&headers, || Ok(Some(Dto { a: 1 })));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_star_if_match_fails_when_no_representation_exists() {
+        let mut headers = HeaderMap::new();
+        headers.insert("if-match", "*".parse().unwrap());
+        let result = check_if_match(&headers, || Ok(None::<Dto>));
+        let err = result.expect_err("star with no representation must fail");
+        assert_eq!(err.0.code, ErrorCode::PreconditionFailed);
+    }
+
+    #[test]
+    fn test_weak_if_match_tag_never_matches() {
+        let mut headers = HeaderMap::new();
+        let tag = etag_for(b"{\"a\":1}");
+        headers.insert("if-match", format!("W/{tag}").parse().unwrap());
+        let result = check_if_match(&headers, || Ok(Some(Dto { a: 1 })));
+        let err = result.expect_err("weak tag must not satisfy If-Match");
+        assert_eq!(err.0.code, ErrorCode::PreconditionFailed);
+    }
+
+    #[test]
+    fn test_if_match_matches_any_strong_tag_in_a_comma_list() {
+        let tag = etag_for(b"{\"a\":1}");
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "if-match",
+            format!("\"zzz\", {tag}, \"yyy\"").parse().unwrap(),
+        );
+        let result = check_if_match(&headers, || Ok(Some(Dto { a: 1 })));
+        assert!(result.is_ok());
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "if-match",
+            format!("W/{tag}, \"yyy\"").parse().unwrap(),
+        );
+        let result = check_if_match(&headers, || Ok(Some(Dto { a: 1 })));
+        assert!(result.is_err());
+    }
 }
