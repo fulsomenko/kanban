@@ -31,6 +31,8 @@ fn is_quoted_32_hex(tag: &str) -> bool {
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
+const STALE_IF_MATCH: &str = "\"00000000000000000000000000000000\"";
+
 async fn seed_board_column_and_card(state: &AppState) -> (Uuid, Uuid, Uuid) {
     let mut ctx = state.ctx.lock().await;
     let board_id = ctx
@@ -448,6 +450,108 @@ async fn test_get_column_flat_carries_etag_header_and_matching_if_none_match_ret
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_patch_card_flat_with_the_get_etag_succeeds_then_the_reused_etag_returns_412() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, card_id) = seed_board_and_card(&state).await;
+
+    let get_response = send(&state, "GET", &format!("/v1/cards/{card_id}"), None).await;
+    let tag = etag_of(&get_response);
+
+    let first = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/cards/{card_id}"),
+        Some(&json!({"title": "Renamed Once"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/cards/{card_id}"),
+        Some(&json!({"title": "Renamed Twice"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::PRECONDITION_FAILED);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_card_flat_with_stale_if_match_returns_412() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, card_id) = seed_board_and_card(&state).await;
+
+    let response = send_with_headers(
+        &state,
+        "DELETE",
+        &format!("/v1/cards/{card_id}"),
+        None,
+        &[("if-match", STALE_IF_MATCH)],
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+
+    let get_response = send(&state, "GET", &format!("/v1/cards/{card_id}"), None).await;
+    assert_eq!(get_response.status(), StatusCode::OK);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_column_flat_with_the_get_etag_succeeds_then_the_reused_etag_returns_412() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, col_id) = seed_board_and_column(&state).await;
+
+    let get_response = send(&state, "GET", &format!("/v1/columns/{col_id}"), None).await;
+    let tag = etag_of(&get_response);
+
+    let first = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/columns/{col_id}"),
+        Some(&json!({"name": "Renamed Once"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/columns/{col_id}"),
+        Some(&json!({"name": "Renamed Twice"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::PRECONDITION_FAILED);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_column_flat_with_stale_if_match_returns_412() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, col_id) = seed_board_and_column(&state).await;
+
+    let response = send_with_headers(
+        &state,
+        "DELETE",
+        &format!("/v1/columns/{col_id}"),
+        None,
+        &[("if-match", STALE_IF_MATCH)],
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+
+    let get_response = send(&state, "GET", &format!("/v1/columns/{col_id}"), None).await;
+    assert_eq!(get_response.status(), StatusCode::OK);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_get_sprint_flat_carries_etag_header_and_matching_if_none_match_returns_304() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -469,4 +573,55 @@ async fn test_get_sprint_flat_carries_etag_header_and_matching_if_none_match_ret
         .await
         .unwrap();
     assert!(bytes.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_sprint_flat_with_the_get_etag_succeeds_then_the_reused_etag_returns_412() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, sprint_id) = seed_board_and_sprint(&state, "Alpha").await;
+
+    let get_response = send(&state, "GET", &format!("/v1/sprints/{sprint_id}"), None).await;
+    let tag = etag_of(&get_response);
+
+    let first = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/sprints/{sprint_id}"),
+        Some(&json!({"name": "Renamed Once"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/sprints/{sprint_id}"),
+        Some(&json!({"name": "Renamed Twice"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::PRECONDITION_FAILED);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_sprint_flat_with_stale_if_match_returns_412() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, sprint_id) = seed_board_and_sprint(&state, "Alpha").await;
+
+    let response = send_with_headers(
+        &state,
+        "DELETE",
+        &format!("/v1/sprints/{sprint_id}"),
+        None,
+        &[("if-match", STALE_IF_MATCH)],
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+
+    let get_response = send(&state, "GET", &format!("/v1/sprints/{sprint_id}"), None).await;
+    assert_eq!(get_response.status(), StatusCode::OK);
 }

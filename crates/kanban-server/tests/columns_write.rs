@@ -7,10 +7,22 @@
 use axum::http::StatusCode;
 use kanban_domain::KanbanOperations;
 use kanban_server::state::AppState;
-use kanban_server::test_helpers::{json_of, make_state, send};
+use kanban_server::test_helpers::{json_of, make_state, send, send_with_headers};
 use serde_json::json;
 use tempfile::tempdir;
 use uuid::Uuid;
+
+const STALE_IF_MATCH: &str = "\"00000000000000000000000000000000\"";
+
+fn etag_of(response: &axum::response::Response) -> String {
+    response
+        .headers()
+        .get("etag")
+        .expect("etag header")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
 
 async fn seed_board(state: &AppState) -> Uuid {
     let mut ctx = state.ctx.lock().await;
@@ -828,4 +840,117 @@ async fn test_patch_column_persists_to_disk() {
         col_from_disk.name, "Updated Name",
         "PATCH update must be persisted to disk, not just in-memory state"
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_column_with_stale_if_match_returns_412_and_leaves_column_unchanged() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (board_id, col_id) = seed_board_and_column(&state, "Original Name").await;
+
+    let response = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/boards/{board_id}/columns/{col_id}"),
+        Some(&json!({"name": "Updated Name"})),
+        &[("if-match", STALE_IF_MATCH)],
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+    assert_eq!(json_of(response).await["code"], "PRECONDITION_FAILED");
+
+    let ctx = state.ctx.lock().await;
+    assert_eq!(ctx.get_column(col_id).unwrap().unwrap().name, "Original Name");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_column_with_the_get_etag_succeeds_then_the_reused_etag_returns_412() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (board_id, col_id) = seed_board_and_column(&state, "Original Name").await;
+
+    let get_response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{board_id}/columns/{col_id}"),
+        None,
+    )
+    .await;
+    let tag = etag_of(&get_response);
+
+    let first = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/boards/{board_id}/columns/{col_id}"),
+        Some(&json!({"name": "Renamed Once"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = send_with_headers(
+        &state,
+        "PATCH",
+        &format!("/v1/boards/{board_id}/columns/{col_id}"),
+        Some(&json!({"name": "Renamed Twice"})),
+        &[("if-match", &tag)],
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::PRECONDITION_FAILED);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_column_with_stale_if_match_returns_412_and_keeps_the_column() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (board_id, col_id) = seed_board_and_column(&state, "Column").await;
+
+    let response = send_with_headers(
+        &state,
+        "DELETE",
+        &format!("/v1/boards/{board_id}/columns/{col_id}"),
+        None,
+        &[("if-match", STALE_IF_MATCH)],
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+
+    let get_response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{board_id}/columns/{col_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(get_response.status(), StatusCode::OK);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_put_column_create_with_if_match_returns_412_and_creates_nothing() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let board_id = seed_board(&state).await;
+    let fresh_id = Uuid::new_v4();
+
+    let response = send_with_headers(
+        &state,
+        "PUT",
+        &format!("/v1/boards/{board_id}/columns/{fresh_id}"),
+        Some(&json!({"name": "New Column", "position": 0})),
+        &[("if-match", "*")],
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+
+    let get_response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{board_id}/columns/{fresh_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(get_response.status(), StatusCode::NOT_FOUND);
 }
