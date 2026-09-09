@@ -1,12 +1,14 @@
 use crate::client_ident::ClientIdent;
 use crate::error::{AppError, AppJson};
+use crate::etag;
 use crate::handlers::boards::{create_board, create_or_replace_board};
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::Response;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use kanban_domain::{Model, NoProjections};
@@ -44,10 +46,11 @@ fn board_response(session: &crate::state::Session, id: Uuid) -> Result<BoardResp
 
 async fn get_board(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<Json<BoardResponse>, AppError> {
+) -> Result<Response, AppError> {
     let guard = state.lock_session().await;
-    Ok(Json(board_response(&guard, id)?))
+    etag::json_with_etag(&headers, &board_response(&guard, id)?)
 }
 
 async fn list_archived_boards(

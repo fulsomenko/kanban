@@ -1,10 +1,12 @@
 use crate::error::{AppError, AppJson};
+use crate::etag;
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use kanban_domain::{Column, Model, NoProjections};
@@ -28,8 +30,9 @@ async fn list_columns(
 
 async fn get_column(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ColumnResponse>, AppError> {
+) -> Result<Response, AppError> {
     let session = state.lock_session().await;
     let scope = RouteScope::Column(id);
     let mut model = Model::default();
@@ -38,7 +41,7 @@ async fn get_column(
     if column.board_id != board_id {
         return Err(AppError::from(&KanbanError::not_found("Column", id)));
     }
-    Ok(Json(ColumnResponse::from(column)))
+    etag::json_with_etag(&headers, &ColumnResponse::from(column))
 }
 
 pub fn read_router() -> Router<AppState> {
@@ -206,14 +209,15 @@ pub fn write_router() -> Router<AppState> {
 
 async fn get_column_flat(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<Json<ColumnResponse>, AppError> {
+) -> Result<Response, AppError> {
     let session = state.lock_session().await;
     let scope = RouteScope::Column(id);
     let mut model = Model::default();
     session.sync(&scope, &mut model, &mut NoProjections);
     let column = require_loaded_entity(model.column_id_status(id), "Column", id)?;
-    Ok(Json(ColumnResponse::from(column)))
+    etag::json_with_etag(&headers, &ColumnResponse::from(column))
 }
 
 async fn update_column_route_flat(

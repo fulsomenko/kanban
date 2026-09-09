@@ -1,10 +1,12 @@
 use crate::error::{AppError, AppJson};
+use crate::etag;
 use crate::model_read::{require_loaded, require_loaded_entity};
 use crate::pagination::paginate_response;
 use crate::scope::RouteScope;
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
@@ -163,8 +165,9 @@ async fn list_cards(
 
 async fn get_card(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<CardResponse>, AppError> {
+) -> Result<Response, AppError> {
     let scope = RouteScope::Card(id);
     let guard = state.lock_session().await;
     let mut model = Model::default();
@@ -174,7 +177,7 @@ async fn get_card(
     if card.board_id != board_id {
         return Err(AppError::from(&KanbanError::not_found("Card", id)));
     }
-    Ok(Json(CardResponse::from(card)))
+    etag::json_with_etag(&headers, &CardResponse::from(card))
 }
 
 async fn list_archived_cards(
@@ -355,15 +358,16 @@ pub fn write_router() -> Router<AppState> {
 
 async fn get_card_flat(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<Json<CardResponse>, AppError> {
+) -> Result<Response, AppError> {
     let scope = RouteScope::Card(id);
     let guard = state.lock_session().await;
     let mut model = Model::default();
     guard.sync(&scope, &mut model, &mut NoProjections);
 
     let card = require_loaded_entity(model.card_by_id_state(id), "Card", id)?;
-    Ok(Json(CardResponse::from(card)))
+    etag::json_with_etag(&headers, &CardResponse::from(card))
 }
 
 async fn update_card_route_flat(

@@ -6,12 +6,33 @@
 
 use axum::http::StatusCode;
 use kanban_domain::{CardPriority, CardStatus, CardUpdate, CreateCardOptions};
-use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
+use kanban_server::test_helpers::{
+    json_of, make_sqlite_state, make_state, send, send_with_headers,
+};
 use kanban_service::api::CardResponse;
 use kanban_service::KanbanOperations;
 use std::collections::HashSet;
 use tempfile::tempdir;
 use uuid::Uuid;
+
+fn etag_of(response: &axum::response::Response) -> String {
+    response
+        .headers()
+        .get("etag")
+        .expect("etag header")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn is_quoted_32_hex(tag: &str) -> bool {
+    tag.len() == 34
+        && tag.starts_with('"')
+        && tag.ends_with('"')
+        && tag[1..33]
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_list_cards_returns_all_board_cards_by_default() {
@@ -1652,4 +1673,78 @@ async fn test_list_cards_malformed_sprint_ids_returns_400() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_carries_etag_header() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let (board_id, card_id) = {
+        let mut ctx = state.ctx.lock().await;
+        let board_id = ctx
+            .create_board("Board".to_string(), Some("KAN".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "To Do".to_string(), None)
+            .unwrap()
+            .id;
+        let card_id = ctx
+            .create_card(board_id, col_id, "Task".to_string(), Default::default())
+            .unwrap()
+            .id;
+        (board_id, card_id)
+    };
+
+    let response = send(
+        &state,
+        "GET",
+        &format!("/v1/boards/{}/cards/{}", board_id, card_id),
+        None,
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let tag = etag_of(&response);
+    assert!(
+        is_quoted_32_hex(&tag),
+        "expected quoted 32-hex etag, got {tag}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_card_with_matching_if_none_match_returns_304() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let (board_id, card_id) = {
+        let mut ctx = state.ctx.lock().await;
+        let board_id = ctx
+            .create_board("Board".to_string(), Some("KAN".to_string()))
+            .unwrap()
+            .id;
+        let col_id = ctx
+            .create_column(board_id, "To Do".to_string(), None)
+            .unwrap()
+            .id;
+        let card_id = ctx
+            .create_card(board_id, col_id, "Task".to_string(), Default::default())
+            .unwrap()
+            .id;
+        (board_id, card_id)
+    };
+
+    let uri = format!("/v1/boards/{}/cards/{}", board_id, card_id);
+    let first = send(&state, "GET", &uri, None).await;
+    let tag = etag_of(&first);
+
+    let second = send_with_headers(&state, "GET", &uri, None, &[("if-none-match", &tag)]).await;
+
+    assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(etag_of(&second), tag);
+    let bytes = axum::body::to_bytes(second.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(bytes.is_empty());
 }
