@@ -45,12 +45,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_absent_header_yields_nil_client_id() {
-        let mut parts = Request::builder()
-            .uri("/")
-            .body(())
-            .unwrap()
-            .into_parts()
-            .0;
+        let mut parts = Request::builder().uri("/").body(()).unwrap().into_parts().0;
         let result = ClientIdent::from_request_parts(&mut parts, &()).await;
         match result {
             Ok(ClientIdent(id)) => assert_eq!(id, ClientId::nil()),
@@ -93,10 +88,9 @@ mod tests {
     #[tokio::test]
     async fn test_non_utf8_header_returns_422() {
         let mut parts = Request::builder().uri("/").body(()).unwrap().into_parts().0;
-        parts.headers.insert(
-            CLIENT_ID_HEADER,
-            HeaderValue::from_bytes(&[0xff]).unwrap(),
-        );
+        parts
+            .headers
+            .insert(CLIENT_ID_HEADER, HeaderValue::from_bytes(&[0xff]).unwrap());
         let result = ClientIdent::from_request_parts(&mut parts, &()).await;
         let err = result.unwrap_err();
         assert_eq!(err.into_response().status(), 422);
