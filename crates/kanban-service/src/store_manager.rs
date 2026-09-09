@@ -43,6 +43,12 @@ impl StoreManager {
         self.backends.names()
     }
 
+    /// Names of the registered backend factories that address local files, in
+    /// registration order. This is the set `migrate_store` can write to.
+    pub fn local_backend_names(&self) -> Vec<&str> {
+        self.backends.local_names()
+    }
+
     /// Returns `true` if `locator` points to a SQLite database — either
     /// because `detect_backend` recognised it as `"sqlite"`, or because the
     /// file extension matches one of the conventional SQLite extensions.

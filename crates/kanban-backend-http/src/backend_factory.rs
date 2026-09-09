@@ -16,6 +16,10 @@ impl KanbanBackendFactory for HttpBackendFactory {
         matches!(kanban_core::scheme_of(locator), Some("http" | "https"))
     }
 
+    fn is_remote(&self) -> bool {
+        true
+    }
+
     async fn create(
         &self,
         locator: &str,
