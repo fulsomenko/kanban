@@ -211,3 +211,77 @@ async fn test_cors_preflight_allows_if_match_and_response_exposes_etag() {
         "expose-headers: {expose_headers}"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cors_origin_policy_allows_every_configured_request_header() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let router = app::router_with(
+        state,
+        LayerConfig {
+            cors: CorsPolicy::Origins(vec![HeaderValue::from_static("http://localhost:5173")]),
+            ..Default::default()
+        },
+    );
+
+    let preflight = Request::builder()
+        .method("OPTIONS")
+        .uri("/v1/boards/00000000-0000-0000-0000-000000000000")
+        .header("origin", "http://localhost:5173")
+        .header("access-control-request-method", "PATCH")
+        .header(
+            "access-control-request-headers",
+            "if-none-match, if-match, x-kanban-client-id",
+        )
+        .body(Body::empty())
+        .unwrap();
+    let response = router.oneshot(preflight).await.unwrap();
+    let allow_headers = response
+        .headers()
+        .get("access-control-allow-headers")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_lowercase();
+    for name in [
+        "content-type",
+        "if-match",
+        "if-none-match",
+        "x-kanban-client-id",
+    ] {
+        assert!(
+            allow_headers.contains(name),
+            "allow-headers: {allow_headers}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cors_permissive_response_exposes_all_headers() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let router = app::router_with(
+        state,
+        LayerConfig {
+            cors: CorsPolicy::Permissive,
+            ..Default::default()
+        },
+    );
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/health")
+        .header("origin", "http://localhost:5173")
+        .body(Body::empty())
+        .unwrap();
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response.headers().get("access-control-allow-origin"),
+        Some(&HeaderValue::from_static("*"))
+    );
+    assert_eq!(
+        response.headers().get("access-control-expose-headers"),
+        Some(&HeaderValue::from_static("*"))
+    );
+}
