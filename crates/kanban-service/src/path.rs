@@ -17,12 +17,18 @@ use std::path::{Path, PathBuf};
 /// This function prevents callers from accidentally (or maliciously) opening files
 /// outside the working directory. Path traversal attempts such as `../../secret.json`
 /// return `Err` with a message containing "Path traversal not allowed".
+///
+/// A locator carrying a URL scheme (`kanban_core::is_remote_locator`) is returned
+/// unchanged and is not validated as a path.
 pub fn validate_path(path: &Path) -> KanbanResult<PathBuf> {
     let cwd = std::env::current_dir().map_err(|e| KanbanError::from(std::io::Error::other(e)))?;
     validate_path_with_cwd(path, &cwd)
 }
 
 fn validate_path_with_cwd(path: &Path, cwd: &Path) -> KanbanResult<PathBuf> {
+    if path.to_str().is_some_and(kanban_core::is_remote_locator) {
+        return Ok(path.to_path_buf());
+    }
     if path.is_absolute() {
         Ok(dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
     } else {

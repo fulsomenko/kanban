@@ -1,3 +1,30 @@
+use crate::HttpBackend;
+use kanban_backend::{KanbanBackend, KanbanBackendFactory};
+use kanban_core::AppConfig;
+use kanban_domain::KanbanResult;
+use std::sync::Arc;
+
+pub struct HttpBackendFactory;
+
+#[async_trait::async_trait]
+impl KanbanBackendFactory for HttpBackendFactory {
+    fn name(&self) -> &str {
+        "http"
+    }
+
+    fn matches_locator(&self, locator: &str, _header: &[u8]) -> bool {
+        matches!(kanban_core::scheme_of(locator), Some("http" | "https"))
+    }
+
+    async fn create(
+        &self,
+        locator: &str,
+        _config: &AppConfig,
+    ) -> KanbanResult<Arc<dyn KanbanBackend>> {
+        Ok(Arc::new(HttpBackend::new(locator)?))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
