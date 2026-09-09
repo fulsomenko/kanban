@@ -38,8 +38,6 @@ fn test_the_registry_still_selects_json_and_sqlite_for_local_paths() {
     assert_eq!(json_factory.name(), "json");
 
     let sqlite_path = dir.path().join("nonexistent.sqlite");
-    let sqlite_factory = registry
-        .for_locator(sqlite_path.to_str().unwrap())
-        .unwrap();
+    let sqlite_factory = registry.for_locator(sqlite_path.to_str().unwrap()).unwrap();
     assert_eq!(sqlite_factory.name(), "sqlite");
 }
