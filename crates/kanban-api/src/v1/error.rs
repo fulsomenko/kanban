@@ -196,6 +196,23 @@ mod tests {
     }
 
     #[test]
+    fn test_precondition_failed_maps_to_412_and_stays_distinct_from_conflict_detected() {
+        assert_eq!(ErrorCode::PreconditionFailed.http_status(), 412);
+        assert_eq!(
+            ErrorCode::PreconditionFailed.to_string(),
+            "PRECONDITION_FAILED"
+        );
+        let json = serde_json::to_string(&ErrorCode::PreconditionFailed).unwrap();
+        assert_eq!(json, "\"PRECONDITION_FAILED\"");
+        let parsed: ErrorCode = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, ErrorCode::PreconditionFailed);
+        assert_ne!(
+            ErrorCode::PreconditionFailed.http_status(),
+            ErrorCode::ConflictDetected.http_status()
+        );
+    }
+
+    #[test]
     fn test_error_code_http_status_mapping() {
         assert_eq!(ErrorCode::NotFound.http_status(), 404);
         assert_eq!(ErrorCode::NotFoundByName.http_status(), 404);
