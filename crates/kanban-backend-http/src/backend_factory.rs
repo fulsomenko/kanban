@@ -44,4 +44,9 @@ mod tests {
         assert!(!HttpBackendFactory.matches_locator("C://boards", &[]));
         assert!(!HttpBackendFactory.matches_locator("notes://draft.json", &[]));
     }
+
+    #[test]
+    fn test_the_http_factory_declares_itself_remote() {
+        assert!(HttpBackendFactory.is_remote());
+    }
 }

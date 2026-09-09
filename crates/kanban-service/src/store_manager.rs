@@ -770,4 +770,45 @@ mod tests {
             assert_eq!(sm.detect_backend("whatever.db"), Some("json".to_string()));
         }
     }
+
+    struct RemoteStub;
+
+    #[async_trait::async_trait]
+    impl kanban_backend::KanbanBackendFactory for RemoteStub {
+        fn name(&self) -> &str {
+            "remote"
+        }
+
+        fn is_remote(&self) -> bool {
+            true
+        }
+
+        async fn create(
+            &self,
+            locator: &str,
+            _config: &AppConfig,
+        ) -> Result<Arc<dyn crate::backend::KanbanBackend>, KanbanError> {
+            Err(KanbanError::validation(format!(
+                "remote factory reached with {locator}"
+            )))
+        }
+    }
+
+    #[test]
+    fn test_local_backend_names_excludes_a_remote_factory() {
+        let mut registry = StoreRegistry::new();
+        registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+        let mut backends = kanban_backend::KanbanBackendRegistry::new();
+        #[cfg(feature = "sqlite")]
+        backends.register(Box::new(kanban_persistence_sqlite::SqliteBackendFactory));
+        backends.register(Box::new(kanban_persistence_json::JsonBackendFactory));
+        backends.register(Box::new(RemoteStub));
+        let sm = StoreManager::new(registry, backends);
+
+        assert!(sm.backend_names().contains(&"remote"));
+        assert!(!sm.local_backend_names().contains(&"remote"));
+        assert!(sm.local_backend_names().contains(&"json"));
+        #[cfg(feature = "sqlite")]
+        assert!(sm.local_backend_names().contains(&"sqlite"));
+    }
 }
