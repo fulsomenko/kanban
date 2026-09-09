@@ -68,6 +68,8 @@ pub struct KanbanContext {
     pub(super) session_id: Uuid,
     /// Which application surface owns this context. Default: Unknown.
     pub(super) app_type: AppType,
+    /// Identity of the client that issued the in-flight request; nil unless a caller sets it.
+    pub(super) issued_by: kanban_core::ClientId,
 }
 
 // The `KanbanOperations` trait impl must live in a single block (Rust forbids

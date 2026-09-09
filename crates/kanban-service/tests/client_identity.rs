@@ -27,7 +27,7 @@ async fn test_execute_stamps_context_issued_by_on_batch() -> KanbanResult<()> {
 
     let id = ClientId::new();
     ctx.set_issued_by(id);
-    ctx.create_board_impl("B".into(), None)?;
+    let _ = ctx.create_board_impl("B".into(), None)?;
 
     let batches = backend.load_batches(baseline, baseline + 1)?;
     assert_eq!(batches[0].issued_by, id);
@@ -47,7 +47,7 @@ async fn test_import_board_stamps_context_issued_by_on_batch() -> KanbanResult<(
 
     let id = ClientId::new();
     b.set_issued_by(id);
-    b.import_board_impl(&json)?;
+    let _ = b.import_board_impl(&json)?;
 
     let batches = backend.load_batches(baseline, baseline + 1)?;
     assert_eq!(batches[0].issued_by, id);
@@ -60,11 +60,11 @@ async fn test_set_issued_by_applies_to_subsequent_batches_only() -> KanbanResult
     let backend = ctx.backend();
     let baseline = backend.batch_count()?;
 
-    ctx.create_board_impl("Before".into(), None)?;
+    let _ = ctx.create_board_impl("Before".into(), None)?;
 
     let id = ClientId::new();
     ctx.set_issued_by(id);
-    ctx.create_board_impl("After".into(), None)?;
+    let _ = ctx.create_board_impl("After".into(), None)?;
 
     let batches = backend.load_batches(baseline, baseline + 2)?;
     assert_eq!(batches[0].issued_by, ClientId::nil());

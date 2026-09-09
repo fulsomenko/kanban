@@ -1,5 +1,5 @@
 use super::KanbanContext;
-use kanban_core::{ClientId, KANBAN_VERSION};
+use kanban_core::KANBAN_VERSION;
 use kanban_domain::commands::{Command, CommandContext};
 use kanban_domain::{
     invalidation_from_inverse, DataStore, Invalidation, KanbanError, KanbanResult, UndoOperations,
@@ -74,8 +74,7 @@ impl KanbanContext {
             let batch = kanban_domain::CommandBatch {
                 commands: built.clone(),
                 correlation_id: Uuid::new_v4(),
-                // nil locally; the HTTP layer assigns the real client identity (KAN-751)
-                issued_by: ClientId::nil(),
+                issued_by: self.issued_by,
                 timestamp: chrono::Utc::now(),
                 app_type: self.app_type,
                 app_version: KANBAN_VERSION.to_string(),
