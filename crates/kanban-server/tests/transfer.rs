@@ -254,7 +254,7 @@ async fn test_export_then_import_round_trips_the_full_graph_on_sqlite() {
     let state_a = make_sqlite_state(&dir_a.path().join("s.sqlite")).await;
     let ids = {
         let mut guard = state_a.ctx.lock().await;
-        seed_graph(&mut guard.ctx, false)
+        seed_graph(&mut guard.ctx, true)
     };
 
     let body_string = export_body(&state_a, ids.board).await;
@@ -274,9 +274,14 @@ async fn test_export_then_import_round_trips_the_full_graph_on_sqlite() {
     .await;
     let cards: Value = json_of(response).await;
     let items = cards["items"].as_array().unwrap();
-    assert!(items
+    let card1_json = items
         .iter()
-        .any(|c| c["id"].as_str().unwrap() == ids.card1.to_string()));
+        .find(|c| c["id"].as_str().unwrap() == ids.card1.to_string())
+        .expect("card1 present");
+    assert_eq!(
+        card1_json["sprint_id"].as_str().unwrap(),
+        ids.sprint.to_string()
+    );
     assert!(items
         .iter()
         .any(|c| c["id"].as_str().unwrap() == ids.card2.to_string()));

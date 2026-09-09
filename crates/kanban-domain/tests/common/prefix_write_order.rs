@@ -6,10 +6,11 @@ use kanban_domain::{
 use std::sync::Mutex;
 use uuid::Uuid;
 
-/// Records any card written while the namespace its prefix names has no row.
+/// Records writes made before the rows they name exist (prefix and sprint).
 pub struct PrefixWriteOrderStore {
     inner: InMemoryStore,
     unbacked_at_write: Mutex<Vec<(u32, String)>>,
+    unbacked_sprint_at_write: Mutex<Vec<Uuid>>,
     prefix_upsert_names: Mutex<Vec<String>>,
     swallow_prefix_writes: bool,
 }
@@ -19,6 +20,7 @@ impl PrefixWriteOrderStore {
         Self {
             inner: InMemoryStore::default(),
             unbacked_at_write: Mutex::new(Vec::new()),
+            unbacked_sprint_at_write: Mutex::new(Vec::new()),
             prefix_upsert_names: Mutex::new(Vec::new()),
             swallow_prefix_writes: false,
         }
@@ -28,6 +30,7 @@ impl PrefixWriteOrderStore {
         Self {
             inner: InMemoryStore::default(),
             unbacked_at_write: Mutex::new(Vec::new()),
+            unbacked_sprint_at_write: Mutex::new(Vec::new()),
             prefix_upsert_names: Mutex::new(Vec::new()),
             swallow_prefix_writes: true,
         }
@@ -35,6 +38,10 @@ impl PrefixWriteOrderStore {
 
     pub fn unbacked_at_write(&self) -> Vec<(u32, String)> {
         self.unbacked_at_write.lock().unwrap().clone()
+    }
+
+    pub fn unbacked_sprint_at_write(&self) -> Vec<Uuid> {
+        self.unbacked_sprint_at_write.lock().unwrap().clone()
     }
 
     /// The exact `Prefix::name` string passed to each `upsert_prefix` call,
@@ -131,6 +138,11 @@ impl DataStore for PrefixWriteOrderStore {
                     .lock()
                     .unwrap()
                     .push((card.card_number, card.prefix.clone()));
+            }
+        }
+        if let Some(sid) = card.sprint_id {
+            if self.inner.get_sprint(sid)?.is_none() {
+                self.unbacked_sprint_at_write.lock().unwrap().push(card.id);
             }
         }
         self.inner.upsert_card(card)
