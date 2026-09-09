@@ -64,6 +64,7 @@ its main loop).
 pub trait KanbanBackendFactory: Send + Sync {
     fn name(&self) -> &str;
     fn matches_locator(&self, _locator: &str, _header: &[u8]) -> bool { false }
+    fn is_remote(&self) -> bool { false }
     async fn create(&self, locator: &str, config: &AppConfig) -> KanbanResult<Arc<dyn KanbanBackend>>;
 }
 
@@ -75,6 +76,7 @@ impl KanbanBackendRegistry {
     pub fn register(&mut self, factory: Box<dyn KanbanBackendFactory>);
     pub fn is_empty(&self) -> bool;
     pub fn names(&self) -> Vec<&str>;
+    pub fn local_names(&self) -> Vec<&str>;
     pub fn for_name(&self, name: &str) -> Option<&dyn KanbanBackendFactory>;
     pub fn for_locator(&self, locator: &str) -> Option<&dyn KanbanBackendFactory>;
 }

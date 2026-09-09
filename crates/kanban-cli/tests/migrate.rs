@@ -667,3 +667,56 @@ async fn test_migrate_rejects_unknown_backend() {
         "stderr: {stderr}"
     );
 }
+
+#[test]
+fn test_migrate_help_lists_only_store_backends() {
+    use assert_cmd::cargo_bin_cmd;
+
+    let output = cargo_bin_cmd!("kanban")
+        .args(["migrate", "--help"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let backend_line = stdout
+        .lines()
+        .find(|line| line.contains("possible values"))
+        .unwrap_or_else(|| panic!("no possible-values line in stdout: {stdout}"));
+
+    assert!(
+        backend_line.contains("possible values: sqlite, json"),
+        "backend_line: {backend_line}"
+    );
+    assert!(
+        !backend_line.contains("http"),
+        "backend_line: {backend_line}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_migrate_to_http_rejected_as_invalid_value() {
+    use assert_cmd::cargo_bin_cmd;
+
+    let dir = TempDir::new().unwrap();
+    let src_path = dir.path().join("source.json");
+
+    create_populated_json_context(&src_path).await;
+
+    let output = cargo_bin_cmd!("kanban")
+        .args([
+            "migrate",
+            src_path.to_str().unwrap(),
+            "http",
+            "--output",
+            dir.path().join("dest.http").to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid value 'http'"), "stderr: {stderr}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("Migrating"), "stdout: {stdout}");
+}

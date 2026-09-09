@@ -16,6 +16,10 @@ impl KanbanBackendFactory for HttpBackendFactory {
         matches!(kanban_core::scheme_of(locator), Some("http" | "https"))
     }
 
+    fn is_remote(&self) -> bool {
+        true
+    }
+
     async fn create(
         &self,
         locator: &str,
@@ -43,5 +47,10 @@ mod tests {
         assert!(!HttpBackendFactory.matches_locator("/abs/board.sqlite", &[]));
         assert!(!HttpBackendFactory.matches_locator("C://boards", &[]));
         assert!(!HttpBackendFactory.matches_locator("notes://draft.json", &[]));
+    }
+
+    #[test]
+    fn test_the_http_factory_declares_itself_remote() {
+        assert!(HttpBackendFactory.is_remote());
     }
 }

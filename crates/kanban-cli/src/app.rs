@@ -83,7 +83,7 @@ where
     T: Into<std::ffi::OsString> + Clone,
 {
     let backend_names: Vec<String> = store_manager
-        .backend_names()
+        .local_backend_names()
         .into_iter()
         .map(str::to_owned)
         .collect();
