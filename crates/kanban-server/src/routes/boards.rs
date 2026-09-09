@@ -110,10 +110,12 @@ async fn put_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<ReplaceBoardRequest>,
 ) -> Result<(StatusCode, Json<BoardResponse>), AppError> {
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let (resp, created) = create_or_replace_board(&mut ctx, id, req).map_err(AppError::from)?;
         state
             .persist_and_broadcast(
@@ -138,10 +140,12 @@ async fn patch_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<UpdateBoardRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
     let board = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let (board, _invalidation) =
             crate::state::mutate(&mut ctx, |c| c.update_board_impl(id, req.into()))
                 .map_err(|e| AppError::from(&e))?;
@@ -158,9 +162,11 @@ async fn delete_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let _invalidation = crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
             .map_err(|e| AppError::from(&e))?;
         state
