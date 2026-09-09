@@ -297,7 +297,10 @@ async fn test_get_sprint_carries_etag_header() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let tag = etag_of(&response);
-    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+    assert!(
+        is_quoted_32_hex(&tag),
+        "expected quoted 32-hex etag, got {tag}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -5,7 +5,9 @@
 //! against the router directly, with no real TCP socket.
 
 use axum::http::StatusCode;
-use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send, send_with_headers};
+use kanban_server::test_helpers::{
+    json_of, make_sqlite_state, make_state, send, send_with_headers,
+};
 use kanban_service::KanbanOperations;
 use tempfile::tempdir;
 use uuid::Uuid;
@@ -428,7 +430,10 @@ async fn test_get_column_carries_etag_header() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let tag = etag_of(&response);
-    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+    assert!(
+        is_quoted_32_hex(&tag),
+        "expected quoted 32-hex etag, got {tag}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

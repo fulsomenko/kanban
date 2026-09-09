@@ -5,7 +5,9 @@
 //! against the router directly, with no real TCP socket.
 
 use axum::http::StatusCode;
-use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send, send_with_headers};
+use kanban_server::test_helpers::{
+    json_of, make_sqlite_state, make_state, send, send_with_headers,
+};
 use kanban_service::KanbanOperations;
 use tempfile::tempdir;
 use uuid::Uuid;
@@ -358,7 +360,10 @@ async fn test_get_board_carries_etag_header() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let tag = etag_of(&response);
-    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+    assert!(
+        is_quoted_32_hex(&tag),
+        "expected quoted 32-hex etag, got {tag}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -411,10 +416,7 @@ async fn test_get_board_with_stale_if_none_match_returns_200_and_body() {
         "GET",
         &format!("/v1/boards/{}", board_id),
         None,
-        &[(
-            "if-none-match",
-            "\"00000000000000000000000000000000\"",
-        )],
+        &[("if-none-match", "\"00000000000000000000000000000000\"")],
     )
     .await;
 

@@ -409,7 +409,10 @@ async fn test_get_card_flat_carries_etag_header_and_matching_if_none_match_retur
     let first = send(&state, "GET", &uri, None).await;
     assert_eq!(first.status(), StatusCode::OK);
     let tag = etag_of(&first);
-    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+    assert!(
+        is_quoted_32_hex(&tag),
+        "expected quoted 32-hex etag, got {tag}"
+    );
 
     let second = send_with_headers(&state, "GET", &uri, None, &[("if-none-match", &tag)]).await;
     assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
@@ -430,7 +433,10 @@ async fn test_get_column_flat_carries_etag_header_and_matching_if_none_match_ret
     let first = send(&state, "GET", &uri, None).await;
     assert_eq!(first.status(), StatusCode::OK);
     let tag = etag_of(&first);
-    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+    assert!(
+        is_quoted_32_hex(&tag),
+        "expected quoted 32-hex etag, got {tag}"
+    );
 
     let second = send_with_headers(&state, "GET", &uri, None, &[("if-none-match", &tag)]).await;
     assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
@@ -451,7 +457,10 @@ async fn test_get_sprint_flat_carries_etag_header_and_matching_if_none_match_ret
     let first = send(&state, "GET", &uri, None).await;
     assert_eq!(first.status(), StatusCode::OK);
     let tag = etag_of(&first);
-    assert!(is_quoted_32_hex(&tag), "expected quoted 32-hex etag, got {tag}");
+    assert!(
+        is_quoted_32_hex(&tag),
+        "expected quoted 32-hex etag, got {tag}"
+    );
 
     let second = send_with_headers(&state, "GET", &uri, None, &[("if-none-match", &tag)]).await;
     assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
