@@ -21,7 +21,13 @@ pub enum ErrorCode {
     SelfReference,
     EdgeNotFound,
     DuplicateEdge,
+    /// File-level optimistic concurrency: the backing store changed under the
+    /// server. The session should reload.
     ConflictDetected,
+    /// Entity-level optimistic concurrency (RFC 9110 `If-Match`): the
+    /// representation this request was conditioned on is no longer current.
+    /// Refetch the entity and re-apply.
+    PreconditionFailed,
     AlreadyExists,
     UnsupportedVersion,
     IoError,
@@ -47,6 +53,7 @@ impl std::fmt::Display for ErrorCode {
             Self::EdgeNotFound => "EDGE_NOT_FOUND",
             Self::DuplicateEdge => "DUPLICATE_EDGE",
             Self::ConflictDetected => "CONFLICT_DETECTED",
+            Self::PreconditionFailed => "PRECONDITION_FAILED",
             Self::AlreadyExists => "ALREADY_EXISTS",
             Self::UnsupportedVersion => "UNSUPPORTED_VERSION",
             Self::IoError => "IO_ERROR",
@@ -78,6 +85,7 @@ impl ErrorCode {
             | Self::DependencyError
             | Self::CycleDetected
             | Self::DuplicateEdge => 409,
+            Self::PreconditionFailed => 412,
             Self::IoError
             | Self::SerializationError
             | Self::DatabaseError
