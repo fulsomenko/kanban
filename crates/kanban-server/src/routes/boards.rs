@@ -11,11 +11,12 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Model, NoProjections};
+use kanban_domain::{LoadState, Model, NoProjections};
 use kanban_service::api::{
     ArchivedBoardResponse, BoardResponse, ChangeKind, CreateBoardRequest, EntityType, Page,
     PageParams, ReplaceBoardRequest, UpdateBoardRequest,
 };
+use kanban_service::KanbanError;
 use uuid::Uuid;
 
 async fn list_boards(
@@ -32,16 +33,26 @@ async fn list_boards(
     )
 }
 
-fn board_response(session: &crate::state::Session, id: Uuid) -> Result<BoardResponse, AppError> {
+fn board_current(
+    session: &crate::state::Session,
+    id: Uuid,
+) -> Result<Option<BoardResponse>, AppError> {
     let mut model = Model::default();
     session.sync(&RouteScope::Board(id), &mut model, &mut NoProjections);
-    let board = require_loaded_entity(model.board_id_status(id), "Board", id)?;
+    let board = match model.board_id_status(id) {
+        LoadState::Missing => return Ok(None),
+        status => require_loaded_entity(status, "Board", id)?,
+    };
     let markers = require_loaded(model.archived_boards_state(), "archived board list")?;
     let archived_at = markers
         .iter()
         .find(|marker| marker.entity_id == id)
         .map(|marker| marker.metadata.archived_at);
-    Ok(BoardResponse::with_archived_at(board, archived_at))
+    Ok(Some(BoardResponse::with_archived_at(board, archived_at)))
+}
+
+fn board_response(session: &crate::state::Session, id: Uuid) -> Result<BoardResponse, AppError> {
+    board_current(session, id)?.ok_or_else(|| AppError::from(&KanbanError::not_found("Board", id)))
 }
 
 async fn get_board(
@@ -99,10 +110,12 @@ async fn put_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<ReplaceBoardRequest>,
 ) -> Result<(StatusCode, Json<BoardResponse>), AppError> {
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let (resp, created) = create_or_replace_board(&mut ctx, id, req).map_err(AppError::from)?;
         state
             .persist_and_broadcast(
@@ -127,10 +140,12 @@ async fn patch_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<UpdateBoardRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
     let board = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let (board, _invalidation) =
             crate::state::mutate(&mut ctx, |c| c.update_board_impl(id, req.into()))
                 .map_err(|e| AppError::from(&e))?;
@@ -147,9 +162,11 @@ async fn delete_board(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let _invalidation = crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
             .map_err(|e| AppError::from(&e))?;
         state

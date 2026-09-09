@@ -12,7 +12,8 @@ use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use kanban_domain::{
-    filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, Model, NoProjections, Sprint,
+    filter_and_sort_cards, ArchivedFilter, Card, CardListFilter, LoadState, Model, NoProjections,
+    Sprint,
 };
 use kanban_service::api::ArchivedCardResponse;
 use kanban_service::api::ArchivedFilterDto;
@@ -164,6 +165,20 @@ async fn list_cards(
     paginate_response(responses, &params)
 }
 
+fn card_current(
+    session: &crate::state::Session,
+    id: Uuid,
+) -> Result<Option<CardResponse>, AppError> {
+    let scope = RouteScope::Card(id);
+    let mut model = Model::default();
+    session.sync(&scope, &mut model, &mut NoProjections);
+    let card = match model.card_by_id_state(id) {
+        LoadState::Missing => return Ok(None),
+        status => require_loaded_entity(status, "Card", id)?,
+    };
+    Ok(Some(CardResponse::from(card)))
+}
+
 async fn get_card(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -294,10 +309,12 @@ async fn put_card_route(
     State(state): State<AppState>,
     Path((column_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<CreateCardRequest>,
 ) -> Result<(StatusCode, Json<CardResponse>), AppError> {
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || card_current(&ctx, id))?;
         let result = crate::handlers::cards::create_or_replace_card(&mut ctx, column_id, id, req)
             .map_err(AppError::from)?;
         state
@@ -318,12 +335,14 @@ async fn update_card_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<UpdateCardRequest>,
 ) -> Result<Json<CardResponse>, AppError> {
     let updates = CardUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let card = {
         let mut ctx = state.lock_for_write(client).await;
         require_card_in_board(&ctx, board_id, id)?;
+        etag::check_if_match(&headers, || card_current(&ctx, id))?;
         let card = do_update_card(&mut ctx, id, updates)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
@@ -338,10 +357,12 @@ async fn delete_card_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
         require_card_in_board(&ctx, board_id, id)?;
+        etag::check_if_match(&headers, || card_current(&ctx, id))?;
         do_delete_card(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Deleted)
@@ -379,11 +400,13 @@ async fn update_card_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<UpdateCardRequest>,
 ) -> Result<Json<CardResponse>, AppError> {
     let updates = CardUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let card = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || card_current(&ctx, id))?;
         let card = do_update_card(&mut ctx, id, updates)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
@@ -398,9 +421,11 @@ async fn delete_card_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || card_current(&ctx, id))?;
         do_delete_card(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Deleted)

@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Column, Model, NoProjections};
+use kanban_domain::{Column, LoadState, Model, NoProjections};
 use kanban_service::api::{ChangeKind, ColumnResponse, EntityType, Page, PageParams};
 use kanban_service::{ColumnUpdate, KanbanError, KanbanOperations};
 use uuid::Uuid;
@@ -27,6 +27,20 @@ async fn list_columns(
     require_loaded_entity(model.board_id_status(board_id), "Board", board_id)?;
     let cols = require_loaded(model.board_columns_state(board_id), "columns")?;
     paginate_response(cols.iter().map(ColumnResponse::from).collect(), &params)
+}
+
+fn column_current(
+    session: &crate::state::Session,
+    id: Uuid,
+) -> Result<Option<ColumnResponse>, AppError> {
+    let scope = RouteScope::Column(id);
+    let mut model = Model::default();
+    session.sync(&scope, &mut model, &mut NoProjections);
+    let column = match model.column_id_status(id) {
+        LoadState::Missing => return Ok(None),
+        status => require_loaded_entity(status, "Column", id)?,
+    };
+    Ok(Some(ColumnResponse::from(column)))
 }
 
 async fn get_column(
@@ -118,10 +132,12 @@ async fn put_column_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<kanban_service::api::ReplaceColumnRequest>,
 ) -> Result<(StatusCode, Json<ColumnResponse>), AppError> {
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || column_current(&ctx, id))?;
         let result =
             crate::handlers::columns::create_or_replace_column(&mut ctx, board_id, id, req)
                 .map_err(AppError::from)?;
@@ -143,12 +159,14 @@ async fn update_column_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<kanban_service::api::UpdateColumnRequest>,
 ) -> Result<Json<ColumnResponse>, AppError> {
     let updates = ColumnUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let col = {
         let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
+        etag::check_if_match(&headers, || column_current(&ctx, id))?;
         let col = do_update_column(&mut ctx, id, updates)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Updated)
@@ -163,10 +181,12 @@ async fn delete_column_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
+        etag::check_if_match(&headers, || column_current(&ctx, id))?;
         do_delete_column(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Deleted)
@@ -230,11 +250,13 @@ async fn update_column_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<kanban_service::api::UpdateColumnRequest>,
 ) -> Result<Json<ColumnResponse>, AppError> {
     let updates = ColumnUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
     let col = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || column_current(&ctx, id))?;
         let col = do_update_column(&mut ctx, id, updates)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Updated)
@@ -249,9 +271,11 @@ async fn delete_column_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || column_current(&ctx, id))?;
         do_delete_column(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Deleted)

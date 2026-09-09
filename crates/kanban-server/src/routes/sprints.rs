@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Model, NoProjections, Sprint};
+use kanban_domain::{LoadState, Model, NoProjections, Sprint};
 use kanban_service::api::{ChangeKind, EntityType, Page, PageParams, SprintResponse};
 use kanban_service::{resolve_sprint_name, KanbanError, KanbanOperations, SprintUpdate};
 use uuid::Uuid;
@@ -118,6 +118,42 @@ pub(crate) fn respond(
     Ok(SprintResponse::new(sprint, name))
 }
 
+fn sprint_current(
+    session: &crate::state::Session,
+    id: Uuid,
+) -> Result<Option<SprintResponse>, AppError> {
+    let mut model = Model::default();
+    session.sync(
+        &RouteScope::Sprint {
+            board_id: None,
+            sprint_id: id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    let sprint = match model.sprint_by_id_state(id) {
+        LoadState::Missing => return Ok(None),
+        status => require_loaded_entity(status, "Sprint", id)?.clone(),
+    };
+    session.sync(
+        &RouteScope::Sprint {
+            board_id: Some(sprint.board_id),
+            sprint_id: id,
+        },
+        &mut model,
+        &mut NoProjections,
+    );
+    let board = require_loaded_entity(
+        model.board_id_status(sprint.board_id),
+        "Board",
+        sprint.board_id,
+    )?;
+    Ok(Some(SprintResponse::new(
+        &sprint,
+        sprint.get_name(board).map(str::to_string),
+    )))
+}
+
 async fn create_sprint_route(
     State(state): State<AppState>,
     Path(board_id): Path<Uuid>,
@@ -146,10 +182,12 @@ async fn put_sprint_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<kanban_service::api::ReplaceSprintRequest>,
 ) -> Result<(StatusCode, Json<SprintResponse>), AppError> {
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
+        etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
         let result =
             crate::handlers::sprints::create_or_replace_sprint(&mut ctx, board_id, id, req)
                 .map_err(AppError::from)?;
@@ -171,12 +209,14 @@ async fn update_sprint_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<kanban_service::api::UpdateSprintRequest>,
 ) -> Result<Json<SprintResponse>, AppError> {
     let updates = SprintUpdate::from(req);
     let body = {
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
+        etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
         let sprint = do_update_sprint(&mut ctx, id, updates)?;
         let body = respond(&ctx, &sprint)?;
         state
@@ -192,10 +232,12 @@ async fn delete_sprint_route(
     State(state): State<AppState>,
     Path((board_id, id)): Path<(Uuid, Uuid)>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
+        etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
         do_delete_sprint(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Deleted)
@@ -255,12 +297,14 @@ async fn update_sprint_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
     AppJson(req): AppJson<kanban_service::api::UpdateSprintRequest>,
 ) -> Result<Json<SprintResponse>, AppError> {
     let updates = SprintUpdate::from(req);
     let body = {
         let mut ctx = state.lock_for_write(client).await;
         do_get_sprint(&ctx, id)?;
+        etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
         let sprint = do_update_sprint(&mut ctx, id, updates)?;
         let body = respond(&ctx, &sprint)?;
         state
@@ -276,10 +320,12 @@ async fn delete_sprint_route_flat(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
+    headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
         do_get_sprint(&ctx, id)?;
+        etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
         do_delete_sprint(&mut ctx, id)?;
         state
             .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Deleted)
