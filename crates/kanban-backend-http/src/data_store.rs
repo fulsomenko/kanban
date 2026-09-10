@@ -13,6 +13,18 @@ use kanban_domain::{
 };
 use uuid::Uuid;
 
+impl HttpBackend {
+    fn lookup_cards(&self, identifier: &str) -> KanbanResult<Vec<Card>> {
+        self.block_on(async {
+            let resp: Vec<CardResponse> = self
+                .get_json_with_query("/v1/cards/lookup", &[("identifier", identifier)])
+                .await?
+                .unwrap_or_default();
+            Ok(resp.iter().map(card_from_response).collect())
+        })
+    }
+}
+
 impl DataStore for HttpBackend {
     fn get_prefix(&self, name: &str) -> KanbanResult<Option<Prefix>> {
         self.block_on(async {
@@ -317,24 +329,23 @@ impl DataStore for HttpBackend {
             .find(|c| c.card_number == card_number))
     }
 
-    /// No route filters cards by a bare `card_number` across every namespace,
-    /// and the inherited default would fetch every card in the workspace to
-    /// answer a one-row lookup. Declines under its own name instead of
-    /// inheriting.
-    fn list_cards_by_number(&self, _card_number: u32) -> KanbanResult<Vec<Card>> {
-        Err(KanbanError::unsupported("list_cards_by_number"))
+    fn list_cards_by_number(&self, card_number: u32) -> KanbanResult<Vec<Card>> {
+        self.lookup_cards(&card_number.to_string())
     }
 
-    /// No route filters cards by `(prefix, card_number)`, and the inherited
-    /// default would both fetch every card in the workspace AND re-implement
-    /// `Prefix::normalize` client-side, a second source of truth for a server
-    /// rule. Declines under its own name instead of inheriting.
+    /// Re-encodes the pair as `{prefix}-{card_number}` and re-parses it
+    /// server-side, faithful because `parse_identifier` splits on the last
+    /// dash and lowercases both sides. An empty `prefix` is the one shape
+    /// that cannot round-trip through that reconstruction, but no caller
+    /// reaches this method with one: `find_cards_by_identifier` only ever
+    /// dispatches here with a prefix `parse_identifier` has already accepted,
+    /// and it rejects the empty-prefix shape before dispatch.
     fn list_cards_by_prefix_and_number(
         &self,
-        _prefix: &str,
-        _card_number: u32,
+        prefix: &str,
+        card_number: u32,
     ) -> KanbanResult<Vec<Card>> {
-        Err(KanbanError::unsupported("list_cards_by_prefix_and_number"))
+        self.lookup_cards(&format!("{prefix}-{card_number}"))
     }
 
     /// The cards route accepts a single `column_id` filter
