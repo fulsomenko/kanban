@@ -1,6 +1,7 @@
 mod backend_factory;
 mod command_store;
 mod conversions;
+mod conversions_out;
 mod data_store;
 mod http;
 mod remote_writes;
