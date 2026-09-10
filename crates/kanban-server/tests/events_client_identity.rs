@@ -120,7 +120,7 @@ async fn card_write_routes(
         &headers,
     )
     .await;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(next_frame(&mut rx).await.issued_by, ClientId::from(client));
 
     let response = send_with_headers(
@@ -404,7 +404,7 @@ async fn test_column_write_routes_stamp_the_header_client_id() {
         &headers,
     )
     .await;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(next_frame(&mut rx).await.issued_by, ClientId::from(client));
 
     let response = send_with_headers(

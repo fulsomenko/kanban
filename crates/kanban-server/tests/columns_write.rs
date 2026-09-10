@@ -84,6 +84,50 @@ async fn test_post_column_creates_with_append_position_and_returns_201() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_post_column_response_carries_invalidation_naming_the_column() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let board_id = seed_board(&state).await;
+
+    let response = send(
+        &state,
+        "POST",
+        &format!("/v1/boards/{board_id}/columns"),
+        Some(&json!({"name": "To Do"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = json_of(response).await;
+    let column_id = body["id"].as_str().unwrap();
+    assert_eq!(body["name"], "To Do");
+    let invalidated_columns = body["invalidation"]["entities"]["columns"]
+        .as_array()
+        .expect("entities invalidation must name columns");
+    assert!(invalidated_columns.iter().any(|v| v == column_id));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_nested_column_patch_keeps_its_bare_entity_body() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (board_id, col_id) = seed_board_and_column(&state, "Original").await;
+
+    let response = send(
+        &state,
+        "PATCH",
+        &format!("/v1/boards/{board_id}/columns/{col_id}"),
+        Some(&json!({"name": "Patched"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    assert_eq!(body["name"], "Patched");
+    assert!(body.get("invalidation").is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_post_column_unknown_board_returns_404() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));

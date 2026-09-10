@@ -143,13 +143,36 @@ async fn test_patch_column_flat_updates_and_matches_board_scoped_route() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_patch_column_flat_response_carries_invalidation_naming_the_column() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, col_id, _card_id) = seed_board_column_and_card(&state).await;
+
+    let response = send(
+        &state,
+        "PATCH",
+        &format!("/v1/columns/{col_id}"),
+        Some(&json!({"name": "Renamed"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    assert_eq!(body["name"], "Renamed");
+    let invalidated_columns = body["invalidation"]["entities"]["columns"]
+        .as_array()
+        .expect("entities invalidation must name columns");
+    assert!(invalidated_columns.iter().any(|v| v == &col_id.to_string()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_delete_column_flat_deletes() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
     let (board_id, col_id) = seed_board_and_column(&state).await;
 
     let delete_response = send(&state, "DELETE", &format!("/v1/columns/{col_id}"), None).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response.status(), StatusCode::OK);
 
     let verify_response = send(
         &state,
@@ -159,6 +182,21 @@ async fn test_delete_column_flat_deletes() {
     )
     .await;
     assert_eq!(verify_response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_column_flat_returns_200_with_the_invalidation_naming_the_column() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, col_id) = seed_board_and_column(&state).await;
+
+    let response = send(&state, "DELETE", &format!("/v1/columns/{col_id}"), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    let invalidated_columns = body["invalidation"]["entities"]["columns"]
+        .as_array()
+        .expect("entities invalidation must name columns");
+    assert!(invalidated_columns.iter().any(|v| v == &col_id.to_string()));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -227,13 +265,36 @@ async fn test_patch_card_flat_updates_and_matches_board_scoped_route() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_patch_card_flat_response_carries_invalidation_naming_the_card() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, _col_id, card_id) = seed_board_column_and_card(&state).await;
+
+    let response = send(
+        &state,
+        "PATCH",
+        &format!("/v1/cards/{card_id}"),
+        Some(&json!({"title": "Renamed"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    assert_eq!(body["title"], "Renamed");
+    let invalidated_cards = body["invalidation"]["entities"]["cards"]
+        .as_array()
+        .expect("entities invalidation must name cards");
+    assert!(invalidated_cards.iter().any(|v| v == &card_id.to_string()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_delete_card_flat_deletes() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
     let (board_id, card_id) = seed_board_and_card(&state).await;
 
     let delete_response = send(&state, "DELETE", &format!("/v1/cards/{card_id}"), None).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response.status(), StatusCode::OK);
 
     let verify_response = send(
         &state,
@@ -243,6 +304,21 @@ async fn test_delete_card_flat_deletes() {
     )
     .await;
     assert_eq!(verify_response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_card_flat_returns_200_with_the_invalidation_naming_the_card() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let (_board_id, card_id) = seed_board_and_card(&state).await;
+
+    let response = send(&state, "DELETE", &format!("/v1/cards/{card_id}"), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    let invalidated_cards = body["invalidation"]["entities"]["cards"]
+        .as_array()
+        .expect("entities invalidation must name cards");
+    assert!(invalidated_cards.iter().any(|v| v == &card_id.to_string()));
 }
 
 #[tokio::test(flavor = "multi_thread")]

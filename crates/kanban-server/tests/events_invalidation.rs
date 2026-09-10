@@ -3,7 +3,7 @@
 use axum::http::StatusCode;
 use kanban_domain::{CreateCardOptions, GraphOperations, KanbanOperations};
 use kanban_server::state::AppState;
-use kanban_server::test_helpers::{make_sqlite_state, make_state, send};
+use kanban_server::test_helpers::{json_of, make_sqlite_state, make_state, send};
 use kanban_service::api::{ChangeKind, EntityType, InvalidationDto};
 use serde_json::json;
 use std::time::Duration;
@@ -95,7 +95,7 @@ async fn test_a_cascading_board_delete_frame_names_every_touched_entity_kind() {
         None,
     )
     .await;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
 
     let frame = next_frame(&mut rx).await;
     assert_eq!(frame.entity_type, Some(EntityType::Board));
@@ -121,7 +121,7 @@ async fn test_a_cascading_board_delete_frame_names_every_touched_entity_kind_on_
         None,
     )
     .await;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
 
     let frame = next_frame(&mut rx).await;
     assert_eq!(frame.entity_type, Some(EntityType::Board));
@@ -131,6 +131,76 @@ async fn test_a_cascading_board_delete_frame_names_every_touched_entity_kind_on_
         .invalidation
         .expect("frame must carry an invalidation");
     assert_cascading_board_delete_invalidation(&invalidation, &graph);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_board_returns_200_with_the_cascade_invalidation_naming_the_subtree() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let graph = seed_graph(&state).await;
+
+    let response = send(
+        &state,
+        "DELETE",
+        &format!("/v1/boards/{}", graph.board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = json_of(response).await;
+    let invalidation: InvalidationDto = serde_json::from_value(body["invalidation"].clone())
+        .expect("body must carry a parseable invalidation");
+    assert_cascading_board_delete_invalidation(&invalidation, &graph);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delete_board_returns_200_with_the_cascade_invalidation_naming_the_subtree_on_sqlite()
+{
+    let dir = tempdir().unwrap();
+    let state = make_sqlite_state(&dir.path().join("s.sqlite")).await;
+    let graph = seed_graph(&state).await;
+
+    let response = send(
+        &state,
+        "DELETE",
+        &format!("/v1/boards/{}", graph.board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = json_of(response).await;
+    let invalidation: InvalidationDto = serde_json::from_value(body["invalidation"].clone())
+        .expect("body must carry a parseable invalidation");
+    assert_cascading_board_delete_invalidation(&invalidation, &graph);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_mutation_body_invalidation_equals_the_sse_frame_invalidation() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+    let graph = seed_graph(&state).await;
+    let mut rx = state.event_tx.subscribe();
+
+    let response = send(
+        &state,
+        "DELETE",
+        &format!("/v1/boards/{}", graph.board_id),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    let body_invalidation: InvalidationDto =
+        serde_json::from_value(body["invalidation"].clone()).unwrap();
+
+    let frame = next_frame(&mut rx).await;
+    let frame_invalidation = frame
+        .invalidation
+        .expect("frame must carry an invalidation");
+
+    assert_eq!(frame_invalidation, body_invalidation);
 }
 
 #[tokio::test(flavor = "multi_thread")]

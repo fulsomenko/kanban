@@ -51,6 +51,48 @@ async fn test_post_board_creates_and_returns_201() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_post_board_response_carries_invalidation_naming_the_board() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let response = send(
+        &state,
+        "POST",
+        "/v1/boards",
+        Some(&json!({"name": "B", "card_prefix": "BB"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = json_of(response).await;
+    let board_id = body["id"].as_str().unwrap();
+    let entity: kanban_service::api::BoardResponse = serde_json::from_value(body.clone()).unwrap();
+    assert_eq!(entity.name, "B");
+    let invalidated_boards = body["invalidation"]["entities"]["boards"]
+        .as_array()
+        .expect("entities invalidation must name boards");
+    assert!(invalidated_boards.iter().any(|v| v == board_id));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_board_response_carries_no_invalidation_field() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id = {
+        let mut ctx = state.ctx.lock().await;
+        ctx.create_board("Board".to_string(), Some("BB".to_string()))
+            .unwrap()
+            .id
+    };
+
+    let response = send(&state, "GET", &format!("/v1/boards/{board_id}"), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    assert!(body.get("invalidation").is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_post_board_existing_id_conflicts_409() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -175,6 +217,38 @@ async fn test_patch_board_applies_merge_patch_and_returns_200() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_patch_board_response_carries_invalidation_naming_the_board() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let board_id = {
+        let mut ctx = state.ctx.lock().await;
+        ctx.create_board("Original Name".to_string(), Some("ON".to_string()))
+            .unwrap()
+            .id
+    };
+
+    let response = send(
+        &state,
+        "PATCH",
+        &format!("/v1/boards/{board_id}"),
+        Some(&json!({"name": "Renamed"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_of(response).await;
+    let entity: kanban_service::api::BoardResponse = serde_json::from_value(body.clone()).unwrap();
+    assert_eq!(entity.name, "Renamed");
+    let invalidated_boards = body["invalidation"]["entities"]["boards"]
+        .as_array()
+        .expect("entities invalidation must name boards");
+    assert!(invalidated_boards
+        .iter()
+        .any(|v| v == &board_id.to_string()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_patch_board_unknown_id_returns_404() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -215,7 +289,7 @@ async fn test_patch_board_unknown_id_returns_404_and_broadcasts_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_delete_board_returns_204_and_removes_board() {
+async fn test_delete_board_returns_200_and_removes_board() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
 
@@ -227,7 +301,7 @@ async fn test_delete_board_returns_204_and_removes_board() {
     };
 
     let response = send(&state, "DELETE", &format!("/v1/boards/{board_id}"), None).await;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
 
     let get_response = send(&state, "GET", &format!("/v1/boards/{board_id}"), None).await;
     assert_eq!(get_response.status(), StatusCode::NOT_FOUND);
@@ -268,7 +342,7 @@ async fn test_board_write_lifecycle() {
     assert_eq!(patch_response.status(), StatusCode::OK);
 
     let delete_response = send(&state, "DELETE", &format!("/v1/boards/{board_id}"), None).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response.status(), StatusCode::OK);
 
     let get_response = send(&state, "GET", &format!("/v1/boards/{board_id}"), None).await;
     assert_eq!(get_response.status(), StatusCode::NOT_FOUND);
@@ -299,7 +373,7 @@ async fn test_delete_board_removes_owned_columns_and_cards() {
     };
 
     let response = send(&state, "DELETE", &format!("/v1/boards/{board_id}"), None).await;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
 
     let ctx = state.ctx.lock().await;
     assert!(
@@ -343,7 +417,7 @@ async fn test_delete_board_removes_owned_subtree_on_sqlite_backend() {
     };
 
     let response = send(&state, "DELETE", &format!("/v1/boards/{board_id}"), None).await;
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
 
     let ctx = state.ctx.lock().await;
     assert!(
