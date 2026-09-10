@@ -78,6 +78,30 @@ async fn test_post_card_creates_with_append_position_and_returns_201() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_post_card_response_carries_a_parseable_invalidation() {
+    let dir = tempdir().unwrap();
+    let state = make_state(&dir.path().join("s.json"));
+
+    let (_board_id, column_id) = seed_board_and_column(&state, "To Do").await;
+
+    let response = send(
+        &state,
+        "POST",
+        &format!("/v1/columns/{column_id}/cards"),
+        Some(&json!({"title": "A card"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = json_of(response).await;
+    let entity: kanban_service::api::CardResponse = serde_json::from_value(body.clone()).unwrap();
+    assert_eq!(entity.title, "A card");
+    let _invalidation: kanban_service::api::InvalidationDto =
+        serde_json::from_value(body["invalidation"].clone())
+            .expect("body must carry a parseable invalidation");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_post_card_unknown_column_returns_404() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -390,7 +414,7 @@ async fn test_patch_card_unknown_id_returns_404() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_delete_card_returns_204_then_get_404() {
+async fn test_nested_card_delete_keeps_its_204_no_content() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
 
@@ -418,8 +442,11 @@ async fn test_delete_card_returns_204_then_get_404() {
     .await;
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(body.is_empty());
 
-    // Verify it's deleted via GET
     let response = send(
         &state,
         "GET",
