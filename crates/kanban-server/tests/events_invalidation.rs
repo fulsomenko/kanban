@@ -67,10 +67,7 @@ async fn seed_graph(state: &AppState) -> SeededGraph {
     }
 }
 
-fn assert_cascading_board_delete_invalidation(
-    invalidation: &InvalidationDto,
-    graph: &SeededGraph,
-) {
+fn assert_cascading_board_delete_invalidation(invalidation: &InvalidationDto, graph: &SeededGraph) {
     match invalidation {
         InvalidationDto::Entities(ids) => {
             assert!(ids.boards.contains(&graph.board_id));
@@ -104,7 +101,9 @@ async fn test_a_cascading_board_delete_frame_names_every_touched_entity_kind() {
     assert_eq!(frame.entity_type, Some(EntityType::Board));
     assert_eq!(frame.entity_id, Some(graph.board_id));
     assert_eq!(frame.kind, Some(ChangeKind::Deleted));
-    let invalidation = frame.invalidation.expect("frame must carry an invalidation");
+    let invalidation = frame
+        .invalidation
+        .expect("frame must carry an invalidation");
     assert_cascading_board_delete_invalidation(&invalidation, &graph);
 }
 
@@ -128,7 +127,9 @@ async fn test_a_cascading_board_delete_frame_names_every_touched_entity_kind_on_
     assert_eq!(frame.entity_type, Some(EntityType::Board));
     assert_eq!(frame.entity_id, Some(graph.board_id));
     assert_eq!(frame.kind, Some(ChangeKind::Deleted));
-    let invalidation = frame.invalidation.expect("frame must carry an invalidation");
+    let invalidation = frame
+        .invalidation
+        .expect("frame must carry an invalidation");
     assert_cascading_board_delete_invalidation(&invalidation, &graph);
 }
 
@@ -148,7 +149,10 @@ async fn test_a_write_frame_does_not_carry_a_previous_requests_invalidation() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let frame_a = next_frame(&mut rx).await;
-    match frame_a.invalidation.expect("frame must carry an invalidation") {
+    match frame_a
+        .invalidation
+        .expect("frame must carry an invalidation")
+    {
         InvalidationDto::Entities(ids) => assert!(ids.cards.contains(&graph.card_a)),
         InvalidationDto::All => panic!("expected an Entities invalidation naming the card"),
     }
@@ -162,7 +166,10 @@ async fn test_a_write_frame_does_not_carry_a_previous_requests_invalidation() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let frame_b = next_frame(&mut rx).await;
-    match frame_b.invalidation.expect("frame must carry an invalidation") {
+    match frame_b
+        .invalidation
+        .expect("frame must carry an invalidation")
+    {
         InvalidationDto::Entities(ids) => {
             assert!(ids.boards.contains(&graph.board_id));
             assert!(!ids.cards.contains(&graph.card_a));

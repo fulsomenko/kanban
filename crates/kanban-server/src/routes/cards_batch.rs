@@ -5,6 +5,7 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use kanban_core::ClientId;
+use kanban_domain::Invalidation;
 use kanban_service::api::{
     BatchArchiveRequest, BatchAssignSprintRequest, BatchFailure, BatchMoveRequest,
     BatchOperationResponse, BatchUpdateRequest, ChangeKind, EntityType,
@@ -26,13 +27,19 @@ fn to_wire(result: &BatchOperationResult) -> BatchOperationResponse {
 async fn run_detailed(
     state: &AppState,
     client: ClientId,
-    op: impl FnOnce(&mut Session) -> BatchOperationResult,
+    op: impl FnOnce(&mut Session) -> (BatchOperationResult, Invalidation),
 ) -> Result<BatchOperationResponse, AppError> {
     let mut ctx = state.lock_for_write(client).await;
-    let result = op(&mut ctx);
+    let (result, invalidation) = op(&mut ctx);
     ctx.save().await.map_err(|e| AppError::from(&e))?;
     for id in &result.succeeded {
-        state.broadcast_change(ctx.issued_by(), EntityType::Card, *id, ChangeKind::Updated);
+        state.broadcast_change(
+            ctx.issued_by(),
+            EntityType::Card,
+            *id,
+            ChangeKind::Updated,
+            &invalidation,
+        );
     }
     Ok(to_wire(&result))
 }
@@ -43,7 +50,7 @@ async fn batch_archive_route(
     AppJson(req): AppJson<BatchArchiveRequest>,
 ) -> Result<Json<BatchOperationResponse>, AppError> {
     Ok(Json(
-        run_detailed(&state, client, |c| c.archive_cards_detailed(req.ids).0).await?,
+        run_detailed(&state, client, |c| c.archive_cards_detailed(req.ids)).await?,
     ))
 }
 
@@ -54,7 +61,7 @@ async fn batch_move_route(
 ) -> Result<Json<BatchOperationResponse>, AppError> {
     Ok(Json(
         run_detailed(&state, client, |c| {
-            c.move_cards_detailed(req.ids, req.column_id).0
+            c.move_cards_detailed(req.ids, req.column_id)
         })
         .await?,
     ))
@@ -67,7 +74,7 @@ async fn batch_assign_sprint_route(
 ) -> Result<Json<BatchOperationResponse>, AppError> {
     Ok(Json(
         run_detailed(&state, client, |c| {
-            c.assign_cards_to_sprint_detailed(req.ids, req.sprint_id).0
+            c.assign_cards_to_sprint_detailed(req.ids, req.sprint_id)
         })
         .await?,
     ))
@@ -87,11 +94,17 @@ async fn batch_update_route(
         .map_err(|e| AppError::from(&e))?;
 
     let mut ctx = state.lock_for_write(client).await;
-    let (_count, _inv) = crate::state::mutate(&mut ctx, |c| c.update_cards_impl(pairs))
+    let (_count, invalidation) = crate::state::mutate(&mut ctx, |c| c.update_cards_impl(pairs))
         .map_err(|e| AppError::from(&e))?;
     ctx.save().await.map_err(|e| AppError::from(&e))?;
     for id in &ids {
-        state.broadcast_change(ctx.issued_by(), EntityType::Card, *id, ChangeKind::Updated);
+        state.broadcast_change(
+            ctx.issued_by(),
+            EntityType::Card,
+            *id,
+            ChangeKind::Updated,
+            &invalidation,
+        );
     }
     Ok(Json(BatchOperationResponse::new(ids, vec![])))
 }

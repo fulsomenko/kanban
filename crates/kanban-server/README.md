@@ -19,7 +19,7 @@ graph TD
 
 A `tokio::sync::Mutex` is used rather than a sync `RwLock`: `KanbanContext`'s write path (`save`/`reload`) is async, and holding a sync write guard across an `.await` would be a `Send`/deadlock hazard.
 
-Each successful mutation broadcasts a `ChangeEventFrame` on an in-process `tokio::sync::broadcast` channel (`AppState::broadcast_change`), naming the entity type, id and change kind (created/updated/deleted) it touched. `GET /v1/events` streams these frames to clients over SSE, so a client can invalidate just the affected board, column, card or sprint instead of its whole cache. A frame caused by an external process writing the file directly (`AppState::broadcast_unscoped_change`) carries no entity identity, meaning subscribers must invalidate everything.
+Each successful mutation broadcasts a `ChangeEventFrame` on an in-process `tokio::sync::broadcast` channel (`AppState::broadcast_change`), naming the entity type, id and change kind (created/updated/deleted) it touched, plus an `invalidation` (`InvalidationDto`) naming the mutation's full blast radius — every board/column/card/sprint id it actually affected, not just the single entity above. `GET /v1/events` streams these frames to clients over SSE, so a client can invalidate exactly what changed instead of its whole cache. A frame caused by an external process writing the file directly (`AppState::broadcast_unscoped_change`) carries no entity identity and an `invalidation` of `InvalidationDto::All`, meaning subscribers must invalidate everything.
 
 ## Installation
 

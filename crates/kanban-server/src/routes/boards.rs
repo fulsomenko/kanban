@@ -96,9 +96,15 @@ async fn post_board(
 ) -> Result<(StatusCode, Json<BoardResponse>), AppError> {
     let resp = {
         let mut ctx = state.lock_for_write(client).await;
-        let resp = create_board(&mut ctx, req).map_err(AppError::from)?;
+        let (resp, invalidation) = create_board(&mut ctx, req).map_err(AppError::from)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Board, resp.id, ChangeKind::Created)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Board,
+                resp.id,
+                ChangeKind::Created,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         resp
@@ -116,13 +122,15 @@ async fn put_board(
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || board_current(&ctx, id))?;
-        let (resp, created) = create_or_replace_board(&mut ctx, id, req).map_err(AppError::from)?;
+        let (resp, created, invalidation) =
+            create_or_replace_board(&mut ctx, id, req).map_err(AppError::from)?;
         state
             .persist_and_broadcast(
                 &ctx,
                 EntityType::Board,
                 id,
                 ChangeKind::created_or_updated(created),
+                &invalidation,
             )
             .await
             .map_err(|e| AppError::from(&e))?;
@@ -146,11 +154,17 @@ async fn patch_board(
     let board = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || board_current(&ctx, id))?;
-        let (board, _invalidation) =
+        let (board, invalidation) =
             crate::state::mutate(&mut ctx, |c| c.update_board_impl(id, req.into()))
                 .map_err(|e| AppError::from(&e))?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Board, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Board,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         board
@@ -167,10 +181,16 @@ async fn delete_board(
     {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || board_current(&ctx, id))?;
-        let _invalidation = crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
+        let invalidation = crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
             .map_err(|e| AppError::from(&e))?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Board, id, ChangeKind::Deleted)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Board,
+                id,
+                ChangeKind::Deleted,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }
@@ -183,11 +203,17 @@ async fn archive_board(
     ClientIdent(client): ClientIdent,
 ) -> Result<Json<BoardResponse>, AppError> {
     let mut guard = state.lock_for_write(client).await;
-    let _invalidation = crate::state::mutate_unit(&mut guard, |c| c.archive_board_impl(id))
+    let invalidation = crate::state::mutate_unit(&mut guard, |c| c.archive_board_impl(id))
         .map_err(|e| AppError::from(&e))?;
     let response = board_response(&guard, id)?;
     state
-        .persist_and_broadcast(&guard, EntityType::Board, id, ChangeKind::Updated)
+        .persist_and_broadcast(
+            &guard,
+            EntityType::Board,
+            id,
+            ChangeKind::Updated,
+            &invalidation,
+        )
         .await
         .map_err(|e| AppError::from(&e))?;
     Ok(Json(response))
@@ -199,11 +225,17 @@ async fn restore_board(
     ClientIdent(client): ClientIdent,
 ) -> Result<Json<BoardResponse>, AppError> {
     let mut guard = state.lock_for_write(client).await;
-    let _invalidation = crate::state::mutate_unit(&mut guard, |c| c.restore_board_impl(id))
+    let invalidation = crate::state::mutate_unit(&mut guard, |c| c.restore_board_impl(id))
         .map_err(|e| AppError::from(&e))?;
     let response = board_response(&guard, id)?;
     state
-        .persist_and_broadcast(&guard, EntityType::Board, id, ChangeKind::Updated)
+        .persist_and_broadcast(
+            &guard,
+            EntityType::Board,
+            id,
+            ChangeKind::Updated,
+            &invalidation,
+        )
         .await
         .map_err(|e| AppError::from(&e))?;
     Ok(Json(response))

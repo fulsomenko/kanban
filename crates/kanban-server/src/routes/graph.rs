@@ -50,11 +50,18 @@ async fn attach_children_route(
 ) -> Result<Json<CardGraphResponse>, AppError> {
     let body = {
         let mut ctx = state.lock_for_write(client).await;
-        let _ = crate::state::mutate_unit(&mut ctx, |c| c.attach_children_impl(id, req.children))
-            .map_err(|e| AppError::from(&e))?;
+        let invalidation =
+            crate::state::mutate_unit(&mut ctx, |c| c.attach_children_impl(id, req.children))
+                .map_err(|e| AppError::from(&e))?;
         let body = graph_mutation_response(&ctx.ctx, id)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Card,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -69,10 +76,17 @@ async fn detach_child_route(
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
-        let _ = crate::state::mutate_unit(&mut ctx, |c| c.detach_children_impl(id, vec![child_id]))
-            .map_err(|e| AppError::from(&e))?;
+        let invalidation =
+            crate::state::mutate_unit(&mut ctx, |c| c.detach_children_impl(id, vec![child_id]))
+                .map_err(|e| AppError::from(&e))?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Card,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }
@@ -87,13 +101,19 @@ async fn add_block_route(
 ) -> Result<Json<CardGraphResponse>, AppError> {
     let body = {
         let mut ctx = state.lock_for_write(client).await;
-        let _ = crate::state::mutate_unit(&mut ctx, |c| {
+        let invalidation = crate::state::mutate_unit(&mut ctx, |c| {
             c.block_impl(id, req.blocked, req.severity.into())
         })
         .map_err(|e| AppError::from(&e))?;
         let body = graph_mutation_response(&ctx.ctx, id)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Card,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -108,10 +128,16 @@ async fn remove_block_route(
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
-        let _ = crate::state::mutate_unit(&mut ctx, |c| c.unblock_impl(id, blocked_id))
+        let invalidation = crate::state::mutate_unit(&mut ctx, |c| c.unblock_impl(id, blocked_id))
             .map_err(|e| AppError::from(&e))?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Card,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }
@@ -126,12 +152,18 @@ async fn add_related_route(
 ) -> Result<Json<CardGraphResponse>, AppError> {
     let body = {
         let mut ctx = state.lock_for_write(client).await;
-        let _ =
+        let invalidation =
             crate::state::mutate_unit(&mut ctx, |c| c.relate_impl(id, req.other, req.kind.into()))
                 .map_err(|e| AppError::from(&e))?;
         let body = graph_mutation_response(&ctx.ctx, id)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Card,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -146,10 +178,16 @@ async fn remove_related_route(
 ) -> Result<StatusCode, AppError> {
     {
         let mut ctx = state.lock_for_write(client).await;
-        let _ = crate::state::mutate_unit(&mut ctx, |c| c.dissociate_impl(id, other_id))
+        let invalidation = crate::state::mutate_unit(&mut ctx, |c| c.dissociate_impl(id, other_id))
             .map_err(|e| AppError::from(&e))?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Card, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Card,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }

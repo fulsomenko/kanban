@@ -21,12 +21,18 @@ async fn activate_sprint_route(
     let body = {
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
-        let (sprint, _invalidation) =
+        let (sprint, invalidation) =
             crate::state::mutate(&mut ctx, |c| c.activate_sprint_impl(id, duration_days))
                 .map_err(|e| AppError::from(&e))?;
         let body = respond(&ctx, &sprint)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -42,12 +48,17 @@ async fn complete_sprint_route(
     let body = {
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
-        let (sprint, _invalidation) =
-            crate::state::mutate(&mut ctx, |c| c.complete_sprint_impl(id))
-                .map_err(|e| AppError::from(&e))?;
+        let (sprint, invalidation) = crate::state::mutate(&mut ctx, |c| c.complete_sprint_impl(id))
+            .map_err(|e| AppError::from(&e))?;
         let body = respond(&ctx, &sprint)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -63,11 +74,17 @@ async fn cancel_sprint_route(
     let body = {
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
-        let (sprint, _invalidation) = crate::state::mutate(&mut ctx, |c| c.cancel_sprint_impl(id))
+        let (sprint, invalidation) = crate::state::mutate(&mut ctx, |c| c.cancel_sprint_impl(id))
             .map_err(|e| AppError::from(&e))?;
         let body = respond(&ctx, &sprint)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -85,12 +102,18 @@ async fn carry_over_sprint_route(
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
         require_sprint_in_board(&ctx, board_id, req.to_sprint_id)?;
-        let (moved, _invalidation) = crate::state::mutate(&mut ctx, |c| {
+        let (moved, invalidation) = crate::state::mutate(&mut ctx, |c| {
             c.carry_over_sprint_cards_impl(id, req.to_sprint_id)
         })
         .map_err(|e| AppError::from(&e))?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         moved

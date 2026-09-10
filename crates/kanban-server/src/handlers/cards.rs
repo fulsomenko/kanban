@@ -9,6 +9,7 @@
 //! onto the wire [`CardResponse`]. The `created` flag lets the HTTP layer
 //! answer 201 (created) vs 200 (replaced).
 
+use kanban_domain::Invalidation;
 use kanban_service::api::{ApiError, CardResponse, CreateCardRequest};
 use kanban_service::{KanbanError, KanbanOperations};
 use uuid::Uuid;
@@ -23,16 +24,19 @@ pub fn create_card(
     ctx: &mut crate::state::Session,
     column_id: Uuid,
     req: CreateCardRequest,
-) -> Result<(CardResponse, bool), ApiError> {
+) -> Result<(CardResponse, bool, Invalidation), ApiError> {
     let (maybe_id, spec) = req
         .into_new_card(column_id)
         .map_err(|e| ApiError::from(&e))?;
     let id = maybe_id.unwrap_or_else(Uuid::new_v4);
     require_card_in_column_if_present(ctx, id, column_id)?;
-    let (outcome, _invalidation) =
-        crate::state::mutate(ctx, |c| c.create_or_replace_card(id, spec))
-            .map_err(|e| ApiError::from(&e))?;
-    Ok((CardResponse::from(&outcome.card), outcome.created))
+    let (outcome, invalidation) = crate::state::mutate(ctx, |c| c.create_or_replace_card(id, spec))
+        .map_err(|e| ApiError::from(&e))?;
+    Ok((
+        CardResponse::from(&outcome.card),
+        outcome.created,
+        invalidation,
+    ))
 }
 
 /// `PUT /v1/columns/:column_id/cards/:id`: idempotent create-or-replace for a
@@ -49,15 +53,18 @@ pub fn create_or_replace_card(
     column_id: Uuid,
     id: Uuid,
     req: CreateCardRequest,
-) -> Result<(CardResponse, bool), ApiError> {
+) -> Result<(CardResponse, bool, Invalidation), ApiError> {
     require_card_in_column_if_present(ctx, id, column_id)?;
     let (_body_id, spec) = req
         .into_new_card(column_id)
         .map_err(|e| ApiError::from(&e))?;
-    let (outcome, _invalidation) =
-        crate::state::mutate(ctx, |c| c.create_or_replace_card(id, spec))
-            .map_err(|e| ApiError::from(&e))?;
-    Ok((CardResponse::from(&outcome.card), outcome.created))
+    let (outcome, invalidation) = crate::state::mutate(ctx, |c| c.create_or_replace_card(id, spec))
+        .map_err(|e| ApiError::from(&e))?;
+    Ok((
+        CardResponse::from(&outcome.card),
+        outcome.created,
+        invalidation,
+    ))
 }
 
 /// 404s when `id` already refers to a card outside `column_id`. A no-op when

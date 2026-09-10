@@ -2,7 +2,7 @@
 
 use axum::http::StatusCode;
 use kanban_core::ClientId;
-use kanban_domain::KanbanOperations;
+use kanban_domain::{EntityIds, Invalidation, KanbanOperations};
 use kanban_server::state::AppState;
 use kanban_server::test_helpers::{json_of, make_state, send, send_with_headers, TestServer};
 use kanban_service::api::{ChangeEventFrame, ChangeKind, EntityType};
@@ -38,7 +38,14 @@ async fn test_broadcast_change_includes_entity_identity() {
     let mut rx = state.event_tx.subscribe();
 
     let id = Uuid::new_v4();
-    state.broadcast_change(ClientId::nil(), EntityType::Board, id, ChangeKind::Updated);
+    let invalidation = Invalidation::Entities(EntityIds::boards([id]));
+    state.broadcast_change(
+        ClientId::nil(),
+        EntityType::Board,
+        id,
+        ChangeKind::Updated,
+        &invalidation,
+    );
 
     let frame = rx.try_recv().unwrap();
     assert_eq!(frame.entity_type, Some(EntityType::Board));
