@@ -88,15 +88,29 @@ impl HttpBackend {
     }
 
     /// Bridge a synchronous DataStore/CommandStore call onto the dedicated
-    /// runtime -- never the caller's ambient one. Must not be called from a
-    /// thread already inside a Tokio runtime; doing so panics with "Cannot
-    /// start a runtime from within a runtime". An async caller reaches this
-    /// through `tokio::task::spawn_blocking`.
+    /// runtime -- never the caller's ambient one. With no ambient runtime on
+    /// the calling thread, this blocks directly. Inside a multi-thread
+    /// ambient runtime, it enters via `tokio::task::block_in_place` so the
+    /// dedicated runtime can be driven without nesting. A current_thread
+    /// ambient runtime is rejected: it has no worker to hand off to, so
+    /// `block_in_place` deadlocks or panics.
     pub(crate) fn block_on<F: std::future::Future>(&self, fut: F) -> F::Output {
-        self.runtime
+        let runtime = self
+            .runtime
             .as_ref()
-            .expect("the runtime is taken only while dropping")
-            .block_on(fut)
+            .expect("the runtime is taken only while dropping");
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                debug_assert!(
+                    handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread,
+                    "HttpBackend requires a multi-threaded Tokio runtime (e.g. #[tokio::main]). \
+                     The current_thread runtime is not supported because synchronous DataStore \
+                     methods need to block on async HTTP I/O."
+                );
+                tokio::task::block_in_place(|| runtime.block_on(fut))
+            }
+            Err(_) => runtime.block_on(fut),
+        }
     }
 
     pub(crate) fn base_url(&self) -> &str {
@@ -135,6 +149,13 @@ mod tests {
         let result = backend.block_on(async { 1 + 1 });
         assert_eq!(result, 2);
         Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(expected = "HttpBackend requires a multi-threaded Tokio runtime")]
+    async fn test_block_on_inside_current_thread_runtime_panics_with_flavor_message() {
+        let backend = HttpBackend::new("http://example.com").unwrap();
+        let _ = backend.block_on(async { 1 + 1 });
     }
 
     #[test]
