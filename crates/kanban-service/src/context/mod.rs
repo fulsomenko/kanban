@@ -23,6 +23,8 @@ mod graph;
 pub use graph::BoardRelations;
 mod mutation_ops;
 mod persistence;
+#[cfg(test)]
+mod remote_writes_divert;
 mod sprints;
 mod sync;
 mod undo;
