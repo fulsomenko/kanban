@@ -13,8 +13,8 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use kanban_domain::{LoadState, Model, NoProjections};
 use kanban_service::api::{
-    ArchivedBoardResponse, BoardResponse, ChangeKind, CreateBoardRequest, EntityType, Page,
-    PageParams, ReplaceBoardRequest, UpdateBoardRequest,
+    ArchivedBoardResponse, BoardResponse, ChangeKind, CreateBoardRequest, DeleteResponse,
+    EntityType, MutationResponse, Page, PageParams, ReplaceBoardRequest, UpdateBoardRequest,
 };
 use kanban_service::KanbanError;
 use uuid::Uuid;
@@ -93,8 +93,8 @@ async fn post_board(
     State(state): State<AppState>,
     ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<CreateBoardRequest>,
-) -> Result<(StatusCode, Json<BoardResponse>), AppError> {
-    let resp = {
+) -> Result<(StatusCode, Json<MutationResponse<BoardResponse>>), AppError> {
+    let (resp, invalidation) = {
         let mut ctx = state.lock_for_write(client).await;
         let (resp, invalidation) = create_board(&mut ctx, req).map_err(AppError::from)?;
         state
@@ -107,9 +107,12 @@ async fn post_board(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        resp
+        (resp, invalidation)
     };
-    Ok((StatusCode::CREATED, Json(resp)))
+    Ok((
+        StatusCode::CREATED,
+        Json(MutationResponse::new(resp, &invalidation)),
+    ))
 }
 
 async fn put_board(
@@ -150,8 +153,8 @@ async fn patch_board(
     ClientIdent(client): ClientIdent,
     headers: HeaderMap,
     AppJson(req): AppJson<UpdateBoardRequest>,
-) -> Result<Json<BoardResponse>, AppError> {
-    let board = {
+) -> Result<Json<MutationResponse<BoardResponse>>, AppError> {
+    let (board, invalidation) = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let (board, invalidation) =
@@ -167,9 +170,12 @@ async fn patch_board(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        board
+        (board, invalidation)
     };
-    Ok(Json(BoardResponse::from(&board)))
+    Ok(Json(MutationResponse::new(
+        BoardResponse::from(&board),
+        &invalidation,
+    )))
 }
 
 async fn delete_board(
@@ -177,8 +183,8 @@ async fn delete_board(
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
     headers: HeaderMap,
-) -> Result<StatusCode, AppError> {
-    {
+) -> Result<(StatusCode, Json<DeleteResponse>), AppError> {
+    let invalidation = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || board_current(&ctx, id))?;
         let invalidation = crate::state::mutate_unit(&mut ctx, |c| c.delete_board_impl(id))
@@ -193,8 +199,9 @@ async fn delete_board(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-    }
-    Ok(StatusCode::NO_CONTENT)
+        invalidation
+    };
+    Ok((StatusCode::OK, Json(DeleteResponse::new(&invalidation))))
 }
 
 async fn archive_board(

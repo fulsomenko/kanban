@@ -20,7 +20,8 @@ use kanban_service::api::ArchivedFilterDto;
 use kanban_service::api::CardResponse;
 use kanban_service::api::{CardStatusDto, SortFieldDto, SortOrderDto};
 use kanban_service::api::{
-    ChangeKind, CreateCardRequest, EntityType, Page, PageParams, UpdateCardRequest,
+    ChangeKind, CreateCardRequest, DeleteResponse, EntityType, MutationResponse, Page, PageParams,
+    UpdateCardRequest,
 };
 use kanban_service::{CardUpdate, KanbanError, KanbanOperations};
 use serde::Deserialize;
@@ -281,8 +282,8 @@ async fn create_card_route(
     Path(column_id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<CreateCardRequest>,
-) -> Result<(StatusCode, Json<CardResponse>), AppError> {
-    let (resp, created) = {
+) -> Result<(StatusCode, Json<MutationResponse<CardResponse>>), AppError> {
+    let (resp, created, invalidation) = {
         let mut ctx = state.lock_for_write(client).await;
         let (resp, created, invalidation) =
             crate::handlers::cards::create_card(&mut ctx, column_id, req)
@@ -297,9 +298,12 @@ async fn create_card_route(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        (resp, created)
+        (resp, created, invalidation)
     };
-    Ok((created_status(created), Json(resp)))
+    Ok((
+        created_status(created),
+        Json(MutationResponse::new(resp, &invalidation)),
+    ))
 }
 
 async fn put_card_route(
@@ -413,9 +417,9 @@ async fn update_card_route_flat(
     ClientIdent(client): ClientIdent,
     headers: HeaderMap,
     AppJson(req): AppJson<UpdateCardRequest>,
-) -> Result<Json<CardResponse>, AppError> {
+) -> Result<Json<MutationResponse<CardResponse>>, AppError> {
     let updates = CardUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
-    let card = {
+    let (card, invalidation) = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || card_current(&ctx, id))?;
         let (card, invalidation) = do_update_card(&mut ctx, id, updates)?;
@@ -429,9 +433,12 @@ async fn update_card_route_flat(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        card
+        (card, invalidation)
     };
-    Ok(Json(CardResponse::from(&card)))
+    Ok(Json(MutationResponse::new(
+        CardResponse::from(&card),
+        &invalidation,
+    )))
 }
 
 async fn delete_card_route_flat(
@@ -439,8 +446,8 @@ async fn delete_card_route_flat(
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
     headers: HeaderMap,
-) -> Result<StatusCode, AppError> {
-    {
+) -> Result<(StatusCode, Json<DeleteResponse>), AppError> {
+    let invalidation = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || card_current(&ctx, id))?;
         let invalidation = do_delete_card(&mut ctx, id)?;
@@ -454,8 +461,9 @@ async fn delete_card_route_flat(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-    }
-    Ok(StatusCode::NO_CONTENT)
+        invalidation
+    };
+    Ok((StatusCode::OK, Json(DeleteResponse::new(&invalidation))))
 }
 
 async fn archive_card_route(

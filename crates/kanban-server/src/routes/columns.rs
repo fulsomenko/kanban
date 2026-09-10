@@ -11,7 +11,9 @@ use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use kanban_domain::{Column, Invalidation, LoadState, Model, NoProjections};
-use kanban_service::api::{ChangeKind, ColumnResponse, EntityType, Page, PageParams};
+use kanban_service::api::{
+    ChangeKind, ColumnResponse, DeleteResponse, EntityType, MutationResponse, Page, PageParams,
+};
 use kanban_service::{ColumnUpdate, KanbanError, KanbanOperations};
 use uuid::Uuid;
 
@@ -105,8 +107,8 @@ async fn create_column_route(
     Path(board_id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
     AppJson(req): AppJson<kanban_service::api::CreateColumnRequest>,
-) -> Result<(StatusCode, Json<ColumnResponse>), AppError> {
-    let (resp, created) = {
+) -> Result<(StatusCode, Json<MutationResponse<ColumnResponse>>), AppError> {
+    let (resp, created, invalidation) = {
         let mut ctx = state.lock_for_write(client).await;
         let (resp, created, invalidation) =
             crate::handlers::columns::create_column(&mut ctx, board_id, req)
@@ -121,9 +123,12 @@ async fn create_column_route(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        (resp, created)
+        (resp, created, invalidation)
     };
-    Ok((created_status(created), Json(resp)))
+    Ok((
+        created_status(created),
+        Json(MutationResponse::new(resp, &invalidation)),
+    ))
 }
 
 async fn put_column_route(
@@ -269,9 +274,9 @@ async fn update_column_route_flat(
     ClientIdent(client): ClientIdent,
     headers: HeaderMap,
     AppJson(req): AppJson<kanban_service::api::UpdateColumnRequest>,
-) -> Result<Json<ColumnResponse>, AppError> {
+) -> Result<Json<MutationResponse<ColumnResponse>>, AppError> {
     let updates = ColumnUpdate::try_from(req).map_err(|e| AppError::from(&e))?;
-    let col = {
+    let (col, invalidation) = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || column_current(&ctx, id))?;
         let (col, invalidation) = do_update_column(&mut ctx, id, updates)?;
@@ -285,9 +290,12 @@ async fn update_column_route_flat(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        col
+        (col, invalidation)
     };
-    Ok(Json(ColumnResponse::from(&col)))
+    Ok(Json(MutationResponse::new(
+        ColumnResponse::from(&col),
+        &invalidation,
+    )))
 }
 
 async fn delete_column_route_flat(
@@ -295,8 +303,8 @@ async fn delete_column_route_flat(
     Path(id): Path<Uuid>,
     ClientIdent(client): ClientIdent,
     headers: HeaderMap,
-) -> Result<StatusCode, AppError> {
-    {
+) -> Result<(StatusCode, Json<DeleteResponse>), AppError> {
+    let invalidation = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || column_current(&ctx, id))?;
         let invalidation = do_delete_column(&mut ctx, id)?;
@@ -310,8 +318,9 @@ async fn delete_column_route_flat(
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-    }
-    Ok(StatusCode::NO_CONTENT)
+        invalidation
+    };
+    Ok((StatusCode::OK, Json(DeleteResponse::new(&invalidation))))
 }
 
 pub fn flat_read_router() -> Router<AppState> {
