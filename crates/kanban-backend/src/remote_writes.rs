@@ -20,11 +20,7 @@ pub trait RemoteWrites: Send + Sync {
         id: Option<Uuid>,
         spec: &NewBoard,
     ) -> KanbanResult<(Board, Invalidation)>;
-    fn update_board(
-        &self,
-        id: Uuid,
-        updates: &BoardUpdate,
-    ) -> KanbanResult<(Board, Invalidation)>;
+    fn update_board(&self, id: Uuid, updates: &BoardUpdate) -> KanbanResult<(Board, Invalidation)>;
     fn delete_board(&self, id: Uuid) -> KanbanResult<Invalidation>;
 
     fn create_column(

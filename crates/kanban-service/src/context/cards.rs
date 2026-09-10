@@ -94,6 +94,9 @@ impl KanbanContext {
         client_id: Option<Uuid>,
         spec: NewCard,
     ) -> KanbanResult<(Card, Invalidation)> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.create_card(client_id, &spec);
+        }
         // FK: column must exist; derive the owning board from it.
         let column = self.require_column(spec.column_id)?;
         let board_id = column.board_id;
@@ -362,6 +365,9 @@ impl KanbanContext {
         id: Uuid,
         updates: CardUpdate,
     ) -> KanbanResult<(Card, Invalidation)> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.update_card(id, &updates);
+        }
         let (_count, invalidation) = self.update_cards_impl(vec![(id, updates)])?;
         let card = self
             .get_card_impl(id)?
@@ -469,6 +475,9 @@ impl KanbanContext {
     }
 
     pub fn delete_card_impl(&mut self, id: Uuid) -> KanbanResult<Invalidation> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.delete_card(id);
+        }
         use kanban_domain::commands::DeleteCard;
         let cmd = Command::Card(CardCommand::Delete(DeleteCard { card_id: id }));
         self.execute(vec![cmd])

@@ -25,6 +25,9 @@ impl KanbanContext {
         id: Option<Uuid>,
         spec: NewBoard,
     ) -> KanbanResult<(Board, Invalidation)> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.create_board(id, &spec);
+        }
         let id = id.unwrap_or_else(Uuid::new_v4);
         if self.backend.get_board(id)?.is_some() {
             return Err(KanbanError::already_exists("Board", id));
@@ -212,6 +215,9 @@ impl KanbanContext {
         id: Uuid,
         updates: BoardUpdate,
     ) -> KanbanResult<(Board, Invalidation)> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.update_board(id, &updates);
+        }
         use kanban_domain::commands::UpdateBoard;
         let cmd = Command::Board(BoardCommand::Update(UpdateBoard {
             board_id: id,
@@ -225,6 +231,9 @@ impl KanbanContext {
     }
 
     pub fn delete_board_impl(&mut self, id: Uuid) -> KanbanResult<Invalidation> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.delete_board(id);
+        }
         let commands = crate::cascade::delete_board(self.backend.as_data_store(), id)?;
         self.execute(commands)
     }

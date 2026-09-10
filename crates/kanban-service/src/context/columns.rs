@@ -21,6 +21,9 @@ impl KanbanContext {
         id: Option<Uuid>,
         spec: NewColumn,
     ) -> KanbanResult<(Column, Invalidation)> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.create_column(spec.board_id, &spec);
+        }
         self.require_board(spec.board_id)?;
         let id = id.unwrap_or_else(Uuid::new_v4);
         if self.backend.get_column(id)?.is_some() {
@@ -136,6 +139,9 @@ impl KanbanContext {
         id: Uuid,
         updates: ColumnUpdate,
     ) -> KanbanResult<(Column, Invalidation)> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.update_column(id, &updates);
+        }
         use kanban_domain::commands::UpdateColumn;
         let cmd = Command::Column(ColumnCommand::Update(UpdateColumn {
             column_id: id,
@@ -149,6 +155,9 @@ impl KanbanContext {
     }
 
     pub fn delete_column_impl(&mut self, id: Uuid) -> KanbanResult<Invalidation> {
+        if let Some(rw) = self.backend.remote_writes() {
+            return rw.delete_column(id);
+        }
         use kanban_domain::commands::DeleteColumn;
         let cmd = Command::Column(ColumnCommand::Delete(DeleteColumn { column_id: id }));
         self.execute(vec![cmd])
