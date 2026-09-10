@@ -19,9 +19,10 @@ pub use v1::{
     ActivateSprintRequest, AddBlockRequest, AddRelatedRequest, ApiError, ArchivedFilterDto,
     AttachChildrenRequest, BlockEdgeDto, BoardResponse, CardGraphResponse, CardPriorityDto,
     CardResponse, CardStatusDto, CarryOverRequest, CarryOverResponse, ChangeEventFrame,
-    ChangeKind, ColumnResponse, CreateBoardRequest, CreateCardRequest, CreateColumnRequest,
-    CreateSprintParts, CreateSprintRequest, EntityType, ErrorCode, Page, PageParams, Patch,
-    PrefixResponse, RelatedEdgeDto, RelatesKindDto, ReorderColumnRequest, ReplaceBoardRequest,
+    ChangeKind, CLIENT_ID_HEADER, ColumnResponse, CreateBoardRequest, CreateCardRequest,
+    CreateColumnRequest, CreateSprintParts, CreateSprintRequest, EntityType, ErrorCode, Page,
+    PageParams, Patch, PrefixResponse, RelatedEdgeDto, RelatesKindDto, ReorderColumnRequest,
+    ReplaceBoardRequest,
     ReplaceCardRequest, ReplaceColumnRequest, ReplaceSprintRequest, SeverityDto, SortFieldDto,
     SortOrderDto, SprintResponse, SprintStatusDto, TaskListViewDto, UpdateBoardRequest,
     UpdateCardRequest, UpdateColumnRequest, UpdateSprintRequest,
@@ -32,6 +33,7 @@ pub use v1::{
 - `Create*Request` / `Replace*Request` / `Update*Request` are the write-side DTOs for `POST` / `PUT` / `PATCH` respectively — `Update*Request` follows JSON Merge Patch (RFC 7386) semantics via `Patch<T>`.
 - `ApiError` / `ErrorCode` are the shared error envelope every non-2xx response uses.
 - `ChangeEventFrame` is the payload broadcast on `kanban-server`'s internal change-event channel; `entity_type`/`entity_id`/`kind` (`EntityType`, `ChangeKind`) name the entity a mutation touched and how, all absent when the emitter cannot know (an external process wrote the file directly).
+- `CLIENT_ID_HEADER` is the wire name of the client-identity request header, shared so the server's extractor and HTTP clients cannot drift.
 
 The optional `schemars` feature (`dep:schemars`, `features = ["uuid1"]`) derives `schemars::JsonSchema` on these DTOs so `kanban-mcp` can use them directly as `Parameters<T>` for its tool handlers (rmcp requires a JSON Schema).
 
