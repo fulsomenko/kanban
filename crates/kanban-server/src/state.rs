@@ -299,6 +299,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_the_broadcast_frame_carries_the_invalidation_the_seam_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = json_state(dir.path());
+        let mut rx = state.event_tx.subscribe();
+
+        let board_id = {
+            let mut guard = state.lock_for_write(ClientId::nil()).await;
+            guard.ctx.create_board("A".into(), None).unwrap().id
+        };
+
+        let mut guard = state.lock_for_write(ClientId::nil()).await;
+        let invalidation = mutate_unit(&mut guard, |c| c.delete_board_impl(board_id)).unwrap();
+        state
+            .persist_and_broadcast(
+                &guard,
+                EntityType::Board,
+                board_id,
+                ChangeKind::Deleted,
+                &invalidation,
+            )
+            .await
+            .unwrap();
+        drop(guard);
+
+        let frame = rx.try_recv().unwrap();
+        assert_eq!(
+            frame.invalidation,
+            Some(kanban_service::api::InvalidationDto::from(&invalidation))
+        );
+    }
+
+    #[tokio::test]
     async fn test_mutate_runs_the_operation_exactly_once() {
         let (mut ctx, board_id) = seeded_ctx().await;
         let calls = Cell::new(0u32);
