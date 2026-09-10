@@ -1,3 +1,38 @@
+use crate::InvalidationDto;
+use kanban_domain::Invalidation;
+use serde::{Deserialize, Serialize};
+
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MutationResponse<T> {
+    #[serde(flatten)]
+    pub entity: T,
+    pub invalidation: InvalidationDto,
+}
+
+impl<T> MutationResponse<T> {
+    pub fn new(entity: T, invalidation: &Invalidation) -> Self {
+        Self {
+            entity,
+            invalidation: InvalidationDto::from(invalidation),
+        }
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeleteResponse {
+    pub invalidation: InvalidationDto,
+}
+
+impl DeleteResponse {
+    pub fn new(invalidation: &Invalidation) -> Self {
+        Self {
+            invalidation: InvalidationDto::from(invalidation),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::BoardResponse;
@@ -26,8 +61,7 @@ mod tests {
             board_id.to_string()
         );
 
-        let round_tripped: MutationResponse<BoardResponse> =
-            serde_json::from_value(value).unwrap();
+        let round_tripped: MutationResponse<BoardResponse> = serde_json::from_value(value).unwrap();
         assert_eq!(round_tripped.entity, resp);
     }
 
