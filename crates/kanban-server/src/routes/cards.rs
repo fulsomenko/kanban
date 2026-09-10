@@ -518,8 +518,30 @@ async fn restore_card_route(
     Ok(Json(CardResponse::from(&card)))
 }
 
+#[derive(Debug, Deserialize)]
+struct CardLookupQuery {
+    identifier: String,
+}
+
+/// Resolves a card identifier (`KAN-7` or a bare `7`) against every board's
+/// live cards. Always answers 200 with a JSON array: one element per match,
+/// empty for no match or an identifier that does not parse. Never 404,
+/// because a miss is folded into `Ok(None)` by the client read path.
+async fn lookup_cards(
+    State(state): State<AppState>,
+    Query(q): Query<CardLookupQuery>,
+) -> Result<Json<Vec<CardResponse>>, AppError> {
+    let guard = state.lock_session().await;
+    let cards = guard
+        .find_cards_by_identifier(&q.identifier)
+        .map_err(|e| AppError::from(&e))?;
+    Ok(Json(cards.iter().map(CardResponse::from).collect()))
+}
+
 pub fn flat_read_router() -> Router<AppState> {
-    Router::new().route("/v1/cards/{id}", get(get_card_flat))
+    Router::new()
+        .route("/v1/cards/lookup", get(lookup_cards))
+        .route("/v1/cards/{id}", get(get_card_flat))
 }
 
 pub fn flat_write_router() -> Router<AppState> {

@@ -1,8 +1,10 @@
 //! A `RouteScope` is built from the matched route plus its path/query
 //! params. The tiers a variant names are the tiers that route's response
-//! body reads; `GET /v1/prefixes` has no variant because no prefix tier
-//! exists in `FetchRound` at any level, so that route stays a lock-only
-//! read outside this plan.
+//! body reads. Two routes have no variant and stay lock-only reads outside
+//! this plan: `GET /v1/prefixes`, because no prefix tier exists in
+//! `FetchRound` at any level, and `GET /v1/cards/lookup`, because it
+//! dispatches straight to the indexed store reads behind
+//! `find_cards_by_identifier` rather than through any `FetchRound` tier.
 
 use kanban_domain::ArchivedFilter;
 use kanban_service::{requestable, FetchPlan, FetchRound, LoadedEntities};
