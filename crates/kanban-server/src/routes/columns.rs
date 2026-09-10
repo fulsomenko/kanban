@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{Column, LoadState, Model, NoProjections};
+use kanban_domain::{Column, Invalidation, LoadState, Model, NoProjections};
 use kanban_service::api::{ChangeKind, ColumnResponse, EntityType, Page, PageParams};
 use kanban_service::{ColumnUpdate, KanbanError, KanbanOperations};
 use uuid::Uuid;
@@ -77,16 +77,12 @@ fn do_update_column(
     ctx: &mut crate::state::Session,
     id: Uuid,
     updates: ColumnUpdate,
-) -> Result<Column, AppError> {
-    crate::state::mutate(ctx, |c| c.update_column_impl(id, updates))
-        .map(|(value, _invalidation)| value)
-        .map_err(|e| AppError::from(&e))
+) -> Result<(Column, Invalidation), AppError> {
+    crate::state::mutate(ctx, |c| c.update_column_impl(id, updates)).map_err(|e| AppError::from(&e))
 }
 
-fn do_delete_column(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
-    crate::state::mutate_unit(ctx, |c| c.delete_column_impl(id))
-        .map(|_invalidation| ())
-        .map_err(|e| AppError::from(&e))
+fn do_delete_column(ctx: &mut crate::state::Session, id: Uuid) -> Result<Invalidation, AppError> {
+    crate::state::mutate_unit(ctx, |c| c.delete_column_impl(id)).map_err(|e| AppError::from(&e))
 }
 
 /// Fetch a column and 404 unless it belongs to `board_id`, needed because
@@ -112,18 +108,20 @@ async fn create_column_route(
 ) -> Result<(StatusCode, Json<ColumnResponse>), AppError> {
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
-        let result = crate::handlers::columns::create_column(&mut ctx, board_id, req)
-            .map_err(AppError::from)?;
+        let (resp, created, invalidation) =
+            crate::handlers::columns::create_column(&mut ctx, board_id, req)
+                .map_err(AppError::from)?;
         state
             .persist_and_broadcast(
                 &ctx,
                 EntityType::Column,
-                result.0.id,
-                ChangeKind::created_or_updated(result.1),
+                resp.id,
+                ChangeKind::created_or_updated(created),
+                &invalidation,
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        result
+        (resp, created)
     };
     Ok((created_status(created), Json(resp)))
 }
@@ -138,7 +136,7 @@ async fn put_column_route(
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || column_current(&ctx, id))?;
-        let result =
+        let (resp, created, invalidation) =
             crate::handlers::columns::create_or_replace_column(&mut ctx, board_id, id, req)
                 .map_err(AppError::from)?;
         state
@@ -146,11 +144,12 @@ async fn put_column_route(
                 &ctx,
                 EntityType::Column,
                 id,
-                ChangeKind::created_or_updated(result.1),
+                ChangeKind::created_or_updated(created),
+                &invalidation,
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        result
+        (resp, created)
     };
     Ok((created_status(created), Json(resp)))
 }
@@ -167,9 +166,15 @@ async fn update_column_route(
         let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
         etag::check_if_match(&headers, || column_current(&ctx, id))?;
-        let col = do_update_column(&mut ctx, id, updates)?;
+        let (col, invalidation) = do_update_column(&mut ctx, id, updates)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Column,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         col
@@ -187,9 +192,15 @@ async fn delete_column_route(
         let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
         etag::check_if_match(&headers, || column_current(&ctx, id))?;
-        do_delete_column(&mut ctx, id)?;
+        let invalidation = do_delete_column(&mut ctx, id)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Deleted)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Column,
+                id,
+                ChangeKind::Deleted,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }
@@ -206,11 +217,17 @@ async fn reorder_column_route(
     let col = {
         let mut ctx = state.lock_for_write(client).await;
         require_column_in_board(&ctx, board_id, id)?;
-        let (col, _invalidation) =
+        let (col, invalidation) =
             crate::state::mutate(&mut ctx, |c| c.reorder_column_impl(id, position))
                 .map_err(|e| AppError::from(&e))?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Column,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         col
@@ -257,9 +274,15 @@ async fn update_column_route_flat(
     let col = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || column_current(&ctx, id))?;
-        let col = do_update_column(&mut ctx, id, updates)?;
+        let (col, invalidation) = do_update_column(&mut ctx, id, updates)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Column,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         col
@@ -276,9 +299,15 @@ async fn delete_column_route_flat(
     {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || column_current(&ctx, id))?;
-        do_delete_column(&mut ctx, id)?;
+        let invalidation = do_delete_column(&mut ctx, id)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Column, id, ChangeKind::Deleted)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Column,
+                id,
+                ChangeKind::Deleted,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }

@@ -50,9 +50,16 @@ async fn import_route(
     })?;
 
     let mut guard = state.lock_for_write(client).await;
-    let board = guard.import_board(&body).map_err(|e| AppError::from(&e))?;
+    let (board, invalidation) = crate::state::mutate(&mut guard, |c| c.import_board_impl(&body))
+        .map_err(|e| AppError::from(&e))?;
     state
-        .persist_and_broadcast(&guard, EntityType::Board, board.id, ChangeKind::Created)
+        .persist_and_broadcast(
+            &guard,
+            EntityType::Board,
+            board.id,
+            ChangeKind::Created,
+            &invalidation,
+        )
         .await
         .map_err(|e| AppError::from(&e))?;
     Ok((StatusCode::CREATED, Json(BoardResponse::from(&board))))

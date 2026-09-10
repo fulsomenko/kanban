@@ -6,6 +6,7 @@
 //! id). Both project the resulting domain `Board` onto the wire
 //! [`BoardResponse`].
 
+use kanban_domain::Invalidation;
 use kanban_service::api::{ApiError, BoardResponse, CreateBoardRequest, ReplaceBoardRequest};
 use uuid::Uuid;
 
@@ -15,11 +16,11 @@ use uuid::Uuid;
 pub fn create_board(
     ctx: &mut crate::state::Session,
     req: CreateBoardRequest,
-) -> Result<BoardResponse, ApiError> {
+) -> Result<(BoardResponse, Invalidation), ApiError> {
     let (id, spec) = req.into_new_board();
-    let (board, _invalidation) = crate::state::mutate(ctx, |c| c.create_board_from_spec(id, spec))
+    let (board, invalidation) = crate::state::mutate(ctx, |c| c.create_board_from_spec(id, spec))
         .map_err(|e| ApiError::from(&e))?;
-    Ok(BoardResponse::from(&board))
+    Ok((BoardResponse::from(&board), invalidation))
 }
 
 /// `PUT /v1/boards/:id`: idempotent create-or-replace for a board keyed on
@@ -29,10 +30,14 @@ pub fn create_or_replace_board(
     ctx: &mut crate::state::Session,
     id: Uuid,
     req: ReplaceBoardRequest,
-) -> Result<(BoardResponse, bool), ApiError> {
+) -> Result<(BoardResponse, bool, Invalidation), ApiError> {
     let spec = req.into_new_board();
-    let (outcome, _invalidation) =
+    let (outcome, invalidation) =
         crate::state::mutate(ctx, |c| c.create_or_replace_board(id, spec))
             .map_err(|e| ApiError::from(&e))?;
-    Ok((BoardResponse::from(&outcome.board), outcome.created))
+    Ok((
+        BoardResponse::from(&outcome.board),
+        outcome.created,
+        invalidation,
+    ))
 }

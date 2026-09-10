@@ -8,6 +8,7 @@
 //! [`ColumnResponse`]. The `created` flag lets the HTTP layer answer 201
 //! (created) vs 200 (replaced).
 
+use kanban_domain::Invalidation;
 use kanban_service::api::{ApiError, ColumnResponse, CreateColumnRequest, ReplaceColumnRequest};
 use kanban_service::{KanbanError, KanbanOperations};
 use uuid::Uuid;
@@ -22,16 +23,20 @@ pub fn create_column(
     ctx: &mut crate::state::Session,
     board_id: Uuid,
     req: CreateColumnRequest,
-) -> Result<(ColumnResponse, bool), ApiError> {
+) -> Result<(ColumnResponse, bool, Invalidation), ApiError> {
     let (maybe_id, spec) = req
         .into_new_column(board_id)
         .map_err(|e| ApiError::from(&e))?;
     let id = maybe_id.unwrap_or_else(Uuid::new_v4);
     require_column_in_board_if_present(ctx, id, board_id)?;
-    let (outcome, _invalidation) =
+    let (outcome, invalidation) =
         crate::state::mutate(ctx, |c| c.create_or_replace_column(id, spec, None))
             .map_err(|e| ApiError::from(&e))?;
-    Ok((ColumnResponse::from(&outcome.column), outcome.created))
+    Ok((
+        ColumnResponse::from(&outcome.column),
+        outcome.created,
+        invalidation,
+    ))
 }
 
 /// `PUT /v1/boards/:board_id/columns/:id`: idempotent create-or-replace for a
@@ -47,16 +52,20 @@ pub fn create_or_replace_column(
     board_id: Uuid,
     id: Uuid,
     req: ReplaceColumnRequest,
-) -> Result<(ColumnResponse, bool), ApiError> {
+) -> Result<(ColumnResponse, bool, Invalidation), ApiError> {
     require_column_in_board_if_present(ctx, id, board_id)?;
     let (spec, position) = req
         .into_new_column(board_id)
         .map_err(|e| ApiError::from(&e))?;
-    let (outcome, _invalidation) = crate::state::mutate(ctx, |c| {
+    let (outcome, invalidation) = crate::state::mutate(ctx, |c| {
         c.create_or_replace_column(id, spec, Some(position))
     })
     .map_err(|e| ApiError::from(&e))?;
-    Ok((ColumnResponse::from(&outcome.column), outcome.created))
+    Ok((
+        ColumnResponse::from(&outcome.column),
+        outcome.created,
+        invalidation,
+    ))
 }
 
 /// 404s when `id` already refers to a column outside `board_id`. A no-op

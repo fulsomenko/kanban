@@ -7,6 +7,7 @@ mod error;
 mod error_mapping;
 mod events;
 mod graph;
+mod invalidation;
 mod pagination;
 mod patch;
 mod prefixes;
@@ -35,6 +36,7 @@ pub use graph::{
     AddBlockRequest, AddRelatedRequest, AttachChildrenRequest, BlockEdgeDto, CardGraphResponse,
     RelatedEdgeDto,
 };
+pub use invalidation::{EntityIdsDto, InvalidationDto};
 pub use pagination::{Page, PageParams};
 pub use patch::Patch;
 pub use prefixes::PrefixResponse;

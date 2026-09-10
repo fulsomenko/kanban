@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use kanban_domain::{LoadState, Model, NoProjections, Sprint};
+use kanban_domain::{Invalidation, LoadState, Model, NoProjections, Sprint};
 use kanban_service::api::{ChangeKind, EntityType, Page, PageParams, SprintResponse};
 use kanban_service::{resolve_sprint_name, KanbanError, KanbanOperations, SprintUpdate};
 use uuid::Uuid;
@@ -86,16 +86,12 @@ fn do_update_sprint(
     ctx: &mut crate::state::Session,
     id: Uuid,
     updates: SprintUpdate,
-) -> Result<Sprint, AppError> {
-    crate::state::mutate(ctx, |c| c.update_sprint_impl(id, updates))
-        .map(|(value, _invalidation)| value)
-        .map_err(|e| AppError::from(&e))
+) -> Result<(Sprint, Invalidation), AppError> {
+    crate::state::mutate(ctx, |c| c.update_sprint_impl(id, updates)).map_err(|e| AppError::from(&e))
 }
 
-fn do_delete_sprint(ctx: &mut crate::state::Session, id: Uuid) -> Result<(), AppError> {
-    crate::state::mutate_unit(ctx, |c| c.delete_sprint_impl(id))
-        .map(|_invalidation| ())
-        .map_err(|e| AppError::from(&e))
+fn do_delete_sprint(ctx: &mut crate::state::Session, id: Uuid) -> Result<Invalidation, AppError> {
+    crate::state::mutate_unit(ctx, |c| c.delete_sprint_impl(id)).map_err(|e| AppError::from(&e))
 }
 
 pub(crate) fn require_sprint_in_board(
@@ -162,18 +158,20 @@ async fn create_sprint_route(
 ) -> Result<(StatusCode, Json<SprintResponse>), AppError> {
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
-        let result = crate::handlers::sprints::create_sprint(&mut ctx, board_id, req)
-            .map_err(AppError::from)?;
+        let (resp, created, invalidation) =
+            crate::handlers::sprints::create_sprint(&mut ctx, board_id, req)
+                .map_err(AppError::from)?;
         state
             .persist_and_broadcast(
                 &ctx,
                 EntityType::Sprint,
-                result.0.id,
-                ChangeKind::created_or_updated(result.1),
+                resp.id,
+                ChangeKind::created_or_updated(created),
+                &invalidation,
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        result
+        (resp, created)
     };
     Ok((created_status(created), Json(resp)))
 }
@@ -188,7 +186,7 @@ async fn put_sprint_route(
     let (resp, created) = {
         let mut ctx = state.lock_for_write(client).await;
         etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
-        let result =
+        let (resp, created, invalidation) =
             crate::handlers::sprints::create_or_replace_sprint(&mut ctx, board_id, id, req)
                 .map_err(AppError::from)?;
         state
@@ -196,11 +194,12 @@ async fn put_sprint_route(
                 &ctx,
                 EntityType::Sprint,
                 id,
-                ChangeKind::created_or_updated(result.1),
+                ChangeKind::created_or_updated(created),
+                &invalidation,
             )
             .await
             .map_err(|e| AppError::from(&e))?;
-        result
+        (resp, created)
     };
     Ok((created_status(created), Json(resp)))
 }
@@ -217,10 +216,16 @@ async fn update_sprint_route(
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
         etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
-        let sprint = do_update_sprint(&mut ctx, id, updates)?;
+        let (sprint, invalidation) = do_update_sprint(&mut ctx, id, updates)?;
         let body = respond(&ctx, &sprint)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -238,9 +243,15 @@ async fn delete_sprint_route(
         let mut ctx = state.lock_for_write(client).await;
         require_sprint_in_board(&ctx, board_id, id)?;
         etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
-        do_delete_sprint(&mut ctx, id)?;
+        let invalidation = do_delete_sprint(&mut ctx, id)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Deleted)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Deleted,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }
@@ -305,10 +316,16 @@ async fn update_sprint_route_flat(
         let mut ctx = state.lock_for_write(client).await;
         do_get_sprint(&ctx, id)?;
         etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
-        let sprint = do_update_sprint(&mut ctx, id, updates)?;
+        let (sprint, invalidation) = do_update_sprint(&mut ctx, id, updates)?;
         let body = respond(&ctx, &sprint)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Updated)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Updated,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
         body
@@ -326,9 +343,15 @@ async fn delete_sprint_route_flat(
         let mut ctx = state.lock_for_write(client).await;
         do_get_sprint(&ctx, id)?;
         etag::check_if_match(&headers, || sprint_current(&ctx, id))?;
-        do_delete_sprint(&mut ctx, id)?;
+        let invalidation = do_delete_sprint(&mut ctx, id)?;
         state
-            .persist_and_broadcast(&ctx, EntityType::Sprint, id, ChangeKind::Deleted)
+            .persist_and_broadcast(
+                &ctx,
+                EntityType::Sprint,
+                id,
+                ChangeKind::Deleted,
+                &invalidation,
+            )
             .await
             .map_err(|e| AppError::from(&e))?;
     }
