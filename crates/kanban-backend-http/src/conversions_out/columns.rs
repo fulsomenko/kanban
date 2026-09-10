@@ -1,9 +1,13 @@
 use kanban_api::{CreateColumnRequest, Patch, UpdateColumnRequest};
 use kanban_domain::{ColumnUpdate, NewColumn};
+use uuid::Uuid;
 
-pub(crate) fn create_column_request(spec: &NewColumn) -> (String, CreateColumnRequest) {
+pub(crate) fn create_column_request(
+    board_id: Uuid,
+    spec: &NewColumn,
+) -> (String, CreateColumnRequest) {
     let NewColumn {
-        board_id,
+        board_id: _,
         name,
         wip_limit,
         default_status,
@@ -42,7 +46,6 @@ mod tests {
     use super::*;
     use kanban_api::{CardStatusDto, Patch};
     use kanban_domain::{CardStatus, FieldUpdate};
-    use uuid::Uuid;
 
     #[test]
     fn test_create_column_request_puts_the_routing_board_id_in_the_path_and_never_in_the_body() {

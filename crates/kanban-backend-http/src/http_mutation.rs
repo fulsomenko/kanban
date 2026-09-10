@@ -13,7 +13,6 @@ use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 
 impl HttpBackend {
-    #[allow(dead_code)]
     pub(crate) async fn send_json_mutation<B, T>(
         &self,
         method: Method,
@@ -48,7 +47,6 @@ impl HttpBackend {
     }
 }
 
-#[allow(dead_code)]
 fn map_mutation_error(status: StatusCode, body: &str, url: &str) -> KanbanError {
     if let Ok(api_err) = serde_json::from_str::<ApiError>(body) {
         if api_err.code == ErrorCode::ConflictDetected {
