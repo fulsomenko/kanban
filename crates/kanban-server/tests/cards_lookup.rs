@@ -24,7 +24,7 @@ async fn seed_card_with_prefix(state: &AppState, card_prefix: &str) -> Uuid {
         .id
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lookup_by_prefix_and_number_returns_single_match() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -39,7 +39,7 @@ async fn test_lookup_by_prefix_and_number_returns_single_match() {
     assert_eq!(arr[0]["card_number"], 1);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lookup_normalizes_prefix_case_server_side() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -53,7 +53,7 @@ async fn test_lookup_normalizes_prefix_case_server_side() {
     assert_eq!(arr[0]["id"], card_id.to_string());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lookup_bare_number_matches_across_boards() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -74,7 +74,7 @@ async fn test_lookup_bare_number_matches_across_boards() {
     assert_eq!(ids, expected);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lookup_no_match_returns_empty_array_not_404() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -91,7 +91,7 @@ async fn test_lookup_no_match_returns_empty_array_not_404() {
     assert_eq!(body, serde_json::json!([]));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lookup_unparseable_identifier_returns_empty_array() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -103,7 +103,7 @@ async fn test_lookup_unparseable_identifier_returns_empty_array() {
     assert_eq!(body, serde_json::json!([]));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lookup_missing_identifier_is_a_400_naming_the_identifier_param() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
@@ -120,7 +120,7 @@ async fn test_lookup_missing_identifier_is_a_400_naming_the_identifier_param() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_lookup_on_sqlite_backend_returns_match() {
     let dir = tempdir().unwrap();
     let state = make_sqlite_state(&dir.path().join("s.db")).await;
