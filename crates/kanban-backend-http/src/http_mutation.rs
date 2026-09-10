@@ -1,5 +1,6 @@
 use crate::HttpBackend;
-use kanban_api::{ApiError, ErrorCode};
+use kanban_api::{ApiError, ErrorCode, CLIENT_ID_HEADER};
+use kanban_backend::KanbanBackend;
 use kanban_domain::{KanbanError, KanbanResult};
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -8,21 +9,49 @@ impl HttpBackend {
     #[allow(dead_code)]
     pub(crate) async fn send_json_mutation<B, T>(
         &self,
-        _method: Method,
-        _path: &str,
-        _body: Option<&B>,
+        method: Method,
+        path: &str,
+        body: Option<&B>,
     ) -> KanbanResult<T>
     where
         B: serde::Serialize + ?Sized,
         T: DeserializeOwned,
     {
-        unimplemented!()
+        let url = format!("{}{}", self.base_url(), path);
+        let mut request = self
+            .client()
+            .request(method, &url)
+            .header(CLIENT_ID_HEADER, self.instance_id().to_string());
+        if let Some(body) = body {
+            request = request.json(body);
+        }
+        let resp = request
+            .send()
+            .await
+            .map_err(|e| KanbanError::Transport(e.to_string()))?;
+        let status = resp.status();
+        let body_text = resp
+            .text()
+            .await
+            .map_err(|e| KanbanError::Transport(e.to_string()))?;
+        if !status.is_success() {
+            return Err(map_mutation_error(status, &body_text, &url));
+        }
+        serde_json::from_str(&body_text).map_err(|e| KanbanError::Serialization(e.to_string()))
     }
 }
 
 #[allow(dead_code)]
-fn map_mutation_error(_status: StatusCode, _body: &str, _url: &str) -> KanbanError {
-    unimplemented!()
+fn map_mutation_error(status: StatusCode, body: &str, url: &str) -> KanbanError {
+    if let Ok(api_err) = serde_json::from_str::<ApiError>(body) {
+        if api_err.code == ErrorCode::ConflictDetected {
+            return KanbanError::ConflictDetected {
+                path: url.to_string(),
+                source: None,
+            };
+        }
+    }
+    crate::http::map_error_response(status, body)
 }
 
 #[cfg(test)]
