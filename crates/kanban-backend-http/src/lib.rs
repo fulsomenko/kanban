@@ -4,6 +4,7 @@ mod conversions;
 mod conversions_out;
 mod data_store;
 mod http;
+mod http_mutation;
 mod remote_writes;
 
 pub use backend_factory::HttpBackendFactory;
