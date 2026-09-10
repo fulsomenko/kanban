@@ -4,6 +4,7 @@ use kanban_domain::{
     Board, BoardUpdate, Card, CardUpdate, Column, ColumnUpdate, CommandBatch, CommandStore,
     DataStore, Invalidation, KanbanResult, NewBoard, NewCard, NewColumn,
 };
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct MockRemoteWritesImpl;
@@ -50,11 +51,7 @@ impl RemoteWrites for MockRemoteWritesImpl {
     ) -> KanbanResult<(Card, Invalidation)> {
         unimplemented!("test should not call this")
     }
-    fn update_card(
-        &self,
-        _id: Uuid,
-        _updates: &CardUpdate,
-    ) -> KanbanResult<(Card, Invalidation)> {
+    fn update_card(&self, _id: Uuid, _updates: &CardUpdate) -> KanbanResult<(Card, Invalidation)> {
         unimplemented!("test should not call this")
     }
     fn delete_card(&self, _id: Uuid) -> KanbanResult<Invalidation> {
@@ -64,14 +61,21 @@ impl RemoteWrites for MockRemoteWritesImpl {
 
 pub struct MockBackend {
     inner: InMemoryStore,
-    mock: MockRemoteWritesImpl,
+    mock: Arc<dyn RemoteWrites>,
 }
 
 impl MockBackend {
     pub fn new() -> Self {
         Self {
             inner: InMemoryStore::new(),
-            mock: MockRemoteWritesImpl,
+            mock: Arc::new(MockRemoteWritesImpl),
+        }
+    }
+
+    pub fn with_remote_writes(mock: Arc<dyn RemoteWrites>) -> Self {
+        Self {
+            inner: InMemoryStore::new(),
+            mock,
         }
     }
 }
@@ -238,7 +242,7 @@ impl KanbanBackend for MockBackend {
     }
 
     fn remote_writes(&self) -> Option<&dyn RemoteWrites> {
-        Some(&self.mock)
+        Some(self.mock.as_ref())
     }
 
     fn with_transaction(&self, f: TransactionFn<'_>) -> KanbanResult<()> {
