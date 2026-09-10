@@ -3,8 +3,10 @@ use kanban_api::{
     SortOrderDto, TaskListViewDto,
 };
 use kanban_backend_http::HttpBackend;
-use kanban_domain::{Board, Card, Column, DataStore, Prefix, Sprint};
+use kanban_domain::{Board, Card, Column, DataStore, KanbanOperations, Prefix, Sprint};
 use kanban_server::test_helpers::TestServer;
+use kanban_service::{AppConfig, KanbanBackend, KanbanContext};
+use std::sync::Arc;
 use uuid::Uuid;
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
@@ -669,4 +671,95 @@ fn test_a_read_against_an_unreachable_server_maps_to_a_transport_error() {
 
     assert!(err.is_transport(), "expected transport error, got {err:?}");
     assert!(!err.is_unsupported());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_by_prefix_and_number_round_trips_over_http() {
+    let server = TestServer::start().await;
+    let board_id = seed_board_with_card_prefix(&server, "KAN").await;
+    let column_id = seed_column(&server, board_id, "Col", None, None).await;
+    let card_id = seed_card(&server, column_id, "Card", None).await;
+    let backend = HttpBackend::new(&server.base_url()).unwrap();
+
+    let cards: Vec<Card> =
+        blocking(move || backend.list_cards_by_prefix_and_number("kan", 1).unwrap()).await;
+
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, card_id);
+    assert_eq!(cards[0].card_number, 1);
+    assert!(!cards[0].prefix.is_empty());
+
+    server.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_cards_by_number_round_trips_over_http_including_the_ambiguous_case() {
+    let server = TestServer::start().await;
+    let board_a = seed_board_with_card_prefix(&server, "aaa").await;
+    let col_a = seed_column(&server, board_a, "Col", None, None).await;
+    let card_a = seed_card(&server, col_a, "Card A", None).await;
+    let board_b = seed_board_with_card_prefix(&server, "bbb").await;
+    let col_b = seed_column(&server, board_b, "Col", None, None).await;
+    let card_b = seed_card(&server, col_b, "Card B", None).await;
+    let backend = HttpBackend::new(&server.base_url()).unwrap();
+
+    let cards: Vec<Card> = blocking(move || backend.list_cards_by_number(1).unwrap()).await;
+
+    let ids: std::collections::HashSet<Uuid> = cards.iter().map(|c| c.id).collect();
+    assert_eq!(ids, [card_a, card_b].into_iter().collect());
+
+    server.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lookup_miss_returns_empty_vec_over_http() {
+    let server = TestServer::start().await;
+    let board_id = seed_board_with_card_prefix(&server, "KAN").await;
+    let column_id = seed_column(&server, board_id, "Col", None, None).await;
+    seed_card(&server, column_id, "Card", None).await;
+    let backend = HttpBackend::new(&server.base_url()).unwrap();
+
+    let by_prefix: kanban_domain::KanbanResult<Vec<Card>> = blocking({
+        let backend = HttpBackend::new(&server.base_url()).unwrap();
+        move || backend.list_cards_by_prefix_and_number("kan", 999)
+    })
+    .await;
+    assert!(by_prefix.is_ok(), "expected Ok, got {by_prefix:?}");
+    assert!(by_prefix.unwrap().is_empty());
+
+    let by_number: kanban_domain::KanbanResult<Vec<Card>> =
+        blocking(move || backend.list_cards_by_number(999)).await;
+    assert!(by_number.is_ok(), "expected Ok, got {by_number:?}");
+    assert!(by_number.unwrap().is_empty());
+
+    server.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_find_cards_by_identifier_resolves_over_http() {
+    let server = TestServer::start().await;
+    let board_id = seed_board_with_card_prefix(&server, "KAN").await;
+    let column_id = seed_column(&server, board_id, "Col", None, None).await;
+    let card_id = seed_card(&server, column_id, "Card", None).await;
+
+    let backend: Arc<dyn KanbanBackend> = Arc::new(HttpBackend::new(&server.base_url()).unwrap());
+    let ctx = KanbanContext::open(Arc::clone(&backend), AppConfig::default())
+        .await
+        .unwrap();
+
+    let by_prefix = ctx.find_cards_by_identifier("KAN-1").unwrap();
+    assert_eq!(by_prefix.len(), 1);
+    assert_eq!(by_prefix[0].id, card_id);
+
+    let by_number = ctx.find_cards_by_identifier("1").unwrap();
+    assert_eq!(by_number.len(), 1);
+    assert_eq!(by_number[0].id, card_id);
+
+    let miss = ctx.find_cards_by_identifier("KAN-999").unwrap();
+    assert!(miss.is_empty());
+
+    drop(ctx);
+    drop(backend);
+
+    server.shutdown().await;
 }
