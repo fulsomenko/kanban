@@ -401,18 +401,19 @@ impl App {
     }
 
     /// Persist the LIVE board-list sort field/order to AppConfig via
-    /// `kanban_service::config::save`, mirroring how the card toggle persists its
-    /// sort (there via `SetTaskSort` onto the board; here onto the global config,
-    /// since the projects-panel sort is a global UI preference, not per-board).
-    /// Callers must only invoke this for the live context — the archived sort is
-    /// session-only and never persisted.
+    /// `kanban_service::config::save_board_sort`, which writes only the two
+    /// sort keys to the on-disk config, mirroring how the card toggle persists
+    /// its sort (there via `SetTaskSort` onto the board; here onto the global
+    /// config, since the projects-panel sort is a global UI preference, not
+    /// per-board). Callers must only invoke this for the live context — the
+    /// archived sort is session-only and never persisted.
     fn persist_board_sort(&mut self) {
         let (field, order) = self.controller.board_sort(false);
         let mut config = self.app_config.clone();
         config.board_sort_field = Some(field.to_string());
         config.board_sort_order = Some(order.to_string());
         self.set_app_config(config);
-        if let Err(e) = kanban_service::config::save(&self.app_config) {
+        if let Err(e) = kanban_service::config::save_board_sort(&self.app_config, field, order) {
             tracing::error!("Failed to persist board sort: {}", e);
             self.set_error(format!("Failed to persist board sort: {}", e));
         }
