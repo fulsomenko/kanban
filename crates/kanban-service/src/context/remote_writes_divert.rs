@@ -5,8 +5,8 @@ use crate::backend_test_support::MockBackend;
 use kanban_backend::RemoteWrites;
 use kanban_core::AppConfig;
 use kanban_domain::{
-    Board, BoardUpdate, Card, Column, ColumnUpdate, DataStore, EntityIds, Invalidation,
-    KanbanResult, NewBoard, NewCard, NewColumn, UndoOperations,
+    Board, BoardUpdate, Card, Column, ColumnUpdate, EntityIds, Invalidation, KanbanResult,
+    NewBoard, NewCard, NewColumn, UndoOperations,
 };
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
