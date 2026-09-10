@@ -137,6 +137,13 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(expected = "HttpBackend requires a multi-threaded Tokio runtime")]
+    async fn test_block_on_inside_current_thread_runtime_panics_with_flavor_message() {
+        let backend = HttpBackend::new("http://example.com").unwrap();
+        let _ = backend.block_on(async { 1 + 1 });
+    }
+
     #[test]
     fn test_http_backend_new_mints_nonnil_instance_id() -> kanban_domain::KanbanResult<()> {
         let backend = HttpBackend::new("http://example.com")?;
