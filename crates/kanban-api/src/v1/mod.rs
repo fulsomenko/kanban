@@ -1,5 +1,6 @@
 mod boards;
 mod cards;
+mod client_id;
 mod columns;
 mod enums;
 mod error;
@@ -19,6 +20,7 @@ pub use cards::{
     BatchMoveRequest, BatchOperationResponse, BatchUpdateItem, BatchUpdateRequest, CardResponse,
     CreateCardRequest, ReplaceCardRequest, UpdateCardRequest,
 };
+pub use client_id::CLIENT_ID_HEADER;
 pub use columns::{
     ColumnResponse, CreateColumnRequest, ReorderColumnRequest, ReplaceColumnRequest,
     UpdateColumnRequest,

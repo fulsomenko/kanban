@@ -16,4 +16,5 @@ pub use v1::{
     ReplaceBoardRequest, ReplaceCardRequest, ReplaceColumnRequest, ReplaceSprintRequest,
     SeverityDto, SortFieldDto, SortOrderDto, SprintResponse, SprintStatusDto, TaskListViewDto,
     UpdateBoardRequest, UpdateCardRequest, UpdateColumnRequest, UpdateSprintRequest,
+    CLIENT_ID_HEADER,
 };
