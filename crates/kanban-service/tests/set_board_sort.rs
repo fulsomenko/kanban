@@ -131,7 +131,12 @@ async fn test_set_board_sort_does_not_persist_session_injected_storage_keys() {
     let config = AppConfig {
         configuration_location: Some(config_path.to_string_lossy().into_owned()),
         storage_backend: Some("sqlite".into()),
-        storage_location: Some(dir.path().join("scratch.json").to_string_lossy().into_owned()),
+        storage_location: Some(
+            dir.path()
+                .join("scratch.json")
+                .to_string_lossy()
+                .into_owned(),
+        ),
         ..Default::default()
     };
     let mut ctx = KanbanContext::open(make_json_backend(&store_path), config)
