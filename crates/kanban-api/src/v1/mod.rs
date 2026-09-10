@@ -36,6 +36,7 @@ pub use graph::{
     AddBlockRequest, AddRelatedRequest, AttachChildrenRequest, BlockEdgeDto, CardGraphResponse,
     RelatedEdgeDto,
 };
+pub use invalidation::{EntityIdsDto, InvalidationDto};
 pub use pagination::{Page, PageParams};
 pub use patch::Patch;
 pub use prefixes::PrefixResponse;

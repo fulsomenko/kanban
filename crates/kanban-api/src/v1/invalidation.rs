@@ -1,3 +1,84 @@
+use kanban_domain::{EntityIds, Invalidation};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Ids are sorted before serialization so the wire form is stable across runs
+/// despite `HashSet` iteration order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EntityIdsDto {
+    #[serde(default)]
+    pub boards: Vec<Uuid>,
+    #[serde(default)]
+    pub columns: Vec<Uuid>,
+    #[serde(default)]
+    pub cards: Vec<Uuid>,
+    #[serde(default)]
+    pub sprints: Vec<Uuid>,
+    #[serde(default)]
+    pub graph: bool,
+    #[serde(default)]
+    pub prefixes: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "scope", content = "entities")]
+pub enum InvalidationDto {
+    All,
+    Entities(EntityIdsDto),
+}
+
+impl From<&EntityIds> for EntityIdsDto {
+    fn from(value: &EntityIds) -> Self {
+        let mut boards: Vec<Uuid> = value.boards.iter().copied().collect();
+        let mut columns: Vec<Uuid> = value.columns.iter().copied().collect();
+        let mut cards: Vec<Uuid> = value.cards.iter().copied().collect();
+        let mut sprints: Vec<Uuid> = value.sprints.iter().copied().collect();
+        boards.sort();
+        columns.sort();
+        cards.sort();
+        sprints.sort();
+        Self {
+            boards,
+            columns,
+            cards,
+            sprints,
+            graph: value.graph,
+            prefixes: value.prefixes,
+        }
+    }
+}
+
+impl From<&EntityIdsDto> for EntityIds {
+    fn from(value: &EntityIdsDto) -> Self {
+        Self {
+            boards: value.boards.iter().copied().collect(),
+            columns: value.columns.iter().copied().collect(),
+            cards: value.cards.iter().copied().collect(),
+            sprints: value.sprints.iter().copied().collect(),
+            graph: value.graph,
+            prefixes: value.prefixes,
+        }
+    }
+}
+
+impl From<&Invalidation> for InvalidationDto {
+    fn from(value: &Invalidation) -> Self {
+        match value {
+            Invalidation::All => Self::All,
+            Invalidation::Entities(ids) => Self::Entities(ids.into()),
+        }
+    }
+}
+
+impl From<&InvalidationDto> for Invalidation {
+    fn from(value: &InvalidationDto) -> Self {
+        match value {
+            InvalidationDto::All => Self::All,
+            InvalidationDto::Entities(ids) => Self::Entities(ids.into()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::*;

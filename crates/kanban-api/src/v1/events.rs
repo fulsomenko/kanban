@@ -1,3 +1,4 @@
+use crate::InvalidationDto;
 use chrono::{DateTime, Utc};
 use kanban_core::ClientId;
 use serde::{Deserialize, Serialize};
@@ -47,9 +48,13 @@ impl ChangeKind {
 ///
 /// `entity_type`/`entity_id`/`kind` are `None` when the emitter cannot name
 /// what changed (an external process wrote the file). Otherwise they name the
-/// single entity that changed and how; a `Deleted` frame for a `Board` or
-/// `Column` implies everything it owned is gone too, since no per-descendant
-/// frames are emitted for a cascade.
+/// single entity that changed and how, and are retained for existing
+/// consumers.
+///
+/// `invalidation` names the mutation's full blast radius: every entity a
+/// consumer must treat as stale, not just the single entity above. `None`
+/// means the emitter could not describe the change; a consumer must then
+/// treat it the same as an explicit `InvalidationDto::All`.
 #[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -66,6 +71,8 @@ pub struct ChangeEventFrame {
     pub entity_id: Option<Uuid>,
     #[serde(default)]
     pub kind: Option<ChangeKind>,
+    #[serde(default)]
+    pub invalidation: Option<InvalidationDto>,
 }
 
 impl ChangeEventFrame {
@@ -84,6 +91,7 @@ impl ChangeEventFrame {
             entity_type: None,
             entity_id: None,
             kind: None,
+            invalidation: None,
         }
     }
 
@@ -111,7 +119,13 @@ impl ChangeEventFrame {
             entity_type,
             entity_id,
             kind,
+            invalidation: None,
         }
+    }
+
+    pub fn with_invalidation(mut self, invalidation: InvalidationDto) -> Self {
+        self.invalidation = Some(invalidation);
+        self
     }
 }
 
