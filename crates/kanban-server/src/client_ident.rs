@@ -5,7 +5,7 @@ use kanban_core::ClientId;
 use kanban_service::api::{ApiError, ErrorCode};
 use uuid::Uuid;
 
-pub const CLIENT_ID_HEADER: &str = "x-kanban-client-id";
+pub use kanban_service::api::CLIENT_ID_HEADER;
 
 /// Unauthenticated, client-supplied identity carried on `X-Kanban-Client-Id`.
 /// Absent header resolves to [`ClientId::nil`]; a malformed value rejects

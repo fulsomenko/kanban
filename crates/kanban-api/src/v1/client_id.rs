@@ -1,3 +1,8 @@
+/// Wire name of the unauthenticated, client-supplied identity header.
+/// Lowercase, so it is usable with `http::HeaderName::from_static`. Shared by
+/// the server's extractor and HTTP clients so the two cannot drift.
+pub const CLIENT_ID_HEADER: &str = "x-kanban-client-id";
+
 #[cfg(test)]
 mod tests {
     use super::CLIENT_ID_HEADER;

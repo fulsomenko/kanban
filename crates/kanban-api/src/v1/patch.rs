@@ -39,6 +39,16 @@ impl<T> From<Patch<T>> for FieldUpdate<T> {
     }
 }
 
+impl<T> From<FieldUpdate<T>> for Patch<T> {
+    fn from(update: FieldUpdate<T>) -> Self {
+        match update {
+            FieldUpdate::NoChange => Patch::NoChange,
+            FieldUpdate::Clear => Patch::Clear,
+            FieldUpdate::Set(value) => Patch::Set(value),
+        }
+    }
+}
+
 // Only ever called for a *present* field (absent is handled by `#[serde(default)]`),
 // so `null` maps to `Clear` and any value maps to `Set`.
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Patch<T> {
