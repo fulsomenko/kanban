@@ -221,6 +221,49 @@ mod tests {
     }
 
     #[test]
+    fn test_change_event_frame_carries_the_mutation_invalidation() {
+        let board_id = Uuid::new_v4();
+        let ids = crate::EntityIdsDto {
+            boards: vec![board_id],
+            ..Default::default()
+        };
+        let dto = crate::InvalidationDto::Entities(ids);
+        let frame = ChangeEventFrame::for_entity(
+            Uuid::nil(),
+            Uuid::nil(),
+            ClientId::nil(),
+            Some(EntityType::Board),
+            Some(board_id),
+            Some(ChangeKind::Deleted),
+        )
+        .with_invalidation(dto.clone());
+        let json = serde_json::to_string(&frame).unwrap();
+        let parsed: ChangeEventFrame = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.invalidation, Some(dto));
+        let value = serde_json::to_value(&frame).unwrap();
+        assert_eq!(value["invalidation"]["scope"], "entities");
+    }
+
+    #[test]
+    fn test_change_event_frame_deserializes_without_the_invalidation_field() {
+        let json = r#"{"writer_instance_id":"00000000-0000-0000-0000-000000000000","detected_at":"1970-01-01T00:00:00Z"}"#;
+        let parsed: ChangeEventFrame = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.correlation_id, Uuid::nil());
+        assert_eq!(parsed.issued_by, ClientId::nil());
+        assert!(parsed.invalidation.is_none());
+
+        let card_id = Uuid::new_v4();
+        let json_with_entity = format!(
+            r#"{{"writer_instance_id":"00000000-0000-0000-0000-000000000000","detected_at":"1970-01-01T00:00:00Z","entity_type":"card","entity_id":"{card_id}","kind":"created"}}"#
+        );
+        let parsed_with_entity: ChangeEventFrame = serde_json::from_str(&json_with_entity).unwrap();
+        assert_eq!(parsed_with_entity.entity_type, Some(EntityType::Card));
+        assert_eq!(parsed_with_entity.entity_id, Some(card_id));
+        assert_eq!(parsed_with_entity.kind, Some(ChangeKind::Created));
+        assert!(parsed_with_entity.invalidation.is_none());
+    }
+
+    #[test]
     fn test_change_event_frame_unscoped_serializes_entity_fields_as_null() {
         let frame = ChangeEventFrame::for_entity(
             Uuid::nil(),
