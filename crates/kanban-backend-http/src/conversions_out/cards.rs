@@ -2,10 +2,7 @@ use kanban_api::{CreateCardRequest, Patch, UpdateCardRequest};
 use kanban_domain::{CardUpdate, NewCard};
 use uuid::Uuid;
 
-pub(crate) fn create_card_request(
-    id: Option<Uuid>,
-    spec: &NewCard,
-) -> (String, CreateCardRequest) {
+pub(crate) fn create_card_request(id: Option<Uuid>, spec: &NewCard) -> (String, CreateCardRequest) {
     let NewCard {
         column_id,
         title,

@@ -1,6 +1,6 @@
 //! Outbound domain -> request-DTO conversions for the v1 mutation routes; no
 //! in-crate caller until the `RemoteWrites` impl lands.
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
 mod boards;
 mod cards;

@@ -294,7 +294,10 @@ mod tests {
 
         let captured = handle.await.unwrap().to_lowercase();
         assert!(
-            captured.contains(&format!("x-kanban-client-id: {}", instance_id.to_lowercase())),
+            captured.contains(&format!(
+                "x-kanban-client-id: {}",
+                instance_id.to_lowercase()
+            )),
             "got: {captured}"
         );
     }

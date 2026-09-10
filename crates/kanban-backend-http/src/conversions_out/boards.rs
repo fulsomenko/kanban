@@ -133,14 +133,16 @@ mod tests {
         assert!(err.is_unsupported());
         assert_eq!(
             err.to_string(),
-            KanbanError::unsupported("update_board.active_sprint_id over HTTP (server-managed field)")
-                .to_string()
+            KanbanError::unsupported(
+                "update_board.active_sprint_id over HTTP (server-managed field)"
+            )
+            .to_string()
         );
     }
 
     #[test]
-    fn test_update_board_request_with_active_sprint_id_cleared_returns_unsupported_not_silent_drop(
-    ) {
+    fn test_update_board_request_with_active_sprint_id_cleared_returns_unsupported_not_silent_drop()
+    {
         let updates = BoardUpdate {
             active_sprint_id: FieldUpdate::Clear,
             ..Default::default()
