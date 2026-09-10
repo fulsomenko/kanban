@@ -1,3 +1,10 @@
+//! A non-success status is always an error, including a 404 -- there is no
+//! `Ok(None)` short-circuit for a mutation, unlike the read-side `get_json`.
+//! `CONFLICT_DETECTED` is remapped to `KanbanError::ConflictDetected`
+//! explicitly, because `From<ApiError>` otherwise classifies it as a plain
+//! validation error. No `If-Match` header is sent: v1 mutations are
+//! last-writer-wins.
+
 use crate::HttpBackend;
 use kanban_api::{ApiError, ErrorCode, CLIENT_ID_HEADER};
 use kanban_backend::KanbanBackend;
