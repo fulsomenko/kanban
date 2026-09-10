@@ -126,12 +126,15 @@ async fn test_a_datastore_call_from_a_blocking_thread_inside_an_ambient_runtime_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[should_panic(expected = "Cannot start a runtime from within a runtime")]
-async fn test_a_datastore_call_directly_on_a_runtime_worker_thread_panics() {
+async fn test_a_datastore_call_directly_on_a_runtime_worker_thread_returns_data() {
     let server = TestServer::start().await;
+    let board_id = seed_board(&server, "Direct Board").await;
     let backend = HttpBackend::new(&server.base_url()).unwrap();
 
-    let _ = backend.list_boards();
+    let boards = backend.list_boards().unwrap();
+
+    assert_eq!(boards.len(), 1);
+    assert_eq!(boards[0].id, board_id);
 
     server.shutdown().await;
 }
