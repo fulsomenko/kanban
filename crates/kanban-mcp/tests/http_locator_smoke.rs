@@ -54,22 +54,29 @@ async fn test_tool_create_card_against_http_locator_succeeds() {
                 sprint_id: None,
             },
         }))
-        .await;
+        .await
+        .unwrap();
 
-    assert!(result.is_ok(), "got: {result:?}");
+    let text = result
+        .content
+        .iter()
+        .find_map(|c| c.as_text().map(|t| t.text.clone()))
+        .expect("tool result should carry a text content block");
+    let created: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let card_id = created["id"].as_str().unwrap();
 
-    let cards: Vec<serde_json::Value> = server
+    let card: serde_json::Value = server
         .client()
-        .get(format!("{}/v1/columns/{column_id}/cards", server.base_url()))
+        .get(format!("{}/v1/cards/{card_id}", server.base_url()))
         .send()
         .await
         .unwrap()
         .json()
         .await
         .unwrap();
-    assert!(
-        cards.iter().any(|c| c["title"] == "Smoke"),
-        "server should hold the created card: {cards:?}"
+    assert_eq!(
+        card["title"], "Smoke",
+        "server should hold the created card: {card:?}"
     );
 
     server.shutdown().await;

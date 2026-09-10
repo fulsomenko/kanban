@@ -44,10 +44,7 @@ async fn test_create_board_with_duplicate_client_id_over_http_returns_already_ex
         .create_board_from_spec(Some(id), a_new_board())
         .unwrap_err();
 
-    assert!(
-        err.to_string().contains("ALREADY_EXISTS"),
-        "got: {err}"
-    );
+    assert!(err.to_string().contains("ALREADY_EXISTS"), "got: {err}");
 
     server.shutdown().await;
 }
@@ -159,6 +156,7 @@ async fn test_mutation_sends_client_id_header_visible_as_sse_issued_by() {
         instance_id.to_string()
     );
 
+    drop(events_response);
     server.shutdown().await;
 }
 
@@ -184,7 +182,8 @@ async fn read_one_sse_frame(response: &mut reqwest::Response) -> serde_json::Val
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_sprint_and_graph_mutations_over_http_hit_the_fence_message() {
+async fn test_sprint_and_archive_mutations_over_http_hit_the_fence_message_graph_declines_earlier()
+{
     let seeded = Arc::new(std::sync::Mutex::new(None::<(Uuid, Uuid, Uuid, Uuid)>));
     let seeded_for_seed = Arc::clone(&seeded);
 
@@ -233,7 +232,10 @@ async fn test_sprint_and_graph_mutations_over_http_hit_the_fence_message() {
     let graph_err = ctx.attach_children(card_a, vec![card_b]).unwrap_err();
     assert_eq!(
         graph_err.to_string(),
-        kanban_domain::KanbanError::unsupported(FENCE_MESSAGE).to_string()
+        kanban_domain::KanbanError::unsupported("get_archived_card").to_string(),
+        "attach_children_impl's edge_born_archived check reads get_archived_card \
+         before execute() reaches the fence, so this declines earlier than the \
+         fence message rather than with it"
     );
 
     let archive_err = ctx.archive_board_impl(board_id).unwrap_err();

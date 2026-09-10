@@ -55,19 +55,20 @@ async fn test_cli_card_create_against_http_locator_succeeds() {
     let response: Value = serde_json::from_str(stdout.trim()).unwrap();
     assert_eq!(response["success"], true);
     assert_eq!(response["data"]["title"], "Smoke");
+    let card_id = response["data"]["id"].as_str().unwrap();
 
-    let cards: Vec<Value> = server
+    let card: Value = server
         .client()
-        .get(format!("{}/v1/columns/{column_id}/cards", server.base_url()))
+        .get(format!("{}/v1/cards/{card_id}", server.base_url()))
         .send()
         .await
         .unwrap()
         .json()
         .await
         .unwrap();
-    assert!(
-        cards.iter().any(|c| c["title"] == "Smoke"),
-        "server should hold the created card: {cards:?}"
+    assert_eq!(
+        card["title"], "Smoke",
+        "server should hold the created card: {card:?}"
     );
 
     server.shutdown().await;

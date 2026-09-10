@@ -224,10 +224,13 @@ async fn test_create_card_over_http_hits_the_card_route_and_returns_server_state
     assert_eq!(card.priority, CardPriority::High);
     assert_eq!(card.points, Some(3));
     assert!(card.card_number > 0, "server should have minted a number");
-    match invalidation {
-        Invalidation::Entities(ids) => assert!(ids.cards.contains(&id)),
-        Invalidation::All => panic!("expected a scoped invalidation"),
-    }
+    assert_eq!(
+        invalidation,
+        Invalidation::All,
+        "a fresh CreateCard's inverse is captured against pre-create store state, \
+         so invalidation_from_inverse falls back to All -- pinned by \
+         kanban-service's test_create_card_from_spec_returns_an_invalidation_naming_the_card"
+    );
 
     server.shutdown().await;
 }
