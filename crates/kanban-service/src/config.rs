@@ -97,6 +97,24 @@ pub fn save_to(config: &AppConfig, path: &Path) -> CoreResult<()> {
     Ok(())
 }
 
+pub fn save_board_sort(
+    config: &AppConfig,
+    field: kanban_domain::BoardSortField,
+    order: kanban_domain::SortOrder,
+) -> CoreResult<()> {
+    let location = effective_configuration_location(config);
+    if location.is_empty() {
+        return Err(kanban_core::CoreError::Config(
+            "No configuration location configured".to_string(),
+        ));
+    }
+    let path = PathBuf::from(location);
+    let mut persisted = load_from(&path);
+    persisted.board_sort_field = Some(field.to_string());
+    persisted.board_sort_order = Some(order.to_string());
+    save_to(&persisted, &path)
+}
+
 pub fn move_config(old_path: &Path, new_path: &Path) -> CoreResult<()> {
     if old_path == new_path || !old_path.exists() {
         return Ok(());

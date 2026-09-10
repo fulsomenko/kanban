@@ -130,8 +130,8 @@ impl CliContext {
     }
 
     /// Persist the default board-list sort through the service helper (R3):
-    /// persist-first via `config::save`, no context rebuild. The canonical
-    /// on-disk strings come from the domain `Display` (R1).
+    /// persist-first via `config::save_board_sort`, no context rebuild. The
+    /// canonical on-disk strings come from the domain `Display` (R1).
     pub fn set_board_sort(&mut self, field: BoardSortField, order: SortOrder) -> KanbanResult<()> {
         self.inner.set_board_sort(field, order)
     }

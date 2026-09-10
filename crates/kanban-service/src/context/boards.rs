@@ -189,18 +189,17 @@ impl KanbanContext {
     /// Persist a board-sort preference and reflect it in the held `app_config`.
     ///
     /// The shared entry point CLI (R4) and MCP (R5) both call to change the
-    /// default board sort. Persists to disk FIRST via [`crate::config::save`] on
-    /// a clone with the canonical strings set (via `Display`); only on save
-    /// success is the in-memory `app_config` mutated IN PLACE. On save failure it
-    /// returns the error and leaves `app_config` untouched. It deliberately does
-    /// NOT rebuild the context (no `open_deferred`), so the session id and the
+    /// default board sort. Persists to disk FIRST via
+    /// [`crate::config::save_board_sort`], which reads the on-disk config and
+    /// writes back only the two sort fields; only on save success is the
+    /// in-memory `app_config` mutated IN PLACE. On save failure it returns the
+    /// error and leaves `app_config` untouched. It deliberately does NOT
+    /// rebuild the context (no `open_deferred`), so the session id and the
     /// per-session undo/redo history survive the change.
     pub fn set_board_sort(&mut self, field: BoardSortField, order: SortOrder) -> KanbanResult<()> {
-        let mut next = self.app_config.clone();
-        next.board_sort_field = Some(field.to_string());
-        next.board_sort_order = Some(order.to_string());
-        crate::config::save(&next)?;
-        self.app_config = next;
+        crate::config::save_board_sort(&self.app_config, field, order)?;
+        self.app_config.board_sort_field = Some(field.to_string());
+        self.app_config.board_sort_order = Some(order.to_string());
         Ok(())
     }
 
