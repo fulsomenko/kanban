@@ -1,9 +1,13 @@
 use kanban_api::{CreateColumnRequest, Patch, UpdateColumnRequest};
 use kanban_domain::{ColumnUpdate, NewColumn};
+use uuid::Uuid;
 
-pub(crate) fn create_column_request(spec: &NewColumn) -> (String, CreateColumnRequest) {
+pub(crate) fn create_column_request(
+    board_id: Uuid,
+    spec: &NewColumn,
+) -> (String, CreateColumnRequest) {
     let NewColumn {
-        board_id,
+        board_id: _,
         name,
         wip_limit,
         default_status,
@@ -42,21 +46,21 @@ mod tests {
     use super::*;
     use kanban_api::{CardStatusDto, Patch};
     use kanban_domain::{CardStatus, FieldUpdate};
-    use uuid::Uuid;
 
     #[test]
-    fn test_create_column_request_puts_board_id_in_the_path_and_never_in_the_body() {
-        let board_id = Uuid::new_v4();
+    fn test_create_column_request_puts_the_routing_board_id_in_the_path_and_never_in_the_body() {
+        let routing_board_id = Uuid::new_v4();
+        let spec_board_id = Uuid::new_v4();
         let spec = NewColumn {
-            board_id,
+            board_id: spec_board_id,
             name: "Doing".to_string(),
             wip_limit: Some(3),
             default_status: Some(CardStatus::Done),
         };
 
-        let (path, body) = create_column_request(&spec);
+        let (path, body) = create_column_request(routing_board_id, &spec);
 
-        assert_eq!(path, format!("/v1/boards/{board_id}/columns"));
+        assert_eq!(path, format!("/v1/boards/{routing_board_id}/columns"));
         assert_eq!(body.id, None);
         assert_eq!(body.wip_limit, Some(3));
         assert_eq!(body.default_status, Some(CardStatusDto::Done));

@@ -6,13 +6,23 @@ client (e.g. a future web UI, or a CLI/TUI pointed at a shared server instead
 of a local file) talk to boards through the same `KanbanBackend` interface
 every other backend implements.
 
-**Status: early / stub.** `HttpBackend` builds its own dedicated Tokio
-runtime and HTTP client, and implements `KanbanBackend` (so it type-checks
-against the trait and is object-safe), but its `DataStore`/`CommandStore`
-methods (in `src/data_store.rs` / `src/command_store.rs`) are stubs that
-return an unsupported-operation error — see
+**Status: reads and the core CRUD writes are live.** `HttpBackend` builds its
+own dedicated Tokio runtime and HTTP client and implements `KanbanBackend`.
+Every `DataStore` read (`src/data_store.rs`) is a real request against
+`kanban-server`'s v1 REST endpoints. `RemoteWrites` (`src/remote_writes/`)
+implements the nine board/column/card create/update/delete mutations the same
+way, and `KanbanBackend::remote_writes()` returns `Some(self)`, so
+`KanbanContext` diverts those nine operations straight to the server instead
+of running them through its local command-execute-then-log path.
+
+Every other `DataStore`/`CommandStore` method (graph, sprints, prefixes,
+archive/restore, the command log) still declines under its own name — see
 `test_http_backend_stub_method_returns_unsupported_error` in `src/lib.rs`.
-Real reads/writes against `kanban-server`'s REST endpoints are follow-up work.
+Returning `Some` from `remote_writes()` also arms a service-layer fence
+(`KanbanContext::execute_with_extra`): every mutation this crate does not
+implement now fails fast with an explicit "not supported over the HTTP
+backend in v1" error instead of the generic `with_transaction` decline it hit
+before this crate had any `RemoteWrites` impl.
 
 ## Key public exports
 
@@ -75,11 +85,12 @@ graph TD
     BEHTTP --> API
 ```
 
-All edges shown are normal (`[dependencies]`) edges. No crate in the workspace
-currently has a normal or optional dependency on `kanban-backend-http` — it
-has no intra-workspace dependents yet (it's meant to be composed by an
-external embedder, or by a future `kanban-cli`/`kanban-tui` "remote mode").
-The crate does have a `[dev-dependencies]` edge on `kanban-server` (feature
+All edges shown are normal (`[dependencies]`) edges. `kanban-cli` (optional,
+behind its `http` feature, default-on), `kanban-mcp` (same), and `kanban-tui`
+(unconditional) each depend on `kanban-backend-http` and register
+`HttpBackendFactory`, so an `http://`/`https://` locator resolves end to end
+from all three. The crate also has `[dev-dependencies]` edges on
+`kanban-server` (feature
 `test-helpers`), used to spin up a real server for integration tests; that's
 test-only and omitted from the diagram above. See the
 [root README](../../README.md) for the full workspace dependency graph.
@@ -101,10 +112,9 @@ test-only and omitted from the diagram above. See the
 ## Related crates
 
 `HttpBackendFactory` is exported from this crate's root for an application to
-register in its own `kanban_backend::KanbanBackendRegistry`. No consumer
-registers it yet — `kanban-cli`, `kanban-tui`, and `kanban-mcp` still resolve
-every locator through their local `json`/`sqlite` registries only. Wiring an
-application to accept an `http://`/`https://` locator end to end is follow-up
-work. [kanban-server](../kanban-server/README.md) depends on this crate only
-in reverse, as a dev-dependency (feature `test-helpers`) to spin up a real
-server for this crate's own integration tests.
+register in its own `kanban_backend::KanbanBackendRegistry`. `kanban-cli`,
+`kanban-mcp`, and `kanban-tui` all register it, alongside their local
+`json`/`sqlite` factories. [kanban-server](../kanban-server/README.md)
+depends on this crate only in reverse, as a dev-dependency (feature
+`test-helpers`) to spin up a real server for this crate's own integration
+tests.

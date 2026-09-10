@@ -51,8 +51,9 @@ impl DataStore for HttpBackend {
     /// `ReplaceBoardRequest` has no `position` and no `active_sprint_id`, both
     /// of which `DataStore::upsert_board` must write verbatim, so a PUT-based
     /// implementation here would silently drop them on every write.
-    /// `with_transaction` already declines and no `RemoteWrites` impl exists,
-    /// so this path is unreachable from `execute_with_extra` today regardless.
+    /// `execute_with_extra`'s fence rejects every non-create/update/delete
+    /// mutation before `with_transaction` is ever reached, so this path stays
+    /// unreachable today regardless.
     fn upsert_board(&self, _board: Board) -> KanbanResult<()> {
         Err(KanbanError::unsupported("upsert_board"))
     }
