@@ -8,6 +8,7 @@ mod error_mapping;
 mod events;
 mod graph;
 mod invalidation;
+mod mutation_response;
 mod pagination;
 mod patch;
 mod prefixes;
@@ -37,6 +38,7 @@ pub use graph::{
     RelatedEdgeDto,
 };
 pub use invalidation::{EntityIdsDto, InvalidationDto};
+pub use mutation_response::{DeleteResponse, MutationResponse};
 pub use pagination::{Page, PageParams};
 pub use patch::Patch;
 pub use prefixes::PrefixResponse;
