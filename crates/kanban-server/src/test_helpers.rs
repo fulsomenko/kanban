@@ -123,6 +123,31 @@ impl TestServer {
         config: crate::layers::LayerConfig,
     ) -> Self {
         let backend: Arc<dyn KanbanBackend> = Arc::new(InMemoryStore::new());
+        Self::start_full_on(backend, seed, config).await
+    }
+
+    /// Serve a `KanbanContext` backed by a `JsonDataStore` at `path`.
+    pub async fn start_on_json(path: &std::path::Path) -> Self {
+        let backend: Arc<dyn KanbanBackend> =
+            Arc::new(JsonDataStore::new(Arc::new(JsonFileStore::new(path))));
+        Self::start_full_on(backend, |_| {}, crate::layers::LayerConfig::default()).await
+    }
+
+    /// Serve a `KanbanContext` backed by a `SqliteBackend` at `path`.
+    pub async fn start_on_sqlite(path: &std::path::Path) -> Self {
+        let backend: Arc<dyn KanbanBackend> = Arc::new(
+            kanban_persistence_sqlite::SqliteBackend::open(path.to_str().unwrap())
+                .await
+                .unwrap(),
+        );
+        Self::start_full_on(backend, |_| {}, crate::layers::LayerConfig::default()).await
+    }
+
+    async fn start_full_on(
+        backend: Arc<dyn KanbanBackend>,
+        seed: impl FnOnce(&mut KanbanContext),
+        config: crate::layers::LayerConfig,
+    ) -> Self {
         let mut ctx = KanbanContext::open(backend, AppConfig::default())
             .await
             .unwrap();
