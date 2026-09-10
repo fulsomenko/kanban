@@ -313,7 +313,7 @@ fn test_card_get_by_id_leaves_live_card_archived_at_none() {
 }
 
 #[test]
-fn test_filter_cards_still_uses_archived_card_index() {
+fn test_board_scoped_list_cards_makes_no_global_marker_read() {
     let (backend, mut ctx) = counting_context();
     let board = ctx.create_board("Board".into(), None).unwrap();
     let col = ctx.create_column(board.id, "Todo".into(), None).unwrap();
@@ -335,8 +335,8 @@ fn test_filter_cards_still_uses_archived_card_index() {
     assert_eq!(cards.len(), 2);
     assert_eq!(
         backend.list_archived_cards_call_count(),
-        2,
-        "list_cards's collection-shaped path keeps building the archived index the same way it did before this change"
+        0,
+        "a board-scoped card listing answers from the board's own markers and never reads the workspace-global collection"
     );
 }
 

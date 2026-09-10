@@ -1590,3 +1590,50 @@ pub async fn test_export_board_whole_store_includes_archived_board_and_card(
         "sprint prefix counter reflects both created sprints across both boards"
     );
 }
+
+/// A board-scoped `list_cards_detailed` call must stamp `archived_at` on every
+/// backend using only that board's own archival markers.
+pub async fn test_list_cards_detailed_board_scoped_stamps_archived_at(factory: &BackendFactory) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
+
+    let board = ctx.create_board("Board".into(), Some("B".into())).unwrap();
+    let col = ctx.create_column(board.id, "Col".into(), None).unwrap();
+    let live = ctx
+        .create_card(
+            board.id,
+            col.id,
+            "Live".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    let archived = ctx
+        .create_card(
+            board.id,
+            col.id,
+            "Archived".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    ctx.archive_card(archived.id).unwrap();
+
+    ctx.save().await.unwrap();
+    let ctx = KanbanContext::open_deferred(factory(&path), AppConfig::default());
+
+    let pairs = ctx
+        .list_cards_detailed(CardListFilter {
+            board_id: Some(board.id),
+            archived: kanban_domain::ArchivedFilter::Include,
+            ..Default::default()
+        })
+        .unwrap();
+
+    assert_eq!(pairs.len(), 2);
+    let live_pair = pairs.iter().find(|(c, _)| c.id == live.id).unwrap();
+    let archived_pair = pairs.iter().find(|(c, _)| c.id == archived.id).unwrap();
+    assert_eq!(live_pair.1, None);
+    assert!(archived_pair.1.is_some());
+}
