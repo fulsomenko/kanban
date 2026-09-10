@@ -2191,4 +2191,68 @@ mod tests {
             "both archived boards remain archived (nothing restored)"
         );
     }
+
+    fn app_with_injected_storage(
+        storage_backend: Option<&str>,
+        storage_location: &str,
+    ) -> (App, tempfile::TempDir, std::path::PathBuf) {
+        let mut app = App::test_default();
+        let cfg_dir = tempfile::tempdir().unwrap();
+        let cfg_path = cfg_dir.path().join("config.toml");
+        app.app_config.configuration_location = Some(cfg_path.display().to_string());
+        app.app_config.storage_location = Some(storage_location.to_string());
+        app.app_config.storage_backend = storage_backend.map(|s| s.to_string());
+        (app, cfg_dir, cfg_path)
+    }
+
+    #[test]
+    fn test_sort_change_under_cli_file_override_does_not_persist_the_override() {
+        let cfg_dir = tempfile::tempdir().unwrap();
+        let injected = cfg_dir.path().join("injected.json");
+        let (mut app, _cfg_dir_guard, cfg_path) =
+            app_with_injected_storage(None, injected.to_str().unwrap());
+
+        app.apply_board_sort(kanban_domain::BoardSortField::Name, SortOrder::Ascending);
+
+        let persisted = kanban_service::config::load_from(&cfg_path);
+        assert_eq!(
+            persisted.board_sort_field.as_deref(),
+            Some("name"),
+            "sort write actually happened"
+        );
+        assert_eq!(
+            persisted.board_sort_order.as_deref(),
+            Some("ascending"),
+            "sort write actually happened"
+        );
+        assert!(
+            persisted.storage_location.is_none(),
+            "session-injected storage_location must not reach disk"
+        );
+        assert!(
+            persisted.storage_backend.is_none(),
+            "session-injected storage_backend must not reach disk"
+        );
+        assert!(
+            app.app_config.storage_location.is_some(),
+            "session keeps talking to its launch target"
+        );
+    }
+
+    #[test]
+    fn test_sort_change_under_remote_url_locator_does_not_persist_the_locator() {
+        let (mut app, _cfg_dir_guard, cfg_path) =
+            app_with_injected_storage(Some("http"), "http://127.0.0.1:9999");
+
+        app.apply_board_sort(kanban_domain::BoardSortField::Name, SortOrder::Ascending);
+
+        let persisted = kanban_service::config::load_from(&cfg_path);
+        assert_eq!(persisted.board_sort_field.as_deref(), Some("name"));
+        assert_eq!(persisted.board_sort_order.as_deref(), Some("ascending"));
+        assert!(
+            persisted.storage_location.is_none(),
+            "a remote locator pointed at by this session must not become the persisted default"
+        );
+        assert!(persisted.storage_backend.is_none());
+    }
 }
