@@ -1,13 +1,64 @@
 use kanban_api::{CreateBoardRequest, Patch, UpdateBoardRequest};
-use kanban_domain::{BoardUpdate, KanbanError, KanbanResult, NewBoard};
+use kanban_domain::{BoardUpdate, FieldUpdate, KanbanError, KanbanResult, NewBoard};
 use uuid::Uuid;
 
-pub(crate) fn create_board_request(_id: Option<Uuid>, _spec: &NewBoard) -> CreateBoardRequest {
-    unimplemented!()
+pub(crate) fn create_board_request(id: Option<Uuid>, spec: &NewBoard) -> CreateBoardRequest {
+    let NewBoard {
+        name,
+        description,
+        sprint_prefix,
+        card_prefix,
+        task_sort_field,
+        task_sort_order,
+        sprint_duration_days,
+        task_list_view,
+    } = spec;
+    CreateBoardRequest {
+        id,
+        name: name.clone(),
+        description: description.clone(),
+        sprint_prefix: sprint_prefix.clone(),
+        card_prefix: card_prefix.clone(),
+        task_sort_field: task_sort_field.map(Into::into),
+        task_sort_order: task_sort_order.map(Into::into),
+        sprint_duration_days: *sprint_duration_days,
+        task_list_view: task_list_view.map(Into::into),
+    }
 }
 
-pub(crate) fn update_board_request(_updates: &BoardUpdate) -> KanbanResult<UpdateBoardRequest> {
-    unimplemented!()
+pub(crate) fn update_board_request(updates: &BoardUpdate) -> KanbanResult<UpdateBoardRequest> {
+    let BoardUpdate {
+        name,
+        description,
+        sprint_prefix,
+        card_prefix,
+        task_sort_field,
+        task_sort_order,
+        sprint_duration_days,
+        task_list_view,
+        active_sprint_id,
+        position,
+    } = updates;
+    if !matches!(active_sprint_id, FieldUpdate::NoChange) {
+        return Err(KanbanError::unsupported(
+            "update_board.active_sprint_id over HTTP (server-managed field)",
+        ));
+    }
+    if position.is_some() {
+        return Err(KanbanError::unsupported(
+            "update_board.position over HTTP (server-managed field)",
+        ));
+    }
+    Ok(UpdateBoardRequest {
+        name: name.clone(),
+        description: Patch::from(description.clone()),
+        sprint_prefix: Patch::from(sprint_prefix.clone()),
+        card_prefix: Patch::from(card_prefix.clone()),
+        task_sort_field: task_sort_field.map(Into::into),
+        task_sort_order: task_sort_order.map(Into::into),
+        sprint_duration_days: Patch::from(sprint_duration_days.clone()),
+        task_list_view: task_list_view.map(Into::into),
+    })
 }
 
 #[cfg(test)]

@@ -1,13 +1,56 @@
-use kanban_api::{CreateCardRequest, UpdateCardRequest};
+use kanban_api::{CreateCardRequest, Patch, UpdateCardRequest};
 use kanban_domain::{CardUpdate, NewCard};
 use uuid::Uuid;
 
-pub(crate) fn create_card_request(_id: Option<Uuid>, _spec: &NewCard) -> (String, CreateCardRequest) {
-    unimplemented!()
+pub(crate) fn create_card_request(
+    id: Option<Uuid>,
+    spec: &NewCard,
+) -> (String, CreateCardRequest) {
+    let NewCard {
+        column_id,
+        title,
+        description,
+        priority,
+        due_date,
+        points,
+        sprint_id,
+    } = spec;
+    let path = format!("/v1/columns/{column_id}/cards");
+    let body = CreateCardRequest {
+        id,
+        title: title.clone(),
+        description: description.clone(),
+        priority: Some((*priority).into()),
+        due_date: *due_date,
+        points: *points,
+        sprint_id: *sprint_id,
+    };
+    (path, body)
 }
 
-pub(crate) fn update_card_request(_updates: &CardUpdate) -> UpdateCardRequest {
-    unimplemented!()
+pub(crate) fn update_card_request(updates: &CardUpdate) -> UpdateCardRequest {
+    let CardUpdate {
+        title,
+        description,
+        priority,
+        status,
+        position,
+        column_id,
+        due_date,
+        points,
+        sprint_id,
+    } = updates;
+    UpdateCardRequest {
+        title: title.clone(),
+        priority: priority.map(Into::into),
+        status: status.map(Into::into),
+        position: *position,
+        column_id: *column_id,
+        description: Patch::from(description.clone()),
+        due_date: Patch::from(due_date.clone()),
+        points: Patch::from(points.clone()),
+        sprint_id: Patch::from(sprint_id.clone()),
+    }
 }
 
 #[cfg(test)]

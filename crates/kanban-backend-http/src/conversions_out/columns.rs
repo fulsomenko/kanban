@@ -1,12 +1,40 @@
-use kanban_api::{CreateColumnRequest, UpdateColumnRequest};
+use kanban_api::{CreateColumnRequest, Patch, UpdateColumnRequest};
 use kanban_domain::{ColumnUpdate, NewColumn};
 
-pub(crate) fn create_column_request(_spec: &NewColumn) -> (String, CreateColumnRequest) {
-    unimplemented!()
+pub(crate) fn create_column_request(spec: &NewColumn) -> (String, CreateColumnRequest) {
+    let NewColumn {
+        board_id,
+        name,
+        wip_limit,
+        default_status,
+    } = spec;
+    let path = format!("/v1/boards/{board_id}/columns");
+    let body = CreateColumnRequest {
+        id: None,
+        name: name.clone(),
+        wip_limit: *wip_limit,
+        default_status: default_status.map(Into::into),
+    };
+    (path, body)
 }
 
-pub(crate) fn update_column_request(_updates: &ColumnUpdate) -> UpdateColumnRequest {
-    unimplemented!()
+pub(crate) fn update_column_request(updates: &ColumnUpdate) -> UpdateColumnRequest {
+    let ColumnUpdate {
+        name,
+        position,
+        wip_limit,
+        default_status,
+    } = updates;
+    UpdateColumnRequest {
+        name: name.clone(),
+        position: *position,
+        wip_limit: Patch::from(wip_limit.clone()),
+        default_status: match default_status {
+            None => Patch::NoChange,
+            Some(None) => Patch::Clear,
+            Some(Some(status)) => Patch::Set((*status).into()),
+        },
+    }
 }
 
 #[cfg(test)]
