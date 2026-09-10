@@ -71,6 +71,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_header_named_by_the_api_constant_yields_that_client_id() {
+        let uuid = Uuid::new_v4();
+        let mut parts = Request::builder()
+            .uri("/")
+            .header(kanban_service::api::CLIENT_ID_HEADER, uuid.to_string())
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        let result = ClientIdent::from_request_parts(&mut parts, &()).await;
+        match result {
+            Ok(ClientIdent(id)) => assert_eq!(id, ClientId::from(uuid)),
+            Err(_) => panic!("expected Ok"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_malformed_header_returns_422() {
         let mut parts = Request::builder()
             .uri("/")
