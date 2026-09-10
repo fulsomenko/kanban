@@ -318,8 +318,14 @@ fn assert_board_eq(label: &str, a: &Board, b: &Board) {
     assert_eq!(description_a, description_b, "{label} description");
     assert_eq!(sprint_prefix_a, sprint_prefix_b, "{label} sprint_prefix");
     assert_eq!(card_prefix_a, card_prefix_b, "{label} card_prefix");
-    assert_eq!(task_sort_field_a, task_sort_field_b, "{label} task_sort_field");
-    assert_eq!(task_sort_order_a, task_sort_order_b, "{label} task_sort_order");
+    assert_eq!(
+        task_sort_field_a, task_sort_field_b,
+        "{label} task_sort_field"
+    );
+    assert_eq!(
+        task_sort_order_a, task_sort_order_b,
+        "{label} task_sort_order"
+    );
     assert_eq!(
         sprint_duration_days_a, sprint_duration_days_b,
         "{label} sprint_duration_days"
@@ -333,7 +339,10 @@ fn assert_board_eq(label: &str, a: &Board, b: &Board) {
         next_sprint_number_a, next_sprint_number_b,
         "{label} next_sprint_number"
     );
-    assert_eq!(active_sprint_id_a, active_sprint_id_b, "{label} active_sprint_id");
+    assert_eq!(
+        active_sprint_id_a, active_sprint_id_b,
+        "{label} active_sprint_id"
+    );
     assert_eq!(task_list_view_a, task_list_view_b, "{label} task_list_view");
     assert_eq!(position_a, position_b, "{label} position");
     assert_eq!(created_at_a, created_at_b, "{label} created_at");
@@ -434,7 +443,12 @@ fn assert_snapshot_eq(remote: &GraphSnapshot, control: &GraphSnapshot) {
     }
 
     assert_eq!(remote.columns.len(), control.columns.len(), "columns.len");
-    for (i, (a, b)) in remote.columns.iter().zip(control.columns.iter()).enumerate() {
+    for (i, (a, b)) in remote
+        .columns
+        .iter()
+        .zip(control.columns.iter())
+        .enumerate()
+    {
         assert_column_eq(&format!("column[{i}]"), a, b);
     }
 
@@ -458,7 +472,12 @@ fn assert_snapshot_eq(remote: &GraphSnapshot, control: &GraphSnapshot) {
     }
 
     assert_eq!(remote.sprints.len(), control.sprints.len(), "sprints.len");
-    for (i, (a, b)) in remote.sprints.iter().zip(control.sprints.iter()).enumerate() {
+    for (i, (a, b)) in remote
+        .sprints
+        .iter()
+        .zip(control.sprints.iter())
+        .enumerate()
+    {
         assert_sprint_eq(&format!("sprint[{i}]"), a, b);
     }
 
@@ -467,17 +486,32 @@ fn assert_snapshot_eq(remote: &GraphSnapshot, control: &GraphSnapshot) {
         control.archived_cards.len(),
         "archived_cards.len"
     );
-    assert_eq!(remote.archived_cards, control.archived_cards, "archived_cards");
+    assert_eq!(
+        remote.archived_cards, control.archived_cards,
+        "archived_cards"
+    );
 
     assert_eq!(
         remote.archived_boards.len(),
         control.archived_boards.len(),
         "archived_boards.len"
     );
-    assert_eq!(remote.archived_boards, control.archived_boards, "archived_boards");
+    assert_eq!(
+        remote.archived_boards, control.archived_boards,
+        "archived_boards"
+    );
 
-    assert_eq!(remote.prefixes.len(), control.prefixes.len(), "prefixes.len");
-    for (i, (a, b)) in remote.prefixes.iter().zip(control.prefixes.iter()).enumerate() {
+    assert_eq!(
+        remote.prefixes.len(),
+        control.prefixes.len(),
+        "prefixes.len"
+    );
+    for (i, (a, b)) in remote
+        .prefixes
+        .iter()
+        .zip(control.prefixes.iter())
+        .enumerate()
+    {
         assert_prefix_eq(&format!("prefix[{i}]"), a, b);
     }
 
@@ -833,7 +867,10 @@ async fn numbering_parity(kind: Backend) {
         })
         .collect();
 
-    assert_eq!(remote_numbers, control_numbers, "per-card (prefix, card_number)");
+    assert_eq!(
+        remote_numbers, control_numbers,
+        "per-card (prefix, card_number)"
+    );
 
     remote_numbers.sort_by_key(|(_, n)| *n);
     let numbers: Vec<u32> = remote_numbers.iter().map(|(_, n)| *n).collect();
@@ -877,7 +914,9 @@ async fn test_remote_create_card_numbering_matches_local_allocation_sqlite() {
 async fn test_remote_create_column_ignores_the_client_supplied_id() {
     let server = TestServer::start().await;
     let mut ctx = ctx_over(&server).await;
-    let (board, _) = ctx.create_board_from_spec(None, a_new_board("B", None)).unwrap();
+    let (board, _) = ctx
+        .create_board_from_spec(None, a_new_board("B", None))
+        .unwrap();
 
     let chosen_uuid = Uuid::new_v4();
     let (column, _) = ctx
