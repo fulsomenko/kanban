@@ -40,7 +40,8 @@ impl ModelChanged {
 /// layer below it has to name the implementor.
 pub trait DerivedProjections {
     /// Recompute everything derived from `model`. Consumes the receipt, so this
-    /// cannot be called without a mutation having produced one.
+    /// cannot be called without a mutation having produced one. An implementor
+    /// may skip its recompute entirely when `changed.any()` is false.
     fn resync(&mut self, model: &Model, changed: ModelChanged);
 }
 

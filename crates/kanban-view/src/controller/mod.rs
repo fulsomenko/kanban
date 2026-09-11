@@ -57,7 +57,10 @@ impl Default for Controller {
 }
 
 impl DerivedProjections for Controller {
-    fn resync(&mut self, model: &Model, _changed: ModelChanged) {
+    fn resync(&mut self, model: &Model, changed: ModelChanged) {
+        if !changed.any() {
+            return;
+        }
         self.archived_board_at = model
             .archived_boards()
             .iter()
