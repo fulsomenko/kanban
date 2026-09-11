@@ -47,10 +47,16 @@ pub struct CountingBackend {
     reads: Arc<AtomicUsize>,
     ops: ReadOpLog,
     failing: Arc<Mutex<HashSet<&'static str>>>,
+    instance_id: Uuid,
 }
 
 impl CountingBackend {
     pub fn wrap(inner: Arc<dyn KanbanBackend>) -> WrappedBackend {
+        Self::wrap_with_instance_id(inner, Uuid::nil())
+    }
+
+    /// Like [`Self::wrap`], but `instance_id()` reports `id` instead of `Uuid::nil()`.
+    pub fn wrap_with_instance_id(inner: Arc<dyn KanbanBackend>, id: Uuid) -> WrappedBackend {
         let reads = Arc::new(AtomicUsize::new(0));
         let ops: ReadOpLog = Arc::new(Mutex::new(Vec::new()));
         let backend: Arc<dyn KanbanBackend> = Arc::new(Self {
@@ -58,6 +64,7 @@ impl CountingBackend {
             reads: reads.clone(),
             ops: ops.clone(),
             failing: Arc::new(Mutex::new(HashSet::new())),
+            instance_id: id,
         });
         (backend, reads, ops)
     }
@@ -75,6 +82,7 @@ impl CountingBackend {
             reads: Arc::new(AtomicUsize::new(0)),
             ops: Arc::new(Mutex::new(Vec::new())),
             failing: Arc::new(Mutex::new(failing)),
+            instance_id: Uuid::nil(),
         })
     }
 
@@ -309,6 +317,10 @@ impl KanbanBackend for CountingBackend {
 
     fn with_transaction(&self, f: TransactionFn<'_>) -> KanbanResult<()> {
         self.inner.with_transaction(f)
+    }
+
+    fn instance_id(&self) -> Uuid {
+        self.instance_id
     }
 }
 
