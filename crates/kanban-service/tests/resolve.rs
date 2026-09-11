@@ -466,11 +466,7 @@ async fn test_resolve_card_ids_mixed_uuid_identifier_and_number() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_resolve_card_ids_takes_single_snapshot_per_batch() {
-    // Behavioural check: even a batch of 10 inputs against 50 cards completes
-    // without per-element backend churn. We assert correctness here; the perf
-    // contract is provable by inspecting the implementation (one set of
-    // list_all_* at the top, then pure in-memory matching).
+async fn test_resolve_card_ids_resolves_a_ten_input_batch_against_fifty_cards() {
     let (mut ctx, _dir) = open_ctx().await;
     let board = ctx.create_board("B".into(), Some("KAN".into())).unwrap();
     let col = ctx.create_column(board.id, "TODO".into(), None).unwrap();
@@ -481,7 +477,6 @@ async fn test_resolve_card_ids_takes_single_snapshot_per_batch() {
             .unwrap();
         all_ids.push(c.id);
     }
-    // Resolve the first 10 by identifier.
     let raws: Vec<String> = (1..=10).map(|n| format!("KAN-{n}")).collect();
     let resolved = ctx.resolve_card_ids(&raws).unwrap();
     assert_eq!(resolved.len(), 10);
