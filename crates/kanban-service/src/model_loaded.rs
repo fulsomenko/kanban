@@ -14,18 +14,6 @@ impl LoadedState for Model {
         self.boards_state().into()
     }
 
-    fn column_list(&self) -> FetchStatus {
-        self.columns_state().into()
-    }
-
-    fn card_list(&self) -> FetchStatus {
-        self.cards_state().into()
-    }
-
-    fn sprint_list(&self) -> FetchStatus {
-        self.sprints_state().into()
-    }
-
     fn graph(&self) -> FetchStatus {
         self.graph_state().into()
     }
@@ -146,7 +134,7 @@ mod tests {
         let mut model = Model::default();
         model.set_cards_of_column(column_id, LoadState::Loaded(vec![card]));
 
-        assert_eq!(LoadedState::card_list(&model), FetchStatus::NotLoaded);
+        assert_eq!(LoadedState::board_list(&model), FetchStatus::NotLoaded);
         assert_eq!(
             LoadedState::cards_of_column(&model, column_id),
             FetchStatus::Loaded

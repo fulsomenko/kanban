@@ -30,7 +30,7 @@ pub fn requestable(status: FetchStatus) -> bool {
 }
 
 /// Whole-collection accessors, parent-scoped accessors, and per-id accessors
-/// are independent tiers: a `card_list()` of `NotLoaded` alongside a
+/// are independent tiers: a `board_list()` of `NotLoaded` alongside a
 /// `cards_of_column(c)` of `Loaded` alongside a `card(id)` of `Missing` is a
 /// coherent state, not a contradiction.
 ///
@@ -45,9 +45,6 @@ pub fn requestable(status: FetchStatus) -> bool {
 /// served by `DataStore::list_archived_cards_by_board`.
 pub trait LoadedState {
     fn board_list(&self) -> FetchStatus;
-    fn column_list(&self) -> FetchStatus;
-    fn card_list(&self) -> FetchStatus;
-    fn sprint_list(&self) -> FetchStatus;
     fn graph(&self) -> FetchStatus;
     fn board(&self, id: Uuid) -> FetchStatus;
     fn column(&self, id: Uuid) -> FetchStatus;
@@ -68,9 +65,6 @@ pub trait LoadedState {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FetchRound {
     pub board_list: bool,
-    pub column_list: bool,
-    pub card_list: bool,
-    pub sprint_list: bool,
     pub graph: bool,
     pub boards: Vec<Uuid>,
     pub columns: Vec<Uuid>,
@@ -91,9 +85,6 @@ pub struct FetchRound {
 impl FetchRound {
     pub fn is_empty(&self) -> bool {
         !self.board_list
-            && !self.column_list
-            && !self.card_list
-            && !self.sprint_list
             && !self.graph
             && self.boards.is_empty()
             && self.columns.is_empty()
@@ -139,7 +130,6 @@ mod tests {
 
     struct StubLoaded {
         board_list: FetchStatus,
-        card_list: FetchStatus,
         card: FetchStatus,
         cards_of_column: FetchStatus,
         columns_by_board: HashMap<Uuid, Vec<Column>>,
@@ -149,7 +139,6 @@ mod tests {
         fn default() -> Self {
             StubLoaded {
                 board_list: FetchStatus::NotLoaded,
-                card_list: FetchStatus::NotLoaded,
                 card: FetchStatus::NotLoaded,
                 cards_of_column: FetchStatus::NotLoaded,
                 columns_by_board: HashMap::new(),
@@ -160,15 +149,6 @@ mod tests {
     impl LoadedState for StubLoaded {
         fn board_list(&self) -> FetchStatus {
             self.board_list
-        }
-        fn column_list(&self) -> FetchStatus {
-            FetchStatus::NotLoaded
-        }
-        fn card_list(&self) -> FetchStatus {
-            self.card_list
-        }
-        fn sprint_list(&self) -> FetchStatus {
-            FetchStatus::NotLoaded
         }
         fn graph(&self) -> FetchStatus {
             FetchStatus::NotLoaded
@@ -287,21 +267,6 @@ mod tests {
         }
         .is_empty());
         assert!(!FetchRound {
-            column_list: true,
-            ..Default::default()
-        }
-        .is_empty());
-        assert!(!FetchRound {
-            card_list: true,
-            ..Default::default()
-        }
-        .is_empty());
-        assert!(!FetchRound {
-            sprint_list: true,
-            ..Default::default()
-        }
-        .is_empty());
-        assert!(!FetchRound {
             graph: true,
             ..Default::default()
         }
@@ -387,13 +352,13 @@ mod tests {
         let column_id = Uuid::new_v4();
         let card_id = Uuid::new_v4();
         let loaded = StubLoaded {
-            card_list: FetchStatus::NotLoaded,
+            board_list: FetchStatus::NotLoaded,
             cards_of_column: FetchStatus::Loaded,
             card: FetchStatus::Missing,
             ..Default::default()
         };
 
-        assert!(requestable(loaded.card_list()));
+        assert!(requestable(loaded.board_list()));
         assert!(!requestable(loaded.cards_of_column(column_id)));
         assert!(!requestable(loaded.card(card_id)));
     }
@@ -427,11 +392,12 @@ mod tests {
     #[test]
     fn test_loaded_state_distinguishes_whole_collection_status_from_per_id_status() {
         let loaded = StubLoaded {
+            board_list: FetchStatus::NotLoaded,
             card: FetchStatus::Loaded,
             ..Default::default()
         };
 
-        assert!(requestable(loaded.card_list()));
+        assert!(requestable(loaded.board_list()));
         assert!(!requestable(loaded.card(Uuid::new_v4())));
     }
 

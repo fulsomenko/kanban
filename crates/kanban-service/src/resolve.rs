@@ -22,15 +22,6 @@ impl LoadedState for Overlay<'_> {
     fn board_list(&self) -> FetchStatus {
         overlay_status(&self.pass.boards.all, self.base.board_list())
     }
-    fn column_list(&self) -> FetchStatus {
-        overlay_status(&self.pass.columns.all, self.base.column_list())
-    }
-    fn card_list(&self) -> FetchStatus {
-        overlay_status(&self.pass.cards.all, self.base.card_list())
-    }
-    fn sprint_list(&self) -> FetchStatus {
-        overlay_status(&self.pass.sprints.all, self.base.sprint_list())
-    }
     fn graph(&self) -> FetchStatus {
         overlay_status(&self.pass.graph, self.base.graph())
     }
@@ -143,9 +134,6 @@ impl LoadedEntities for Overlay<'_> {
 #[derive(Default)]
 struct Fetched {
     board_list: bool,
-    column_list: bool,
-    card_list: bool,
-    sprint_list: bool,
     graph: bool,
     boards: HashSet<Uuid>,
     columns: HashSet<Uuid>,
@@ -162,9 +150,6 @@ struct Fetched {
 impl Fetched {
     fn record(&mut self, round: &FetchRound) {
         self.board_list |= round.board_list;
-        self.column_list |= round.column_list;
-        self.card_list |= round.card_list;
-        self.sprint_list |= round.sprint_list;
         self.graph |= round.graph;
         self.boards.extend(round.boards.iter().copied());
         self.columns.extend(round.columns.iter().copied());
@@ -207,9 +192,6 @@ fn narrow_to_outstanding(
 ) -> FetchRound {
     FetchRound {
         board_list: round.board_list && !fetched.board_list,
-        column_list: round.column_list && !fetched.column_list,
-        card_list: round.card_list && !fetched.card_list,
-        sprint_list: round.sprint_list && !fetched.sprint_list,
         graph: round.graph && !fetched.graph,
         boards: outstanding(round.boards, &fetched.boards, |id| loaded.board(id)),
         columns: outstanding(round.columns, &fetched.columns, |id| loaded.column(id)),
@@ -230,24 +212,6 @@ fn narrow_to_outstanding(
 fn fetch_round(round: &FetchRound, store: &dyn DataStore, resolved: &mut Resolved) {
     if round.board_list {
         resolved.boards.all = match store.list_boards() {
-            Ok(v) => LoadState::Loaded(v),
-            Err(e) => LoadState::Failed(Arc::new(e)),
-        };
-    }
-    if round.column_list {
-        resolved.columns.all = match store.list_all_columns() {
-            Ok(v) => LoadState::Loaded(v),
-            Err(e) => LoadState::Failed(Arc::new(e)),
-        };
-    }
-    if round.card_list {
-        resolved.cards.all = match store.list_all_cards() {
-            Ok(v) => LoadState::Loaded(v),
-            Err(e) => LoadState::Failed(Arc::new(e)),
-        };
-    }
-    if round.sprint_list {
-        resolved.sprints.all = match store.list_all_sprints() {
             Ok(v) => LoadState::Loaded(v),
             Err(e) => LoadState::Failed(Arc::new(e)),
         };
