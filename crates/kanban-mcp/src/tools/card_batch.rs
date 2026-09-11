@@ -100,7 +100,9 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let count = locked_write(&self.ctx, |ctx| {
-            let ids = ctx.resolve_card_ids(&req.cards).map_err(kanban_err_to_mcp)?;
+            let ids = ctx
+                .resolve_card_ids(&req.cards)
+                .map_err(kanban_err_to_mcp)?;
             ctx.mutate(|c| c.archive_cards_impl(ids))
                 .map(|(count, _inv)| count)
                 .map_err(kanban_err_to_mcp)
@@ -119,7 +121,9 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
             let mut model = ctx.model_for(&scope);
-            let ids = ctx.resolve_card_ids(&req.cards).map_err(kanban_err_to_mcp)?;
+            let ids = ctx
+                .resolve_card_ids(&req.cards)
+                .map_err(kanban_err_to_mcp)?;
             let board_id = ctx.require_same_board(&ids).map_err(kanban_err_to_mcp)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
             let column_id = resolve_column_in_board(&model, &req.column, board_id)?;
@@ -141,7 +145,9 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
             let mut model = ctx.model_for(&scope);
-            let ids = ctx.resolve_card_ids(&req.cards).map_err(kanban_err_to_mcp)?;
+            let ids = ctx
+                .resolve_card_ids(&req.cards)
+                .map_err(kanban_err_to_mcp)?;
             let board_id = ctx.require_same_board(&ids).map_err(kanban_err_to_mcp)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
             let board = board_head(ctx, &model, board_id)?;

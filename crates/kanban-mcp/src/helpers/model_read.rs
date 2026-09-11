@@ -321,5 +321,4 @@ mod tests {
         assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
         assert!(!err.message.contains("not found"));
     }
-
 }

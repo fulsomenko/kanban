@@ -523,8 +523,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_on_json(
-    ) {
+    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_on_json() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
 
@@ -544,8 +543,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_on_sqlite(
-    ) {
+    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_on_sqlite() {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
 

@@ -50,7 +50,12 @@ async fn seeded() -> Seeded {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_card_ids_with_only_uuid_inputs_reads_nothing_from_the_store() {
-    let Seeded { backend, ctx, c1, c2 } = seeded().await;
+    let Seeded {
+        backend,
+        ctx,
+        c1,
+        c2,
+    } = seeded().await;
 
     let resolved = ctx
         .resolve_card_ids(&[c1.to_string(), c2.to_string()])
@@ -64,7 +69,12 @@ async fn test_resolve_card_ids_with_only_uuid_inputs_reads_nothing_from_the_stor
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_card_ids_performs_one_indexed_lookup_per_identifier() {
-    let Seeded { backend, ctx, c1, c2 } = seeded().await;
+    let Seeded {
+        backend,
+        ctx,
+        c1,
+        c2,
+    } = seeded().await;
 
     let resolved = ctx
         .resolve_card_ids(&["KAN-1".to_string(), "KAN-2".to_string()])
