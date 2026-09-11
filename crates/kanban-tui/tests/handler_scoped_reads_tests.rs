@@ -1,4 +1,4 @@
-//! Pins the TUI handlers named by KAN-1583 to the board-scoped tiers
+//! Pins the TUI handlers to the board-scoped tiers
 //! (`App::board_columns_view`/`board_sprints_view`, `Controller::live_cards`/
 //! `archived_cards`, `Model::card_by_id_state`/`column_cards_state`) rather
 //! than the flat `Model::cards_state`/`columns_state`/`sprints_state`

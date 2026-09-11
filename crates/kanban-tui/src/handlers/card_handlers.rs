@@ -344,10 +344,10 @@ impl App {
         let card_ids: Vec<uuid::Uuid> = self.multi_select.selected_cards.iter().copied().collect();
         let first_card_id = card_ids.first().copied();
 
-        if card_ids
-            .iter()
-            .any(|id| self.model.card_by_id_state(*id).is_not_loaded())
-        {
+        if card_ids.iter().any(|id| {
+            let state = self.model.card_by_id_state(*id);
+            state.is_not_loaded() || state.is_failed()
+        }) {
             self.set_error("Cards are not loaded yet");
             return;
         }
@@ -1052,17 +1052,11 @@ impl App {
         let archived_ids = self.board_archived_ids(board_id);
         let target_is_archived = archived_ids.contains(&card_id);
 
-        let LoadState::Loaded(cards) = self.controller.live_cards() else {
+        let LoadState::Loaded((cards, archived)) = self.board_candidate_cards() else {
             self.pop_mode();
             self.set_error("Cards are not loaded yet");
             return;
         };
-        let archived = self
-            .controller
-            .archived_cards()
-            .loaded()
-            .copied()
-            .unwrap_or(&[]);
         let eligible_cards: Vec<_> = cards
             .iter()
             .chain(archived.iter())

@@ -653,12 +653,10 @@ impl App {
         if self.relationship.search.is_empty() {
             return Some(self.relationship.card_ids.clone());
         }
-        if self
-            .relationship
-            .card_ids
-            .iter()
-            .any(|id| self.model.card_by_id_state(*id).is_not_loaded())
-        {
+        if self.relationship.card_ids.iter().any(|id| {
+            let state = self.model.card_by_id_state(*id);
+            state.is_not_loaded() || state.is_failed()
+        }) {
             return None;
         }
         let search_lower = self.relationship.search.to_lowercase();
