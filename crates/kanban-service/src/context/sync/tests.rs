@@ -217,7 +217,7 @@ fn test_sync_invalidated_with_an_empty_entity_set_and_a_satisfied_plan_reports_u
     );
 
     assert_eq!(recording.any_flags.last(), Some(&true));
-    assert_eq!(recording.any_flags[recording.any_flags.len() - 2], false);
+    assert!(!recording.any_flags[recording.any_flags.len() - 2]);
 }
 
 #[test]
