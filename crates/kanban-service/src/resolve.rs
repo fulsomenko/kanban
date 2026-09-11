@@ -95,13 +95,6 @@ impl LoadedState for Overlay<'_> {
         )
     }
 
-    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
-        match self.pass.cards.by_id.get(&id) {
-            Some(state) => state.into(),
-            None => self.base.card_in_collection(id),
-        }
-    }
-
     fn board_in_collection(&self, id: Uuid) -> FetchStatus {
         match self.pass.boards.by_id.get(&id) {
             Some(state) => state.into(),

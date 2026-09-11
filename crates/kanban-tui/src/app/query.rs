@@ -12,44 +12,20 @@ impl App {
             .or_else(|| self.board_list.get_selected_board_id())
     }
 
-    /// One column tier per board-scoped feature: the scoped tier when it has
-    /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
-    /// `Loaded` (including an empty one) is authoritative and never falls
-    /// back; only `NotLoaded` triggers the fallback. Unfiltered — callers
-    /// that need the position-ordered, search-narrowed view use
-    /// `visible_board_columns` instead.
+    /// The scoped column tier for `board_id`. Unfiltered: callers that need
+    /// the position-ordered, search-narrowed view use `visible_board_columns`
+    /// instead.
     pub(crate) fn board_columns_view(&self, board_id: uuid::Uuid) -> LoadState<Vec<Column>> {
         match self.model.board_columns_state(board_id) {
             LoadState::Loaded(columns) => LoadState::Loaded(columns.to_vec()),
-            LoadState::NotLoaded => match self.model.columns_state() {
-                LoadState::Loaded(all) => LoadState::Loaded(
-                    all.iter()
-                        .filter(|c| c.board_id == board_id)
-                        .cloned()
-                        .collect(),
-                ),
-                _ => LoadState::NotLoaded,
-            },
             other => other.map(|_| Vec::new()),
         }
     }
 
-    /// One sprint tier per board-scoped feature: the scoped tier when it has
-    /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
-    /// `Loaded` (including an empty one) is authoritative and never falls
-    /// back; only `NotLoaded` triggers the fallback.
+    /// The scoped sprint tier for `board_id`.
     pub(crate) fn board_sprints_view(&self, board_id: uuid::Uuid) -> LoadState<Vec<Sprint>> {
         match self.model.board_sprints_state(board_id) {
             LoadState::Loaded(sprints) => LoadState::Loaded(sprints.to_vec()),
-            LoadState::NotLoaded => match self.model.sprints_state() {
-                LoadState::Loaded(all) => LoadState::Loaded(
-                    all.iter()
-                        .filter(|s| s.board_id == board_id)
-                        .cloned()
-                        .collect(),
-                ),
-                _ => LoadState::NotLoaded,
-            },
             other => other.map(|_| Vec::new()),
         }
     }
@@ -231,12 +207,10 @@ mod board_columns_view_tests {
     }
 
     #[test]
-    fn test_board_columns_view_prefers_the_scoped_tier_and_falls_back_to_the_flat_one() {
+    fn test_board_columns_view_answers_not_loaded_when_the_scoped_tier_is_not_loaded() {
         let board = Board::new("B", None::<String>);
-        let other_board = Board::new("Other", None::<String>);
         let col_a = Column::new(board.id, "A", 0);
         let col_b = Column::new(board.id, "B", 1);
-        let col_other = Column::new(other_board.id, "Other", 0);
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
@@ -255,20 +229,20 @@ mod board_columns_view_tests {
             other => panic!("expected the scoped tier, got {other:?}"),
         }
 
+        let app = App::test_default();
+        assert!(app.board_columns_view(board.id).is_not_loaded());
+
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
         resolved.columns = Collection {
-            all: LoadState::Loaded(vec![col_a.clone(), col_other.clone()]),
+            all: LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
             ..Default::default()
         };
         let _ = app.model.apply_resolved(resolved);
-        match app.board_columns_view(board.id) {
-            LoadState::Loaded(columns) => assert_eq!(columns, vec![col_a.clone()]),
-            other => panic!("expected fallback to the flat tier, got {other:?}"),
-        }
-
-        let app = App::test_default();
-        assert!(app.board_columns_view(board.id).is_not_loaded());
+        assert!(
+            app.board_columns_view(board.id).is_not_loaded(),
+            "a populated flat tier must not stand in for a not-loaded scoped tier"
+        );
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
@@ -313,28 +287,24 @@ mod board_sprints_view_tests {
     }
 
     #[test]
-    fn test_board_sprints_view_prefers_the_scoped_tier_and_falls_back_to_the_flat_one() {
+    fn test_board_sprints_view_answers_not_loaded_when_the_scoped_tier_is_not_loaded() {
         let board = Board::new("B", None::<String>);
-        let other_board = Board::new("Other", None::<String>);
         let s_on_board = Sprint::new(board.id, 1, None, None::<String>);
-        let s_other_board = Sprint::new(other_board.id, 1, None, None::<String>);
+
+        let app = App::test_default();
+        assert!(app.board_sprints_view(board.id).is_not_loaded());
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
         resolved.sprints = Collection {
-            all: LoadState::Loaded(vec![s_on_board.clone(), s_other_board.clone()]),
+            all: LoadState::Loaded(vec![s_on_board.clone()]),
             ..Default::default()
         };
         let _ = app.model.apply_resolved(resolved);
-        match app.board_sprints_view(board.id) {
-            LoadState::Loaded(sprints) => {
-                assert_eq!(sprints, vec![s_on_board.clone()]);
-            }
-            other => panic!("expected fallback to the flat tier, got {other:?}"),
-        }
-
-        let app = App::test_default();
-        assert!(app.board_sprints_view(board.id).is_not_loaded());
+        assert!(
+            app.board_sprints_view(board.id).is_not_loaded(),
+            "a populated flat tier must not stand in for a not-loaded scoped tier"
+        );
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);

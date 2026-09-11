@@ -50,7 +50,12 @@ fn test_a_failed_reload_leaves_the_previous_model_contents() {
     app.selection.active_board_id = Some(board.id);
     app.reload_model();
     let boards_before = app.model.boards_state().loaded_or_empty().len();
-    let cards_before = app.model.cards_state().loaded_or_empty().len();
+    let cards_before = app
+        .model
+        .board_cards_state(board.id)
+        .loaded()
+        .map(|v| v.len())
+        .unwrap_or(0);
     assert_eq!(boards_before, 1);
     assert_eq!(cards_before, 1);
 
@@ -59,7 +64,14 @@ fn test_a_failed_reload_leaves_the_previous_model_contents() {
     app.reload_model();
 
     assert_eq!(app.model.boards_state().loaded_or_empty().len(), 1);
-    assert_eq!(app.model.cards_state().loaded_or_empty().len(), 1);
+    assert_eq!(
+        app.model
+            .board_cards_state(board.id)
+            .loaded()
+            .map(|v| v.len())
+            .unwrap_or(0),
+        1
+    );
     assert_eq!(app.model.boards_state().loaded_or_empty()[0].id, board.id);
 }
 

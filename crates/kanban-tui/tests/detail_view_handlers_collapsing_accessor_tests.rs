@@ -154,11 +154,20 @@ fn test_open_assign_sprint_dialog_for_still_opens_when_sprints_loaded() {
         &mut app,
         ModelLoadStates {
             boards: LoadState::Loaded(vec![board]),
-            cards: LoadState::Loaded(vec![card]),
-            sprints: LoadState::Loaded(vec![sprint.clone()]),
             ..Default::default()
         },
     );
+    let _ = app.model.apply_resolved(Resolved {
+        cards: Collection {
+            by_id: HashMap::from([(card_id, LoadState::Loaded(card))]),
+            ..Default::default()
+        },
+        sprints: Collection {
+            by_parent: HashMap::from([(board_id, LoadState::Loaded(vec![sprint.clone()]))]),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
     app.selection.active_board_id = Some(board_id);
     app.sprint_view.panel = kanban_tui::app::SprintTaskPanel::Uncompleted;
     app.sprint_view

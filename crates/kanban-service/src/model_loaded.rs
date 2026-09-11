@@ -70,10 +70,6 @@ impl LoadedState for Model {
         (&self.archived_boards_state()).into()
     }
 
-    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
-        (&self.card_in_collection_status(id)).into()
-    }
-
     fn board_in_collection(&self, id: Uuid) -> FetchStatus {
         (&self.board_in_collection_status(id)).into()
     }
@@ -206,62 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn test_card_in_collection_reports_not_loaded_for_an_id_absent_from_a_loaded_flat_list() {
-        let column_id = Uuid::new_v4();
-        let live = card_in(column_id);
-        let archived_id = Uuid::new_v4();
-        let mut model = Model::default();
-        let _ = model.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Loaded(vec![live]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert_eq!(
-            LoadedState::card_in_collection(&model, archived_id),
-            FetchStatus::NotLoaded
-        );
-        assert!(requestable(LoadedState::card_in_collection(
-            &model,
-            archived_id
-        )));
-    }
-
-    #[test]
-    fn test_card_in_collection_ignores_a_loaded_per_id_entry() {
-        let column_id = Uuid::new_v4();
-        let live = card_in(column_id);
-        let archived = card_in(column_id);
-        let archived_id = archived.id;
-        let mut model = Model::default();
-        let mut by_id = std::collections::HashMap::new();
-        by_id.insert(archived_id, LoadState::Loaded(archived));
-        let _ = model.apply_resolved(Resolved {
-            cards: Collection {
-                by_id,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        let _ = model.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Loaded(vec![live]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert_eq!(LoadedState::card(&model, archived_id), FetchStatus::Loaded);
-        assert_eq!(
-            LoadedState::card_in_collection(&model, archived_id),
-            FetchStatus::NotLoaded
-        );
-    }
-
-    #[test]
-    fn test_board_in_collection_mirrors_the_card_accessor() {
+    fn test_board_in_collection_reports_not_loaded_for_an_id_absent_from_a_loaded_flat_list() {
         use kanban_domain::Board;
 
         let live = Board::new("Live", None::<String>);

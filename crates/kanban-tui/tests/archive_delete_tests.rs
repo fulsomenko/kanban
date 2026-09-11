@@ -212,14 +212,11 @@ fn test_archive_animation_completion_is_a_single_undo_step() {
     app.prepare_frame();
     warm_archived_card_markers(&mut app);
 
-    // Unified model: the row stays in `cards_state()`; archival is recorded by the
-    // id set. "Archived" means present in `archived_card_ids`, not removed.
+    // Unified model: the row stays reachable via `card_by_id_state`; archival
+    // is recorded by the id set. "Archived" means present in
+    // `archived_card_ids`, not removed.
     assert!(
-        app.model
-            .cards_state()
-            .loaded_or_empty()
-            .iter()
-            .any(|c| c.id == card_id)
+        app.model.card_by_id_state(card_id).is_loaded()
             && app.model.archived_card_ids().contains(&card_id),
         "card must be archived (marked) after animation completion"
     );
@@ -231,10 +228,10 @@ fn test_archive_animation_completion_is_a_single_undo_step() {
 
     assert!(
         app.model
-            .cards_state()
-            .loaded_or_empty()
-            .iter()
-            .any(|c| c.id == card_id)
+            .board_cards_state(board.id)
+            .loaded()
+            .map(|v| v.iter().any(|c| c.id == card_id))
+            .unwrap_or(false)
             && !app.model.archived_card_ids().contains(&card_id),
         "card must be live again after one undo press — archive + compact must \
          live in a single undo batch"
@@ -313,7 +310,8 @@ fn test_multi_column_archive_compacts_every_affected_column() {
     app.reload_model();
     app.prepare_frame();
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = app.model.board_cards_state(board.id);
+    let cards = cards.loaded().map(|v| v.as_slice()).unwrap_or(&[]);
     let k1 = cards.iter().find(|c| c.id == keep1.id).unwrap();
     let k2 = cards.iter().find(|c| c.id == keep2.id).unwrap();
     assert_eq!(

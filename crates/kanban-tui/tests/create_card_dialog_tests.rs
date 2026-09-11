@@ -24,6 +24,14 @@ fn board_id(app: &App) -> uuid::Uuid {
     app.model.boards_state().loaded_or_empty()[0].id
 }
 
+fn cards_of(app: &App, board_id: uuid::Uuid) -> Vec<kanban_domain::Card> {
+    app.model
+        .board_cards_state(board_id)
+        .loaded()
+        .map(|cards| cards.iter().map(|c| (*c).clone()).collect())
+        .unwrap_or_default()
+}
+
 fn setup_app_with_board_and_sprint() -> App {
     let mut app = setup_app_with_board();
     let bid = board_id(&app);
@@ -85,7 +93,7 @@ fn test_create_card_dialog_auto_assigns_sole_active_sprint_on_open() {
 
     confirm_create_card_dialog(&mut app, "Task");
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = cards_of(&app, bid);
     let created = cards
         .iter()
         .find(|c| c.title == "Task")
@@ -120,7 +128,7 @@ fn test_create_card_dialog_space_on_pre_checked_sprint_unchecks_it() {
     app.reload_model();
     app.prepare_frame();
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = cards_of(&app, bid);
     let created = cards
         .iter()
         .find(|c| c.title == "Task")
@@ -139,7 +147,7 @@ fn test_create_card_dialog_leaves_card_unassigned_when_no_active_sprint() {
 
     confirm_create_card_dialog(&mut app, "Plain");
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = cards_of(&app, bid);
     let created = cards
         .iter()
         .find(|c| c.title == "Plain")
@@ -160,7 +168,7 @@ fn test_create_card_dialog_leaves_card_unassigned_when_multiple_active_sprints()
 
     confirm_create_card_dialog(&mut app, "Ambig");
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = cards_of(&app, bid);
     let created = cards
         .iter()
         .find(|c| c.title == "Ambig")
@@ -257,7 +265,7 @@ fn test_j_on_sprint_focus_navigates_picker_like_down() {
     app.reload_model();
     app.prepare_frame();
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = cards_of(&app, bid);
     let created = cards
         .iter()
         .find(|c| c.title == "Vim")
@@ -302,7 +310,7 @@ fn test_arrow_to_none_row_then_space_explicitly_leaves_card_unassigned() {
     app.reload_model();
     app.prepare_frame();
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = cards_of(&app, bid);
     let created = cards
         .iter()
         .find(|c| c.title == "NoSprint")
@@ -344,7 +352,7 @@ fn test_arrow_down_then_space_assigns_navigated_sprint() {
     app.reload_model();
     app.prepare_frame();
 
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = cards_of(&app, bid);
     let created = cards
         .iter()
         .find(|c| c.title == "Picked")
@@ -373,7 +381,13 @@ fn test_create_card_does_not_carry_sprint_id_from_a_different_board() {
     app.prepare_frame();
 
     // Reset picker for board A.
-    let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+    let sprints = app
+        .model
+        .board_sprints_state(board_a)
+        .loaded()
+        .copied()
+        .unwrap_or(&[])
+        .to_vec();
     let board_a_ref = app
         .model
         .boards_state()

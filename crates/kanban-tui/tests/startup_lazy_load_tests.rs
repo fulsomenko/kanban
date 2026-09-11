@@ -178,11 +178,11 @@ async fn test_startup_reads_the_board_list_and_board_scoped_tiers_instead_of_one
             )
         })
         .count();
-    assert!(
-        whole_store_list_reads <= 5,
-        "expected at most 5 whole-store list reads (1 list_all_columns + 1 list_all_cards \
-         + 1 list_all_sprints from ViewScope's transitional flat arms, plus 1 list_all_cards \
-         + 1 list_all_sprints from migrate_sprint_logs), got {whole_store_list_reads} in {ops:?}"
+    assert_eq!(
+        whole_store_list_reads, 2,
+        "expected exactly 2 whole-store list reads (1 list_all_cards + 1 list_all_sprints \
+         from migrate_sprint_logs; ViewScope no longer requests any flat tier), \
+         got {whole_store_list_reads} in {ops:?}"
     );
     assert!(
         !ops.iter()
@@ -279,8 +279,8 @@ async fn test_startup_loads_the_auto_selected_boards_subtree() {
 
     app.load_initial_state().await;
 
-    assert!(matches!(app.model.columns_state(), LoadState::Loaded(_)));
-    assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
+    assert!(app.model.board_columns_state(board1.id).is_loaded());
+    assert!(app.model.board_sprints_state(board1.id).is_loaded());
     assert_eq!(app.selection.active_board_id, None);
     assert_eq!(app.board_list.get_selected_board_id(), Some(board1.id));
 }
@@ -327,8 +327,10 @@ async fn test_startup_runs_the_sprint_log_migration_before_the_first_fetch() {
 
     let migrated_log_present = app
         .model
-        .cards_state()
-        .loaded_or_empty()
+        .board_cards_state(board.id)
+        .loaded()
+        .map(|v| v.as_slice())
+        .unwrap_or(&[])
         .iter()
         .find(|c| c.id == card.id)
         .map(|c| !c.sprint_logs.is_empty())
@@ -547,17 +549,22 @@ mod backend_parity {
                 "boards differ between {baseline_kind} and {kind}"
             );
 
-            let expected_columns =
-                sorted_by_id(baseline.columns_state().loaded().unwrap(), |c| c.id);
-            let actual_columns = sorted_by_id(model.columns_state().loaded().unwrap(), |c| c.id);
+            let expected_columns = sorted_by_id(
+                baseline.board_columns_state(board1).loaded().unwrap(),
+                |c| c.id,
+            );
+            let actual_columns =
+                sorted_by_id(model.board_columns_state(board1).loaded().unwrap(), |c| {
+                    c.id
+                });
             assert_eq!(
                 actual_columns, expected_columns,
                 "columns differ between {baseline_kind} and {kind}"
             );
 
-            let mut expected_cards = baseline.cards_state().loaded().unwrap().clone();
+            let mut expected_cards = baseline.board_cards_state(board1).loaded().unwrap().clone();
             expected_cards.sort_by_key(|c| c.id);
-            let mut actual_cards = model.cards_state().loaded().unwrap().clone();
+            let mut actual_cards = model.board_cards_state(board1).loaded().unwrap().clone();
             actual_cards.sort_by_key(|c| c.id);
             assert_eq!(
                 expected_cards.len(),
@@ -568,9 +575,14 @@ mod backend_parity {
                 assert_card_eq(a, b);
             }
 
-            let expected_sprints =
-                sorted_by_id(baseline.sprints_state().loaded().unwrap(), |s| s.id);
-            let actual_sprints = sorted_by_id(model.sprints_state().loaded().unwrap(), |s| s.id);
+            let expected_sprints = sorted_by_id(
+                baseline.board_sprints_state(board1).loaded().unwrap(),
+                |s| s.id,
+            );
+            let actual_sprints =
+                sorted_by_id(model.board_sprints_state(board1).loaded().unwrap(), |s| {
+                    s.id
+                });
             assert_eq!(
                 actual_sprints, expected_sprints,
                 "sprints differ between {baseline_kind} and {kind}"
@@ -615,8 +627,49 @@ mod backend_parity {
                 "{kind}: an empty board's sprint tier must resolve to Loaded(vec![]), not NotLoaded/Missing"
             );
             assert!(
-                model.cards_state().is_loaded(),
-                "{kind}: the flat card tier must resolve to Loaded(vec![])"
+                model.board_cards_state(board_id).is_loaded(),
+                "{kind}: the scoped card tier must resolve to Loaded(vec![])"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_the_startup_scope_never_reads_the_flat_tiers_on_any_backend() {
+        let (snapshot, board1, _board2) = seed_non_trivial_snapshot().await;
+        let kinds = ["memory", "json", "sqlite"];
+        let dirs = [
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        ];
+
+        for (kind, dir) in kinds.iter().zip(dirs.iter()) {
+            let ctx = open_seeded(kind, dir, &snapshot).await;
+            let model = populate_scope(&ctx, board1);
+
+            assert!(
+                model.columns_state().is_not_loaded(),
+                "{kind}: the flat column tier must stay unrequested"
+            );
+            assert!(
+                model.cards_state().is_not_loaded(),
+                "{kind}: the flat card tier must stay unrequested"
+            );
+            assert!(
+                model.sprints_state().is_not_loaded(),
+                "{kind}: the flat sprint tier must stay unrequested"
+            );
+            assert!(
+                model.board_columns_state(board1).is_loaded(),
+                "{kind}: the scoped column tier must be loaded"
+            );
+            assert!(
+                model.board_cards_state(board1).is_loaded(),
+                "{kind}: the scoped card tier must be loaded"
+            );
+            assert!(
+                model.board_sprints_state(board1).is_loaded(),
+                "{kind}: the scoped sprint tier must be loaded"
             );
         }
     }

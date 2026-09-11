@@ -559,10 +559,11 @@ mod tests {
             assert_eq!(m.card_index[&card.id], i);
         }
         assert!(m
-            .card_in_collection_status(a.id)
+            .cards_state()
             .loaded()
-            .copied()
-            .is_none());
+            .unwrap()
+            .iter()
+            .all(|c| c.id != a.id));
         assert_eq!(m.card_by_id_state(a.id).loaded().copied().unwrap(), &a);
         assert_eq!(m.card_by_id_state(c.id).loaded().copied().unwrap(), &c);
         assert_eq!(m.card_by_id_state(d.id).loaded().copied().unwrap(), &d);

@@ -100,7 +100,11 @@ fn has_op_with_id(ops: &[ReadOp], method: &str, id: Uuid) -> bool {
 fn select_column(app: &mut App, board_id: Uuid, column_id: Uuid) {
     let columns = kanban_domain::card_lifecycle::sorted_board_columns(
         board_id,
-        app.model.columns_state().loaded_or_empty(),
+        app.model
+            .board_columns_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
     );
     let idx = columns
         .iter()
@@ -127,7 +131,6 @@ async fn test_activate_sprint_refetches_the_sprint_and_board_tiers_without_a_sna
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
     assert!(has_op(&refetch, "list_boards"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_columns_by_board", seed.board),
         "got {refetch:?}"
@@ -188,7 +191,6 @@ async fn test_complete_sprint_refetches_the_sprint_and_board_tiers_but_not_the_c
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
     assert!(has_op(&refetch, "list_boards"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_cards"), "got {refetch:?}");
 }
 
@@ -215,11 +217,12 @@ async fn test_create_sprint_falls_back_to_a_whole_model_reset_because_its_invers
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
     assert!(has_op(&refetch, "list_boards"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_columns"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_columns_by_board", board.id),
+        "got {refetch:?}"
+    );
+    assert!(
+        has_op_with_id(&refetch, "list_sprints_by_board", board.id),
         "got {refetch:?}"
     );
     assert!(!has_op(&refetch, "get_graph"), "got {refetch:?}");
@@ -240,7 +243,6 @@ async fn test_set_card_points_refetches_the_card_tiers_only() {
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_cards_by_column", seed.c1),
         "got {refetch:?}"
@@ -334,7 +336,6 @@ async fn test_prefix_dialog_sprint_branches_refetch_the_sprint_list_and_never_th
     {
         let refetch = refetch_ops(&ops);
         assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-        assert!(has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
         assert!(
             has_op_with_id(&refetch, "list_sprints_by_board", seed.board),
             "got {refetch:?}"
@@ -352,7 +353,6 @@ async fn test_prefix_dialog_sprint_branches_refetch_the_sprint_list_and_never_th
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_sprints_by_board", seed.board),
         "got {refetch:?}"
@@ -378,7 +378,6 @@ async fn test_prefix_dialog_sprint_card_branches_refetch_the_sprint_list_and_nev
     {
         let refetch = refetch_ops(&ops);
         assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-        assert!(has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
         assert!(!has_op(&refetch, "list_all_cards"), "got {refetch:?}");
         assert!(!has_op(&refetch, "list_cards_by_column"), "got {refetch:?}");
     }
@@ -390,7 +389,6 @@ async fn test_prefix_dialog_sprint_card_branches_refetch_the_sprint_list_and_nev
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_cards_by_column"), "got {refetch:?}");
 }
@@ -445,7 +443,6 @@ async fn test_set_card_priority_refetches_the_card_tiers_only() {
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_cards_by_column", seed.c1),
         "got {refetch:?}"
@@ -491,7 +488,6 @@ async fn test_set_column_default_status_refetches_the_column_tiers_not_the_card_
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_columns"), "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_columns_by_board", seed.board),
         "got {refetch:?}"
@@ -544,7 +540,7 @@ async fn test_set_multiple_cards_priority_refetches_the_card_tiers_once_for_the_
     assert_eq!(
         refetch
             .iter()
-            .filter(|op| op.method == "list_all_cards")
+            .filter(|op| op.method == "list_cards_by_column")
             .count(),
         1,
         "got {refetch:?}"
@@ -590,7 +586,13 @@ async fn test_assign_card_to_sprint_refetches_the_card_tiers_not_the_sprint_list
 
     app.selection.active_board_id = Some(seed.board);
     app.selection.active_card_id = Some(seed.k1);
-    let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+    let sprints = app
+        .model
+        .board_sprints_state(seed.board)
+        .loaded()
+        .copied()
+        .unwrap_or(&[])
+        .to_vec();
     let board = app
         .model
         .boards_state()
@@ -607,7 +609,6 @@ async fn test_assign_card_to_sprint_refetches_the_card_tiers_not_the_sprint_list
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(has_op(&refetch, "list_cards_by_column"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(
@@ -624,7 +625,13 @@ async fn test_assign_card_to_sprint_failure_issues_no_refetch_read() {
 
     app.selection.active_board_id = Some(seed.board);
     app.selection.active_card_id = Some(seed.k1);
-    let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+    let sprints = app
+        .model
+        .board_sprints_state(seed.board)
+        .loaded()
+        .copied()
+        .unwrap_or(&[])
+        .to_vec();
     let board = app
         .model
         .boards_state()
@@ -655,7 +662,13 @@ async fn test_assign_multiple_cards_to_sprint_refetches_the_card_tiers_not_the_s
     app.selection.active_board_id = Some(seed.board);
     app.multi_select.selected_cards.insert(seed.k1);
     app.multi_select.selected_cards.insert(seed.k2);
-    let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+    let sprints = app
+        .model
+        .board_sprints_state(seed.board)
+        .loaded()
+        .copied()
+        .unwrap_or(&[])
+        .to_vec();
     let board = app
         .model
         .boards_state()
@@ -672,12 +685,12 @@ async fn test_assign_multiple_cards_to_sprint_refetches_the_card_tiers_not_the_s
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert_eq!(
-        refetch
-            .iter()
-            .filter(|op| op.method == "list_all_cards")
-            .count(),
-        1,
+    assert!(
+        has_op_with_id(&refetch, "list_cards_by_column", seed.c1),
+        "got {refetch:?}"
+    );
+    assert!(
+        has_op_with_id(&refetch, "list_cards_by_column", seed.c2),
         "got {refetch:?}"
     );
     assert!(!has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
@@ -719,7 +732,6 @@ async fn test_carry_over_sprint_refetches_the_card_tiers_not_the_sprint_list() {
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(has_op(&refetch, "list_cards_by_column"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     let _ = target;
@@ -765,7 +777,6 @@ async fn test_relationship_popup_add_edge_refetches_the_graph_and_the_card_tiers
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
     assert!(has_op(&refetch, "get_graph"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_boards"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_columns"), "got {refetch:?}");
@@ -812,7 +823,6 @@ async fn test_relationship_popup_remove_edge_refetches_the_graph_and_the_card_ti
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
     assert!(has_op(&refetch, "get_graph"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_boards"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_columns"), "got {refetch:?}");
@@ -872,7 +882,6 @@ async fn test_sprint_detail_move_card_refetches_the_card_tiers_not_the_column_li
 
     let refetch = refetch_ops(&ops);
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
-    assert!(has_op(&refetch, "list_all_cards"), "got {refetch:?}");
     assert!(
         has_op_with_id(&refetch, "list_cards_by_column", c1.id),
         "got {refetch:?}"

@@ -165,8 +165,10 @@ pub fn tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
     // finding 4). Matches `displayed_cards()`, which selects the set the same way.
     let viewing_archived_cards = *app.get_base_mode() == AppMode::ArchivedCardsView;
 
-    let all_tiers_loaded =
-        app.model.columns_state().is_loaded() && app.model.sprints_state().is_loaded();
+    let all_tiers_loaded = app.scope_board_id().is_some_and(|board_id| {
+        app.model.board_columns_state(board_id).is_loaded()
+            && app.model.board_sprints_state(board_id).is_loaded()
+    });
     let active_task_list = match (
         app.controller.displayed_cards(viewing_archived_cards),
         all_tiers_loaded,

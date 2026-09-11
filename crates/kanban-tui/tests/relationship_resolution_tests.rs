@@ -15,6 +15,22 @@ fn invalidate_graph(app: &mut App) {
         .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
 }
 
+/// `ViewScope` scopes the board-cards tier to the active board only, so a
+/// card on a different board (a cross-board `spawns` relative) never lands
+/// in `card_by_id_state` via `reload_model`/`prepare_frame`. Seed its body
+/// directly, the same way `warm_archived_card_markers` backfills the
+/// archived-marker tier.
+fn warm_card_body(app: &mut App, card_id: Uuid) {
+    let card = app.ctx.get_card(card_id).unwrap().unwrap();
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        cards: kanban_domain::resolved::Collection {
+            by_id: [(card_id, kanban_domain::LoadState::Loaded(card))].into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+}
+
 /// The dependency graph is only requested by `ViewScope` for `CardDetail`
 /// and the manage-parents/children dialogs. Tests that inspect
 /// `model.graph_state()` directly, without driving one of those handlers,
@@ -71,7 +87,14 @@ fn test_resolve_relationship_cards_returns_only_the_related_cards() {
     app.reload_model();
     warm_graph(&mut app);
 
-    assert_eq!(app.model.cards_state().loaded_or_empty().len(), 50);
+    assert_eq!(
+        app.model
+            .board_cards_state(board_id)
+            .loaded()
+            .map(|v| v.len())
+            .unwrap_or(0),
+        50
+    );
 
     let ids = [
         app.model
@@ -129,7 +152,7 @@ fn test_resolve_relationship_cards_resolves_archived_related_card() {
 }
 
 #[test]
-fn test_resolve_relationship_cards_resolves_cross_board_related_card() {
+fn test_resolve_relationship_cards_resolves_a_cross_board_card_whose_body_was_fetched() {
     let mut app = App::test_default();
     let (board_b_id, column_b_id) = create_board_and_column(&mut app, "Board B");
     let (board_c_id, column_c_id) = create_board_and_column(&mut app, "Board C");
@@ -141,6 +164,7 @@ fn test_resolve_relationship_cards_resolves_cross_board_related_card() {
     app.selection.active_board_id = Some(board_b_id);
     app.reload_model();
     warm_graph(&mut app);
+    warm_card_body(&mut app, cross);
 
     let children = app
         .model
@@ -192,6 +216,7 @@ fn test_resolve_relationship_cards_resolves_same_set_as_full_collection_scan() {
     app.reload_model();
     helpers::warm_archived_card_markers(&mut app);
     warm_graph(&mut app);
+    warm_card_body(&mut app, cross_child);
 
     let mut ids = [
         app.model
@@ -211,15 +236,7 @@ fn test_resolve_relationship_cards_resolves_same_set_as_full_collection_scan() {
 
     let expected: Vec<Uuid> = ids
         .iter()
-        .filter_map(|id| {
-            app.model
-                .cards_state()
-                .loaded_or_empty()
-                .iter()
-                .find(|c| c.id == *id)
-                .cloned()
-        })
-        .map(|c| c.id)
+        .filter_map(|id| app.model.card_by_id_state(*id).loaded().map(|c| c.id))
         .collect();
     assert_eq!(expected.len(), 3);
 
@@ -241,14 +258,21 @@ fn test_resolve_relationship_cards_with_no_ids_returns_empty() {
     app.selection.active_board_id = Some(board_id);
     app.reload_model();
 
-    assert_eq!(app.model.cards_state().loaded_or_empty().len(), 50);
+    assert_eq!(
+        app.model
+            .board_cards_state(board_id)
+            .loaded()
+            .map(|v| v.len())
+            .unwrap_or(0),
+        50
+    );
 
     let resolved = resolve_relationship_cards(&app.model, &[]);
     assert!(resolved.is_empty());
 }
 
 #[test]
-fn test_card_detail_children_box_shows_cross_board_child_title() {
+fn test_card_detail_children_box_shows_a_cross_board_child_whose_body_was_fetched() {
     use kanban_tui::app::mode::AppMode;
 
     let mut app = App::test_default();
@@ -265,6 +289,8 @@ fn test_card_detail_children_box_shows_cross_board_child_title() {
     app.selection.active_board_id = Some(board_b_id);
     app.selection.active_card_id = Some(subject);
     app.push_mode(AppMode::CardDetail);
+    warm_graph(&mut app);
+    warm_card_body(&mut app, cross);
     app.relationship.children_list.update_item_count(1);
 
     let output =

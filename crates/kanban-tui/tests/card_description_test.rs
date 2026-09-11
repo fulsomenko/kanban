@@ -43,7 +43,8 @@ fn test_card_description_appears_in_detail_view() {
     // Verify the card has the description
     app.reload_model();
     app.prepare_frame();
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = app.model.board_cards_state(board.id);
+    let cards = cards.loaded().map(|v| v.as_slice()).unwrap_or(&[]);
     assert_eq!(cards.len(), 1);
     let displayed_card = &cards[0];
 
@@ -90,7 +91,8 @@ fn test_card_description_preserved_after_edit() {
     app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
-    let cards_before = app.model.cards_state().loaded_or_empty();
+    let cards_before = app.model.board_cards_state(board.id);
+    let cards_before = cards_before.loaded().map(|v| v.as_slice()).unwrap_or(&[]);
     assert_eq!(
         cards_before[0].description,
         Some("Original description".to_string())
@@ -113,7 +115,8 @@ fn test_card_description_preserved_after_edit() {
     // Verify description is still there after update
     app.reload_model();
     app.prepare_frame();
-    let cards_after = app.model.cards_state().loaded_or_empty();
+    let cards_after = app.model.board_cards_state(board.id);
+    let cards_after = cards_after.loaded().map(|v| v.as_slice()).unwrap_or(&[]);
     assert_eq!(cards_after.len(), 1);
     assert_eq!(cards_after[0].title, "Updated Title");
     assert_eq!(
@@ -204,11 +207,12 @@ fn test_card_with_empty_string_description_displays_placeholder() {
     // Verify the card has an empty string description (not None)
     app.reload_model();
     app.prepare_frame();
-    let cards = app.model.cards_state().loaded_or_empty();
+    let cards = app.model.board_cards_state(board.id);
+    let cards = cards.loaded().map(|v| v.as_slice()).unwrap_or(&[]);
     assert_eq!(cards[0].description, Some("".to_string()));
 
     // Verify rendering shows placeholder text instead of blank
-    let lines = build_description_lines(&cards[0]);
+    let lines = build_description_lines(cards[0]);
     assert!(
         !lines.is_empty(),
         "Empty string description should show 'No description' placeholder"

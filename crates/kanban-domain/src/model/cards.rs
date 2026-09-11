@@ -87,24 +87,6 @@ impl Model {
             .unwrap_or(LoadState::NotLoaded)
     }
 
-    /// The flat collection tier alone, with no composition against the
-    /// per-id tier. Answers `NotLoaded` for an id absent from a `Loaded`
-    /// flat list rather than `Missing`, because `list_all_cards` excludes
-    /// archived cards by design: the id may still be requestable through a
-    /// per-id fetch even though the flat list has been read.
-    pub fn card_in_collection_status(&self, id: Uuid) -> LoadState<&Card> {
-        match self.cards.as_ref() {
-            LoadState::Loaded(cards) => {
-                match self.card_index.get(&id).and_then(|&idx| cards.get(idx)) {
-                    Some(card) => LoadState::Loaded(card),
-                    None => LoadState::NotLoaded,
-                }
-            }
-            LoadState::NotLoaded | LoadState::Missing => LoadState::NotLoaded,
-            LoadState::Failed(e) => LoadState::Failed(e),
-        }
-    }
-
     /// Replaces the card set for one column's scoped tier. The only writer
     /// of `cards_by_column`'s membership: `load_from_snapshot` clears the
     /// map and index together, and `mark_failed` transitions state in place

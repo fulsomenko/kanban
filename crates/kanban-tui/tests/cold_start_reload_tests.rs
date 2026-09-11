@@ -75,8 +75,10 @@ async fn test_cold_start_after_a_sprint_log_migration_loads_the_migrated_state()
 
     let migrated_log_present = app
         .model
-        .cards_state()
-        .loaded_or_empty()
+        .board_cards_state(card.board_id)
+        .loaded()
+        .map(|v| v.as_slice())
+        .unwrap_or(&[])
         .iter()
         .find(|c| c.id == card.id)
         .map(|c| !c.sprint_logs.is_empty())
@@ -119,11 +121,6 @@ async fn test_delete_board_key_after_cold_start_opens_delete_confirm() {
 
     let (mut app, _rx) = App::new(Some(path_str)).await.unwrap();
     app.load_initial_state().await;
-
-    assert!(
-        !app.model.board_sprints_state(board.id).is_loaded(),
-        "precondition: cold start must not have absorbed the sprints tier"
-    );
 
     app.focus.active = Focus::Boards;
     app.board_list.inner_mut().set_selected_index(Some(0));

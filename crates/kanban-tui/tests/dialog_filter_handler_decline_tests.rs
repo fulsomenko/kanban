@@ -136,9 +136,15 @@ fn test_handle_filter_options_popup_with_a_loaded_sprint_tier_does_not_decline()
     let board = Board::new("Board", None::<String>);
     let board_id = board.id;
     let sprint = Sprint::new(board_id, 1, None, None::<String>);
-    app.model = kanban_domain::Model::with_load_states(ModelLoadStates {
-        boards: LoadState::Loaded(vec![board]),
-        sprints: LoadState::Loaded(vec![sprint]),
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        boards: kanban_domain::resolved::Collection {
+            all: LoadState::Loaded(vec![board]),
+            ..Default::default()
+        },
+        sprints: kanban_domain::resolved::Collection {
+            by_parent: [(board_id, LoadState::Loaded(vec![sprint]))].into(),
+            ..Default::default()
+        },
         ..Default::default()
     });
     app.selection.active_board_id = Some(board_id);
@@ -190,9 +196,15 @@ fn test_handle_filter_options_popup_space_with_a_loaded_sprint_tier_does_not_dec
     let board_id = board.id;
     let sprint = Sprint::new(board_id, 1, None, None::<String>);
     let sprint_id = sprint.id;
-    app.model = kanban_domain::Model::with_load_states(ModelLoadStates {
-        boards: LoadState::Loaded(vec![board]),
-        sprints: LoadState::Loaded(vec![sprint]),
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        boards: kanban_domain::resolved::Collection {
+            all: LoadState::Loaded(vec![board]),
+            ..Default::default()
+        },
+        sprints: kanban_domain::resolved::Collection {
+            by_parent: [(board_id, LoadState::Loaded(vec![sprint]))].into(),
+            ..Default::default()
+        },
         ..Default::default()
     });
     app.selection.active_board_id = Some(board_id);

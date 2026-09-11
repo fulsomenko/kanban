@@ -119,9 +119,6 @@ impl LoadedState for StubWorld {
     fn archived_board_list(&self) -> FetchStatus {
         self.archived_board_list
     }
-    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
-        self.card(id)
-    }
     fn board_in_collection(&self, id: Uuid) -> FetchStatus {
         self.board(id)
     }
