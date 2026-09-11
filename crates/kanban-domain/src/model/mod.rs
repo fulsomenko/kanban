@@ -121,7 +121,7 @@ impl Model {
 
         self.rebuild_card_index();
         self.rebuild_board_index();
-        self.rebuild_board_scoped_tiers();
+        self.rebuild_scoped_tiers();
 
         ModelChanged::new()
     }
@@ -135,7 +135,7 @@ impl Model {
         ModelChanged::new()
     }
 
-    fn rebuild_board_scoped_tiers(&mut self) {
+    fn rebuild_scoped_tiers(&mut self) {
         self.columns_by_board.clear();
         self.sprints_by_board.clear();
 
@@ -171,6 +171,51 @@ impl Model {
                 bucket.push(s.clone());
             }
         }
+
+        self.rebuild_card_column_buckets();
+        self.rebuild_archived_card_board_buckets();
+    }
+
+    fn rebuild_card_column_buckets(&mut self) {
+        let mut buckets: HashMap<Uuid, Vec<Card>> = HashMap::new();
+        if let LoadState::Loaded(columns) = &self.columns {
+            for c in columns {
+                buckets.entry(c.id).or_default();
+            }
+        }
+        if let LoadState::Loaded(cards) = &self.cards {
+            for card in cards {
+                if self.archived_card_ids.contains(&card.id) {
+                    continue;
+                }
+                buckets
+                    .entry(card.column_id)
+                    .or_default()
+                    .push(card.clone());
+            }
+        }
+        for (column_id, cards) in buckets {
+            self.set_cards_of_column(column_id, LoadState::Loaded(cards));
+        }
+    }
+
+    fn rebuild_archived_card_board_buckets(&mut self) {
+        let mut buckets: HashMap<Uuid, Vec<ArchivedCard>> = HashMap::new();
+        if let LoadState::Loaded(boards) = &self.boards {
+            for b in boards {
+                buckets.entry(b.id).or_default();
+            }
+        }
+        for marker in self.archived_cards.iter().flatten() {
+            buckets
+                .entry(marker.context.board_id)
+                .or_default()
+                .push(*marker);
+        }
+        self.archived_cards_by_board = buckets
+            .into_iter()
+            .map(|(board_id, markers)| (board_id, LoadState::Loaded(markers)))
+            .collect();
     }
 
     fn absorb_archival_markers(

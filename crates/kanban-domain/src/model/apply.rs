@@ -558,8 +558,12 @@ mod tests {
         for (i, card) in m.cards_state().loaded().unwrap().iter().enumerate() {
             assert_eq!(m.card_index[&card.id], i);
         }
-        assert!(m.card_by_id_state(a.id).loaded().copied().is_none());
-        assert!(m.card_by_id_state(a.id).is_missing());
+        assert!(m
+            .card_in_collection_status(a.id)
+            .loaded()
+            .copied()
+            .is_none());
+        assert_eq!(m.card_by_id_state(a.id).loaded().copied().unwrap(), &a);
         assert_eq!(m.card_by_id_state(c.id).loaded().copied().unwrap(), &c);
         assert_eq!(m.card_by_id_state(d.id).loaded().copied().unwrap(), &d);
         assert_eq!(m.card_by_id_state(e.id).loaded().copied().unwrap(), &e);

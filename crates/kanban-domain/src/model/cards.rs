@@ -43,6 +43,40 @@ impl Model {
         scoped_state(&self.cards_by_column, column_id)
     }
 
+    /// The parent-scoped card tier for one board: the concatenation, in
+    /// column order, of every column's `column_cards_state`. `Loaded` only
+    /// when the board's column tier and every one of its columns' card
+    /// tiers are `Loaded`; `Failed` takes precedence over `Missing` over
+    /// `NotLoaded`. Never reads `cards_state()`.
+    pub fn board_cards_state(&self, board_id: Uuid) -> LoadState<Vec<&Card>> {
+        let columns = match self.board_columns_state(board_id) {
+            LoadState::Loaded(columns) => columns,
+            LoadState::Failed(e) => return LoadState::Failed(e),
+            LoadState::Missing => return LoadState::Missing,
+            LoadState::NotLoaded => return LoadState::NotLoaded,
+        };
+
+        let mut cards = Vec::new();
+        let mut missing = false;
+        let mut not_loaded = false;
+        for column in columns {
+            match self.column_cards_state(column.id) {
+                LoadState::Loaded(column_cards) => cards.extend(column_cards.iter()),
+                LoadState::Failed(e) => return LoadState::Failed(e),
+                LoadState::Missing => missing = true,
+                LoadState::NotLoaded => not_loaded = true,
+            }
+        }
+
+        if missing {
+            LoadState::Missing
+        } else if not_loaded {
+            LoadState::NotLoaded
+        } else {
+            LoadState::Loaded(cards)
+        }
+    }
+
     /// The per-id tier only, with no composition against the flat
     /// collection or the parent-scoped tier. Returns `NotLoaded` for an id
     /// that was never named by a resolve pass.
