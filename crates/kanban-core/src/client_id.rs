@@ -90,4 +90,11 @@ mod tests {
     fn test_client_id_default_is_nil() {
         assert_eq!(ClientId::default(), ClientId::nil());
     }
+
+    #[test]
+    fn test_client_id_is_nil_matches_nil_constructor() {
+        assert!(ClientId::nil().is_nil());
+        assert!(!ClientId::new().is_nil());
+        assert!(ClientId::from(Uuid::nil()).is_nil());
+    }
 }
