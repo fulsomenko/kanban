@@ -186,6 +186,8 @@ impl Model {
         if let LoadState::Loaded(cards) = &self.cards {
             for card in cards {
                 if self.archived_card_ids.contains(&card.id) {
+                    self.cards_by_id
+                        .insert(card.id, LoadState::Loaded(card.clone()));
                     continue;
                 }
                 buckets
