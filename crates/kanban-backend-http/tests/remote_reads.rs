@@ -763,3 +763,32 @@ async fn test_find_cards_by_identifier_resolves_over_http() {
 
     server.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_card_ids_resolves_a_batch_over_http() {
+    let server = TestServer::start().await;
+    let board_id = seed_board_with_card_prefix(&server, "KAN").await;
+    let column_id = seed_column(&server, board_id, "Col", None, None).await;
+    let card_a = seed_card(&server, column_id, "Card A", None).await;
+    let card_b = seed_card(&server, column_id, "Card B", None).await;
+
+    let backend: Arc<dyn KanbanBackend> = Arc::new(HttpBackend::new(&server.base_url()).unwrap());
+    let ctx = KanbanContext::open(Arc::clone(&backend), AppConfig::default())
+        .await
+        .unwrap();
+
+    let resolved = ctx
+        .resolve_card_ids(&["KAN-1".to_string(), "KAN-2".to_string()])
+        .unwrap();
+    assert_eq!(resolved, vec![card_a, card_b]);
+
+    let mixed = ctx
+        .resolve_card_ids(&[card_a.to_string(), "KAN-2".to_string()])
+        .unwrap();
+    assert_eq!(mixed, vec![card_a, card_b]);
+
+    drop(ctx);
+    drop(backend);
+
+    server.shutdown().await;
+}

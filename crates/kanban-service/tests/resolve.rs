@@ -287,6 +287,24 @@ async fn test_resolve_card_ids_success_returns_all_uuids() {
     assert_eq!(ids, vec![c1.id, c2.id]);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_card_ids_resolves_a_card_on_an_archived_board() {
+    let (mut ctx, _dir) = open_ctx().await;
+    let board = ctx.create_board("B".into(), Some("KAN".into())).unwrap();
+    let col = ctx.create_column(board.id, "TODO".into(), None).unwrap();
+    let card = ctx
+        .create_card(board.id, col.id, "Hello".into(), Default::default())
+        .unwrap();
+    let ident = format!("KAN-{}", card.card_number);
+    ctx.archive_board(board.id).unwrap();
+
+    assert_eq!(ctx.resolve_card_id(&ident).unwrap(), card.id);
+    assert_eq!(
+        ctx.resolve_card_ids(std::slice::from_ref(&ident)).unwrap(),
+        vec![card.id]
+    );
+}
+
 // ---------- require_same_board ----------
 
 #[tokio::test(flavor = "multi_thread")]
