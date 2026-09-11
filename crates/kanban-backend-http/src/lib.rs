@@ -259,4 +259,16 @@ mod tests {
         assert_eq!(backend_ref.instance_id(), backend.instance_id);
         Ok(())
     }
+
+    #[test]
+    fn test_http_backend_as_any_downcasts_to_http_backend() -> kanban_domain::KanbanResult<()> {
+        let backend = HttpBackend::new("http://example.com")?;
+        let backend_ref: &dyn kanban_backend::KanbanBackend = &backend;
+        let downcast = backend_ref
+            .as_any()
+            .and_then(|a| a.downcast_ref::<HttpBackend>());
+        let downcast = downcast.expect("expected as_any to downcast to HttpBackend");
+        assert_eq!(downcast.instance_id(), backend.instance_id());
+        Ok(())
+    }
 }

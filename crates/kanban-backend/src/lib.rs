@@ -331,6 +331,13 @@ mod tests {
     }
 
     #[test]
+    fn test_kanban_backend_as_any_defaults_to_none() {
+        let backend = StubBackend::default();
+        let backend: &dyn KanbanBackend = &backend;
+        assert!(backend.as_any().is_none());
+    }
+
+    #[test]
     fn test_mark_dirty_is_callable_on_a_backend_that_does_not_override_it() {
         let backend = StubBackend::default();
         let backend: &dyn KanbanBackend = &backend;
