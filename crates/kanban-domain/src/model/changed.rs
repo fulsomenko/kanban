@@ -74,8 +74,10 @@ mod tests {
     #[test]
     fn test_model_changed_keeps_its_must_use_attribute_and_private_field() {
         let prod = include_str!("changed.rs")
+            .replace("\r\n", "\n")
             .split("#[cfg(test)]")
             .next()
+            .map(str::to_owned)
             .unwrap();
         assert!(prod.contains(
             "#[must_use = \"derived projections are stale until resync consumes this\"]"
