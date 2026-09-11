@@ -15,18 +15,33 @@ fn frame_to_event(frame: &ChangeEventFrame) -> Event {
         .expect("ChangeEventFrame always serializes")
 }
 
+async fn next_event_frame(
+    rx: &mut broadcast::Receiver<ChangeEventFrame>,
+    instance_id: uuid::Uuid,
+) -> Option<ChangeEventFrame> {
+    loop {
+        match rx.recv().await {
+            Ok(frame) => return Some(frame),
+            Err(broadcast::error::RecvError::Lagged(_)) => {
+                return Some(ChangeEventFrame::now(
+                    instance_id,
+                    uuid::Uuid::new_v4(),
+                    kanban_core::ClientId::nil(),
+                ));
+            }
+            Err(broadcast::error::RecvError::Closed) => return None,
+        }
+    }
+}
+
 async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl futures_util::stream::Stream<Item = Result<Event, Infallible>> + Send> {
     let rx = state.event_tx.subscribe();
-    let stream = stream::unfold(rx, |mut rx| async move {
-        loop {
-            match rx.recv().await {
-                Ok(frame) => return Some((Ok(frame_to_event(&frame)), rx)),
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(broadcast::error::RecvError::Closed) => return None,
-            }
-        }
+    let stream = stream::unfold((rx, state.instance_id), |(mut rx, instance_id)| async move {
+        next_event_frame(&mut rx, instance_id)
+            .await
+            .map(|frame| (Ok(frame_to_event(&frame)), (rx, instance_id)))
     });
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
