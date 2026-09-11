@@ -296,7 +296,14 @@ impl DataStore for HttpBackend {
     }
 
     fn get_graph(&self) -> KanbanResult<DependencyGraph> {
-        Err(KanbanError::unsupported("get_graph"))
+        self.block_on(async {
+            match self.get_json::<DependencyGraph>("/v1/graph").await? {
+                Some(graph) => Ok(graph),
+                None => Err(KanbanError::unsupported(
+                    "get_graph (server has no /v1/graph route)",
+                )),
+            }
+        })
     }
 
     fn set_graph(&self, _graph: DependencyGraph) -> KanbanResult<()> {
