@@ -24,7 +24,7 @@ impl App {
             self.animation.animating.remove(&card_id);
             match animation_type {
                 AnimationType::Archiving => {
-                    if let LoadState::Loaded(cards) = self.model.cards_state() {
+                    if let LoadState::Loaded(cards) = self.controller.live_cards() {
                         if let Some(card_pos) = cards.iter().position(|c| c.id == card_id) {
                             let card = &cards[card_pos];
                             if !affected_columns.contains(&card.column_id) {

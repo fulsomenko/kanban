@@ -138,15 +138,13 @@ impl App {
 
                 {
                     use kanban_domain::query::sprint::get_sprint_uncompleted_cards;
-                    let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+                    let LoadState::Loaded(sprints) = self.board_sprints_view(board_id) else {
                         self.set_error("Sprints are not loaded yet".to_string());
                         return;
                     };
-                    let has_planning = sprints.iter().any(|s| {
-                        s.board_id == board_id
-                            && s.status == SprintStatus::Planning
-                            && s.id != sprint_id
-                    });
+                    let has_planning = sprints
+                        .iter()
+                        .any(|s| s.status == SprintStatus::Planning && s.id != sprint_id);
 
                     if has_planning
                         && !get_sprint_uncompleted_cards(
@@ -178,10 +176,10 @@ impl App {
             }
         };
 
-        let has_planning_sprint = match self.model.sprints_state() {
-            LoadState::Loaded(sprints) => sprints
-                .iter()
-                .any(|s| s.board_id == board_id && s.status == SprintStatus::Planning),
+        let has_planning_sprint = match self.board_sprints_view(board_id) {
+            LoadState::Loaded(sprints) => {
+                sprints.iter().any(|s| s.status == SprintStatus::Planning)
+            }
             _ => {
                 self.set_error("Sprints are not loaded yet".to_string());
                 return;
@@ -219,10 +217,8 @@ impl App {
                 .to_string();
 
             let sprint_id = uuid::Uuid::new_v4();
-            let prior_sprint_count = match self.model.sprints_state() {
-                LoadState::Loaded(sprints) => {
-                    sprints.iter().filter(|s| s.board_id == board_id).count()
-                }
+            let prior_sprint_count = match self.board_sprints_view(board_id) {
+                LoadState::Loaded(sprints) => sprints.len(),
                 _ => {
                     self.set_error("Sprints are not loaded yet".to_string());
                     return;

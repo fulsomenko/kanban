@@ -436,14 +436,14 @@ impl App {
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                 {
-                    let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+                    let LoadState::Loaded(sprints) = self.board_sprints_view(board.id) else {
                         self.set_error("Sprints are not loaded yet".to_string());
                         return;
                     };
                     let now = chrono::Utc::now();
                     self.dialog_input
                         .assign_sprint_picker
-                        .handle_key(key_code, sprints, board, now);
+                        .handle_key(key_code, &sprints, board, now);
                 }
             }
         }
@@ -519,14 +519,14 @@ impl App {
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                 {
-                    let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+                    let LoadState::Loaded(sprints) = self.board_sprints_view(board.id) else {
                         self.set_error("Sprints are not loaded yet".to_string());
                         return;
                     };
                     let now = chrono::Utc::now();
                     self.dialog_input
                         .assign_sprint_picker
-                        .handle_key(key_code, sprints, board, now);
+                        .handle_key(key_code, &sprints, board, now);
                 }
             }
         }
@@ -552,13 +552,12 @@ impl App {
                     match self.model.sprint_by_id_state(source_id) {
                         LoadState::Loaded(sprint) => {
                             let board_id = sprint.board_id;
-                            match self.model.sprints_state() {
+                            match self.board_sprints_view(board_id) {
                                 LoadState::Loaded(sprints) => {
                                     let count = sprints
                                         .iter()
                                         .filter(|s| {
-                                            s.board_id == board_id
-                                                && s.status == kanban_domain::SprintStatus::Planning
+                                            s.status == kanban_domain::SprintStatus::Planning
                                         })
                                         .count();
                                     self.dialog_input.carry_over_sprint_selection.next(count);
@@ -580,14 +579,12 @@ impl App {
                         match self.model.sprint_by_id_state(source_id) {
                             LoadState::Loaded(sprint) => {
                                 let board_id = sprint.board_id;
-                                match self.model.sprints_state() {
+                                match self.board_sprints_view(board_id) {
                                     LoadState::Loaded(sprints) => {
                                         let planning_sprint_ids: Vec<uuid::Uuid> = sprints
                                             .iter()
                                             .filter(|s| {
-                                                s.board_id == board_id
-                                                    && s.status
-                                                        == kanban_domain::SprintStatus::Planning
+                                                s.status == kanban_domain::SprintStatus::Planning
                                             })
                                             .map(|s| s.id)
                                             .collect();
@@ -656,18 +653,23 @@ impl App {
         if self.relationship.search.is_empty() {
             return Some(self.relationship.card_ids.clone());
         }
-        let LoadState::Loaded(cards) = self.model.cards_state() else {
+        if self
+            .relationship
+            .card_ids
+            .iter()
+            .any(|id| self.model.card_by_id_state(*id).is_not_loaded())
+        {
             return None;
-        };
+        }
         let search_lower = self.relationship.search.to_lowercase();
         Some(
             self.relationship
                 .card_ids
                 .iter()
                 .filter(|card_id| {
-                    cards
-                        .iter()
-                        .find(|c| c.id == **card_id)
+                    self.model
+                        .card_by_id_state(**card_id)
+                        .loaded()
                         .map(|c| c.title.to_lowercase().contains(&search_lower))
                         .unwrap_or(false)
                 })

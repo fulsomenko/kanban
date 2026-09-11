@@ -3,8 +3,11 @@ use kanban_domain::LoadState;
 use uuid::Uuid;
 
 impl App {
+    /// Ended sprints on the ACTIVE board only, or `None` while no board is
+    /// active or its scoped sprint tier has not loaded.
     pub(in crate::app) fn check_ended_sprints(&self) -> Option<Vec<Uuid>> {
-        let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+        let board_id = self.scope_board_id()?;
+        let LoadState::Loaded(sprints) = self.board_sprints_view(board_id) else {
             return None;
         };
         let ended_sprints: Vec<_> = sprints

@@ -54,6 +54,20 @@ impl App {
         }
     }
 
+    /// Ids of the archived cards on `board_id`, from the board-scoped
+    /// archival marker tier. `NotLoaded` collapses to an empty set, matching
+    /// `Model::archived_card_ids()`'s behaviour outside the archived views.
+    pub(crate) fn board_archived_ids(
+        &self,
+        board_id: uuid::Uuid,
+    ) -> std::collections::HashSet<uuid::Uuid> {
+        self.model
+            .board_archived_cards_state(board_id)
+            .loaded()
+            .map(|markers| markers.iter().map(|m| m.entity_id).collect())
+            .unwrap_or_default()
+    }
+
     pub fn get_current_priority_selection_index(&self) -> usize {
         if let Some(active_id) = self.selection.active_card_id {
             if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {

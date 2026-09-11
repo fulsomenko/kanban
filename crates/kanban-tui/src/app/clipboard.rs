@@ -11,14 +11,14 @@ impl App {
         if let Some(active_id) = self.selection.active_card_id {
             if let Some(board) = self.active_board() {
                 if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
-                    let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+                    let LoadState::Loaded(sprints) = self.board_sprints_view(board.id) else {
                         self.set_error("Sprints are not loaded yet".to_string());
                         return;
                     };
                     let output = get_output(
                         card,
                         board,
-                        sprints,
+                        &sprints,
                         self.app_config.effective_default_card_prefix(),
                     );
                     if let Err(e) = clipboard::copy_to_clipboard(&output) {

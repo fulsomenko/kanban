@@ -95,22 +95,16 @@ impl App {
             .and_then(|id| self.model.board_by_id_state(id).loaded().copied());
 
         let (uncompleted_ids, completed_ids) = if let Some(board) = board_opt {
-            if !self.model.columns_state().is_loaded() || !self.model.sprints_state().is_loaded() {
+            let LoadState::Loaded(columns) = self.board_columns_view(board.id) else {
                 self.set_error("Columns or sprints are not loaded yet".to_string());
                 return;
-            }
-            let columns = self
-                .model
-                .columns_state()
-                .loaded()
-                .expect("checked loaded above");
-            let sprints = self
-                .model
-                .sprints_state()
-                .loaded()
-                .expect("checked loaded above");
+            };
+            let LoadState::Loaded(sprints) = self.board_sprints_view(board.id) else {
+                self.set_error("Columns or sprints are not loaded yet".to_string());
+                return;
+            };
             let sorted_sprint_ids =
-                kanban_domain::CardQueryBuilder::new(cards, columns, sprints, board)
+                kanban_domain::CardQueryBuilder::new(cards, &columns, &sprints, board)
                     .in_sprints(std::iter::once(sprint_id))
                     .execute();
             let mut unc = Vec::new();
