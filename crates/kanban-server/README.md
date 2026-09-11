@@ -221,6 +221,7 @@ The remaining card routes (get/create/replace/update/delete, and the flat `/v1/c
 
 | Method | Path | Description | Body |
 |---|---|---|---|
+| `GET` | `/v1/graph` | The whole workspace dependency graph as the domain `DependencyGraph` serde shape (`spawns`/`blocks`/`relates`, each `{"edges": [...]}`). Includes archived (tombstoned) edges and every edge's `created_at`, unlike the card-scoped route. Always `200`, `{}`-shaped empty graph when there are no edges, never `404`. | — |
 | `GET` | `/v1/cards/{id}/graph` | The card's dependency edges, scoped to that card: parents/children (spawns), blocked_by/blocks and related, plus `block_edges`/`related_edges` carrying each edge's severity/kind. Only active edges; archived edges are omitted. 404s if the card does not exist, rather than returning empty arrays. | — |
 | `POST` | `/v1/cards/{id}/children` | Attach cards as spawned children of `id`. `200` with the updated `CardGraphResponse`. 404 if `id` or any child is unknown; 409 `CYCLE_DETECTED` if the edge would create a cycle. | `{"children": [uuid, ...]}` |
 | `DELETE` | `/v1/cards/{id}/children/{child_id}` | Detach `child_id` as a spawned child of `id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
