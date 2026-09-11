@@ -852,7 +852,9 @@ impl App {
         if self
             .model
             .board_archived_cards_state(board_id)
-            .loaded().copied().unwrap_or(&[])
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
             .iter()
             .any(|dc| dc.entity_id == card_id)
         {
@@ -951,7 +953,9 @@ impl App {
         if self
             .model
             .board_archived_cards_state(board_id)
-            .loaded().copied().unwrap_or(&[])
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
             .iter()
             .any(|dc| dc.entity_id == card_id)
         {
@@ -1074,51 +1078,10 @@ mod create_card_factory_tests {
 
     /// Refresh the TUI model from the store so the create handler (which reads
     /// `self.model`) sees prior writes. The event loop does this each frame via
-    /// `prepare_frame`; tests pull the snapshot directly. Also seeds the
-    /// per-board scoped columns/sprints tiers `load_from_snapshot` leaves
-    /// untouched, since `create_card_target_column` reads them.
+    /// `prepare_frame`; tests pull the snapshot directly.
     fn refresh(app: &mut App) {
         let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
-        let mut columns_by_board: std::collections::HashMap<
-            uuid::Uuid,
-            Vec<kanban_domain::Column>,
-        > = snap.boards.iter().map(|b| (b.id, Vec::new())).collect();
-        for column in &snap.columns {
-            columns_by_board
-                .entry(column.board_id)
-                .or_default()
-                .push(column.clone());
-        }
-        let mut sprints_by_board: std::collections::HashMap<
-            uuid::Uuid,
-            Vec<kanban_domain::Sprint>,
-        > = snap.boards.iter().map(|b| (b.id, Vec::new())).collect();
-        for sprint in &snap.sprints {
-            sprints_by_board
-                .entry(sprint.board_id)
-                .or_default()
-                .push(sprint.clone());
-        }
         app.load_snapshot(snap);
-        let changed = app.model.apply_resolved(kanban_domain::Resolved {
-            columns: kanban_domain::resolved::Collection {
-                by_parent: columns_by_board
-                    .into_iter()
-                    .map(|(id, cols)| (id, kanban_domain::LoadState::Loaded(cols)))
-                    .collect(),
-                ..Default::default()
-            },
-            sprints: kanban_domain::resolved::Collection {
-                by_parent: sprints_by_board
-                    .into_iter()
-                    .map(|(id, sprints)| (id, kanban_domain::LoadState::Loaded(sprints)))
-                    .collect(),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        use kanban_domain::DerivedProjections;
-        kanban_domain::NoProjections.resync(&app.model, changed);
     }
 
     /// Seed a board with one column through the service, then point the TUI's

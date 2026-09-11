@@ -143,7 +143,9 @@ impl App {
         if let Some(archived_card) = self
             .model
             .board_archived_cards_state(board_id)
-            .loaded().copied().unwrap_or(&[])
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
             .iter()
             .find(|dc| dc.entity_id == card_id)
             .cloned()
