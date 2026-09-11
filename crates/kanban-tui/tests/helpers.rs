@@ -86,6 +86,21 @@ impl CountingBackend {
         })
     }
 
+    /// Like [`Self::wrap_failing`], but every method in `methods` fails.
+    pub fn wrap_failing_all(
+        inner: Arc<dyn KanbanBackend>,
+        methods: &[&'static str],
+    ) -> Arc<dyn KanbanBackend> {
+        let failing: HashSet<&'static str> = methods.iter().copied().collect();
+        Arc::new(Self {
+            inner,
+            reads: Arc::new(AtomicUsize::new(0)),
+            ops: Arc::new(Mutex::new(Vec::new())),
+            failing: Arc::new(Mutex::new(failing)),
+            instance_id: Uuid::nil(),
+        })
+    }
+
     fn record(&self, method: &'static str, ids: Vec<Uuid>) {
         self.reads.fetch_add(1, Ordering::SeqCst);
         self.ops.lock().unwrap().push(ReadOp { method, ids });
@@ -154,10 +169,12 @@ impl DataStore for CountingBackend {
     }
     fn list_all_cards(&self) -> KanbanResult<Vec<Card>> {
         self.record("list_all_cards", vec![]);
+        self.fault("list_all_cards")?;
         self.inner.list_all_cards()
     }
     fn list_cards_by_column(&self, column_id: Uuid) -> KanbanResult<Vec<Card>> {
         self.record("list_cards_by_column", vec![column_id]);
+        self.fault("list_cards_by_column")?;
         self.inner.list_cards_by_column(column_id)
     }
     fn list_cards_by_sprint(&self, sprint_id: Uuid) -> KanbanResult<Vec<Card>> {
@@ -221,6 +238,7 @@ impl DataStore for CountingBackend {
     }
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
         self.record("list_archived_cards", vec![]);
+        self.fault("list_archived_cards")?;
         self.inner.list_archived_cards()
     }
     fn list_archived_cards_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<ArchivedCard>> {
@@ -1154,6 +1172,22 @@ pub fn warm_archived_card_markers(app: &mut App) {
     app.mode = kanban_tui::app::mode::AppMode::ArchivedCardsView;
     app.resolve_for_view();
     app.mode = prior;
+
+    // `ViewScope` requests the by-board archived-card tier now, not the flat
+    // one, so `model.archived_card_ids()` (fed only by the flat tier) stays
+    // stale after the call above. Backfill it directly from the store.
+    let markers = app
+        .ctx
+        .data_store()
+        .list_archived_cards()
+        .unwrap_or_default();
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        archived_cards: kanban_domain::resolved::Collection {
+            all: kanban_domain::LoadState::Loaded(markers),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 }
 
 /// Board-head equivalent of [`warm_archived_card_markers`].

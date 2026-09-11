@@ -7,7 +7,10 @@ use kanban_tui::app::mode::AppMode;
 use kanban_tui::App;
 
 /// No live board remains, so the only way the archived cards view can show
-/// its entity is via an entry-triggered reload.
+/// its entity is via an entry-triggered reload. Archived-card requests are
+/// board-scoped, so the board must be identified (`active_board_id`) before
+/// toggling in, matching the drilled-in-archived-board flow the app itself
+/// requires (`handle_toggle_archived_cards_view`'s own doc comment).
 #[tokio::test]
 async fn test_entering_the_archived_cards_view_after_startup_displays_its_card() {
     let mut app = App::test_default();
@@ -46,6 +49,7 @@ async fn test_entering_the_archived_cards_view_after_startup_displays_its_card()
     );
 
     app.focus.active = Focus::Boards;
+    app.selection.active_board_id = Some(board.id);
     app.handle_toggle_archived_cards_view();
     assert_eq!(app.mode, AppMode::ArchivedCardsView);
     let archived_tasks: Vec<_> = app

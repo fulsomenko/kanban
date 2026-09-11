@@ -12,6 +12,7 @@ impl App {
     /// Runs `scope` against the store and folds the result into `self.model`,
     /// resyncing the controller's derived partitions.
     pub fn populate(&mut self, scope: ViewScope) {
+        self.controller.set_scope_board(scope.board, &self.model);
         self.ctx.sync(&scope, &mut self.model, &mut self.controller);
     }
 
@@ -31,6 +32,7 @@ impl App {
     /// reads, in place of a full `reload_model`.
     pub fn resolve_after_command(&mut self, inv: Invalidation) {
         let scope = self.view_scope();
+        self.controller.set_scope_board(scope.board, &self.model);
         self.ctx
             .resync_invalidated(inv, &scope, &mut self.model, &mut self.controller);
     }
@@ -106,7 +108,9 @@ impl App {
     /// partitions. Every snapshot load in this crate goes through here so the
     /// partitions can never lag the model.
     pub fn load_snapshot(&mut self, snapshot: Snapshot) {
+        let scope_board = self.scope_board_id();
         let changed = self.model.load_from_snapshot(snapshot);
+        self.controller.set_scope_board(scope_board, &self.model);
         self.controller.resync(&self.model, changed);
     }
 
@@ -120,6 +124,7 @@ impl App {
     pub fn reload_model(&mut self) {
         let previous = self.model.clone();
         let scope = self.view_scope();
+        self.controller.set_scope_board(scope.board, &self.model);
         self.ctx.resync_invalidated(
             Invalidation::All,
             &scope,
@@ -141,29 +146,31 @@ impl App {
             self.set_error(format!("Failed to load from store: {e}"));
             return true;
         }
-        if let LoadState::Failed(e) = self.model.columns_state() {
-            self.set_error(format!("Failed to load from store: {e}"));
-            return true;
-        }
-        if let LoadState::Failed(e) = self.model.cards_state() {
-            self.set_error(format!("Failed to load from store: {e}"));
-            return true;
-        }
-        if let LoadState::Failed(e) = self.model.sprints_state() {
-            self.set_error(format!("Failed to load from store: {e}"));
-            return true;
-        }
         if let LoadState::Failed(e) = self.model.graph_state() {
-            self.set_error(format!("Failed to load from store: {e}"));
-            return true;
-        }
-        if let LoadState::Failed(e) = self.model.archived_cards_state() {
             self.set_error(format!("Failed to load from store: {e}"));
             return true;
         }
         if let LoadState::Failed(e) = self.model.archived_boards_state() {
             self.set_error(format!("Failed to load from store: {e}"));
             return true;
+        }
+        if let Some(board_id) = self.scope_board_id() {
+            if let LoadState::Failed(e) = self.model.board_columns_state(board_id) {
+                self.set_error(format!("Failed to load from store: {e}"));
+                return true;
+            }
+            if let LoadState::Failed(e) = self.model.board_cards_state(board_id) {
+                self.set_error(format!("Failed to load from store: {e}"));
+                return true;
+            }
+            if let LoadState::Failed(e) = self.model.board_sprints_state(board_id) {
+                self.set_error(format!("Failed to load from store: {e}"));
+                return true;
+            }
+            if let LoadState::Failed(e) = self.model.board_archived_cards_state(board_id) {
+                self.set_error(format!("Failed to load from store: {e}"));
+                return true;
+            }
         }
         false
     }
@@ -172,14 +179,6 @@ impl App {
     /// Pure: performs no store access, unlike `refresh_view`, which fetches
     /// first.
     pub fn prepare_frame(&mut self) {
-        // Single card-side selector: borrow the cached displayed subset (stack-
-        // aware base mode). No per-frame filter/clone — the partition was built
-        // on load. Resolved via `self.model` directly (not `self.displayed_cards`)
-        // so the borrow is scoped to `self.model` and splits cleanly from the
-        // `&mut self.view.strategy` borrow `refresh_task_lists` takes below.
-        let want_archived_cards = matches!(self.get_base_mode(), AppMode::ArchivedCardsView);
-        let cards_for_display = self.controller.displayed_cards(want_archived_cards);
-
         // Board resolution: resolved via `self.model` directly (rather than
         // `active_board` / `displayed_boards`, which borrow all of `self`) so the
         // borrow stays scoped to `self.model` and NLL can split it from the
@@ -197,6 +196,20 @@ impl App {
         self.board_list.update_boards(board_ids);
         let highlighted_id: Option<Uuid> = self.board_list.get_selected_board_id();
         let board_id: Option<Uuid> = self.selection.active_board_id.or(highlighted_id);
+
+        // The controller's card-partition scope may lag `board_id` (e.g. a
+        // snapshot loaded before `active_board_id` was set), so `prepare_frame`
+        // re-asserts it here rather than trusting whichever seam ran last.
+        self.controller.set_scope_board(board_id, &self.model);
+
+        // Single card-side selector: borrow the cached displayed subset (stack-
+        // aware base mode). No per-frame filter/clone — the partition was built
+        // on load. Resolved via `self.model` directly (not `self.displayed_cards`)
+        // so the borrow is scoped to `self.model` and splits cleanly from the
+        // `&mut self.view.strategy` borrow `refresh_task_lists` takes below.
+        let want_archived_cards = matches!(self.get_base_mode(), AppMode::ArchivedCardsView);
+        let cards_for_display = self.controller.displayed_cards(want_archived_cards);
+
         let board: Option<&Board> =
             board_id.and_then(|id| self.model.board_by_id_state(id).loaded().copied());
 

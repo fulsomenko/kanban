@@ -134,6 +134,17 @@ impl LoadedEntities for Overlay<'_> {
             LoadState::Missing | LoadState::Failed(_) => None,
         }
     }
+
+    fn loaded_archived_cards_of_board(
+        &self,
+        board_id: Uuid,
+    ) -> Option<&[kanban_domain::ArchivedCard]> {
+        match self.pass.archived_cards.by_parent.get(&board_id) {
+            Some(LoadState::Loaded(v)) => Some(v.as_slice()),
+            Some(_) => None,
+            None => self.base.loaded_archived_cards_of_board(board_id),
+        }
+    }
 }
 
 #[derive(Default)]

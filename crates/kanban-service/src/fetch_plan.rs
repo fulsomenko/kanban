@@ -125,6 +125,10 @@ pub trait LoadedEntities: LoadedState {
     /// naming every marker a plan needs to walk into a body round.
     fn loaded_archived_card_markers(&self) -> Option<&[ArchivedCard]>;
     fn loaded_archived_board_markers(&self) -> Option<&[ArchivedBoard]>;
+    /// `Some` exactly when one board's archived-card-marker tier is
+    /// `Loaded`, naming every marker a plan needs to walk into a body
+    /// round. A marker-less board is `Some(&[])`, not `None`.
+    fn loaded_archived_cards_of_board(&self, board_id: Uuid) -> Option<&[ArchivedCard]>;
 }
 
 pub trait FetchPlan {
@@ -225,6 +229,9 @@ mod tests {
             None
         }
         fn loaded_archived_board_markers(&self) -> Option<&[kanban_domain::ArchivedBoard]> {
+            None
+        }
+        fn loaded_archived_cards_of_board(&self, _board_id: Uuid) -> Option<&[ArchivedCard]> {
             None
         }
     }

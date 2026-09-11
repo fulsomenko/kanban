@@ -159,9 +159,18 @@ pub fn filter_title_suffix(app: &App) -> Option<String> {
 /// Resolves the App-native primitives, asks `kanban_view::panel_titles` for
 /// the structured title, and renders it for the terminal.
 pub fn tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
-    let all_tiers_loaded = matches!(app.model.columns_state(), LoadState::Loaded(_))
-        && matches!(app.model.sprints_state(), LoadState::Loaded(_));
-    let active_task_list = match (app.model.cards_state(), all_tiers_loaded) {
+    // Stack-aware: key off the base mode so a confirm dialog opened OVER the
+    // archived-cards view keeps the "Archive" title as the underlay, rather than
+    // flipping to the live "Tasks" title while the modal is open (#428 / #414
+    // finding 4). Matches `displayed_cards()`, which selects the set the same way.
+    let viewing_archived_cards = *app.get_base_mode() == AppMode::ArchivedCardsView;
+
+    let all_tiers_loaded =
+        app.model.columns_state().is_loaded() && app.model.sprints_state().is_loaded();
+    let active_task_list = match (
+        app.controller.displayed_cards(viewing_archived_cards),
+        all_tiers_loaded,
+    ) {
         (LoadState::Failed(_), _) => PanelCount::Failed,
         (_, false) => PanelCount::NotLoaded,
         (LoadState::Loaded(_), true) => PanelCount::Known(
@@ -179,11 +188,6 @@ pub fn tasks_panel_title(app: &App, with_filter_suffix: bool) -> String {
         .selection
         .active_board_id
         .is_some_and(|id| app.model.archived_board_ids().contains(&id));
-    // Stack-aware: key off the base mode so a confirm dialog opened OVER the
-    // archived-cards view keeps the "Archive" title as the underlay, rather than
-    // flipping to the live "Tasks" title while the modal is open (#428 / #414
-    // finding 4). Matches `displayed_cards()`, which selects the set the same way.
-    let viewing_archived_cards = *app.get_base_mode() == AppMode::ArchivedCardsView;
     let focus_is_cards = app.focus.active == Focus::Cards;
 
     format_tasks_panel_title(&kanban_view::panel_titles::build_tasks_panel_title(

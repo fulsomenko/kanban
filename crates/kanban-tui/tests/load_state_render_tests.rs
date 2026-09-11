@@ -115,7 +115,7 @@ fn app_with_asymmetric_column_tier(board_columns_state: LoadState<Vec<Column>>) 
     let column = Column::new(board.id, "Backlog", 0);
     let mut resolved = base_resolved(&board);
     resolved.columns = Collection {
-        all: LoadState::Loaded(vec![column]),
+        all: LoadState::Loaded(vec![column.clone()]),
         by_parent: HashMap::from([(board.id, board_columns_state)]),
         ..Default::default()
     };
@@ -127,7 +127,22 @@ fn app_with_asymmetric_column_tier(board_columns_state: LoadState<Vec<Column>>) 
     app.controller.resync(&app.model, changed);
     app.selection.active_board_id = Some(board.id);
     app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
-    app.prepare_frame();
+
+    // The board-scoped column tier under test is deliberately asymmetric
+    // with the flat one, so `prepare_frame`'s all-scoped-tiers-Loaded gate
+    // would decline here; drive `refresh_task_lists` directly with the flat
+    // column so the task-list skeleton exists and the render's own
+    // `board_columns_state` name lookup is what's under test.
+    let ctx = kanban_view::view_strategy::ViewRefreshContext {
+        board: &board,
+        all_cards: &[],
+        all_columns: std::slice::from_ref(&column),
+        all_sprints: &[],
+        active_sprint_filters: Default::default(),
+        hide_assigned_cards: false,
+        search_query: None,
+    };
+    app.view.strategy.refresh_task_lists(&ctx);
     app
 }
 
