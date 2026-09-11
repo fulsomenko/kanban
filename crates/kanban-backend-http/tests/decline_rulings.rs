@@ -54,3 +54,37 @@ fn test_get_graph_no_longer_declines_it_reaches_the_transport() {
     assert!(err.is_transport(), "expected transport error, got {err:?}");
     assert!(!err.is_unsupported());
 }
+
+#[test]
+fn test_every_declining_datastore_method_declines_under_its_own_name() {
+    let backend = unreachable_backend();
+    let archived = kanban_domain::ArchivedFilter::ArchivedOnly;
+    let now = chrono::Utc::now();
+
+    let cases: Vec<(&str, kanban_domain::KanbanResult<()>)> = vec![
+        (
+            "clear_sprint_from_archived_cards",
+            backend.clear_sprint_from_archived_cards(Uuid::new_v4(), now),
+        ),
+        (
+            "list_cards_by_column_filtered",
+            backend
+                .list_cards_by_column_filtered(Uuid::new_v4(), archived)
+                .map(|_| ()),
+        ),
+        (
+            "count_cards_in_column_filtered",
+            backend
+                .count_cards_in_column_filtered(Uuid::new_v4(), archived)
+                .map(|_| ()),
+        ),
+        (
+            "modify_graph",
+            backend.modify_graph(Box::new(|_graph| Ok(()))),
+        ),
+    ];
+
+    for (name, result) in cases {
+        assert_declines_under_its_own_name(result, name);
+    }
+}

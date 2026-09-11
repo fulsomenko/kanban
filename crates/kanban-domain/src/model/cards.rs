@@ -340,6 +340,43 @@ mod tests {
     }
 
     #[test]
+    fn test_load_from_snapshot_lands_archived_card_bodies_in_the_per_id_tier() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col_id = Uuid::new_v4();
+        let live = make_card(&board, col_id);
+        let archived = make_card(&board, col_id);
+        let archived_id = archived.id;
+        let _ = m.load_from_snapshot(Snapshot {
+            archived_boards: Vec::new(),
+            cards: vec![live, archived.clone()],
+            archived_cards: vec![ArchivedCard::new(archived_id, uuid::Uuid::nil())],
+            ..Default::default()
+        });
+
+        let state = m.card_id_status(archived_id);
+        assert!(state.is_loaded());
+        assert_eq!(state.loaded().copied().unwrap().title, archived.title);
+    }
+
+    #[test]
+    fn test_card_by_id_state_answers_not_loaded_for_an_id_absent_from_a_loaded_snapshot() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col_id = Uuid::new_v4();
+        let card = make_card(&board, col_id);
+        let _ = m.load_from_snapshot(Snapshot {
+            archived_boards: Vec::new(),
+            cards: vec![card],
+            ..Default::default()
+        });
+
+        let state = m.card_by_id_state(Uuid::new_v4());
+        assert!(state.is_not_loaded());
+        assert!(!state.is_missing());
+    }
+
+    #[test]
     fn test_an_unapplied_board_reads_not_loaded() {
         let mut m = Model::default();
         let board_a = Uuid::new_v4();
