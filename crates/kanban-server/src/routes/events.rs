@@ -34,11 +34,14 @@ async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl futures_util::stream::Stream<Item = Result<Event, Infallible>> + Send> {
     let rx = state.event_tx.subscribe();
-    let stream = stream::unfold((rx, state.instance_id), |(mut rx, instance_id)| async move {
-        next_event_frame(&mut rx, instance_id)
-            .await
-            .map(|frame| (Ok(frame_to_event(&frame)), (rx, instance_id)))
-    });
+    let stream = stream::unfold(
+        (rx, state.instance_id),
+        |(mut rx, instance_id)| async move {
+            next_event_frame(&mut rx, instance_id)
+                .await
+                .map(|frame| (Ok(frame_to_event(&frame)), (rx, instance_id)))
+        },
+    );
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 

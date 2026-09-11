@@ -54,8 +54,12 @@ mod tests {
 
     #[test]
     fn test_sse_parser_parses_single_data_line_into_frame() {
-        let frame = ChangeEventFrame::now(Uuid::new_v4(), Uuid::new_v4(), ClientId::from(Uuid::new_v4()))
-            .with_invalidation(InvalidationDto::All);
+        let frame = ChangeEventFrame::now(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            ClientId::from(Uuid::new_v4()),
+        )
+        .with_invalidation(InvalidationDto::All);
         let json = serde_json::to_string(&frame).unwrap();
         let wire = format!("data: {json}\n\n");
 
