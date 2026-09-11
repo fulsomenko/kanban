@@ -19,18 +19,14 @@ async fn next_event_frame(
     rx: &mut broadcast::Receiver<ChangeEventFrame>,
     instance_id: uuid::Uuid,
 ) -> Option<ChangeEventFrame> {
-    loop {
-        match rx.recv().await {
-            Ok(frame) => return Some(frame),
-            Err(broadcast::error::RecvError::Lagged(_)) => {
-                return Some(ChangeEventFrame::now(
-                    instance_id,
-                    uuid::Uuid::new_v4(),
-                    kanban_core::ClientId::nil(),
-                ));
-            }
-            Err(broadcast::error::RecvError::Closed) => return None,
-        }
+    match rx.recv().await {
+        Ok(frame) => Some(frame),
+        Err(broadcast::error::RecvError::Lagged(_)) => Some(ChangeEventFrame::now(
+            instance_id,
+            uuid::Uuid::new_v4(),
+            kanban_core::ClientId::nil(),
+        )),
+        Err(broadcast::error::RecvError::Closed) => None,
     }
 }
 
