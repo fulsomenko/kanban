@@ -532,6 +532,27 @@ mod tests {
     }
 
     #[test]
+    fn test_route_scope_for_graph_requests_only_the_graph_tier() {
+        let round = RouteScope::Graph.next_round(&Model::default());
+
+        assert_eq!(
+            round,
+            FetchRound {
+                graph: true,
+                ..Default::default()
+            }
+        );
+
+        let mut model = Model::default();
+        let _ = model.apply_resolved(kanban_domain::Resolved {
+            graph: LoadState::Loaded(kanban_domain::DependencyGraph::default()),
+            ..Default::default()
+        });
+        let second_round = RouteScope::Graph.next_round(&model);
+        assert!(second_round.is_empty());
+    }
+
+    #[test]
     fn test_route_scope_retries_a_failed_tier_but_not_a_missing_one() {
         let id = Uuid::new_v4();
 
