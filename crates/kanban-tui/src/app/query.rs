@@ -1,5 +1,5 @@
 use super::{App, AppMode};
-use kanban_domain::{Column, LoadState, Sprint};
+use kanban_domain::{Card, Column, LoadState, Sprint};
 
 impl App {
     /// The board the render-side scoped tiers (`Controller` card partitions,
@@ -52,6 +52,37 @@ impl App {
             },
             other => other.map(|_| Vec::new()),
         }
+    }
+
+    /// Ids of the archived cards on `board_id`, from the board-scoped
+    /// archival marker tier. `NotLoaded` collapses to an empty set, matching
+    /// `Model::archived_card_ids()`'s behaviour outside the archived views.
+    pub(crate) fn board_archived_ids(
+        &self,
+        board_id: uuid::Uuid,
+    ) -> std::collections::HashSet<uuid::Uuid> {
+        self.model
+            .board_archived_cards_state(board_id)
+            .loaded()
+            .map(|markers| markers.iter().map(|m| m.entity_id).collect())
+            .unwrap_or_default()
+    }
+
+    /// The live and archived card partitions for the currently scoped board,
+    /// paired for a candidate search across both. `NotLoaded`/`Failed` on the
+    /// live partition propagates; the archived half degrades to empty rather
+    /// than gating, matching its behaviour outside the archived views.
+    pub(crate) fn board_candidate_cards(&self) -> LoadState<(&[Card], &[Card])> {
+        self.controller.live_cards().map(|live| {
+            (
+                live,
+                self.controller
+                    .archived_cards()
+                    .loaded()
+                    .copied()
+                    .unwrap_or(&[]),
+            )
+        })
     }
 
     pub fn get_current_priority_selection_index(&self) -> usize {

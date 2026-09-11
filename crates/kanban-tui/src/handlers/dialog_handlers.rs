@@ -103,14 +103,14 @@ impl App {
             .active_board_id
             .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
         {
-            let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+            let LoadState::Loaded(sprints) = self.board_sprints_view(board.id) else {
                 self.set_error("Sprints are not loaded yet".to_string());
                 return;
             };
             let now = chrono::Utc::now();
             self.dialog_input
                 .create_card_sprint_picker
-                .handle_key(key_code, sprints, board, now);
+                .handle_key(key_code, &sprints, board, now);
         }
     }
 

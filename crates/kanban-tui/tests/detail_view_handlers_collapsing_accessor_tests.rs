@@ -1,7 +1,8 @@
 use crossterm::event::KeyCode;
 use kanban_domain::resolved::Collection;
 use kanban_domain::{
-    Board, Card, Column, KanbanOperations, LoadState, Model, ModelLoadStates, Resolved, Sprint,
+    Board, Card, Column, DerivedProjections, KanbanOperations, LoadState, Model, ModelLoadStates,
+    Resolved, Sprint,
 };
 use kanban_tui::app::{AppMode, DialogMode};
 use kanban_tui::App;
@@ -30,6 +31,35 @@ fn set_column_by_id(app: &mut App, column_id: Uuid, state: LoadState<Column>) {
         },
         ..Default::default()
     });
+}
+
+fn seed_scoped_partitions(
+    app: &mut App,
+    board_id: Uuid,
+    columns: Vec<Column>,
+    cards_by_column: Vec<(Uuid, Vec<Card>)>,
+) {
+    let changed = app.model.apply_resolved(Resolved {
+        columns: Collection {
+            by_parent: HashMap::from([(board_id, LoadState::Loaded(columns))]),
+            ..Default::default()
+        },
+        cards: Collection {
+            by_parent: cards_by_column
+                .into_iter()
+                .map(|(column_id, cards)| (column_id, LoadState::Loaded(cards)))
+                .collect(),
+            ..Default::default()
+        },
+        archived_cards: Collection {
+            by_parent: HashMap::from([(board_id, LoadState::Loaded(Vec::new()))]),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    app.selection.active_board_id = Some(board_id);
+    app.controller.set_scope_board(Some(board_id), &app.model);
+    app.controller.resync(&app.model, changed);
 }
 
 fn assert_error_banner(app: &App) {
@@ -246,13 +276,19 @@ fn test_handle_manage_parents_still_opens_the_dialog_when_everything_is_loaded()
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card, other_card]),
+            cards: LoadState::Loaded(vec![card.clone(), other_card.clone()]),
             columns: LoadState::Loaded(vec![column.clone()]),
             graph: LoadState::Loaded(kanban_domain::DependencyGraph::default()),
             ..Default::default()
         },
     );
-    set_column_by_id(&mut app, column_id, LoadState::Loaded(column));
+    set_column_by_id(&mut app, column_id, LoadState::Loaded(column.clone()));
+    seed_scoped_partitions(
+        &mut app,
+        board_id,
+        vec![column],
+        vec![(column_id, vec![card, other_card])],
+    );
     app.selection.active_card_id = Some(card_id);
 
     app.handle_manage_parents();
@@ -330,13 +366,19 @@ fn test_handle_manage_children_still_opens_the_dialog_when_everything_is_loaded(
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card, other_card]),
+            cards: LoadState::Loaded(vec![card.clone(), other_card.clone()]),
             columns: LoadState::Loaded(vec![column.clone()]),
             graph: LoadState::Loaded(kanban_domain::DependencyGraph::default()),
             ..Default::default()
         },
     );
-    set_column_by_id(&mut app, column_id, LoadState::Loaded(column));
+    set_column_by_id(&mut app, column_id, LoadState::Loaded(column.clone()));
+    seed_scoped_partitions(
+        &mut app,
+        board_id,
+        vec![column],
+        vec![(column_id, vec![card, other_card])],
+    );
     app.selection.active_card_id = Some(card_id);
 
     app.handle_manage_children();
@@ -382,6 +424,14 @@ fn seed_move_fixture(app: &mut App, columns_loaded: bool) -> (Uuid, Uuid, Uuid, 
             ..Default::default()
         },
     );
+    if columns_loaded {
+        seed_scoped_partitions(
+            app,
+            board.id,
+            vec![left.clone(), right.clone()],
+            vec![(left.id, vec![card.clone()]), (right.id, Vec::new())],
+        );
+    }
     app.selection.active_board_id = Some(board.id);
     app.sprint_view.panel = kanban_tui::app::SprintTaskPanel::Uncompleted;
     app.sprint_view

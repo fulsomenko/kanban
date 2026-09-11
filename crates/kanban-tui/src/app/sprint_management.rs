@@ -3,8 +3,11 @@ use kanban_domain::LoadState;
 use uuid::Uuid;
 
 impl App {
+    /// Ended sprints on the ACTIVE board only, or `None` while no board is
+    /// active or its scoped sprint tier has not loaded.
     pub(in crate::app) fn check_ended_sprints(&self) -> Option<Vec<Uuid>> {
-        let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+        let board_id = self.scope_board_id()?;
+        let LoadState::Loaded(sprints) = self.board_sprints_view(board_id) else {
             return None;
         };
         let ended_sprints: Vec<_> = sprints
@@ -55,7 +58,7 @@ mod tests {
         SprintUpdate,
     };
 
-    fn seed_ended_sprint(app: &mut App) -> uuid::Uuid {
+    fn seed_ended_sprint(app: &mut App) -> (uuid::Uuid, uuid::Uuid) {
         let board = app.ctx.create_board("Board".into(), None).unwrap();
         let sprint = app.ctx.create_sprint(board.id, None, None).unwrap();
         app.ctx
@@ -68,7 +71,7 @@ mod tests {
                 },
             )
             .unwrap();
-        sprint.id
+        (board.id, sprint.id)
     }
 
     #[test]
@@ -88,9 +91,10 @@ mod tests {
     #[test]
     fn test_check_ended_sprints_reports_ended_sprints_in_the_loaded_tier() {
         let mut app = App::test_default();
-        let sprint_id = seed_ended_sprint(&mut app);
+        let (board_id, sprint_id) = seed_ended_sprint(&mut app);
         let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         let _ = app.model.load_from_snapshot(snap);
+        app.selection.active_board_id = Some(board_id);
         assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
 
         let ended = app.check_ended_sprints();
@@ -101,9 +105,10 @@ mod tests {
     #[test]
     fn test_check_ended_sprints_with_a_not_loaded_boards_tier_skips_the_board_name_lookup() {
         let mut app = App::test_default();
-        let sprint_id = seed_ended_sprint(&mut app);
+        let (board_id, sprint_id) = seed_ended_sprint(&mut app);
         let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         let _ = app.model.load_from_snapshot(snap);
+        app.selection.active_board_id = Some(board_id);
         assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
 
         let _ = app
@@ -120,5 +125,20 @@ mod tests {
             Some(vec![sprint_id]),
             "the sprint-tier scan must be unaffected by a NotLoaded boards tier"
         );
+    }
+
+    #[test]
+    fn test_check_ended_sprints_scopes_to_the_active_board() {
+        let mut app = App::test_default();
+        let (board_a, sprint_a) = seed_ended_sprint(&mut app);
+        let (_board_b, _sprint_b) = seed_ended_sprint(&mut app);
+        let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
+        let _ = app.model.load_from_snapshot(snap);
+
+        app.selection.active_board_id = Some(board_a);
+        assert_eq!(app.check_ended_sprints(), Some(vec![sprint_a]));
+
+        app.selection.active_board_id = None;
+        assert_eq!(app.check_ended_sprints(), None);
     }
 }

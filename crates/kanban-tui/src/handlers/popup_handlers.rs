@@ -436,14 +436,14 @@ impl App {
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                 {
-                    let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+                    let LoadState::Loaded(sprints) = self.board_sprints_view(board.id) else {
                         self.set_error("Sprints are not loaded yet".to_string());
                         return;
                     };
                     let now = chrono::Utc::now();
                     self.dialog_input
                         .assign_sprint_picker
-                        .handle_key(key_code, sprints, board, now);
+                        .handle_key(key_code, &sprints, board, now);
                 }
             }
         }
@@ -519,14 +519,14 @@ impl App {
                     .active_board_id
                     .and_then(|id| self.model.board_by_id_state(id).loaded().copied())
                 {
-                    let LoadState::Loaded(sprints) = self.model.sprints_state() else {
+                    let LoadState::Loaded(sprints) = self.board_sprints_view(board.id) else {
                         self.set_error("Sprints are not loaded yet".to_string());
                         return;
                     };
                     let now = chrono::Utc::now();
                     self.dialog_input
                         .assign_sprint_picker
-                        .handle_key(key_code, sprints, board, now);
+                        .handle_key(key_code, &sprints, board, now);
                 }
             }
         }
@@ -552,13 +552,12 @@ impl App {
                     match self.model.sprint_by_id_state(source_id) {
                         LoadState::Loaded(sprint) => {
                             let board_id = sprint.board_id;
-                            match self.model.sprints_state() {
+                            match self.board_sprints_view(board_id) {
                                 LoadState::Loaded(sprints) => {
                                     let count = sprints
                                         .iter()
                                         .filter(|s| {
-                                            s.board_id == board_id
-                                                && s.status == kanban_domain::SprintStatus::Planning
+                                            s.status == kanban_domain::SprintStatus::Planning
                                         })
                                         .count();
                                     self.dialog_input.carry_over_sprint_selection.next(count);
@@ -580,14 +579,12 @@ impl App {
                         match self.model.sprint_by_id_state(source_id) {
                             LoadState::Loaded(sprint) => {
                                 let board_id = sprint.board_id;
-                                match self.model.sprints_state() {
+                                match self.board_sprints_view(board_id) {
                                     LoadState::Loaded(sprints) => {
                                         let planning_sprint_ids: Vec<uuid::Uuid> = sprints
                                             .iter()
                                             .filter(|s| {
-                                                s.board_id == board_id
-                                                    && s.status
-                                                        == kanban_domain::SprintStatus::Planning
+                                                s.status == kanban_domain::SprintStatus::Planning
                                             })
                                             .map(|s| s.id)
                                             .collect();
@@ -656,18 +653,21 @@ impl App {
         if self.relationship.search.is_empty() {
             return Some(self.relationship.card_ids.clone());
         }
-        let LoadState::Loaded(cards) = self.model.cards_state() else {
+        if self.relationship.card_ids.iter().any(|id| {
+            let state = self.model.card_by_id_state(*id);
+            state.is_not_loaded() || state.is_failed()
+        }) {
             return None;
-        };
+        }
         let search_lower = self.relationship.search.to_lowercase();
         Some(
             self.relationship
                 .card_ids
                 .iter()
                 .filter(|card_id| {
-                    cards
-                        .iter()
-                        .find(|c| c.id == **card_id)
+                    self.model
+                        .card_by_id_state(**card_id)
+                        .loaded()
                         .map(|c| c.title.to_lowercase().contains(&search_lower))
                         .unwrap_or(false)
                 })
@@ -801,8 +801,8 @@ mod tests {
     use crate::App;
     use crossterm::event::KeyCode;
     use kanban_domain::{
-        CardPriority, CreateCardOptions, EntityIds, Invalidation, KanbanOperations, Snapshot,
-        SprintStatus, SprintUpdate,
+        CardPriority, CreateCardOptions, DerivedProjections, EntityIds, Invalidation,
+        KanbanOperations, Snapshot, SprintStatus, SprintUpdate,
     };
     use std::collections::HashSet;
 
@@ -1033,6 +1033,49 @@ mod tests {
             .banner
             .as_ref()
             .expect("a NotLoaded cards tier must banner rather than silently show no matches");
+        assert!(
+            banner.message.to_lowercase().contains("not loaded"),
+            "banner should explain the cards tier is not loaded, got: {}",
+            banner.message
+        );
+    }
+
+    #[test]
+    fn test_relationship_search_with_failed_cards_tier_for_an_unresolvable_id_banners() {
+        let mut app = App::test_default();
+        let (_board_id, card_id) = seed_relationship_dialog(&mut app);
+        let unresolvable_id = uuid::Uuid::new_v4();
+        app.relationship.card_ids = vec![card_id, unresolvable_id];
+        app.relationship.selection.set(Some(0));
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("flat declined"),
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        app.relationship.search_active = true;
+        app.handle_manage_parents_popup(KeyCode::Char('f'));
+
+        assert_eq!(
+            app.relationship.selection.get(),
+            Some(0),
+            "a Failed flat cards tier must not clear a staged selection"
+        );
+        assert_eq!(
+            app.relationship.card_ids.len(),
+            2,
+            "a Failed flat cards tier must not empty the candidate list"
+        );
+        let banner =
+            app.ui_state.banner.as_ref().expect(
+                "a Failed flat cards tier must banner rather than silently show no matches",
+            );
         assert!(
             banner.message.to_lowercase().contains("not loaded"),
             "banner should explain the cards tier is not loaded, got: {}",

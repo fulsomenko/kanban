@@ -761,13 +761,9 @@ impl App {
     /// assign to.
     fn handle_assign_sprint_shortcut(&mut self) {
         if let Some(board) = self.active_board().cloned() {
-            match self.model.sprints_state() {
+            match self.board_sprints_view(board.id) {
                 LoadState::Loaded(all_sprints) => {
-                    let sprint_count = all_sprints
-                        .iter()
-                        .filter(|s| s.board_id == board.id)
-                        .count();
-                    if sprint_count > 0 {
+                    if !all_sprints.is_empty() {
                         let current_sprint_id = self
                             .selection
                             .active_card_id
@@ -777,7 +773,7 @@ impl App {
                             .assign_sprint_picker
                             .reset_for_card_assignment(
                                 current_sprint_id,
-                                all_sprints,
+                                &all_sprints,
                                 &board,
                                 chrono::Utc::now(),
                             );
@@ -795,13 +791,9 @@ impl App {
     fn open_assign_sprint_dialog_for(&mut self, card_id: uuid::Uuid) {
         if self.activate_card(card_id) {
             if let Some(board) = self.active_board().cloned() {
-                match self.model.sprints_state() {
+                match self.board_sprints_view(board.id) {
                     LoadState::Loaded(all_sprints) => {
-                        let sprint_count = all_sprints
-                            .iter()
-                            .filter(|s| s.board_id == board.id)
-                            .count();
-                        if sprint_count > 0 {
+                        if !all_sprints.is_empty() {
                             let current_sprint_id = self
                                 .model
                                 .card_by_id_state(card_id)
@@ -812,7 +804,7 @@ impl App {
                                 .assign_sprint_picker
                                 .reset_for_card_assignment(
                                     current_sprint_id,
-                                    all_sprints,
+                                    &all_sprints,
                                     &board,
                                     chrono::Utc::now(),
                                 );
@@ -978,8 +970,8 @@ impl App {
                             }
                         }
                         CardListAction::Complete(card_id) => {
-                            if let LoadState::Loaded(cards) = self.model.cards_state() {
-                                if let Some(card) = cards.iter().find(|c| c.id == card_id) {
+                            match self.model.card_by_id_state(card_id) {
+                                LoadState::Loaded(card) => {
                                     use kanban_domain::CardStatus;
                                     let new_status = if card.status == CardStatus::Done {
                                         CardStatus::Todo
@@ -1007,8 +999,8 @@ impl App {
                                         }
                                     }
                                 }
-                            } else {
-                                self.set_error("Cards are not loaded yet");
+                                LoadState::Missing => {}
+                                _ => self.set_error("Cards are not loaded yet"),
                             }
                         }
                         CardListAction::TogglePriority(card_id) => {
@@ -1046,12 +1038,13 @@ impl App {
                             }
                         }
                         CardListAction::MoveColumn(card_id, is_right) => {
-                            let LoadState::Loaded(cards) = self.model.cards_state() else {
-                                self.set_error("Cards are not loaded yet");
-                                return;
-                            };
-                            let Some(card) = cards.iter().find(|c| c.id == card_id).cloned() else {
-                                return;
+                            let card = match self.model.card_by_id_state(card_id) {
+                                LoadState::Loaded(card) => card.clone(),
+                                LoadState::Missing => return,
+                                _ => {
+                                    self.set_error("Cards are not loaded yet");
+                                    return;
+                                }
                             };
 
                             let direction = if is_right {
@@ -1062,11 +1055,19 @@ impl App {
 
                             let board = self.active_board().cloned();
                             let move_result = match board {
-                                Some(board) => match self.model.columns_state() {
+                                Some(board) => match self.board_columns_view(board.id) {
                                     LoadState::Loaded(columns) => {
-                                        kanban_domain::card_lifecycle::compute_card_column_move(
-                                            &card, &board, columns, cards, direction,
-                                        )
+                                        match self.controller.live_cards() {
+                                            LoadState::Loaded(cards) => {
+                                                kanban_domain::card_lifecycle::compute_card_column_move(
+                                                    &card, &board, &columns, cards, direction,
+                                                )
+                                            }
+                                            _ => {
+                                                self.set_error("Cards are not loaded yet");
+                                                None
+                                            }
+                                        }
                                     }
                                     _ => {
                                         self.set_error("Columns are not loaded yet");
@@ -1167,12 +1168,8 @@ impl App {
             }
         };
 
-        let column_ids: std::collections::HashSet<_> = match self.model.columns_state() {
-            LoadState::Loaded(columns) => columns
-                .iter()
-                .filter(|c| c.board_id == board_id)
-                .map(|c| c.id)
-                .collect(),
+        let column_ids: std::collections::HashSet<_> = match self.board_columns_view(board_id) {
+            LoadState::Loaded(columns) => columns.iter().map(|c| c.id).collect(),
             _ => {
                 self.set_error("Columns are not loaded yet");
                 return;
@@ -1185,18 +1182,20 @@ impl App {
         };
         let descendants = graph.descendants(card_id);
 
-        let target_is_archived = self.model.archived_card_ids().contains(&card_id);
+        let archived_ids = self.board_archived_ids(board_id);
+        let target_is_archived = archived_ids.contains(&card_id);
 
-        let LoadState::Loaded(cards) = self.model.cards_state() else {
+        let LoadState::Loaded((cards, archived)) = self.board_candidate_cards() else {
             self.set_error("Cards are not loaded yet");
             return;
         };
         let eligible_cards: Vec<_> = cards
             .iter()
+            .chain(archived.iter())
             .filter(|c| column_ids.contains(&c.column_id))
             .filter(|c| c.id != card_id)
             .filter(|c| !descendants.contains(&c.id))
-            .filter(|c| target_is_archived || !self.model.archived_card_ids().contains(&c.id))
+            .filter(|c| target_is_archived || !archived_ids.contains(&c.id))
             .map(|c| c.id)
             .collect();
 
@@ -1230,12 +1229,8 @@ impl App {
             }
         };
 
-        let column_ids: std::collections::HashSet<_> = match self.model.columns_state() {
-            LoadState::Loaded(columns) => columns
-                .iter()
-                .filter(|c| c.board_id == board_id)
-                .map(|c| c.id)
-                .collect(),
+        let column_ids: std::collections::HashSet<_> = match self.board_columns_view(board_id) {
+            LoadState::Loaded(columns) => columns.iter().map(|c| c.id).collect(),
             _ => {
                 self.set_error("Columns are not loaded yet");
                 return;
@@ -1248,18 +1243,20 @@ impl App {
         };
         let ancestors = graph.ancestors(card_id);
 
-        let target_is_archived = self.model.archived_card_ids().contains(&card_id);
+        let archived_ids = self.board_archived_ids(board_id);
+        let target_is_archived = archived_ids.contains(&card_id);
 
-        let LoadState::Loaded(cards) = self.model.cards_state() else {
+        let LoadState::Loaded((cards, archived)) = self.board_candidate_cards() else {
             self.set_error("Cards are not loaded yet");
             return;
         };
         let eligible_cards: Vec<_> = cards
             .iter()
+            .chain(archived.iter())
             .filter(|c| column_ids.contains(&c.column_id))
             .filter(|c| c.id != card_id)
             .filter(|c| !ancestors.contains(&c.id))
-            .filter(|c| target_is_archived || !self.model.archived_card_ids().contains(&c.id))
+            .filter(|c| target_is_archived || !archived_ids.contains(&c.id))
             .map(|c| c.id)
             .collect();
 
@@ -1382,15 +1379,23 @@ impl App {
     pub fn toggle_completion_for_card_ids(&mut self, ids: Vec<uuid::Uuid>) {
         use kanban_domain::{CardStatus, CardUpdate};
 
-        let LoadState::Loaded(all_cards) = self.model.cards_state() else {
+        if ids.iter().any(|id| {
+            let state = self.model.card_by_id_state(*id);
+            state.is_not_loaded() || state.is_failed()
+        }) {
             self.set_error("Cards are not loaded yet");
             return;
-        };
+        }
 
         let updates: Vec<(uuid::Uuid, CardUpdate)> = ids
             .iter()
             .filter_map(|card_id| {
-                let card = all_cards.iter().find(|c| c.id == *card_id)?.clone();
+                let card = self
+                    .model
+                    .card_by_id_state(*card_id)
+                    .loaded()
+                    .copied()?
+                    .clone();
                 let new_status = if card.status == CardStatus::Done {
                     CardStatus::Todo
                 } else {
@@ -2642,11 +2647,12 @@ mod tests {
     }
 
     fn invalidate_cards_tier(app: &mut App) {
-        let _ = app
+        let changed = app
             .model
             .invalidate(Invalidation::Entities(EntityIds::cards([
                 uuid::Uuid::new_v4(),
             ])));
+        app.controller.resync(&app.model, changed);
     }
 
     fn pin_card_by_id(app: &mut App, card_id: uuid::Uuid) {
@@ -2734,6 +2740,35 @@ mod tests {
             card.status,
             CardStatus::Todo,
             "status must be unchanged when the handler declines"
+        );
+    }
+
+    #[test]
+    fn test_toggle_completion_for_card_ids_with_a_failed_flat_cards_tier_for_an_unresolvable_id_declines(
+    ) {
+        let mut app = App::test_default();
+        let card_id = seed_sprint_with_card(&mut app, "task");
+        let unresolvable_id = uuid::Uuid::new_v4();
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("flat declined"),
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        app.toggle_completion_for_card_ids(vec![card_id, unresolvable_id]);
+
+        assert_error_banner(&app, "Cards are not loaded yet");
+        let card = app.ctx.get_card(card_id).unwrap().unwrap();
+        assert_eq!(
+            card.status,
+            CardStatus::Todo,
+            "a Failed resolution for one selected id must decline the whole batch, not silently toggle the resolvable one"
         );
     }
 
