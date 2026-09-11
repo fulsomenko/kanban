@@ -144,20 +144,15 @@ fn test_archived_board_sprints_view_reachable() {
     // The active board's sprints resolve archival-agnostically.
     let board = app.active_board().expect("archived board resolves");
     assert_eq!(board.id, board_id);
-    let sprint_count = app
-        .model
-        .sprints_state()
-        .loaded_or_empty()
-        .iter()
-        .filter(|s| s.board_id == board_id)
-        .count();
+    let sprints = app.model.board_sprints_state(board_id);
+    let sprint_count = sprints
+        .loaded()
+        .map(|s| s.iter().filter(|s| s.board_id == board_id).count())
+        .unwrap_or(0);
     assert_eq!(sprint_count, 1, "archived board's sprint is visible");
-    assert!(app
-        .model
-        .sprints_state()
-        .loaded_or_empty()
-        .iter()
-        .any(|s| s.id == sprint_id));
+    assert!(sprints
+        .loaded()
+        .is_some_and(|s| s.iter().any(|s| s.id == sprint_id)));
 }
 
 #[test]
@@ -176,11 +171,10 @@ fn test_archived_board_columns_resolve() {
     assert_eq!(board.id, board_id);
     let column_count = app
         .model
-        .columns_state()
-        .loaded_or_empty()
-        .iter()
-        .filter(|c| c.board_id == board_id)
-        .count();
+        .board_columns_state(board_id)
+        .loaded()
+        .map(|c| c.iter().filter(|c| c.board_id == board_id).count())
+        .unwrap_or(0);
     assert_eq!(column_count, 2, "archived board's columns are visible");
 }
 

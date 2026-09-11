@@ -416,6 +416,34 @@ async fn test_toggle_card_completion_refetches_the_card_tiers_and_repairs_the_vi
 }
 
 #[tokio::test]
+async fn test_a_card_mutation_repairs_the_column_scope_without_reading_the_whole_card_list() {
+    let mut app = App::test_default();
+    let seed = seed_two_columns_two_cards(&mut app);
+    let ops = prime(&mut app).await;
+
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        cards: kanban_domain::resolved::Collection {
+            all: kanban_domain::LoadState::Loaded(vec![]),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    app.selection.active_board_id = Some(seed.board);
+    app.focus.active = Focus::Cards;
+    app.selection.active_card_id = Some(seed.k1);
+    app.handle_toggle_card_completion();
+
+    let refetch = refetch_ops(&ops);
+    assert!(!has_op(&refetch, "list_all_cards"), "got {refetch:?}");
+    assert!(
+        has_op_with_id(&refetch, "list_cards_by_column", seed.c1),
+        "got {refetch:?}"
+    );
+    assert!(app.model.column_cards_state(seed.c1).is_loaded());
+}
+
+#[tokio::test]
 async fn test_move_card_refetches_the_card_tiers_and_leaves_the_column_tier_untouched() {
     let mut app = App::test_default();
     let board = app.ctx.create_board("Board".to_string(), None).unwrap();

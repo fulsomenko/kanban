@@ -18,7 +18,6 @@ struct ArchivedBodiesPlan {
 impl FetchPlan for ArchivedBodiesPlan {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
         let mut round = FetchRound {
-            card_list: self.card_bodies && requestable(loaded.card_list()),
             board_list: self.board_bodies && requestable(loaded.board_list()),
             ..Default::default()
         };
@@ -115,11 +114,7 @@ fn assert_an_archived_card_body_is_fetchable_without_a_snapshot(ctx: &mut Kanban
     ctx.sync(&cards_plan(), &mut model, &mut NoProjections);
     ctx.sync(&cards_plan(), &mut model, &mut NoProjections);
 
-    assert!(model
-        .cards_state()
-        .loaded_or_empty()
-        .iter()
-        .any(|c| c.id == card.id));
+    assert!(model.card_by_id_state(card.id).loaded().is_some());
     assert!(model.archived_card_ids().contains(&card.id));
 }
 
@@ -200,14 +195,8 @@ fn assert_a_card_mutation_keeps_every_other_archived_body_present(ctx: &mut Kanb
     ctx.resync_invalidated(inv, &cards_plan(), &mut model, &mut NoProjections);
     ctx.sync(&cards_plan(), &mut model, &mut NoProjections);
 
-    let present: Vec<Uuid> = model
-        .cards_state()
-        .loaded_or_empty()
-        .iter()
-        .map(|c| c.id)
-        .collect();
-    assert!(present.contains(&a.id));
-    assert!(present.contains(&b.id));
+    assert!(model.card_by_id_state(a.id).loaded().is_some());
+    assert!(model.card_by_id_state(b.id).loaded().is_some());
 }
 
 fn assert_archive_then_restore_is_the_identity_over_the_card_and_its_partition(
@@ -229,24 +218,18 @@ fn assert_archive_then_restore_is_the_identity_over_the_card_and_its_partition(
     ctx.resync_invalidated(inv, &cards_plan(), &mut model, &mut NoProjections);
     ctx.sync(&cards_plan(), &mut model, &mut NoProjections);
 
-    assert!(model
-        .cards_state()
-        .loaded_or_empty()
-        .iter()
-        .any(|c| c.id == card.id));
+    assert!(model.card_by_id_state(card.id).loaded().is_some());
     assert!(model.archived_card_ids().contains(&card.id));
 
     let (_card, inv) = ctx.restore_card_impl(card.id, None).unwrap();
     ctx.resync_invalidated(inv, &cards_plan(), &mut model, &mut NoProjections);
     ctx.sync(&cards_plan(), &mut model, &mut NoProjections);
 
-    let restored = model
-        .cards_state()
-        .loaded_or_empty()
-        .iter()
-        .find(|c| c.id == card.id)
-        .unwrap()
-        .clone();
+    let restored = (*model
+        .card_by_id_state(card.id)
+        .loaded()
+        .expect("card resolvable again after restore"))
+    .clone();
     assert_eq!(restored.title, "task");
     assert_eq!(restored.column_id, column.id);
     assert!(!model.archived_card_ids().contains(&card.id));

@@ -38,15 +38,6 @@ impl LoadedStateTrait for StubLoaded {
     fn board_list(&self) -> FetchStatus {
         (&self.boards.all).into()
     }
-    fn column_list(&self) -> FetchStatus {
-        (&self.columns.all).into()
-    }
-    fn card_list(&self) -> FetchStatus {
-        (&self.cards.all).into()
-    }
-    fn sprint_list(&self) -> FetchStatus {
-        (&self.sprints.all).into()
-    }
     fn graph(&self) -> FetchStatus {
         (&self.graph).into()
     }
@@ -372,15 +363,16 @@ impl FetchPlan for StickyThenNextPlan {
     }
 }
 
-pub(super) struct CardListThenCardPlan {
+pub(super) struct CardsByColumnThenCardPlan {
+    pub column_id: Uuid,
     pub card_id: Uuid,
 }
 
-impl FetchPlan for CardListThenCardPlan {
+impl FetchPlan for CardsByColumnThenCardPlan {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
-        if requestable(loaded.card_list()) {
+        if requestable(loaded.cards_of_column(self.column_id)) {
             FetchRound {
-                card_list: true,
+                cards_by_column: vec![self.column_id],
                 ..Default::default()
             }
         } else if requestable(loaded.card(self.card_id)) {
@@ -467,9 +459,6 @@ impl FetchPlan for ArchivedByBoardPlan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Observed {
     pub board_list: FetchStatus,
-    pub column_list: FetchStatus,
-    pub card_list: FetchStatus,
-    pub sprint_list: FetchStatus,
     pub graph: FetchStatus,
     pub column: FetchStatus,
     pub card: FetchStatus,
@@ -515,9 +504,6 @@ impl FetchPlan for ProbePlan {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
         self.seen.borrow_mut().push(Observed {
             board_list: loaded.board_list(),
-            column_list: loaded.column_list(),
-            card_list: loaded.card_list(),
-            sprint_list: loaded.sprint_list(),
             graph: loaded.graph(),
             column: loaded.column(self.column_id),
             card: loaded.card(self.card_id),

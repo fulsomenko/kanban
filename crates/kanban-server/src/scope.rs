@@ -237,9 +237,7 @@ mod tests {
         assert_eq!(round.boards, vec![board_id]);
         assert_eq!(round.columns_by_board, vec![board_id]);
         assert!(round.archived_cards_by_board.is_empty());
-        assert!(!round.card_list);
         assert!(!round.board_list);
-        assert!(!round.column_list);
         assert!(round.cards_by_column.is_empty());
     }
 
@@ -328,7 +326,6 @@ mod tests {
         assert!(round.archived_cards_by_board.is_empty());
         assert!(!round.archived_card_list);
         assert!(round.cards.is_empty());
-        assert!(!round.card_list);
         assert!(!round.board_list);
     }
 
@@ -445,7 +442,6 @@ mod tests {
         .next_round(&Model::default());
 
         assert!(round.sprints_by_board.is_empty());
-        assert!(!round.sprint_list);
     }
 
     #[test]
@@ -515,7 +511,6 @@ mod tests {
         let card_round = RouteScope::Card(card_id).next_round(&Model::default());
         assert_eq!(card_round.cards, vec![card_id]);
         assert!(!card_round.is_empty());
-        assert!(!card_round.card_list);
         assert!(!card_round.board_list);
         assert!(card_round.boards.is_empty());
         assert!(card_round.columns_by_board.is_empty());
@@ -532,7 +527,6 @@ mod tests {
 
         assert!(round.graph);
         assert_eq!(round.cards, vec![card_id]);
-        assert!(!round.card_list);
     }
 
     #[test]

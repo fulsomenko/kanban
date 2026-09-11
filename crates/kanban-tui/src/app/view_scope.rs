@@ -189,9 +189,6 @@ mod tests {
 
     struct StubLoaded {
         board_list: FetchStatus,
-        column_list: FetchStatus,
-        card_list: FetchStatus,
-        sprint_list: FetchStatus,
         graph: FetchStatus,
         card: FetchStatus,
         sprint: FetchStatus,
@@ -213,9 +210,6 @@ mod tests {
         fn default() -> Self {
             StubLoaded {
                 board_list: FetchStatus::NotLoaded,
-                column_list: FetchStatus::NotLoaded,
-                card_list: FetchStatus::NotLoaded,
-                sprint_list: FetchStatus::NotLoaded,
                 graph: FetchStatus::NotLoaded,
                 card: FetchStatus::NotLoaded,
                 sprint: FetchStatus::NotLoaded,
@@ -238,15 +232,6 @@ mod tests {
     impl kanban_service::LoadedState for StubLoaded {
         fn board_list(&self) -> FetchStatus {
             self.board_list
-        }
-        fn column_list(&self) -> FetchStatus {
-            self.column_list
-        }
-        fn card_list(&self) -> FetchStatus {
-            self.card_list
-        }
-        fn sprint_list(&self) -> FetchStatus {
-            self.sprint_list
         }
         fn graph(&self) -> FetchStatus {
             self.graph
@@ -387,9 +372,6 @@ mod tests {
         let c1 = Uuid::new_v4();
         let stub = StubLoaded {
             board_list: FetchStatus::Loaded,
-            column_list: FetchStatus::Failed,
-            card_list: FetchStatus::Failed,
-            sprint_list: FetchStatus::Failed,
             columns_of_board: HashMap::from([(board, FetchStatus::Loaded)]),
             sprints_of_board: FetchStatus::Loaded,
             loaded_columns: HashMap::from([(board, vec![column(c1)])]),
@@ -414,9 +396,6 @@ mod tests {
         let board = Uuid::new_v4();
         let stub = StubLoaded {
             board_list: FetchStatus::Loaded,
-            column_list: FetchStatus::Loaded,
-            card_list: FetchStatus::Loaded,
-            sprint_list: FetchStatus::Loaded,
             graph: FetchStatus::Loaded,
             card: FetchStatus::Loaded,
             sprint: FetchStatus::Loaded,
@@ -451,9 +430,6 @@ mod tests {
         let board = Uuid::new_v4();
         let stub = StubLoaded {
             board_list: FetchStatus::Loaded,
-            column_list: FetchStatus::Loaded,
-            card_list: FetchStatus::Loaded,
-            sprint_list: FetchStatus::Loaded,
             columns_of_board: HashMap::from([(board, FetchStatus::Failed)]),
             ..StubLoaded::default()
         };
@@ -490,9 +466,6 @@ mod tests {
         let board = Uuid::new_v4();
         let stub = StubLoaded {
             board_list: FetchStatus::Loaded,
-            column_list: FetchStatus::Loaded,
-            card_list: FetchStatus::Loaded,
-            sprint_list: FetchStatus::Loaded,
             columns_of_board: HashMap::from([(board, FetchStatus::Loaded)]),
             sprints_of_board: FetchStatus::Loaded,
             loaded_columns: HashMap::from([(board, vec![])]),
@@ -525,9 +498,6 @@ mod tests {
 
         let round = scope.next_round(&stub);
         assert!(round.board_list);
-        assert!(!round.column_list);
-        assert!(!round.card_list);
-        assert!(!round.sprint_list);
         assert!(round.columns_by_board.is_empty());
         assert!(round.cards_by_column.is_empty());
         assert!(round.sprints_by_board.is_empty());
@@ -562,9 +532,6 @@ mod tests {
 
         let round = scope.next_round(&stub);
         assert!(round.board_list);
-        assert!(!round.column_list);
-        assert!(!round.card_list);
-        assert!(!round.sprint_list);
         assert!(round.columns_by_board.is_empty());
         assert!(round.cards_by_column.is_empty());
         assert!(round.sprints_by_board.is_empty());
@@ -642,7 +609,6 @@ mod tests {
         let round = scope.next_round(&stub);
         assert_eq!(round.cards, vec![m1]);
         assert!(!round.archived_card_list);
-        assert!(!round.card_list);
     }
 
     #[test]

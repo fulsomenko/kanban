@@ -33,32 +33,14 @@ fn test_resolve_for_a_board_list_need_issues_exactly_one_list_boards_read() {
 }
 
 #[test]
-fn test_resolve_of_a_whole_collection_need_populates_all_not_just_by_id() {
-    let store = store();
-    let (board, column) = seed_board_with_column(&store);
-    seed_card(&store, &board, &column, "a");
-    let loaded = StubLoaded::default();
-    let plan = FixedPlan(FetchRound {
-        card_list: true,
-        ..Default::default()
-    });
-
-    let resolved = resolve(&plan, &loaded, &store);
-
-    assert!(resolved.cards.all.is_loaded());
-    assert_eq!(resolved.cards.all.loaded().unwrap().len(), 1);
-    assert!(resolved.cards.by_id.is_empty());
-}
-
-#[test]
-fn test_resolve_of_column_sprint_and_graph_list_needs_populates_the_returned_all_tier() {
+fn test_resolve_of_columns_sprints_and_graph_scoped_needs_populates_the_returned_scoped_tier() {
     let store = store();
     let (board, column) = seed_board_with_column(&store);
     let sprint = seed_sprint(&store, &board);
     let loaded = StubLoaded::default();
     let plan = FixedPlan(FetchRound {
-        column_list: true,
-        sprint_list: true,
+        columns_by_board: vec![board.id],
+        sprints_by_board: vec![board.id],
         graph: true,
         ..Default::default()
     });
@@ -68,37 +50,22 @@ fn test_resolve_of_column_sprint_and_graph_list_needs_populates_the_returned_all
     assert_eq!(
         resolved
             .columns
-            .all
-            .loaded()
+            .by_parent
+            .get(&board.id)
+            .and_then(|s| s.loaded())
             .map(|c| c.iter().map(|c| c.id).collect::<Vec<_>>()),
         Some(vec![column.id])
     );
     assert_eq!(
         resolved
             .sprints
-            .all
-            .loaded()
+            .by_parent
+            .get(&board.id)
+            .and_then(|s| s.loaded())
             .map(|s| s.iter().map(|s| s.id).collect::<Vec<_>>()),
         Some(vec![sprint.id])
     );
     assert!(resolved.graph.is_loaded());
-}
-
-#[test]
-fn test_resolve_of_a_genuinely_empty_card_list_is_loaded_not_not_loaded() {
-    let store = store();
-    let loaded = StubLoaded::default();
-    let plan = FixedPlan(FetchRound {
-        card_list: true,
-        ..Default::default()
-    });
-
-    let resolved = resolve(&plan, &loaded, &store);
-
-    assert!(resolved.cards.all.is_loaded());
-    assert!(resolved.cards.all.loaded().unwrap().is_empty());
-    assert!(!resolved.cards.all.is_not_loaded());
-    assert!(!resolved.cards.is_untouched());
 }
 
 #[test]
@@ -256,14 +223,14 @@ fn test_a_loaded_card_collection_does_not_report_an_unfetched_card_id_as_loaded(
     let a = seed_card(&store, &board, &column, "a");
     let mut loaded = StubLoaded::default();
     let plan = FixedPlan(FetchRound {
-        card_list: true,
+        cards_by_column: vec![column.id],
         ..Default::default()
     });
 
     let resolved = resolve(&plan, &loaded, &store);
     loaded.apply(resolved);
 
-    assert!(loaded.card_list_state().is_loaded());
+    assert!(loaded.cards.by_parent[&column.id].is_loaded());
     assert!(loaded.card_state(a.id).is_not_loaded());
 }
 

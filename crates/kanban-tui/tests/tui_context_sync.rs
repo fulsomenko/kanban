@@ -8,6 +8,7 @@ use kanban_service::{
 use kanban_tui::tui_context::TuiContext;
 use std::sync::Arc;
 use tempfile::TempDir;
+use uuid::Uuid;
 
 struct BoardListPlan;
 impl FetchPlan for BoardListPlan {
@@ -19,11 +20,17 @@ impl FetchPlan for BoardListPlan {
     }
 }
 
-struct CardListPlan;
-impl FetchPlan for CardListPlan {
+struct CardByIdPlan {
+    id: Uuid,
+}
+impl FetchPlan for CardByIdPlan {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
         FetchRound {
-            card_list: requestable(loaded.card_list()),
+            cards: if requestable(loaded.card(self.id)) {
+                vec![self.id]
+            } else {
+                Vec::new()
+            },
             ..Default::default()
         }
     }
@@ -103,7 +110,11 @@ fn test_tui_context_sync_invalidated_refetches_before_planning() {
         .unwrap();
 
     let mut model = Model::default();
-    tui_ctx.sync(&CardListPlan, &mut model, &mut NoProjections);
+    tui_ctx.sync(
+        &CardByIdPlan { id: card.id },
+        &mut model,
+        &mut NoProjections,
+    );
     assert_eq!(
         model.card_by_id_state(card.id).loaded().unwrap().title,
         "before"
@@ -121,7 +132,7 @@ fn test_tui_context_sync_invalidated_refetches_before_planning() {
 
     tui_ctx.sync_invalidated(
         kanban_domain::Invalidation::All,
-        &CardListPlan,
+        &CardByIdPlan { id: card.id },
         &mut model,
         &mut NoProjections,
     );

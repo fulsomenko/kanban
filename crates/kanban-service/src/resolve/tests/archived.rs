@@ -107,19 +107,19 @@ fn test_an_unrequested_archived_tier_stays_not_loaded() {
 
     let loaded = StubLoaded::default();
     let plan = FixedPlan(FetchRound {
-        card_list: true,
+        cards_by_column: vec![column.id],
         ..Default::default()
     });
 
     let resolved = resolve(&plan, &loaded, &store);
 
-    assert!(resolved.cards.all.is_loaded());
+    assert!(resolved.cards.by_parent[&column.id].is_loaded());
     assert!(resolved.archived_cards.is_untouched());
     assert_ops(
         &store.ops(),
         &[ReadOp {
-            method: "list_all_cards",
-            ids: vec![],
+            method: "list_cards_by_column",
+            ids: vec![column.id],
         }],
     );
 }

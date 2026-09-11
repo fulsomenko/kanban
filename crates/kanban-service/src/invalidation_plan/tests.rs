@@ -11,9 +11,6 @@ use super::*;
 
 struct StubWorld {
     board_list: FetchStatus,
-    column_list: FetchStatus,
-    card_list: FetchStatus,
-    sprint_list: FetchStatus,
     graph: FetchStatus,
     boards: HashMap<Uuid, FetchStatus>,
     columns: HashMap<Uuid, FetchStatus>,
@@ -31,9 +28,6 @@ impl Default for StubWorld {
     fn default() -> Self {
         StubWorld {
             board_list: FetchStatus::NotLoaded,
-            column_list: FetchStatus::NotLoaded,
-            card_list: FetchStatus::NotLoaded,
-            sprint_list: FetchStatus::NotLoaded,
             graph: FetchStatus::NotLoaded,
             boards: HashMap::new(),
             columns: HashMap::new(),
@@ -52,15 +46,6 @@ impl Default for StubWorld {
 impl LoadedState for StubWorld {
     fn board_list(&self) -> FetchStatus {
         self.board_list
-    }
-    fn column_list(&self) -> FetchStatus {
-        self.column_list
-    }
-    fn card_list(&self) -> FetchStatus {
-        self.card_list
-    }
-    fn sprint_list(&self) -> FetchStatus {
-        self.sprint_list
     }
     fn graph(&self) -> FetchStatus {
         self.graph
@@ -145,9 +130,6 @@ impl LoadedEntities for StubWorld {
 fn all_loaded() -> StubWorld {
     StubWorld {
         board_list: FetchStatus::Loaded,
-        column_list: FetchStatus::Loaded,
-        card_list: FetchStatus::Loaded,
-        sprint_list: FetchStatus::Loaded,
         graph: FetchStatus::Loaded,
         boards: HashMap::new(),
         columns: HashMap::new(),
@@ -189,26 +171,7 @@ fn test_an_invalidated_card_that_was_loaded_is_requested_by_id() {
     assert!(plan.round().columns.is_empty());
     assert!(plan.round().sprints.is_empty());
     assert!(!plan.round().board_list);
-    assert!(!plan.round().column_list);
-    assert!(!plan.round().card_list);
-    assert!(!plan.round().sprint_list);
     assert!(!plan.round().graph);
-}
-
-#[test]
-fn test_a_loaded_card_list_is_re_requested_when_any_card_is_invalidated() {
-    let a = Uuid::new_v4();
-    let world = StubWorld {
-        card_list: FetchStatus::Loaded,
-        ..Default::default()
-    };
-
-    let plan =
-        InvalidationPlan::for_invalidation(&Invalidation::Entities(EntityIds::cards([a])), &world)
-            .expect("card_list was loaded");
-
-    assert!(plan.round().card_list);
-    assert!(plan.round().cards.is_empty());
 }
 
 #[test]
@@ -248,9 +211,6 @@ fn test_a_prefix_only_invalidation_re_requests_a_loaded_board_list() {
     assert!(plan.round().cards.is_empty());
     assert!(plan.round().sprints.is_empty());
     assert!(!plan.round().graph);
-    assert!(!plan.round().column_list);
-    assert!(!plan.round().card_list);
-    assert!(!plan.round().sprint_list);
 }
 
 #[test]
@@ -306,18 +266,18 @@ fn test_only_the_loaded_ids_of_a_mixed_invalidation_are_requested() {
 }
 
 #[test]
-fn test_a_failed_card_list_is_still_re_requested_because_it_was_read() {
-    let a = Uuid::new_v4();
+fn test_a_failed_board_list_is_still_re_requested_because_it_was_read() {
+    let b = Uuid::new_v4();
     let world = StubWorld {
-        card_list: FetchStatus::Failed,
+        board_list: FetchStatus::Failed,
         ..Default::default()
     };
 
     let plan =
-        InvalidationPlan::for_invalidation(&Invalidation::Entities(EntityIds::cards([a])), &world)
-            .expect("card_list was read, even though it failed");
+        InvalidationPlan::for_invalidation(&Invalidation::Entities(EntityIds::boards([b])), &world)
+            .expect("board_list was read, even though it failed");
 
-    assert!(plan.round().card_list);
+    assert!(plan.round().board_list);
 }
 
 #[test]
@@ -434,20 +394,17 @@ fn test_empty_entities_invalidation_plans_nothing_and_wipes_nothing() {
     let _ = model.invalidate(inv);
 
     assert_eq!(LoadedState::board_list(&model), FetchStatus::Loaded);
-    assert_eq!(LoadedState::column_list(&model), FetchStatus::Loaded);
-    assert_eq!(LoadedState::card_list(&model), FetchStatus::Loaded);
-    assert_eq!(LoadedState::sprint_list(&model), FetchStatus::Loaded);
+    assert!(model.columns_state().is_loaded());
+    assert!(model.cards_state().is_loaded());
+    assert!(model.sprints_state().is_loaded());
     assert_eq!(LoadedState::graph(&model), FetchStatus::Loaded);
     assert_eq!(LoadedState::column(&model, column.id), FetchStatus::Loaded);
 }
 
 #[test]
-fn test_all_repairs_every_read_tier_including_the_archival_markers() {
+fn test_invalidation_plan_for_all_re_requests_every_surviving_tier_that_was_read() {
     let world = StubWorld {
         board_list: FetchStatus::Loaded,
-        column_list: FetchStatus::Loaded,
-        card_list: FetchStatus::Loaded,
-        sprint_list: FetchStatus::Loaded,
         graph: FetchStatus::Loaded,
         archived_card_list: FetchStatus::Loaded,
         archived_board_list: FetchStatus::Loaded,
@@ -459,9 +416,6 @@ fn test_all_repairs_every_read_tier_including_the_archival_markers() {
 
     let round = plan.round();
     assert!(round.board_list);
-    assert!(round.column_list);
-    assert!(round.card_list);
-    assert!(round.sprint_list);
     assert!(round.graph);
     assert!(round.archived_card_list);
     assert!(round.archived_board_list);
@@ -611,4 +565,56 @@ fn all_loaded_with_cards(ids: &[Uuid]) -> StubWorld {
         cards: ids.iter().map(|id| (*id, FetchStatus::Loaded)).collect(),
         ..all_loaded()
     }
+}
+
+#[test]
+fn test_invalidate_all_over_seeded_flat_collections_issues_no_flat_list_read() {
+    let board = Board::new("B", None::<String>);
+    let column = Column::new(board.id, "A", 0);
+    let card = Card::new(board.id, column.id, "task", 0);
+    let sprint = Sprint::new(board.id, 1, None, None::<String>);
+
+    let mut model = Model::default();
+    let changed = model.apply_resolved(Resolved {
+        boards: Collection {
+            all: LoadState::Loaded(vec![board.clone()]),
+            ..Default::default()
+        },
+        columns: Collection {
+            all: LoadState::Loaded(vec![]),
+            ..Default::default()
+        },
+        cards: Collection {
+            all: LoadState::Loaded(vec![card.clone()]),
+            ..Default::default()
+        },
+        sprints: Collection {
+            all: LoadState::Loaded(vec![]),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    NoProjections.resync(&model, changed);
+
+    let plan = InvalidationPlan::for_invalidation(&Invalidation::All, &model)
+        .expect("board_list and flat collections were loaded");
+    let _ = model.invalidate(Invalidation::All);
+
+    let store = crate::read_recorder::RecordingStore::new();
+    kanban_domain::DataStore::upsert_board(&store, board.clone()).unwrap();
+    kanban_domain::DataStore::upsert_column(&store, column.clone()).unwrap();
+    kanban_domain::DataStore::upsert_card(&store, card.clone()).unwrap();
+    kanban_domain::DataStore::upsert_sprint(&store, sprint.clone()).unwrap();
+
+    crate::resolve::resolve(&plan, &model, &store);
+
+    let ops = store.ops();
+    let ops = ops.lock().unwrap();
+    assert!(
+        !ops.iter().any(|op| matches!(
+            op.method,
+            "list_all_columns" | "list_all_cards" | "list_all_sprints"
+        )),
+        "no plan may drive a whole-workspace list read; ops were: {ops:?}"
+    );
 }

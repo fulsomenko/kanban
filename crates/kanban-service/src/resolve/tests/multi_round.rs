@@ -2,7 +2,7 @@ use crate::fetch_plan::FetchRound;
 use uuid::Uuid;
 
 use super::{
-    seed_board_with_column, seed_card, store, CardListThenCardPlan, CardsByIdPlan, ChainPlan,
+    seed_board_with_column, seed_card, store, CardsByColumnThenCardPlan, CardsByIdPlan, ChainPlan,
     FixedPlan, GraphThenCardPlan, StickyThenNextPlan, StubLoaded,
 };
 use crate::read_recorder::{assert_ops, ReadOp};
@@ -176,7 +176,10 @@ fn test_a_later_round_does_not_clobber_a_collection_loaded_by_an_earlier_round()
     let (board, column) = seed_board_with_column(&store);
     let card = seed_card(&store, &board, &column, "a");
     let loaded = StubLoaded::default();
-    let plan = CardListThenCardPlan { card_id: card.id };
+    let plan = CardsByColumnThenCardPlan {
+        column_id: column.id,
+        card_id: card.id,
+    };
 
     let resolved = resolve(&plan, &loaded, &store);
 
@@ -184,8 +187,8 @@ fn test_a_later_round_does_not_clobber_a_collection_loaded_by_an_earlier_round()
         &store.ops(),
         &[
             ReadOp {
-                method: "list_all_cards",
-                ids: vec![],
+                method: "list_cards_by_column",
+                ids: vec![column.id],
             },
             ReadOp {
                 method: "get_card",
@@ -193,8 +196,11 @@ fn test_a_later_round_does_not_clobber_a_collection_loaded_by_an_earlier_round()
             },
         ],
     );
-    assert!(resolved.cards.all.is_loaded());
-    assert_eq!(resolved.cards.all.loaded().unwrap().len(), 1);
+    assert!(resolved.cards.by_parent[&column.id].is_loaded());
+    assert_eq!(
+        resolved.cards.by_parent[&column.id].loaded().unwrap().len(),
+        1
+    );
     assert!(resolved.cards.by_id[&card.id].is_loaded());
 }
 
