@@ -1612,6 +1612,41 @@ mod cards_tier_decline_tests {
     }
 
     #[test]
+    fn test_toggle_selected_cards_completion_with_a_failed_flat_cards_tier_for_an_unresolvable_id_declines(
+    ) {
+        let mut app = App::test_default();
+        let (board_id, _column_id, card_id) = seed_board_column_card(&mut app);
+        refresh(&mut app);
+        let unresolvable_id = uuid::Uuid::new_v4();
+        app.selection.active_board_id = Some(board_id);
+        app.focus.active = Focus::Cards;
+        app.multi_select.selected_cards.insert(card_id);
+        app.multi_select.selected_cards.insert(unresolvable_id);
+        app.multi_select.selection_mode_active = true;
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("flat declined"),
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        app.handle_toggle_card_completion();
+
+        assert_error_banner(&app, "Cards are not loaded yet");
+        let card = app.ctx.get_card(card_id).unwrap().unwrap();
+        assert_eq!(
+            card.status,
+            CardStatus::Todo,
+            "a Failed resolution for one selected id must decline the whole batch, not silently toggle the resolvable one"
+        );
+    }
+
+    #[test]
     fn test_create_card_with_a_not_loaded_cards_tier_declines() {
         let mut app = App::test_default();
         let (board_id, _column_id, _card_id) = seed_board_column_card(&mut app);

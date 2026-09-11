@@ -2755,6 +2755,35 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_toggle_completion_for_card_ids_with_a_failed_flat_cards_tier_for_an_unresolvable_id_declines(
+    ) {
+        let mut app = App::test_default();
+        let card_id = seed_sprint_with_card(&mut app, "task");
+        let unresolvable_id = uuid::Uuid::new_v4();
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("flat declined"),
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        app.toggle_completion_for_card_ids(vec![card_id, unresolvable_id]);
+
+        assert_error_banner(&app, "Cards are not loaded yet");
+        let card = app.ctx.get_card(card_id).unwrap().unwrap();
+        assert_eq!(
+            card.status,
+            CardStatus::Todo,
+            "a Failed resolution for one selected id must decline the whole batch, not silently toggle the resolvable one"
+        );
+    }
+
     fn seed_board_with_scoped_and_flat_sprints(
         app: &mut App,
         build_scoped: impl FnOnce(uuid::Uuid) -> Vec<kanban_domain::Sprint>,

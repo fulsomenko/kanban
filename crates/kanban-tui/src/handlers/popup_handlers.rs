@@ -803,8 +803,8 @@ mod tests {
     use crate::App;
     use crossterm::event::KeyCode;
     use kanban_domain::{
-        CardPriority, CreateCardOptions, EntityIds, Invalidation, KanbanOperations, Snapshot,
-        SprintStatus, SprintUpdate,
+        CardPriority, CreateCardOptions, DerivedProjections, EntityIds, Invalidation,
+        KanbanOperations, Snapshot, SprintStatus, SprintUpdate,
     };
     use std::collections::HashSet;
 
@@ -1035,6 +1035,49 @@ mod tests {
             .banner
             .as_ref()
             .expect("a NotLoaded cards tier must banner rather than silently show no matches");
+        assert!(
+            banner.message.to_lowercase().contains("not loaded"),
+            "banner should explain the cards tier is not loaded, got: {}",
+            banner.message
+        );
+    }
+
+    #[test]
+    fn test_relationship_search_with_failed_cards_tier_for_an_unresolvable_id_banners() {
+        let mut app = App::test_default();
+        let (_board_id, card_id) = seed_relationship_dialog(&mut app);
+        let unresolvable_id = uuid::Uuid::new_v4();
+        app.relationship.card_ids = vec![card_id, unresolvable_id];
+        app.relationship.selection.set(Some(0));
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                    kanban_domain::KanbanError::unsupported("flat declined"),
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        app.relationship.search_active = true;
+        app.handle_manage_parents_popup(KeyCode::Char('f'));
+
+        assert_eq!(
+            app.relationship.selection.get(),
+            Some(0),
+            "a Failed flat cards tier must not clear a staged selection"
+        );
+        assert_eq!(
+            app.relationship.card_ids.len(),
+            2,
+            "a Failed flat cards tier must not empty the candidate list"
+        );
+        let banner =
+            app.ui_state.banner.as_ref().expect(
+                "a Failed flat cards tier must banner rather than silently show no matches",
+            );
         assert!(
             banner.message.to_lowercase().contains("not loaded"),
             "banner should explain the cards tier is not loaded, got: {}",
