@@ -40,8 +40,10 @@ fn test_tasks_panel_title_gates_on_scoped_tiers() {
         "expected a numeric count before the backend degrades: {title_before}"
     );
 
-    let failing =
-        CountingBackend::wrap_failing_all(app.ctx.backend(), &["list_all_cards", "list_archived_cards"]);
+    let failing = CountingBackend::wrap_failing_all(
+        app.ctx.backend(),
+        &["list_all_cards", "list_archived_cards"],
+    );
     app.ctx.replace_backend(failing);
 
     app.reload_model();
@@ -84,12 +86,7 @@ fn test_surface_load_failures_surfaces_a_scoped_card_tier_failure() {
     app.reload_model();
     app.prepare_frame();
 
-    let cards_before = app
-        .displayed_cards()
-        .loaded()
-        .copied()
-        .unwrap_or(&[])
-        .len();
+    let cards_before = app.displayed_cards().loaded().copied().unwrap_or(&[]).len();
     assert_eq!(cards_before, 1, "fixture sanity: one live card seeded");
 
     let failing = CountingBackend::wrap_failing(app.ctx.backend(), "list_cards_by_column");
@@ -104,12 +101,7 @@ fn test_surface_load_failures_surfaces_a_scoped_card_tier_failure() {
         .expect("expected surface_load_failures to raise a banner on a scoped card failure");
     assert!(banner.message.contains("Failed to load from store"));
 
-    let cards_after = app
-        .displayed_cards()
-        .loaded()
-        .copied()
-        .unwrap_or(&[])
-        .len();
+    let cards_after = app.displayed_cards().loaded().copied().unwrap_or(&[]).len();
     assert_eq!(
         cards_after, 1,
         "expected the rollback to keep the previous model's card intact"

@@ -1,6 +1,6 @@
 mod helpers;
 
-use helpers::warm_archived_card_markers;
+use helpers::{warm_archived_card_markers, CountingBackend};
 use kanban_domain::{CreateCardOptions, KanbanOperations, UndoOperations};
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::AppMode;
@@ -442,5 +442,164 @@ fn test_q_in_archived_view_returns_to_normal() {
     assert!(
         !app.should_quit,
         "pressing 'q' in ArchivedCardsView should not quit the app"
+    );
+}
+
+/// `start_restore_animation`, `start_permanent_delete_animation` and
+/// `complete_restore_animation` all check archived membership via
+/// `board_archived_cards_state`, the by-board tier. A failure on the flat
+/// `list_archived_cards` tier must not stop any of the three from working.
+#[test]
+fn test_restore_animation_detects_membership_when_the_global_archived_tier_fails() {
+    let mut app = App::test_default();
+
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    let card = app
+        .ctx
+        .create_card(
+            board.id,
+            column.id,
+            "ArchiveMe".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    let card_id = card.id;
+    app.ctx.archive_card(card_id).unwrap();
+
+    app.selection.active_board_id = Some(board.id);
+    app.mode = AppMode::ArchivedCardsView;
+    app.reload_model();
+    app.prepare_frame();
+
+    let failing = CountingBackend::wrap_failing(app.ctx.backend(), "list_archived_cards");
+    app.ctx.replace_backend(failing);
+    app.reload_model();
+    app.prepare_frame();
+
+    if let Some(list) = app.view.strategy.get_active_task_list_mut() {
+        list.set_selected_index(Some(0));
+    }
+
+    app.handle_restore_card();
+
+    assert!(
+        app.animation.animating.contains_key(&card_id),
+        "restore animation must start off the by-board archived tier even \
+         when the global list_archived_cards tier is failing"
+    );
+
+    force_animation_complete(&mut app, card_id);
+    app.handle_animation_tick();
+
+    app.reload_model();
+    app.prepare_frame();
+
+    assert!(
+        !app.model.archived_card_ids().contains(&card_id),
+        "the card must actually be restored, proving complete_restore_animation \
+         also resolved membership off the by-board tier"
+    );
+}
+
+#[test]
+fn test_permanent_delete_animation_detects_membership_when_the_global_archived_tier_fails() {
+    let mut app = App::test_default();
+
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    let card = app
+        .ctx
+        .create_card(
+            board.id,
+            column.id,
+            "DeleteMe".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    let card_id = card.id;
+    app.ctx.archive_card(card_id).unwrap();
+
+    app.selection.active_board_id = Some(board.id);
+    app.mode = AppMode::ArchivedCardsView;
+    app.reload_model();
+    app.prepare_frame();
+
+    let failing = CountingBackend::wrap_failing(app.ctx.backend(), "list_archived_cards");
+    app.ctx.replace_backend(failing);
+    app.reload_model();
+    app.prepare_frame();
+
+    if let Some(list) = app.view.strategy.get_active_task_list_mut() {
+        list.set_selected_index(Some(0));
+    }
+
+    app.handle_delete_card_permanent();
+
+    assert!(
+        app.animation.animating.contains_key(&card_id),
+        "permanent-delete animation must start off the by-board archived tier \
+         even when the global list_archived_cards tier is failing"
+    );
+}
+
+/// `start_restore_animation` and `start_permanent_delete_animation` both
+/// gained a `scope_board_id()` guard when they moved onto the by-board
+/// tier. With no board in scope, the guard must make them a deliberate
+/// no-op rather than starting an animation with no board to resolve.
+#[test]
+fn test_no_board_in_scope_leaves_restore_and_permanent_delete_animations_unstarted() {
+    let mut app = App::test_default();
+
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".to_string(), None)
+        .unwrap();
+    let card = app
+        .ctx
+        .create_card(
+            board.id,
+            column.id,
+            "ArchiveMe".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    let card_id = card.id;
+    app.ctx.archive_card(card_id).unwrap();
+
+    app.selection.active_board_id = Some(board.id);
+    app.mode = AppMode::ArchivedCardsView;
+    app.reload_model();
+    app.prepare_frame();
+
+    if let Some(list) = app.view.strategy.get_active_task_list_mut() {
+        list.set_selected_index(Some(0));
+    }
+    assert_eq!(
+        app.get_selected_card_id(),
+        Some(card_id),
+        "fixture sanity: the archived card must be selected before scope is cleared"
+    );
+
+    app.selection.active_board_id = None;
+    app.board_list.inner_mut().set_selected_index(None);
+
+    app.handle_restore_card();
+    assert!(
+        !app.animation.animating.contains_key(&card_id),
+        "restore must not start an animation with no board in scope"
+    );
+
+    app.handle_delete_card_permanent();
+    assert!(
+        !app.animation.animating.contains_key(&card_id),
+        "permanent delete must not start an animation with no board in scope"
     );
 }
