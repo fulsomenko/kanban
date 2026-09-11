@@ -1,5 +1,5 @@
 use kanban_backend_http::HttpBackend;
-use kanban_domain::{DataStore, KanbanError, Prefix};
+use kanban_domain::{DataStore, DependencyGraph, KanbanError, Prefix};
 use uuid::Uuid;
 
 fn unreachable_backend() -> HttpBackend {
@@ -36,4 +36,21 @@ fn test_list_all_cards_and_siblings_stay_unsupported_under_their_own_names() {
     assert_declines_under_its_own_name(backend.list_all_cards(), "list_all_cards");
     assert_declines_under_its_own_name(backend.list_all_columns(), "list_all_columns");
     assert_declines_under_its_own_name(backend.list_all_sprints(), "list_all_sprints");
+}
+
+#[test]
+fn test_set_graph_stays_declined_under_its_own_name() {
+    let backend = unreachable_backend();
+    let result = backend.set_graph(DependencyGraph::default());
+    assert_declines_under_its_own_name(result, "set_graph");
+}
+
+#[test]
+fn test_get_graph_no_longer_declines_it_reaches_the_transport() {
+    let backend = unreachable_backend();
+    let err = backend
+        .get_graph()
+        .expect_err("no server is listening on port 1");
+    assert!(err.is_transport(), "expected transport error, got {err:?}");
+    assert!(!err.is_unsupported());
 }
