@@ -213,6 +213,7 @@ Column writes (create/update/delete) aren't implemented yet.
 | `POST` | `/v1/cards/batch/move` | Move up to N cards into `column_id`. `200` with `BatchOperationResponse`. If moving would violate the target column's WIP limit, every id in the request fails with no card moved. | `BatchMoveRequest` (`{"ids": [uuid, ...], "column_id": uuid}`) |
 | `POST` | `/v1/cards/batch/assign-sprint` | Assign up to N cards to `sprint_id`. `200` with `BatchOperationResponse`. An unknown sprint id fails every card id. | `BatchAssignSprintRequest` (`{"ids": [uuid, ...], "sprint_id": uuid}`) |
 | `POST` | `/v1/cards/batch/update` | Apply a per-card `UpdateCardRequest`-shaped patch to each id, all-or-nothing. `200` with `BatchOperationResponse` (`failed` always empty) on full success; an unknown id or any other execution error is an ordinary `ApiError` envelope and no card is modified. | `BatchUpdateRequest` (`{"updates": [{"id": uuid, ...UpdateCardRequest fields}, ...]}`) |
+| `GET` | `/v1/cards/lookup` | Resolve a card identifier (`KAN-7` or a bare `7`). Requires `?identifier=`. Returns an unpaginated JSON array of `CardResponse`; an empty array for no match or an unparseable identifier, never 404. A bare number matches across every namespace. | — |
 
 The remaining card routes (get/create/replace/update/delete, and the flat `/v1/cards/{id}` aliases) exist but aren't documented in this table yet.
 

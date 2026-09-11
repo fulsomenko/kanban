@@ -24,20 +24,6 @@ fn test_get_card_by_board_and_number_declines_under_its_own_name() {
 }
 
 #[test]
-fn test_list_cards_by_number_declines_under_its_own_name() {
-    let backend = unreachable_backend();
-    let result = backend.list_cards_by_number(1);
-    assert_declines_under_its_own_name(result, "list_cards_by_number");
-}
-
-#[test]
-fn test_list_cards_by_prefix_and_number_declines_under_its_own_name() {
-    let backend = unreachable_backend();
-    let result = backend.list_cards_by_prefix_and_number("kan", 1);
-    assert_declines_under_its_own_name(result, "list_cards_by_prefix_and_number");
-}
-
-#[test]
 fn test_upsert_prefix_declines_under_its_own_name() {
     let backend = unreachable_backend();
     let result = backend.upsert_prefix(Prefix::new("kan"));
