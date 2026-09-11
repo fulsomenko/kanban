@@ -464,4 +464,90 @@ mod tests {
             "Model::sprints must be deleted; callers should use sprints_state().loaded_or_empty()"
         );
     }
+
+    #[test]
+    fn test_load_from_snapshot_buckets_live_cards_into_column_tiers() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col_a = Column::new(board.id, "A", 0);
+        let col_b = Column::new(board.id, "B", 1);
+        let live = make_card(&board, col_a.id);
+        let archived = make_card(&board, col_a.id);
+        let live_id = live.id;
+        let archived_id = archived.id;
+        let _ = m.load_from_snapshot(Snapshot {
+            boards: vec![board.clone()],
+            columns: vec![col_a.clone(), col_b.clone()],
+            cards: vec![live, archived],
+            archived_cards: vec![ArchivedCard::new(archived_id, board.id)],
+            ..Default::default()
+        });
+
+        let col_a_state = m.column_cards_state(col_a.id);
+        let col_a_ids: Vec<Uuid> = col_a_state.loaded().unwrap().iter().map(|c| c.id).collect();
+        assert_eq!(col_a_ids, vec![live_id]);
+
+        let col_b_state = m.column_cards_state(col_b.id);
+        assert_eq!(col_b_state.loaded().unwrap().len(), 0);
+
+        let board_state = m.board_cards_state(board.id);
+        let board_ids: Vec<Uuid> = board_state.loaded().unwrap().iter().map(|c| c.id).collect();
+        assert_eq!(board_ids, vec![live_id]);
+    }
+
+    #[test]
+    fn test_load_from_snapshot_buckets_archived_markers_by_board() {
+        let mut m = Model::default();
+        let board_1 = Board::new("B1", None::<String>);
+        let board_2 = Board::new("B2", None::<String>);
+        let col_1 = Column::new(board_1.id, "A", 0);
+        let card_1 = make_card(&board_1, col_1.id);
+        let card_1_id = card_1.id;
+        let marker = ArchivedCard::new(card_1_id, board_1.id);
+        let _ = m.load_from_snapshot(Snapshot {
+            boards: vec![board_1.clone(), board_2.clone()],
+            columns: vec![col_1],
+            cards: vec![card_1],
+            archived_cards: vec![marker],
+            ..Default::default()
+        });
+
+        let board_1_state = m.board_archived_cards_state(board_1.id);
+        let board_1_ids: Vec<Uuid> = board_1_state
+            .loaded()
+            .unwrap()
+            .iter()
+            .map(|ac| ac.entity_id)
+            .collect();
+        assert_eq!(board_1_ids, vec![card_1_id]);
+
+        let board_2_state = m.board_archived_cards_state(board_2.id);
+        assert_eq!(board_2_state.loaded().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_load_from_snapshot_resolves_a_bucketed_card_through_the_scoped_index() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col = Column::new(board.id, "A", 0);
+        let live = make_card(&board, col.id);
+        let live_id = live.id;
+        let _ = m.load_from_snapshot(Snapshot {
+            boards: vec![board.clone()],
+            columns: vec![col],
+            cards: vec![live],
+            ..Default::default()
+        });
+
+        let err = Arc::new(KanbanError::unsupported("boom"));
+        let _ = m.apply_resolved(crate::Resolved {
+            cards: crate::resolved::Collection {
+                all: LoadState::Failed(err),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert!(m.card_by_id_state(live_id).is_loaded());
+    }
 }

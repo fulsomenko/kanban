@@ -347,4 +347,133 @@ mod tests {
         assert!(state.is_not_loaded());
         assert!(!state.is_loaded());
     }
+
+    fn seed_columns_for_board(m: &mut Model, board_id: Uuid, columns: Vec<crate::Column>) {
+        let mut by_parent = std::collections::HashMap::new();
+        by_parent.insert(board_id, LoadState::Loaded(columns));
+        let _ = m.apply_resolved(crate::Resolved {
+            columns: crate::resolved::Collection {
+                by_parent,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    }
+
+    fn seed_cards_for_column(m: &mut Model, column_id: Uuid, state: LoadState<Vec<Card>>) {
+        let mut by_parent = std::collections::HashMap::new();
+        by_parent.insert(column_id, state);
+        let _ = m.apply_resolved(crate::Resolved {
+            cards: crate::resolved::Collection {
+                by_parent,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    }
+
+    #[test]
+    fn test_board_cards_state_concats_loaded_column_tiers_in_column_order() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col_a = crate::Column::new(board.id, "A", 0);
+        let col_b = crate::Column::new(board.id, "B", 1);
+        let col_a_id = col_a.id;
+        let col_b_id = col_b.id;
+        seed_columns_for_board(&mut m, board.id, vec![col_a, col_b]);
+
+        let a1 = make_card(&board, col_a_id);
+        let b1 = make_card(&board, col_b_id);
+        let a1_id = a1.id;
+        let b1_id = b1.id;
+        seed_cards_for_column(&mut m, col_a_id, LoadState::Loaded(vec![a1]));
+        seed_cards_for_column(&mut m, col_b_id, LoadState::Loaded(vec![b1]));
+
+        let state = m.board_cards_state(board.id);
+        let ids: Vec<Uuid> = state.loaded().unwrap().iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![a1_id, b1_id]);
+    }
+
+    #[test]
+    fn test_board_cards_state_not_loaded_when_any_column_tier_not_loaded() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col_a = crate::Column::new(board.id, "A", 0);
+        let col_b = crate::Column::new(board.id, "B", 1);
+        let col_a_id = col_a.id;
+        seed_columns_for_board(&mut m, board.id, vec![col_a, col_b]);
+
+        let a1 = make_card(&board, col_a_id);
+        seed_cards_for_column(&mut m, col_a_id, LoadState::Loaded(vec![a1]));
+
+        let state = m.board_cards_state(board.id);
+        assert!(state.is_not_loaded());
+    }
+
+    #[test]
+    fn test_board_cards_state_failed_wins_over_not_loaded() {
+        let err = std::sync::Arc::new(KanbanError::unsupported("boom"));
+
+        let mut m1 = Model::default();
+        let board1 = Board::new("B", None::<String>);
+        let col_a = crate::Column::new(board1.id, "A", 0);
+        let col_b = crate::Column::new(board1.id, "B", 1);
+        let col_a_id = col_a.id;
+        seed_columns_for_board(&mut m1, board1.id, vec![col_a, col_b]);
+        seed_cards_for_column(&mut m1, col_a_id, LoadState::Failed(err.clone()));
+        let state1 = m1.board_cards_state(board1.id);
+        assert!(matches!(state1, LoadState::Failed(e) if std::sync::Arc::ptr_eq(&e, &err)));
+
+        let mut m2 = Model::default();
+        let board2 = Board::new("B2", None::<String>);
+        let col_a2 = crate::Column::new(board2.id, "A", 0);
+        let col_b2 = crate::Column::new(board2.id, "B", 1);
+        let col_b2_id = col_b2.id;
+        seed_columns_for_board(&mut m2, board2.id, vec![col_a2, col_b2]);
+        seed_cards_for_column(&mut m2, col_b2_id, LoadState::Failed(err.clone()));
+        let state2 = m2.board_cards_state(board2.id);
+        assert!(matches!(state2, LoadState::Failed(e) if std::sync::Arc::ptr_eq(&e, &err)));
+    }
+
+    #[test]
+    fn test_board_cards_state_returns_not_loaded_for_a_board_with_no_scoped_column_entry() {
+        let mut m = Model::default();
+        let random_board = Uuid::new_v4();
+        assert!(m.board_cards_state(random_board).is_not_loaded());
+
+        let err = std::sync::Arc::new(KanbanError::unsupported("boom"));
+        let mut by_parent = std::collections::HashMap::new();
+        by_parent.insert(random_board, LoadState::Failed(err.clone()));
+        let _ = m.apply_resolved(crate::Resolved {
+            columns: crate::resolved::Collection {
+                by_parent,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let state = m.board_cards_state(random_board);
+        assert!(matches!(state, LoadState::Failed(e) if std::sync::Arc::ptr_eq(&e, &err)));
+    }
+
+    #[test]
+    fn test_board_cards_state_ignores_a_failed_flat_collection() {
+        let err = std::sync::Arc::new(KanbanError::unsupported("boom"));
+        let mut m = Model::with_load_states(crate::model::ModelLoadStates {
+            cards: LoadState::Failed(err.clone()),
+            columns: LoadState::Failed(err),
+            ..Default::default()
+        });
+
+        let board = Board::new("B", None::<String>);
+        let col = crate::Column::new(board.id, "A", 0);
+        let col_id = col.id;
+        seed_columns_for_board(&mut m, board.id, vec![col]);
+        let card = make_card(&board, col_id);
+        let card_id = card.id;
+        seed_cards_for_column(&mut m, col_id, LoadState::Loaded(vec![card]));
+
+        let state = m.board_cards_state(board.id);
+        let ids: Vec<Uuid> = state.loaded().unwrap().iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![card_id]);
+    }
 }
