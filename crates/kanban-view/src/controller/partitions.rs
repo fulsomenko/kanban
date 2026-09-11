@@ -13,26 +13,43 @@ fn joined<T, A, B>(flat: LoadState<A>, markers: LoadState<B>) -> LoadState<Vec<T
     }
 }
 
+/// Joins a board's archived-marker tier with the per-id card body tier: for
+/// each Loaded marker, resolves its body through `card_by_id_state`. A
+/// `Missing` body is skipped (a stale marker never wedges the view); any
+/// `Failed` body short-circuits the whole join; any `NotLoaded` body means
+/// the join itself is `NotLoaded`, not partially populated.
+fn archived_bodies(model: &Model, board_id: uuid::Uuid) -> LoadState<Vec<Card>> {
+    let markers = match model.board_archived_cards_state(board_id) {
+        LoadState::Loaded(markers) => markers,
+        LoadState::Failed(e) => return LoadState::Failed(e),
+        LoadState::Missing => return LoadState::Missing,
+        LoadState::NotLoaded => return LoadState::NotLoaded,
+    };
+
+    let mut cards = Vec::with_capacity(markers.len());
+    for marker in markers {
+        match model.card_by_id_state(marker.entity_id) {
+            LoadState::Loaded(card) => cards.push(card.clone()),
+            LoadState::Missing => continue,
+            LoadState::Failed(e) => return LoadState::Failed(e),
+            LoadState::NotLoaded => return LoadState::NotLoaded,
+        }
+    }
+    LoadState::Loaded(cards)
+}
+
 impl Controller {
     pub(super) fn rebuild_card_partitions(&mut self, model: &Model) {
-        match (model.cards_state().as_ref(), model.archived_cards_state()) {
-            (LoadState::Loaded(cards), LoadState::Loaded(_)) => {
-                let (archived_cards, live_cards): (Vec<Card>, Vec<Card>) = cards
-                    .iter()
-                    .cloned()
-                    .partition(|c| model.archived_card_ids().contains(&c.id));
-                self.displayed_cards_live = LoadState::Loaded(live_cards);
-                self.displayed_cards_archived = LoadState::Loaded(archived_cards);
-            }
-            (LoadState::Loaded(cards), markers) => {
-                self.displayed_cards_live = LoadState::Loaded(cards.clone());
-                self.displayed_cards_archived = markers.map(|_| Vec::new());
-            }
-            (flat, markers) => {
-                self.displayed_cards_live = flat.clone().map(|_| Vec::new());
-                self.displayed_cards_archived = joined(flat, markers);
-            }
-        }
+        let Some(board_id) = self.scope_board else {
+            self.displayed_cards_live = LoadState::NotLoaded;
+            self.displayed_cards_archived = LoadState::NotLoaded;
+            return;
+        };
+
+        self.displayed_cards_live = model
+            .board_cards_state(board_id)
+            .map(|cards| cards.into_iter().cloned().collect());
+        self.displayed_cards_archived = archived_bodies(model, board_id);
     }
 
     pub(super) fn rebuild_board_partitions(&mut self, model: &Model) {

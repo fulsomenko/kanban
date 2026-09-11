@@ -14,6 +14,11 @@ mod partitions;
 /// sort, partitions and the archived-at side map are the `Controller`'s.
 #[derive(Debug)]
 pub struct Controller {
+    // The board the card partitions are scoped to. A scope change is a
+    // staleness source independent of `ModelChanged`: `set_scope_board`
+    // rebuilds the card partitions itself rather than waiting for the next
+    // `resync`, which may otherwise skip the rebuild on an unchanged receipt.
+    scope_board: Option<Uuid>,
     // Live/archived partitions of the Model's unified `cards`/`boards`
     // collections, computed ONCE in `resync` and served as a borrow by
     // `displayed_cards`/`displayed_boards`. This is the concrete
@@ -43,6 +48,7 @@ pub struct Controller {
 impl Default for Controller {
     fn default() -> Self {
         Self {
+            scope_board: None,
             displayed_cards_live: LoadState::NotLoaded,
             displayed_cards_archived: LoadState::NotLoaded,
             displayed_boards_live: LoadState::NotLoaded,
@@ -83,6 +89,17 @@ impl Controller {
         } else {
             self.displayed_cards_live.as_ref().map(Vec::as_slice)
         }
+    }
+
+    /// Sets the board the card partitions are scoped to and rebuilds them
+    /// immediately against `model`. A no-op when `board_id` already matches
+    /// the current scope.
+    pub fn set_scope_board(&mut self, board_id: Option<Uuid>, model: &Model) {
+        if self.scope_board == board_id {
+            return;
+        }
+        self.scope_board = board_id;
+        self.rebuild_card_partitions(model);
     }
 
     /// The boards the projects panel should display, selected by
