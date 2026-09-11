@@ -960,13 +960,14 @@ mod tests {
     }
 
     #[test]
-    fn test_board_delete_counts_declines_when_the_archived_marker_tier_is_not_absorbed() {
+    fn test_board_delete_counts_declines_when_the_by_board_archived_tier_is_not_loaded() {
         use kanban_domain::resolved::Collection;
         use kanban_domain::{Board, Column, DerivedProjections, Sprint};
         use std::collections::HashMap;
 
         let board = Board::new("Roadmap", None::<String>);
         let column = Column::new(board.id, "Todo", 0);
+        let column_id = column.id;
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
@@ -979,21 +980,17 @@ mod tests {
             ..Default::default()
         };
         resolved.cards = Collection {
-            all: LoadState::Loaded(Vec::new()),
+            by_parent: HashMap::from([(column_id, LoadState::Loaded(Vec::new()))]),
             ..Default::default()
         };
         let changed = app.model.apply_resolved(resolved);
         app.controller.resync(&app.model, changed);
 
-        assert!(
-            !app.model.archived_card_markers_absorbed(),
-            "the archived marker tier must not be absorbed by this fixture"
-        );
         assert_eq!(app.board_delete_counts(board.id), None);
 
         let resolved_archived = kanban_domain::Resolved {
             archived_cards: Collection {
-                all: LoadState::Loaded(Vec::new()),
+                by_parent: HashMap::from([(board.id, LoadState::Loaded(Vec::new()))]),
                 ..Default::default()
             },
             ..Default::default()
@@ -1009,7 +1006,7 @@ mod tests {
                 archived: 0,
                 sprints: 0,
             }),
-            "a Loaded-but-empty archived marker tier must not decline"
+            "a Loaded-but-empty by-board archived tier must not decline"
         );
     }
 

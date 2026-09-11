@@ -227,6 +227,9 @@ mod tests {
         fn loaded_archived_board_markers(&self) -> Option<&[kanban_domain::ArchivedBoard]> {
             None
         }
+        fn loaded_archived_cards_of_board(&self, _board_id: Uuid) -> Option<&[ArchivedCard]> {
+            None
+        }
     }
 
     struct StubPlan;

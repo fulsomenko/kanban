@@ -198,6 +198,13 @@ fn seed_model_states(
     columns: LoadState<Vec<Column>>,
     sprints: LoadState<Vec<Sprint>>,
 ) {
+    let columns_by_parent = std::collections::HashMap::from([(board.id, columns.clone())]);
+    let cards_by_parent: std::collections::HashMap<uuid::Uuid, LoadState<Vec<Card>>> =
+        match &columns {
+            LoadState::Loaded(cols) => cols.iter().map(|c| (c.id, cards.clone())).collect(),
+            _ => std::collections::HashMap::new(),
+        };
+    let sprints_by_parent = std::collections::HashMap::from([(board.id, sprints.clone())]);
     let resolved = Resolved {
         boards: Collection {
             all: LoadState::Loaded(vec![board.clone()]),
@@ -205,14 +212,17 @@ fn seed_model_states(
         },
         cards: Collection {
             all: cards,
+            by_parent: cards_by_parent,
             ..Default::default()
         },
         columns: Collection {
             all: columns,
+            by_parent: columns_by_parent,
             ..Default::default()
         },
         sprints: Collection {
             all: sprints,
+            by_parent: sprints_by_parent,
             ..Default::default()
         },
         graph: LoadState::Loaded(DependencyGraph::default()),
@@ -236,7 +246,7 @@ fn test_a_not_loaded_card_tier_titles_the_panel_without_a_count() {
         &mut app,
         &board,
         LoadState::NotLoaded,
-        LoadState::Loaded(vec![]),
+        LoadState::Loaded(vec![Column::new(board.id, "Todo", 0)]),
         LoadState::Loaded(vec![]),
     );
 
@@ -269,11 +279,12 @@ fn test_a_loaded_empty_card_tier_still_titles_the_panel_with_zero() {
 fn test_a_failed_card_tier_titles_the_panel_distinctly_from_not_loaded() {
     let mut app_not_loaded = App::test_default();
     let board = Board::new("TestBoard", None::<String>);
+    let column = Column::new(board.id, "Todo", 0);
     seed_model_states(
         &mut app_not_loaded,
         &board,
         LoadState::NotLoaded,
-        LoadState::Loaded(vec![]),
+        LoadState::Loaded(vec![column.clone()]),
         LoadState::Loaded(vec![]),
     );
     let not_loaded_rendered = tasks_panel_title(&app_not_loaded, false);
@@ -283,7 +294,7 @@ fn test_a_failed_card_tier_titles_the_panel_distinctly_from_not_loaded() {
         &mut app_failed,
         &board,
         boom_cards(),
-        LoadState::Loaded(vec![]),
+        LoadState::Loaded(vec![column]),
         LoadState::Loaded(vec![]),
     );
     let failed_rendered = tasks_panel_title(&app_failed, false);

@@ -13,6 +13,7 @@ async fn json_app_with_archived_card() -> (App, uuid::Uuid) {
 
     let store = kanban_persistence_json::JsonFileStore::new(&path_str);
     let board = Board::new("Board", None::<String>);
+    let board_id = board.id;
     let column = Column::new(board.id, "Todo", 0);
     let card = Card::new(board.id, column.id, "Archived task", 0);
     let card_id = card.id;
@@ -21,7 +22,7 @@ async fn json_app_with_archived_card() -> (App, uuid::Uuid) {
         boards: vec![board],
         columns: vec![column],
         cards: vec![card],
-        archived_cards: vec![ArchivedCard::new(card_id, uuid::Uuid::nil())],
+        archived_cards: vec![ArchivedCard::new(card_id, board_id)],
         sprints: vec![],
         graph: Default::default(),
         prefixes: Vec::new(),

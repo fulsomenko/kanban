@@ -291,7 +291,7 @@ fn test_d_in_the_archived_cards_view_starts_no_animation() {
 #[test]
 fn test_d_in_the_archived_cards_view_leaves_the_card_archived_after_undo() {
     let mut app = App::test_default();
-    let (_, _, _, card_id) = seed_archived_card(&mut app);
+    let (board_id, _, _, card_id) = seed_archived_card(&mut app);
     app.ctx.clear_history().unwrap();
     assert!(
         !app.ctx.can_undo(),
@@ -318,7 +318,13 @@ fn test_d_in_the_archived_cards_view_leaves_the_card_archived_after_undo() {
     app.reload_model();
     app.prepare_frame();
     assert!(
-        app.model.archived_card_ids().contains(&card_id),
+        app.model
+            .board_archived_cards_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .any(|marker| marker.entity_id == card_id),
         "the card must remain archived"
     );
 }

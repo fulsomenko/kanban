@@ -144,6 +144,13 @@ impl LoadedEntities for StubLoaded {
     fn loaded_archived_board_markers(&self) -> Option<&[ArchivedBoard]> {
         self.archived_boards.all.loaded().map(Vec::as_slice)
     }
+    fn loaded_archived_cards_of_board(&self, board_id: Uuid) -> Option<&[ArchivedCard]> {
+        self.archived_cards
+            .by_parent
+            .get(&board_id)
+            .and_then(LoadState::loaded)
+            .map(Vec::as_slice)
+    }
 }
 
 fn apply_collection<T: Clone>(target: &mut Collection<T>, incoming: Collection<T>) {

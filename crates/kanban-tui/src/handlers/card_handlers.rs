@@ -1700,8 +1700,8 @@ mod cards_tier_decline_tests {
         app.ctx
             .create_column(board_id, "Doing".into(), None)
             .unwrap();
-        refresh(&mut app);
         app.selection.active_board_id = Some(board_id);
+        refresh(&mut app);
         app.focus.active = Focus::Cards;
         select_card_in_active_task_list(&mut app, card_id);
 
@@ -1747,8 +1747,8 @@ mod cards_tier_decline_tests {
     fn test_cursor_archive_anchor_with_a_not_loaded_cards_tier_returns_none() {
         let mut app = App::test_default();
         let (board_id, _column_id, card_id) = seed_board_column_card(&mut app);
-        refresh(&mut app);
         app.selection.active_board_id = Some(board_id);
+        refresh(&mut app);
         app.focus.active = Focus::Cards;
         select_card_in_active_task_list(&mut app, card_id);
 
@@ -1787,8 +1787,8 @@ mod cards_tier_decline_tests {
     fn test_handle_manage_children_from_list_with_a_cold_cards_tier_repopulates_and_opens() {
         let mut app = App::test_default();
         let (board_id, _column_id, card_id) = seed_board_column_card(&mut app);
-        refresh(&mut app);
         app.selection.active_board_id = Some(board_id);
+        refresh(&mut app);
         app.focus.active = Focus::Cards;
         select_card_in_active_task_list(&mut app, card_id);
 
@@ -1812,8 +1812,8 @@ mod cards_tier_decline_tests {
     fn test_handle_manage_children_from_list_with_a_cold_graph_opens_the_dialog() {
         let mut app = App::test_default();
         let (board_id, _column_id, card_id) = seed_board_column_card(&mut app);
-        refresh(&mut app);
         app.selection.active_board_id = Some(board_id);
+        refresh(&mut app);
         app.focus.active = Focus::Cards;
         select_card_in_active_task_list(&mut app, card_id);
 
