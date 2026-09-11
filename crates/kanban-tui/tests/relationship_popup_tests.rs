@@ -92,8 +92,8 @@ fn test_manage_parents_popup_enter_creates_parent_edge() {
         )
         .unwrap();
 
-    // Wire the model so popup_handlers' `self.model.cards_state().loaded_or_empty()` reflects
-    // the data store. `selection.active_card` points at child.
+    // Wire the model so it reflects the data store.
+    // `selection.active_card` points at child.
     let snapshot = Snapshot {
         archived_boards: Vec::new(),
         boards: app.ctx.data_store().list_boards().unwrap(),

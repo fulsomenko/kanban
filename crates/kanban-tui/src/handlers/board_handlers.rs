@@ -945,7 +945,7 @@ mod tests {
         app.controller.resync(&app.model, changed);
 
         assert!(
-            app.model.cards_state().is_not_loaded(),
+            app.model.board_cards_state(board.id).is_not_loaded(),
             "cards must stay NotLoaded for this fixture to isolate the live-cards gate"
         );
         assert_eq!(app.board_delete_counts(board.id), None);

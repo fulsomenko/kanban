@@ -77,8 +77,8 @@ mod tests {
     #[test]
     fn test_check_ended_sprints_does_not_scan_an_unloaded_sprint_tier() {
         let mut app = App::test_default();
-        seed_ended_sprint(&mut app);
-        assert!(matches!(app.model.sprints_state(), LoadState::NotLoaded));
+        let (board_id, _sprint_id) = seed_ended_sprint(&mut app);
+        assert!(app.model.board_sprints_state(board_id).is_not_loaded());
 
         let ended = app.check_ended_sprints();
 
@@ -95,7 +95,7 @@ mod tests {
         let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         let _ = app.model.load_from_snapshot(snap);
         app.selection.active_board_id = Some(board_id);
-        assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
+        assert!(app.model.board_sprints_state(board_id).is_loaded());
 
         let ended = app.check_ended_sprints();
 
@@ -109,7 +109,7 @@ mod tests {
         let snap = kanban_service::read_full_snapshot(app.ctx.data_store()).unwrap();
         let _ = app.model.load_from_snapshot(snap);
         app.selection.active_board_id = Some(board_id);
-        assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
+        assert!(app.model.board_sprints_state(board_id).is_loaded());
 
         let _ = app
             .model

@@ -462,10 +462,8 @@ fn test_move_selected_card_column_declines_when_the_column_tier_is_not_loaded() 
     assert_error_banner(&app);
     let stored_column = app
         .model
-        .cards_state()
-        .loaded_or_empty()
-        .iter()
-        .find(|c| c.id == card_id)
+        .card_by_id_state(card_id)
+        .loaded()
         .map(|c| c.column_id)
         .expect("card still present");
     assert_eq!(stored_column, left_id);

@@ -1705,7 +1705,12 @@ mod tests {
 
         // A second card, placed only in the Completed panel, distinct from the
         // Uncompleted panel's card set up by seed_sprint_with_card.
-        let column_id = app.model.columns_state().loaded_or_empty()[0].id;
+        let column_id = app
+            .model
+            .board_columns_state(board_id)
+            .loaded()
+            .unwrap()[0]
+            .id;
         let completed_card = app
             .ctx
             .create_card(
@@ -2779,10 +2784,9 @@ mod tests {
         );
     }
 
-    fn seed_board_with_scoped_and_flat_sprints(
+    fn seed_board_with_scoped_sprints(
         app: &mut App,
         build_scoped: impl FnOnce(uuid::Uuid) -> Vec<kanban_domain::Sprint>,
-        build_flat_all: impl FnOnce(uuid::Uuid) -> LoadState<Vec<kanban_domain::Sprint>>,
     ) -> uuid::Uuid {
         use kanban_domain::resolved::Collection;
         use kanban_domain::{Column, DependencyGraph, Resolved};
@@ -2791,7 +2795,6 @@ mod tests {
         let board_id = board.id;
         let column = Column::new(board_id, "Todo", 0);
         let scoped = build_scoped(board_id);
-        let flat_all = build_flat_all(board_id);
 
         let resolved = Resolved {
             boards: Collection {
@@ -2799,16 +2802,10 @@ mod tests {
                 ..Default::default()
             },
             columns: Collection {
-                all: LoadState::Loaded(vec![column.clone()]),
                 by_parent: [(board_id, LoadState::Loaded(vec![column]))].into(),
                 ..Default::default()
             },
-            cards: Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
             sprints: Collection {
-                all: flat_all,
                 by_parent: [(board_id, LoadState::Loaded(scoped))].into(),
                 ..Default::default()
             },
@@ -2825,16 +2822,12 @@ mod tests {
     #[test]
     fn test_board_detail_sprint_nav_uses_scoped_tier_rows() {
         let mut app = App::test_default();
-        let board_id = seed_board_with_scoped_and_flat_sprints(
-            &mut app,
-            |board_id| {
-                vec![
-                    kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
-                    kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
-                ]
-            },
-            |_| LoadState::NotLoaded,
-        );
+        let board_id = seed_board_with_scoped_sprints(&mut app, |board_id| {
+            vec![
+                kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
+                kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
+            ]
+        });
 
         app.selection.active_board_id = Some(board_id);
         app.focus.board_focus = BoardFocus::Sprints;
@@ -2851,23 +2844,12 @@ mod tests {
     fn test_board_detail_sprint_enter_opens_the_sprint_the_scoped_tier_shows() {
         let mut app = App::test_default();
         let s2_id = std::cell::Cell::new(uuid::Uuid::nil());
-        let board_id = seed_board_with_scoped_and_flat_sprints(
-            &mut app,
-            |board_id| {
-                let s1 = kanban_domain::Sprint::new(board_id, 1, None, None::<String>);
-                let s2 = kanban_domain::Sprint::new(board_id, 2, None, None::<String>);
-                s2_id.set(s2.id);
-                vec![s1, s2]
-            },
-            |board_id| {
-                LoadState::Loaded(vec![kanban_domain::Sprint::new(
-                    board_id,
-                    99,
-                    None,
-                    None::<String>,
-                )])
-            },
-        );
+        let board_id = seed_board_with_scoped_sprints(&mut app, |board_id| {
+            let s1 = kanban_domain::Sprint::new(board_id, 1, None, None::<String>);
+            let s2 = kanban_domain::Sprint::new(board_id, 2, None, None::<String>);
+            s2_id.set(s2.id);
+            vec![s1, s2]
+        });
         let s2_id = s2_id.get();
 
         app.selection.active_board_id = Some(board_id);
@@ -2884,22 +2866,12 @@ mod tests {
     #[test]
     fn test_column_focus_exit_upwards_lands_on_the_last_scoped_sprint_row() {
         let mut app = App::test_default();
-        let board_id = seed_board_with_scoped_and_flat_sprints(
-            &mut app,
-            |board_id| {
-                vec![
-                    kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
-                    kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
-                ]
-            },
-            |board_id| {
-                LoadState::Loaded(vec![
-                    kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
-                    kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
-                    kanban_domain::Sprint::new(board_id, 3, None, None::<String>),
-                ])
-            },
-        );
+        let board_id = seed_board_with_scoped_sprints(&mut app, |board_id| {
+            vec![
+                kanban_domain::Sprint::new(board_id, 1, None, None::<String>),
+                kanban_domain::Sprint::new(board_id, 2, None, None::<String>),
+            ]
+        });
 
         app.selection.active_board_id = Some(board_id);
         app.focus.board_focus = BoardFocus::Columns;
@@ -2924,10 +2896,6 @@ mod visible_board_columns_tests {
         Resolved {
             boards: Collection {
                 all: LoadState::Loaded(vec![board.clone()]),
-                ..Default::default()
-            },
-            cards: Collection {
-                all: LoadState::Loaded(vec![]),
                 ..Default::default()
             },
             graph: LoadState::Loaded(DependencyGraph::default()),
@@ -2964,18 +2932,6 @@ mod visible_board_columns_tests {
 
         let app = App::test_default();
         assert!(app.visible_board_columns(board.id).is_not_loaded());
-
-        let mut app = App::test_default();
-        let mut resolved = base_resolved(&board);
-        resolved.columns = Collection {
-            all: LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
-            ..Default::default()
-        };
-        let _ = app.model.apply_resolved(resolved);
-        assert!(
-            app.visible_board_columns(board.id).is_not_loaded(),
-            "a populated flat tier must not stand in for a not-loaded scoped tier"
-        );
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);

@@ -168,7 +168,13 @@ mod active_card_index_regression {
         app.ctx.assign_card_to_sprint(fx.p_id, sprint_p.id).unwrap();
         load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
-        let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+        let sprints = app
+            .model
+            .board_sprints_state(fx.board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .to_vec();
         let entries = build_entries(&sprints, fx.board_id, chrono::Utc::now());
         let expected_idx = entries
             .iter()
@@ -195,10 +201,6 @@ mod board_columns_view_tests {
         Resolved {
             boards: Collection {
                 all: LoadState::Loaded(vec![board.clone()]),
-                ..Default::default()
-            },
-            cards: Collection {
-                all: LoadState::Loaded(vec![]),
                 ..Default::default()
             },
             graph: LoadState::Loaded(DependencyGraph::default()),
@@ -235,18 +237,6 @@ mod board_columns_view_tests {
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
         resolved.columns = Collection {
-            all: LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
-            ..Default::default()
-        };
-        let _ = app.model.apply_resolved(resolved);
-        assert!(
-            app.board_columns_view(board.id).is_not_loaded(),
-            "a populated flat tier must not stand in for a not-loaded scoped tier"
-        );
-
-        let mut app = App::test_default();
-        let mut resolved = base_resolved(&board);
-        resolved.columns = Collection {
             by_parent: HashMap::from([(
                 board.id,
                 LoadState::Failed(std::sync::Arc::new(
@@ -273,14 +263,6 @@ mod board_sprints_view_tests {
                 all: LoadState::Loaded(vec![board.clone()]),
                 ..Default::default()
             },
-            cards: Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            columns: Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
             graph: LoadState::Loaded(DependencyGraph::default()),
             ..Default::default()
         }
@@ -289,22 +271,9 @@ mod board_sprints_view_tests {
     #[test]
     fn test_board_sprints_view_answers_not_loaded_when_the_scoped_tier_is_not_loaded() {
         let board = Board::new("B", None::<String>);
-        let s_on_board = Sprint::new(board.id, 1, None, None::<String>);
 
         let app = App::test_default();
         assert!(app.board_sprints_view(board.id).is_not_loaded());
-
-        let mut app = App::test_default();
-        let mut resolved = base_resolved(&board);
-        resolved.sprints = Collection {
-            all: LoadState::Loaded(vec![s_on_board.clone()]),
-            ..Default::default()
-        };
-        let _ = app.model.apply_resolved(resolved);
-        assert!(
-            app.board_sprints_view(board.id).is_not_loaded(),
-            "a populated flat tier must not stand in for a not-loaded scoped tier"
-        );
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
@@ -323,7 +292,6 @@ mod board_sprints_view_tests {
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
         resolved.sprints = Collection {
-            all: LoadState::Loaded(vec![s_on_board.clone()]),
             by_parent: HashMap::from([(board.id, LoadState::Loaded(Vec::new()))]),
             ..Default::default()
         };
@@ -336,8 +304,6 @@ mod board_sprints_view_tests {
 
     #[test]
     fn test_sprint_selection_index_matches_scoped_tier_entries() {
-        use kanban_view::sprint_assign_list::{build_entries, sprint_id_of};
-
         let board = Board::new("B", None::<String>);
         let column = Column::new(board.id, "Todo", 0);
         let mut s_a = Sprint::new(board.id, 2, None, None::<String>);
@@ -346,41 +312,27 @@ mod board_sprints_view_tests {
         s_b.status = kanban_domain::SprintStatus::Planning;
 
         let mut app = App::test_default();
-        let mut card = kanban_domain::Card::new(board.id, column.id, "Task", 0);
+        let column_id = column.id;
+        let mut card = kanban_domain::Card::new(board.id, column_id, "Task", 0);
         card.sprint_id = Some(s_b.id);
 
         let mut resolved = base_resolved(&board);
         resolved.columns = Collection {
-            all: LoadState::Loaded(vec![column]),
+            by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![column]))]),
             ..Default::default()
         };
         resolved.cards = Collection {
-            all: LoadState::Loaded(vec![card.clone()]),
+            by_parent: HashMap::from([(column_id, LoadState::Loaded(vec![card.clone()]))]),
             ..Default::default()
         };
         resolved.sprints = Collection {
-            all: LoadState::Loaded(vec![s_a.clone(), s_b.clone()]),
             by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![s_b.clone()]))]),
             ..Default::default()
         };
         let _ = app.model.apply_resolved(resolved);
         app.selection.active_board_id = Some(board.id);
         app.selection.active_card_id = Some(card.id);
-
-        let sprints = app.model.sprints_state();
-        let flat_entries = if let LoadState::Loaded(sprints) = sprints {
-            build_entries(sprints, board.id, chrono::Utc::now())
-        } else {
-            panic!("expected flat tier loaded")
-        };
-        let flat_idx = flat_entries
-            .iter()
-            .position(|e| sprint_id_of(e) == Some(s_b.id))
-            .unwrap();
-        assert_eq!(
-            flat_idx, 3,
-            "sanity: the flat tier lists s_a before s_b, so s_b sits later there"
-        );
+        let _ = &s_a;
 
         let idx = app.get_current_sprint_selection_index();
 

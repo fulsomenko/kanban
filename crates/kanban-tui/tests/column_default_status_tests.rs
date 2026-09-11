@@ -33,7 +33,11 @@ fn setup_board_with_columns(app: &mut App) -> (uuid::Uuid, uuid::Uuid, uuid::Uui
 fn board_columns(app: &App, board_id: uuid::Uuid) -> Vec<kanban_domain::Column> {
     kanban_domain::card_lifecycle::sorted_board_columns(
         board_id,
-        app.model.columns_state().loaded_or_empty(),
+        app.model
+            .board_columns_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
     )
     .into_iter()
     .cloned()

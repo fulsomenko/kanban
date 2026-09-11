@@ -113,7 +113,7 @@ fn test_create_card_target_column_prefers_board_scoped_state_over_stale_flat_tie
     let _ = app
         .model
         .invalidate(Invalidation::Entities(EntityIds::columns([Uuid::new_v4()])));
-    assert!(app.model.columns_state().is_not_loaded());
+    assert!(app.model.board_columns_state(board_id).is_not_loaded());
 
     let changed = app.model.apply_resolved(Resolved {
         columns: Collection {
@@ -412,21 +412,6 @@ fn test_create_card_still_auto_completes_into_a_completion_column_on_a_loaded_co
     sync_model_from_store(&mut app);
     app.selection.active_board_id = Some(board.id);
 
-    let columns = app
-        .model
-        .columns_state()
-        .loaded()
-        .cloned()
-        .unwrap_or_default();
-    let changed = app.model.apply_resolved(Resolved {
-        columns: Collection {
-            by_parent: [(board.id, LoadState::Loaded(columns))].into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    NoProjections.resync(&app.model, changed);
-
     app.input.set("Auto-complete".to_string());
     app.create_card();
     app.input.clear();
@@ -693,21 +678,6 @@ fn test_handle_manage_children_from_list_still_lists_a_sibling_card_on_a_loaded_
     app.selection.active_board_id = Some(board_id);
     app.focus.active = Focus::Cards;
     select_card_in_active_task_list(&mut app, target.id);
-
-    let columns = app
-        .model
-        .columns_state()
-        .loaded()
-        .cloned()
-        .unwrap_or_default();
-    let changed = app.model.apply_resolved(Resolved {
-        columns: Collection {
-            by_parent: [(board_id, LoadState::Loaded(columns))].into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    NoProjections.resync(&app.model, changed);
 
     app.handle_manage_children_from_list();
 

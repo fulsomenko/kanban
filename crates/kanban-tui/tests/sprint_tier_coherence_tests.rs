@@ -10,31 +10,19 @@ use kanban_tui::App;
 use kanban_view::view_strategy::ViewRefreshContext;
 use std::collections::HashMap;
 
-fn seed_board_with_divergent_sprint_tiers(
+fn seed_board_with_scoped_sprints(
     build_scoped: impl FnOnce(uuid::Uuid) -> Vec<Sprint>,
-    build_flat_extra: impl FnOnce(uuid::Uuid) -> Vec<Sprint>,
 ) -> (App, Board) {
     let mut app = App::test_default();
     let board = Board::new("TestBoard", None::<String>);
     let scoped = build_scoped(board.id);
-    let mut all_sprints = build_flat_extra(board.id);
-    all_sprints.extend(scoped.clone());
 
     let resolved = Resolved {
         boards: Collection {
             all: LoadState::Loaded(vec![board.clone()]),
             ..Default::default()
         },
-        cards: Collection {
-            all: LoadState::Loaded(vec![]),
-            ..Default::default()
-        },
-        columns: Collection {
-            all: LoadState::Loaded(vec![]),
-            ..Default::default()
-        },
         sprints: Collection {
-            all: LoadState::Loaded(all_sprints),
             by_parent: HashMap::from([(board.id, LoadState::Loaded(scoped))]),
             ..Default::default()
         },
@@ -54,21 +42,12 @@ fn open_filter_dialog(app: &mut App) {
 
 #[test]
 fn test_filter_dialog_sprint_toggle_targets_rendered_sprint() {
-    let s_a_id = std::cell::Cell::new(uuid::Uuid::nil());
     let s_b_id = std::cell::Cell::new(uuid::Uuid::nil());
-    let (mut app, _board) = seed_board_with_divergent_sprint_tiers(
-        |board_id| {
-            let s_b = Sprint::new(board_id, 2, None, None::<String>);
-            s_b_id.set(s_b.id);
-            vec![s_b]
-        },
-        |board_id| {
-            let s_a = Sprint::new(board_id, 1, None, None::<String>);
-            s_a_id.set(s_a.id);
-            vec![s_a]
-        },
-    );
-    let s_a_id = s_a_id.get();
+    let (mut app, _board) = seed_board_with_scoped_sprints(|board_id| {
+        let s_b = Sprint::new(board_id, 2, None, None::<String>);
+        s_b_id.set(s_b.id);
+        vec![s_b]
+    });
     let s_b_id = s_b_id.get();
 
     open_filter_dialog(&mut app);
@@ -82,15 +61,12 @@ fn test_filter_dialog_sprint_toggle_targets_rendered_sprint() {
     app.handle_filter_options_popup(crossterm::event::KeyCode::Char(' '));
 
     assert!(app.filter.active_sprint_filters.contains(&s_b_id));
-    assert!(!app.filter.active_sprint_filters.contains(&s_a_id));
 }
 
 #[test]
 fn test_filter_dialog_sprint_nav_counts_the_rendered_rows() {
-    let (mut app, _board) = seed_board_with_divergent_sprint_tiers(
-        |board_id| vec![Sprint::new(board_id, 2, None, None::<String>)],
-        |board_id| vec![Sprint::new(board_id, 1, None, None::<String>)],
-    );
+    let (mut app, _board) =
+        seed_board_with_scoped_sprints(|board_id| vec![Sprint::new(board_id, 2, None, None::<String>)]);
 
     open_filter_dialog(&mut app);
     {
@@ -130,11 +106,10 @@ fn test_task_row_sprint_suffix_not_loaded_renders_marker_not_blank() {
             ..Default::default()
         },
         cards: Collection {
-            all: LoadState::Loaded(vec![card.clone()]),
+            by_parent: HashMap::from([(column.id, LoadState::Loaded(vec![card.clone()]))]),
             ..Default::default()
         },
         columns: Collection {
-            all: LoadState::Loaded(vec![column.clone()]),
             by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![column.clone()]))]),
             ..Default::default()
         },
@@ -181,11 +156,10 @@ fn test_task_row_sprint_suffix_loaded_renders_the_sprint_name() {
             ..Default::default()
         },
         cards: Collection {
-            all: LoadState::Loaded(vec![card.clone()]),
+            by_parent: HashMap::from([(column.id, LoadState::Loaded(vec![card.clone()]))]),
             ..Default::default()
         },
         columns: Collection {
-            all: LoadState::Loaded(vec![column.clone()]),
             by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![column.clone()]))]),
             ..Default::default()
         },

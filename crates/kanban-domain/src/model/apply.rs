@@ -538,7 +538,7 @@ mod tests {
         let new_sprint = Sprint::new(board.id, 2, None, None::<String>);
         let _ = m.apply_resolved(Resolved {
             sprints: Collection {
-                all: LoadState::Loaded(vec![sprint, new_sprint]),
+                by_parent: [(board.id, LoadState::Loaded(vec![sprint, new_sprint]))].into(),
                 ..Default::default()
             },
             ..Default::default()

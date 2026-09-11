@@ -103,11 +103,12 @@ mod tests {
     fn test_the_fetch_status_of_a_card_absent_from_a_loaded_list_is_not_loaded() {
         let column_id = Uuid::new_v4();
         let card_a = card_in(column_id);
+        let card_a_id = card_a.id;
         let b_id = Uuid::new_v4();
         let mut model = Model::default();
         let _ = model.apply_resolved(Resolved {
             cards: Collection {
-                all: LoadState::Loaded(vec![card_a]),
+                by_id: [(card_a_id, LoadState::Loaded(card_a))].into(),
                 ..Default::default()
             },
             ..Default::default()

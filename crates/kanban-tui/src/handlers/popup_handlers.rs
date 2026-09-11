@@ -811,7 +811,13 @@ mod tests {
         let sprint = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
         load_with_card_order(app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
-        let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+        let sprints = app
+            .model
+            .board_sprints_state(fx.board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .to_vec();
         let board = app
             .model
             .boards_state()
@@ -861,7 +867,13 @@ mod tests {
         load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
         // Prime the picker with the target sprint pre-checked.
-        let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+        let sprints = app
+            .model
+            .board_sprints_state(fx.board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .to_vec();
         let board = app
             .model
             .boards_state()

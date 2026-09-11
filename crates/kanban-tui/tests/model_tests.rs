@@ -10,9 +10,9 @@ fn make_card(board: &Board, column_id: Uuid, title: &str, pos: i32) -> Card {
 fn test_empty_model_returns_empty_slices() {
     let model = Model::default();
     assert!(model.boards_state().loaded_or_empty().is_empty());
-    assert!(model.columns_state().loaded_or_empty().is_empty());
-    assert!(model.cards_state().loaded_or_empty().is_empty());
-    assert!(model.sprints_state().loaded_or_empty().is_empty());
+    assert!(model.board_columns_state(Uuid::new_v4()).is_not_loaded());
+    assert!(model.column_cards_state(Uuid::new_v4()).is_not_loaded());
+    assert!(model.board_sprints_state(Uuid::new_v4()).is_not_loaded());
     assert!(model.archived_card_markers().is_empty());
     assert_eq!(
         model
@@ -44,15 +44,30 @@ fn test_load_from_snapshot_populates_all_fields() {
     };
 
     let _ = model.load_from_snapshot(snapshot);
+    let board_id = model.boards_state().loaded_or_empty()[0].id;
+    let column_id = model
+        .board_columns_state(board_id)
+        .loaded()
+        .unwrap()[0]
+        .id;
 
     assert_eq!(model.boards_state().loaded_or_empty().len(), 1);
     assert_eq!(model.boards_state().loaded_or_empty()[0].name, "Board1");
-    assert_eq!(model.columns_state().loaded_or_empty().len(), 1);
-    assert_eq!(model.columns_state().loaded_or_empty()[0].name, "Col1");
-    assert_eq!(model.cards_state().loaded_or_empty().len(), 1);
-    assert_eq!(model.cards_state().loaded_or_empty()[0].title, "Card1");
-    assert_eq!(model.sprints_state().loaded_or_empty().len(), 1);
-    assert_eq!(model.sprints_state().loaded_or_empty()[0].sprint_number, 1);
+    assert_eq!(model.board_columns_state(board_id).loaded().unwrap().len(), 1);
+    assert_eq!(
+        model.board_columns_state(board_id).loaded().unwrap()[0].name,
+        "Col1"
+    );
+    assert_eq!(model.column_cards_state(column_id).loaded().unwrap().len(), 1);
+    assert_eq!(
+        model.column_cards_state(column_id).loaded().unwrap()[0].title,
+        "Card1"
+    );
+    assert_eq!(model.board_sprints_state(board_id).loaded().unwrap().len(), 1);
+    assert_eq!(
+        model.board_sprints_state(board_id).loaded().unwrap()[0].sprint_number,
+        1
+    );
 }
 
 #[test]
@@ -144,13 +159,15 @@ fn test_load_from_snapshot_rebuilds_card_index() {
 // collection, filtered by `archived_card_ids` (the same set that backs
 // `displayed_cards`).
 fn archived_titles(model: &Model) -> Vec<String> {
-    let ids = model.archived_card_ids();
     model
-        .cards_state()
-        .loaded_or_empty()
+        .archived_card_markers()
         .iter()
-        .filter(|c| ids.contains(&c.id))
-        .map(|c| c.title.clone())
+        .filter_map(|marker| {
+            model
+                .card_id_status(marker.entity_id)
+                .loaded()
+                .map(|c| c.title.clone())
+        })
         .collect()
 }
 
