@@ -148,6 +148,7 @@ mod tests {
     #[test]
     fn test_sync_partitions_cards_by_the_archived_markers() {
         let board = seed_board("B", 0);
+        let board_id = board.id;
         let column = Column::new(board.id, "Col", 0);
         let live = Card::new(board.id, column.id, "live", 0);
         let archived = Card::new(board.id, column.id, "archived", 1);
@@ -157,11 +158,12 @@ mod tests {
             boards: vec![board],
             columns: vec![column],
             cards: vec![live, archived],
-            archived_cards: vec![ArchivedCard::new(archived_id, Uuid::nil())],
+            archived_cards: vec![ArchivedCard::new(archived_id, board_id)],
             archived_boards: Vec::new(),
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
 
         let live_ids: Vec<Uuid> = controller
@@ -221,7 +223,9 @@ mod tests {
     #[test]
     fn test_sync_rebuilds_the_partitions_after_apply_resolved() {
         let board = seed_board("B", 0);
+        let board_id = board.id;
         let column = Column::new(board.id, "Col", 0);
+        let column_id = column.id;
         let live = Card::new(board.id, column.id, "live", 0);
         let archived = Card::new(board.id, column.id, "archived", 1);
         let live_id = live.id;
@@ -231,11 +235,12 @@ mod tests {
             boards: vec![board.clone()],
             columns: vec![column.clone()],
             cards: vec![live, archived],
-            archived_cards: vec![ArchivedCard::new(archived_id, Uuid::nil())],
+            archived_cards: vec![ArchivedCard::new(archived_id, board_id)],
             archived_boards: Vec::new(),
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
         assert_eq!(
             controller
@@ -254,9 +259,14 @@ mod tests {
         let extra = Card::new(board.id, column.id, "extra", 2);
         let extra_id = extra.id;
 
+        let mut cards_by_id = std::collections::HashMap::new();
+        cards_by_id.insert(archived_id, LoadState::Loaded(archived_edited));
+        let mut cards_by_parent = std::collections::HashMap::new();
+        cards_by_parent.insert(column_id, LoadState::Loaded(vec![live_edited, extra]));
         let changed = model.apply_resolved(Resolved {
             cards: Collection {
-                all: LoadState::Loaded(vec![live_edited, archived_edited, extra]),
+                by_id: cards_by_id,
+                by_parent: cards_by_parent,
                 ..Default::default()
             },
             ..Default::default()
@@ -292,9 +302,11 @@ mod tests {
         );
     }
 
-    fn seed_non_empty_model() -> (Model, Controller) {
+    fn seed_non_empty_model() -> (Model, Controller, Uuid, Uuid) {
         let board = seed_board("B", 0);
+        let board_id = board.id;
         let column = Column::new(board.id, "Col", 0);
+        let column_id = column.id;
         let live = Card::new(board.id, column.id, "live", 0);
         let archived = Card::new(board.id, column.id, "archived", 1);
         let archived_id = archived.id;
@@ -303,18 +315,19 @@ mod tests {
             boards: vec![board],
             columns: vec![column],
             cards: vec![live, archived],
-            archived_cards: vec![ArchivedCard::new(archived_id, Uuid::nil())],
+            archived_cards: vec![ArchivedCard::new(archived_id, board_id)],
             archived_boards: Vec::new(),
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
-        (model, controller)
+        (model, controller, board_id, column_id)
     }
 
     #[test]
     fn test_resync_with_an_unchanged_receipt_leaves_the_cached_partitions_untouched() {
-        let (mut model, mut controller) = seed_non_empty_model();
+        let (mut model, mut controller, _board_id, _column_id) = seed_non_empty_model();
         let cards_before = controller
             .displayed_cards(false)
             .loaded()
@@ -354,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_resync_with_a_changed_receipt_rebuilds_the_partitions() {
-        let (mut model, mut controller) = seed_non_empty_model();
+        let (mut model, mut controller, board_id, column_id) = seed_non_empty_model();
         let cards_before = controller
             .displayed_cards(false)
             .loaded()
@@ -362,14 +375,14 @@ mod tests {
             .unwrap()
             .as_ptr();
 
-        let board = seed_board("B", 0);
-        let column = Column::new(board.id, "Col", 0);
-        let mut live_edited = Card::new(board.id, column.id, "live edited", 0);
-        let live_id = model.cards_state().loaded().unwrap()[0].id;
+        let live_id = model.board_cards_state(board_id).loaded().unwrap()[0].id;
+        let mut live_edited = Card::new(board_id, column_id, "live edited", 0);
         live_edited.id = live_id;
+        let mut cards_by_parent = std::collections::HashMap::new();
+        cards_by_parent.insert(column_id, LoadState::Loaded(vec![live_edited.clone()]));
         let changed = model.apply_resolved(Resolved {
             cards: Collection {
-                all: LoadState::Loaded(vec![live_edited.clone()]),
+                by_parent: cards_by_parent,
                 ..Default::default()
             },
             ..Default::default()
@@ -478,7 +491,9 @@ mod tests {
     #[test]
     fn test_resync_consumes_the_receipt_from_apply_resolved() {
         let board = seed_board("B", 0);
+        let board_id = board.id;
         let column = Column::new(board.id, "Col", 0);
+        let column_id = column.id;
         let live = Card::new(board.id, column.id, "live", 0);
         let archived = Card::new(board.id, column.id, "archived", 1);
         let live_id = live.id;
@@ -488,11 +503,12 @@ mod tests {
             boards: vec![board.clone()],
             columns: vec![column.clone()],
             cards: vec![live, archived],
-            archived_cards: vec![ArchivedCard::new(archived_id, Uuid::nil())],
+            archived_cards: vec![ArchivedCard::new(archived_id, board_id)],
             archived_boards: Vec::new(),
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
         assert_eq!(
             controller
@@ -511,9 +527,14 @@ mod tests {
         let extra = Card::new(board.id, column.id, "extra", 2);
         let extra_id = extra.id;
 
+        let mut cards_by_id = std::collections::HashMap::new();
+        cards_by_id.insert(archived_id, LoadState::Loaded(archived_edited));
+        let mut cards_by_parent = std::collections::HashMap::new();
+        cards_by_parent.insert(column_id, LoadState::Loaded(vec![live_edited, extra]));
         let changed = model.apply_resolved(Resolved {
             cards: Collection {
-                all: LoadState::Loaded(vec![live_edited, archived_edited, extra]),
+                by_id: cards_by_id,
+                by_parent: cards_by_parent,
                 ..Default::default()
             },
             ..Default::default()
@@ -572,10 +593,15 @@ mod tests {
 
     #[test]
     fn test_resync_over_a_loaded_empty_model_reports_loaded_empty() {
+        let board_id = Uuid::new_v4();
         let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(Vec::new()));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(board_id, LoadState::Loaded(Vec::new()));
         let changed = model.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Loaded(Vec::new()),
+            columns: Collection {
+                by_parent: columns_by_parent,
                 ..Default::default()
             },
             boards: Collection {
@@ -583,7 +609,7 @@ mod tests {
                 ..Default::default()
             },
             archived_cards: Collection {
-                all: LoadState::Loaded(Vec::new()),
+                by_parent: archived_by_parent,
                 ..Default::default()
             },
             archived_boards: Collection {
@@ -593,6 +619,7 @@ mod tests {
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
 
         assert!(matches!(controller.displayed_cards(false), LoadState::Loaded(v) if v.is_empty()));
@@ -602,20 +629,31 @@ mod tests {
     }
 
     #[test]
-    fn test_card_partitions_report_not_loaded_when_markers_not_loaded_and_cards_loaded() {
+    fn test_card_partitions_report_not_loaded_when_the_by_board_marker_tier_is_not_loaded() {
         let board = seed_board("B", 0);
+        let board_id = board.id;
         let column = Column::new(board.id, "Col", 0);
+        let column_id = column.id;
         let card = Card::new(board.id, column.id, "card", 0);
         let card_id = card.id;
         let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column.clone()]));
+        let mut cards_by_parent = std::collections::HashMap::new();
+        cards_by_parent.insert(column_id, LoadState::Loaded(vec![card.clone()]));
         let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
             cards: Collection {
-                all: LoadState::Loaded(vec![card.clone()]),
+                by_parent: cards_by_parent,
                 ..Default::default()
             },
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
 
         assert!(!controller.displayed_cards(true).is_loaded());
@@ -639,6 +677,7 @@ mod tests {
             archived_boards: Vec::new(),
             ..Default::default()
         });
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
         assert!(controller.displayed_cards(true).is_loaded());
     }
@@ -672,25 +711,41 @@ mod tests {
     }
 
     #[test]
-    fn test_card_partitions_report_failed_when_marker_tier_failed() {
+    fn test_card_partitions_report_failed_when_the_by_board_marker_tier_failed() {
         let board = seed_board("B", 0);
+        let board_id = board.id;
         let column = Column::new(board.id, "Col", 0);
+        let column_id = column.id;
         let card = Card::new(board.id, column.id, "card", 0);
         let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column]));
+        let mut cards_by_parent = std::collections::HashMap::new();
+        cards_by_parent.insert(column_id, LoadState::Loaded(vec![card]));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(
+            board_id,
+            LoadState::Failed(std::sync::Arc::new(
+                kanban_domain::KanbanError::unsupported("boom"),
+            )),
+        );
         let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
             cards: Collection {
-                all: LoadState::Loaded(vec![card]),
+                by_parent: cards_by_parent,
                 ..Default::default()
             },
             archived_cards: Collection {
-                all: LoadState::Failed(std::sync::Arc::new(
-                    kanban_domain::KanbanError::unsupported("boom"),
-                )),
+                by_parent: archived_by_parent,
                 ..Default::default()
             },
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
 
         assert!(controller.displayed_cards(true).is_failed());
@@ -723,17 +778,35 @@ mod tests {
 
     #[test]
     fn test_resync_propagates_failed_from_the_model_into_both_partitions() {
+        let board_id = Uuid::new_v4();
         let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(
+            board_id,
+            LoadState::Failed(std::sync::Arc::new(
+                kanban_domain::KanbanError::unsupported("x"),
+            )),
+        );
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(
+            board_id,
+            LoadState::Failed(std::sync::Arc::new(
+                kanban_domain::KanbanError::unsupported("x"),
+            )),
+        );
         let changed = model.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Failed(std::sync::Arc::new(
-                    kanban_domain::KanbanError::unsupported("x"),
-                )),
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                by_parent: archived_by_parent,
                 ..Default::default()
             },
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
 
         assert!(controller.displayed_cards(false).is_failed());
@@ -743,6 +816,7 @@ mod tests {
     #[test]
     fn test_sync_rebuilds_the_partitions_after_the_model_changes() {
         let board = seed_board("B", 0);
+        let board_id = board.id;
         let column = Column::new(board.id, "Col", 0);
         let card_a = Card::new(board.id, column.id, "a", 0);
         let card_b = Card::new(board.id, column.id, "b", 1);
@@ -755,6 +829,7 @@ mod tests {
             ..Default::default()
         });
         let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
         controller.resync(&model, changed);
         assert_eq!(
             controller
@@ -811,5 +886,327 @@ mod tests {
             .map(|b| b.id)
             .collect();
         assert_eq!(order, vec![second_id, first_id]);
+    }
+
+    #[test]
+    fn test_scoped_loaded_model_with_flat_tiers_failed_renders_live_partition() {
+        let err = std::sync::Arc::new(kanban_domain::KanbanError::unsupported("boom"));
+        let mut model = Model::default();
+        let _ = model.apply_resolved(Resolved {
+            cards: Collection {
+                all: LoadState::Failed(err.clone()),
+                ..Default::default()
+            },
+            columns: Collection {
+                all: LoadState::Failed(err.clone()),
+                ..Default::default()
+            },
+            sprints: Collection {
+                all: LoadState::Failed(err),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let board = seed_board("B", 0);
+        let board_id = board.id;
+        let column = Column::new(board_id, "Col", 0);
+        let column_id = column.id;
+        let card = Card::new(board_id, column_id, "card", 0);
+
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column]));
+        let mut cards_by_parent = std::collections::HashMap::new();
+        cards_by_parent.insert(column_id, LoadState::Loaded(vec![card.clone()]));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(board_id, LoadState::Loaded(Vec::new()));
+        let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            cards: Collection {
+                by_parent: cards_by_parent,
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                by_parent: archived_by_parent,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
+        controller.resync(&model, changed);
+
+        let live_ids: Vec<Uuid> = controller
+            .displayed_cards(false)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(live_ids, vec![card.id]);
+        assert!(matches!(controller.displayed_cards(true), LoadState::Loaded(v) if v.is_empty()));
+    }
+
+    #[test]
+    fn test_no_scope_board_leaves_card_partitions_not_loaded() {
+        let board = seed_board("B", 0);
+        let mut model = Model::default();
+        let changed = model.load_from_snapshot(Snapshot {
+            boards: vec![board],
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model, changed);
+
+        assert!(controller.displayed_cards(false).is_not_loaded());
+        assert!(controller.displayed_cards(true).is_not_loaded());
+        assert!(controller.displayed_boards(false).is_loaded());
+    }
+
+    #[test]
+    fn test_set_scope_board_change_rebuilds_partitions_without_a_model_change() {
+        let board_1 = seed_board("B1", 0);
+        let board_1_id = board_1.id;
+        let column_1 = Column::new(board_1_id, "Col", 0);
+        let card_1 = Card::new(board_1_id, column_1.id, "card1", 0);
+        let card_1_id = card_1.id;
+
+        let board_2 = seed_board("B2", 1);
+        let board_2_id = board_2.id;
+        let column_2 = Column::new(board_2_id, "Col", 0);
+        let card_2 = Card::new(board_2_id, column_2.id, "card2", 0);
+        let card_2_id = card_2.id;
+
+        let mut model = Model::default();
+        let _ = model.load_from_snapshot(Snapshot {
+            boards: vec![board_1, board_2],
+            columns: vec![column_1, column_2],
+            cards: vec![card_1, card_2],
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_1_id), &model);
+        let ids_1: Vec<Uuid> = controller
+            .displayed_cards(false)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(ids_1, vec![card_1_id]);
+
+        controller.set_scope_board(Some(board_2_id), &model);
+        let ids_2: Vec<Uuid> = controller
+            .displayed_cards(false)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(ids_2, vec![card_2_id]);
+    }
+
+    #[test]
+    fn test_archived_partition_joins_by_board_markers_with_per_id_bodies() {
+        let board = seed_board("B", 0);
+        let board_id = board.id;
+        let column = Column::new(board_id, "Col", 0);
+        let column_id = column.id;
+        let card_a = Card::new(board_id, column_id, "a", 0);
+        let card_b = Card::new(board_id, column_id, "b", 1);
+        let card_a_id = card_a.id;
+        let card_b_id = card_b.id;
+
+        let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column]));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(
+            board_id,
+            LoadState::Loaded(vec![
+                ArchivedCard::new(card_a_id, board_id),
+                ArchivedCard::new(card_b_id, board_id),
+            ]),
+        );
+        let mut cards_by_id = std::collections::HashMap::new();
+        cards_by_id.insert(card_a_id, LoadState::Loaded(card_a));
+        cards_by_id.insert(card_b_id, LoadState::Loaded(card_b));
+        let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                by_parent: archived_by_parent,
+                ..Default::default()
+            },
+            cards: Collection {
+                by_id: cards_by_id,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
+        controller.resync(&model, changed);
+
+        let archived_ids: Vec<Uuid> = controller
+            .displayed_cards(true)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(archived_ids, vec![card_a_id, card_b_id]);
+    }
+
+    #[test]
+    fn test_archived_partition_not_loaded_while_a_body_is_in_flight() {
+        let board = seed_board("B", 0);
+        let board_id = board.id;
+        let column = Column::new(board_id, "Col", 0);
+        let column_id = column.id;
+        let card_a = Card::new(board_id, column_id, "a", 0);
+        let card_a_id = card_a.id;
+        let card_b_id = Uuid::new_v4();
+
+        let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column.clone()]));
+        let mut cards_by_parent = std::collections::HashMap::new();
+        cards_by_parent.insert(column_id, LoadState::Loaded(vec![card_a.clone()]));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(
+            board_id,
+            LoadState::Loaded(vec![ArchivedCard::new(card_b_id, board_id)]),
+        );
+        let mut cards_by_id = std::collections::HashMap::new();
+        cards_by_id.insert(card_a_id, LoadState::Loaded(card_a));
+        let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            cards: Collection {
+                by_parent: cards_by_parent,
+                by_id: cards_by_id,
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                by_parent: archived_by_parent,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
+        controller.resync(&model, changed);
+
+        assert!(controller.displayed_cards(false).is_loaded());
+        assert!(controller.displayed_cards(true).is_not_loaded());
+    }
+
+    #[test]
+    fn test_archived_partition_skips_a_missing_body() {
+        let board = seed_board("B", 0);
+        let board_id = board.id;
+        let column = Column::new(board_id, "Col", 0);
+        let card_a = Card::new(board_id, column.id, "a", 0);
+        let card_a_id = card_a.id;
+        let card_b_id = Uuid::new_v4();
+
+        let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column]));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(
+            board_id,
+            LoadState::Loaded(vec![
+                ArchivedCard::new(card_a_id, board_id),
+                ArchivedCard::new(card_b_id, board_id),
+            ]),
+        );
+        let mut cards_by_id = std::collections::HashMap::new();
+        cards_by_id.insert(card_a_id, LoadState::Loaded(card_a));
+        cards_by_id.insert(card_b_id, LoadState::Missing);
+        let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                by_parent: archived_by_parent,
+                ..Default::default()
+            },
+            cards: Collection {
+                by_id: cards_by_id,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
+        controller.resync(&model, changed);
+
+        let archived_ids: Vec<Uuid> = controller
+            .displayed_cards(true)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(archived_ids, vec![card_a_id]);
+    }
+
+    #[test]
+    fn test_board_scoped_live_partition_excludes_another_boards_cards() {
+        let board_1 = seed_board("B1", 0);
+        let board_1_id = board_1.id;
+        let column_1 = Column::new(board_1_id, "Col", 0);
+        let card_1 = Card::new(board_1_id, column_1.id, "card1", 0);
+        let card_1_id = card_1.id;
+
+        let board_2 = seed_board("B2", 1);
+        let board_2_id = board_2.id;
+        let column_2 = Column::new(board_2_id, "Col", 0);
+        let card_2 = Card::new(board_2_id, column_2.id, "card2", 0);
+
+        let mut model = Model::default();
+        let changed = model.load_from_snapshot(Snapshot {
+            boards: vec![board_1, board_2],
+            columns: vec![column_1, column_2],
+            cards: vec![card_1, card_2],
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_1_id), &model);
+        controller.resync(&model, changed);
+
+        let live_ids: Vec<Uuid> = controller
+            .displayed_cards(false)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(live_ids, vec![card_1_id]);
     }
 }
