@@ -81,6 +81,13 @@ impl Model {
     pub fn apply_resolved(&mut self, resolved: Resolved) -> ModelChanged {
         let boards_touched = !resolved.boards.is_untouched();
         let cards_touched = !resolved.cards.is_untouched();
+        let touched = boards_touched
+            || cards_touched
+            || !resolved.columns.is_untouched()
+            || !resolved.sprints.is_untouched()
+            || !resolved.archived_cards.is_untouched()
+            || !resolved.archived_boards.is_untouched()
+            || !resolved.graph.is_not_loaded();
 
         let Collection {
             all: boards_all,
@@ -173,7 +180,11 @@ impl Model {
             self.rebuild_board_index();
         }
 
-        ModelChanged::new()
+        if touched {
+            ModelChanged::new()
+        } else {
+            ModelChanged::unchanged()
+        }
     }
 
     /// Marks the flat collection, the per-id entries and the parent scopes
@@ -185,6 +196,7 @@ impl Model {
     /// whatever derives from this `Model` is stale until a
     /// [`DerivedProjections`] implementor consumes it.
     pub fn mark_failed(&mut self, ids: EntityIds, err: Arc<KanbanError>) -> ModelChanged {
+        let touched = !ids.is_empty();
         if !ids.boards.is_empty() {
             self.boards = LoadState::Failed(Arc::clone(&err));
             self.rebuild_board_index();
@@ -227,7 +239,11 @@ impl Model {
             self.graph = LoadState::Failed(err);
         }
 
-        ModelChanged::new()
+        if touched {
+            ModelChanged::new()
+        } else {
+            ModelChanged::unchanged()
+        }
     }
 }
 

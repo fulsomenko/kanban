@@ -1,21 +1,37 @@
 use super::Model;
 
-/// Proof that a `Model` mutation happened and that whatever derives from it has
-/// not been recomputed yet. Minted only by the `Model` mutators, since the field
-/// is private, and consumed by a `DerivedProjections` implementor.
+/// Proof that a `Model` mutation ran and that whatever derives from it may be
+/// stale. Minted only by the `Model` mutators, since the field is private, and
+/// consumed by a `DerivedProjections` implementor. `any()` reports whether the
+/// mutator actually wrote anything, so a mutator that ran but touched nothing
+/// (an untouched `apply_resolved`, an `invalidate` of an empty `EntityIds`)
+/// can tell its consumer there is nothing to recompute.
 #[derive(Debug)]
 #[must_use = "derived projections are stale until resync consumes this"]
-pub struct ModelChanged(());
+pub struct ModelChanged {
+    dirty: bool,
+}
 
 impl ModelChanged {
     pub(crate) fn new() -> Self {
-        Self(())
+        Self { dirty: true }
     }
 
-    /// Folds two receipts into one so a caller performing several mutations
-    /// resyncs once instead of discarding the extras.
-    pub fn merge(self, _other: Self) -> Self {
-        self
+    pub(crate) fn unchanged() -> Self {
+        Self { dirty: false }
+    }
+
+    /// Whether the mutator that minted this receipt actually wrote.
+    pub fn any(&self) -> bool {
+        self.dirty
+    }
+
+    /// Folds two receipts into one, as a disjunction, so a caller performing
+    /// several mutations resyncs once instead of discarding the extras.
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            dirty: self.dirty || other.dirty,
+        }
     }
 }
 

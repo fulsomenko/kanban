@@ -35,7 +35,7 @@ impl Model {
                 *self = Self::default();
                 return ModelChanged::new();
             }
-            Invalidation::Entities(ids) if ids.is_empty() => return ModelChanged::new(),
+            Invalidation::Entities(ids) if ids.is_empty() => return ModelChanged::unchanged(),
             Invalidation::Entities(ids) => ids,
         };
 
