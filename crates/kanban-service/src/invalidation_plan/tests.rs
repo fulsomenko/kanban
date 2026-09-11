@@ -125,6 +125,9 @@ impl LoadedEntities for StubWorld {
     ) -> Option<&[kanban_domain::ArchivedCard]> {
         None
     }
+    fn loaded_graph_neighbours(&self, _card_id: Uuid) -> Option<Vec<Uuid>> {
+        None
+    }
 }
 
 fn all_loaded() -> StubWorld {

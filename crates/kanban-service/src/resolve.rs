@@ -129,6 +129,14 @@ impl LoadedEntities for Overlay<'_> {
             None => self.base.loaded_archived_cards_of_board(board_id),
         }
     }
+
+    fn loaded_graph_neighbours(&self, card_id: Uuid) -> Option<Vec<Uuid>> {
+        match &self.pass.graph {
+            LoadState::Loaded(g) => Some(g.neighbours(card_id)),
+            LoadState::NotLoaded => self.base.loaded_graph_neighbours(card_id),
+            LoadState::Missing | LoadState::Failed(_) => None,
+        }
+    }
 }
 
 #[derive(Default)]

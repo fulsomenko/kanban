@@ -114,6 +114,10 @@ pub trait LoadedEntities: LoadedState {
     /// `Loaded`, naming every marker a plan needs to walk into a body
     /// round. A marker-less board is `Some(&[])`, not `None`.
     fn loaded_archived_cards_of_board(&self, board_id: Uuid) -> Option<&[ArchivedCard]>;
+    /// `Some` exactly when the graph tier is `Loaded`, naming every relative
+    /// of `card_id` a plan needs in order to walk into a body round. A
+    /// relative-less card is `Some(vec![])`, not `None`.
+    fn loaded_graph_neighbours(&self, card_id: Uuid) -> Option<Vec<Uuid>>;
 }
 
 pub trait FetchPlan {
@@ -203,6 +207,9 @@ mod tests {
             None
         }
         fn loaded_archived_cards_of_board(&self, _board_id: Uuid) -> Option<&[ArchivedCard]> {
+            None
+        }
+        fn loaded_graph_neighbours(&self, _card_id: Uuid) -> Option<Vec<Uuid>> {
             None
         }
     }

@@ -38,6 +38,17 @@ impl FetchPlan for ViewScope {
             if requestable(loaded.card(card_id)) {
                 round.cards.push(card_id);
             }
+
+            if self.graph {
+                if let Some(neighbours) = loaded.loaded_graph_neighbours(card_id) {
+                    let mut ids: Vec<Uuid> = neighbours
+                        .into_iter()
+                        .filter(|&id| requestable(loaded.card(id)))
+                        .collect();
+                    ids.sort_unstable();
+                    round.cards.extend(ids);
+                }
+            }
         }
 
         if let Some(sprint_id) = self.sprint {
@@ -204,6 +215,7 @@ mod tests {
         archived_card_markers: Option<Vec<kanban_domain::ArchivedCard>>,
         archived_cards_by_board_markers: HashMap<Uuid, Vec<kanban_domain::ArchivedCard>>,
         archived_board_markers: Option<Vec<kanban_domain::ArchivedBoard>>,
+        graph_neighbours: HashMap<Uuid, Vec<Uuid>>,
     }
 
     impl Default for StubLoaded {
@@ -225,6 +237,7 @@ mod tests {
                 archived_card_markers: None,
                 archived_cards_by_board_markers: HashMap::new(),
                 archived_board_markers: None,
+                graph_neighbours: HashMap::new(),
             }
         }
     }
@@ -303,6 +316,13 @@ mod tests {
             self.archived_cards_by_board_markers
                 .get(&board_id)
                 .map(Vec::as_slice)
+        }
+        fn loaded_graph_neighbours(&self, card_id: Uuid) -> Option<Vec<Uuid>> {
+            if self.graph == FetchStatus::Loaded {
+                Some(self.graph_neighbours.get(&card_id).cloned().unwrap_or_default())
+            } else {
+                None
+            }
         }
     }
 

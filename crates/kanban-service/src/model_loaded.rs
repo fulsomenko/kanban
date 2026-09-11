@@ -79,6 +79,10 @@ impl LoadedEntities for Model {
     fn loaded_archived_cards_of_board(&self, board_id: Uuid) -> Option<&[ArchivedCard]> {
         self.board_archived_cards_state(board_id).loaded().copied()
     }
+
+    fn loaded_graph_neighbours(&self, card_id: Uuid) -> Option<Vec<Uuid>> {
+        self.graph_state().loaded().map(|g| g.neighbours(card_id))
+    }
 }
 
 #[cfg(test)]
