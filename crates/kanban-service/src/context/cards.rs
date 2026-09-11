@@ -35,7 +35,7 @@ impl KanbanContext {
         &self,
         filter: CardListFilter,
     ) -> KanbanResult<Vec<(Card, Option<chrono::DateTime<chrono::Utc>>)>> {
-        let (_ids, at_by_id) = self.archived_card_index()?;
+        let (_ids, at_by_id) = self.archived_card_index(filter.board_id)?;
         Ok(self
             .filter_cards(&filter)?
             .into_iter()
