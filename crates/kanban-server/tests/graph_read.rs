@@ -258,7 +258,12 @@ fn seed_whole_graph(
         .create_column(board.id, "Todo".to_string(), None)
         .unwrap();
     let parent = ctx
-        .create_card(board.id, column.id, "Parent".to_string(), Default::default())
+        .create_card(
+            board.id,
+            column.id,
+            "Parent".to_string(),
+            Default::default(),
+        )
         .unwrap()
         .id;
     let child = ctx
@@ -275,11 +280,21 @@ fn seed_whole_graph(
         .unwrap()
         .id;
     let rel = ctx
-        .create_card(board.id, column.id, "Related".to_string(), Default::default())
+        .create_card(
+            board.id,
+            column.id,
+            "Related".to_string(),
+            Default::default(),
+        )
         .unwrap()
         .id;
     let doomed = ctx
-        .create_card(board.id, column.id, "Doomed".to_string(), Default::default())
+        .create_card(
+            board.id,
+            column.id,
+            "Doomed".to_string(),
+            Default::default(),
+        )
         .unwrap()
         .id;
 
