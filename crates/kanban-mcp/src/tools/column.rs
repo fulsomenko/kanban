@@ -38,37 +38,25 @@ impl ToolScoped for ListColumnsRequest {
 
 impl ToolScoped for GetColumnRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            column: Some(Ref::of(&self.column)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for UpdateColumnRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            column: Some(Ref::of(&self.column)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for DeleteColumnRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            column: Some(Ref::of(&self.column)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for ReorderColumnRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            column: Some(Ref::of(&self.column)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -125,10 +113,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let column = locked_read(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_column_global(&model, &req.column)?;
+            let id = resolve_column_global(ctx, &req.column)?;
             ctx.get_column(id).map_err(kanban_err_to_mcp)
         })
         .await?;
@@ -143,7 +129,6 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let updates = ColumnUpdate {
             name: req.name,
             position: req.position,
@@ -161,8 +146,7 @@ impl KanbanMcpServer {
             },
         };
         let column = locked_write(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_column_global(&model, &req.column)?;
+            let id = resolve_column_global(ctx, &req.column)?;
             ctx.mutate(|c| c.update_column_impl(id, updates))
                 .map(|(column, _inv)| column)
                 .map_err(kanban_err_to_mcp)
@@ -176,10 +160,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_column_global(&model, &req.column)?;
+            let id = resolve_column_global(ctx, &req.column)?;
             let _inv = ctx
                 .mutate_unit(|c| c.delete_column_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -194,10 +176,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ReorderColumnRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let column = locked_write(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let id = resolve_column_global(&model, &req.column)?;
+            let id = resolve_column_global(ctx, &req.column)?;
             ctx.mutate(|c| c.reorder_column_impl(id, req.position))
                 .map(|(column, _inv)| column)
                 .map_err(kanban_err_to_mcp)
@@ -266,11 +246,7 @@ mod tests {
         let named_get = GetColumnRequest {
             column: "TODO".into(),
         };
-        let round = named_get.scope().next_round(&Model::default());
-        assert!(round.column_list);
-        assert!(round.board_list);
-        assert!(round.columns_by_board.is_empty());
-        assert!(!named_get.scope().wants_board_columns);
+        assert!(named_get.scope().next_round(&Model::default()).is_empty());
 
         let id_get = GetColumnRequest {
             column: Uuid::new_v4().to_string(),
@@ -286,27 +262,27 @@ mod tests {
             default_status: None,
             clear_default_status: None,
         };
-        let round = named_update.scope().next_round(&Model::default());
-        assert!(round.column_list);
-        assert!(round.board_list);
-        assert!(!named_update.scope().wants_board_columns);
+        assert!(named_update
+            .scope()
+            .next_round(&Model::default())
+            .is_empty());
 
         let named_delete = DeleteColumnRequest {
             column: "TODO".into(),
         };
-        let round = named_delete.scope().next_round(&Model::default());
-        assert!(round.column_list);
-        assert!(round.board_list);
-        assert!(!named_delete.scope().wants_board_columns);
+        assert!(named_delete
+            .scope()
+            .next_round(&Model::default())
+            .is_empty());
 
         let named_reorder = ReorderColumnRequest {
             column: "TODO".into(),
             position: 1,
         };
-        let round = named_reorder.scope().next_round(&Model::default());
-        assert!(round.column_list);
-        assert!(round.board_list);
-        assert!(!named_reorder.scope().wants_board_columns);
+        assert!(named_reorder
+            .scope()
+            .next_round(&Model::default())
+            .is_empty());
     }
 
     struct RecordingFactory {
@@ -423,7 +399,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("column list"));
         assert!(err.message.contains("injected fault: list_all_columns"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
@@ -443,7 +418,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("column list"));
         assert!(err.message.contains("injected fault: list_all_columns"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }

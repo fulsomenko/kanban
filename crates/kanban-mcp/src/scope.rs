@@ -20,9 +20,6 @@ impl Ref {
 #[derive(Debug, Default)]
 pub(crate) struct ToolScope {
     pub(crate) board: Option<Ref>,
-    pub(crate) column: Option<Ref>,
-    pub(crate) sprint: Option<Ref>,
-    pub(crate) cards: Vec<Ref>,
     pub(crate) wants_graph: bool,
     /// Set once a board reference has been resolved to an id; the
     /// parent-scoped tiers cannot be requested before it is known.
@@ -46,20 +43,10 @@ pub(crate) trait ToolScoped {
 
 impl FetchPlan for ToolScope {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
-        let global_column = matches!(self.column, Some(Ref::Name)) && !self.wants_board_columns;
-        let global_sprint = matches!(self.sprint, Some(Ref::Name)) && !self.wants_board_sprints;
-        let named_cards = self.cards.iter().any(|r| matches!(r, Ref::Name));
         let wants_board_list = matches!(self.board, Some(Ref::Name))
-            || (self.resolved_board.is_some() && self.wants_board_sprints)
-            || matches!(self.sprint, Some(Ref::Name))
-            || global_column;
+            || (self.resolved_board.is_some() && self.wants_board_sprints);
         FetchRound {
             board_list: wants_board_list && requestable(loaded.board_list()),
-            column_list: global_column && requestable(loaded.column_list()),
-            card_list: named_cards && requestable(loaded.card_list()),
-            sprint_list: global_sprint && requestable(loaded.sprint_list()),
-            archived_board_list: (global_column || global_sprint || named_cards)
-                && requestable(loaded.archived_board_list()),
             graph: self.wants_graph && requestable(loaded.graph()),
             columns_by_board: self
                 .resolved_board
@@ -256,7 +243,6 @@ mod tests {
             resolved_board: None,
             wants_board_columns: false,
             wants_board_sprints: false,
-            ..Default::default()
         };
 
         let mut model = Model::default();

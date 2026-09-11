@@ -1,11 +1,11 @@
+use crate::context::McpContext;
 use crate::helpers::error_mapping::kanban_err_to_mcp;
 use kanban_domain::{
     find_boards_by_name, find_columns_by_name, find_sprints_by_query_global,
-    find_sprints_by_query_on_board, parse_identifier, AmbiguousMatch, BatchResolutionCause,
-    BatchResolutionFailure, Board, Card, KanbanError, LoadState, Model, ParsedIdentifier, Prefix,
+    find_sprints_by_query_on_board, AmbiguousMatch, Board, KanbanError, KanbanOperations,
+    LoadState, Model,
 };
 use rmcp::model::ErrorData as McpError;
-use std::collections::HashSet;
 use uuid::Uuid;
 
 pub(crate) fn require_loaded<T>(state: LoadState<T>, what: &str) -> Result<T, McpError> {
@@ -79,39 +79,27 @@ pub(crate) fn resolve_column_in_board(
     }
 }
 
-fn require_archived_board_ids(model: &Model) -> Result<&HashSet<Uuid>, McpError> {
-    require_loaded(model.archived_boards_state(), "archived board markers")?;
-    Ok(model.archived_board_ids())
-}
-
-pub(crate) fn resolve_column_global(model: &Model, raw: &str) -> Result<Uuid, McpError> {
+pub(crate) fn resolve_column_global(ctx: &McpContext, raw: &str) -> Result<Uuid, McpError> {
     if let Ok(uuid) = Uuid::parse_str(raw) {
         return Ok(uuid);
     }
-    let columns = require_loaded(model.columns_state().as_ref(), "column list")?;
-    let archived = require_archived_board_ids(model)?;
-    let matches = find_columns_by_name(raw, columns)
-        .into_iter()
-        .filter(|c| !archived.contains(&c.board_id))
-        .collect::<Vec<_>>();
+    let columns = ctx.list_all_columns().map_err(kanban_err_to_mcp)?;
+    let matches = find_columns_by_name(raw, &columns);
     match matches.as_slice() {
         [] => Err(kanban_err_to_mcp(KanbanError::not_found_by_name(
             "Column",
             raw,
-            columns
-                .iter()
-                .filter(|c| !archived.contains(&c.board_id))
-                .map(|c| c.name.clone())
-                .collect(),
+            columns.iter().map(|c| c.name.clone()).collect(),
         ))),
         [c] => Ok(c.id),
         many => {
-            let boards = model.boards_state().loaded();
+            let boards = ctx.list_boards().map_err(kanban_err_to_mcp)?;
             let matches: Vec<AmbiguousMatch> = many
                 .iter()
                 .map(|c| {
                     let board_name = boards
-                        .and_then(|bs| bs.iter().find(|b| b.id == c.board_id))
+                        .iter()
+                        .find(|b| b.id == c.board_id)
                         .map(|b| b.name.as_str())
                         .unwrap_or("(unknown)");
                     AmbiguousMatch {
@@ -167,22 +155,17 @@ pub(crate) fn resolve_sprint_in_board(
     }
 }
 
-pub(crate) fn resolve_sprint_global(model: &Model, raw: &str) -> Result<Uuid, McpError> {
+pub(crate) fn resolve_sprint_global(ctx: &McpContext, raw: &str) -> Result<Uuid, McpError> {
     if let Ok(uuid) = Uuid::parse_str(raw) {
         return Ok(uuid);
     }
-    let all_sprints = require_loaded(model.sprints_state().as_ref(), "sprint list")?;
-    let boards = require_loaded(model.boards_state().as_ref(), "board list")?;
-    let archived = require_archived_board_ids(model)?;
-    let matches = find_sprints_by_query_global(raw, all_sprints, boards)
-        .into_iter()
-        .filter(|s| !archived.contains(&s.board_id))
-        .collect::<Vec<_>>();
+    let all_sprints = ctx.list_all_sprints().map_err(kanban_err_to_mcp)?;
+    let boards = ctx.list_boards().map_err(kanban_err_to_mcp)?;
+    let matches = find_sprints_by_query_global(raw, &all_sprints, &boards);
     match matches.as_slice() {
         [] => {
             let available = all_sprints
                 .iter()
-                .filter(|s| !archived.contains(&s.board_id))
                 .map(|s| {
                     let label = boards
                         .iter()
@@ -220,76 +203,11 @@ pub(crate) fn resolve_sprint_global(model: &Model, raw: &str) -> Result<Uuid, Mc
     }
 }
 
-fn find_card_matches<'a>(
-    cards: &'a [kanban_domain::Card],
-    raw: &str,
-) -> Vec<&'a kanban_domain::Card> {
-    match parse_identifier(raw) {
-        Some(ParsedIdentifier::PrefixAndNumber { prefix, number }) => cards
-            .iter()
-            .filter(|c| c.card_number == number && Prefix::normalize(&c.prefix) == prefix)
-            .collect(),
-        Some(ParsedIdentifier::NumberOnly(number)) => {
-            cards.iter().filter(|c| c.card_number == number).collect()
-        }
-        None => Vec::new(),
-    }
-}
-
-pub(crate) fn resolve_cards(model: &Model, raws: &[String]) -> Result<Vec<Uuid>, McpError> {
-    let mut resolved = Vec::with_capacity(raws.len());
-    let mut failures = Vec::new();
-    let mut loaded: Option<(&Vec<Card>, &HashSet<Uuid>)> = None;
-    for raw in raws {
-        if let Ok(uuid) = Uuid::parse_str(raw) {
-            resolved.push(uuid);
-            continue;
-        }
-        let (cards, archived) = match loaded {
-            Some(pair) => pair,
-            None => {
-                let cards = require_loaded(model.cards_state().as_ref(), "card list")?;
-                let archived = require_archived_board_ids(model)?;
-                loaded = Some((cards, archived));
-                (cards, archived)
-            }
-        };
-        let matches = find_card_matches(cards, raw)
-            .into_iter()
-            .filter(|c| !archived.contains(&c.board_id))
-            .collect::<Vec<_>>();
-        match matches.as_slice() {
-            [] => failures.push(BatchResolutionFailure {
-                raw_input: raw.clone(),
-                cause: BatchResolutionCause::NotFound,
-            }),
-            [c] => resolved.push(c.id),
-            many => failures.push(BatchResolutionFailure {
-                raw_input: raw.clone(),
-                cause: BatchResolutionCause::Ambiguous(
-                    many.iter()
-                        .map(|c| AmbiguousMatch {
-                            label: format!("'{}'", c.title),
-                            id: c.id,
-                        })
-                        .collect(),
-                ),
-            }),
-        }
-    }
-    if !failures.is_empty() {
-        return Err(kanban_err_to_mcp(KanbanError::batch_resolution_failed(
-            "Card", failures,
-        )));
-    }
-    Ok(resolved)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use kanban_domain::{
-        resolved::Collection, Board, Card, Column, EntityIds, KanbanError, Resolved, Sprint,
+        resolved::Collection, Board, Column, EntityIds, KanbanError, Resolved, Sprint,
     };
     use std::sync::Arc;
 
@@ -379,70 +297,6 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_column_global_reads_the_flat_tier() {
-        let board_id = Uuid::new_v4();
-        let column = Column::new(board_id, "TODO", 0);
-
-        let mut model = Model::default();
-        let _ = model.apply_resolved(Resolved {
-            columns: Collection {
-                all: LoadState::Loaded(vec![column]),
-                ..Default::default()
-            },
-            archived_boards: Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert!(resolve_column_global(&model, "TODO").is_ok());
-
-        let err = resolve_column_global(&Model::default(), "TODO").unwrap_err();
-        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("column list"));
-
-        let board_a = Uuid::new_v4();
-        let board_b = Uuid::new_v4();
-        let mut dup_model = Model::default();
-        let _ = dup_model.apply_resolved(Resolved {
-            columns: Collection {
-                all: LoadState::Loaded(vec![
-                    Column::new(board_a, "TODO", 0),
-                    Column::new(board_b, "TODO", 0),
-                ]),
-                ..Default::default()
-            },
-            archived_boards: Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        assert!(resolve_column_global(&dup_model, "TODO").is_err());
-    }
-
-    #[test]
-    fn test_resolve_column_global_requires_the_archived_marker_tier() {
-        let board_id = Uuid::new_v4();
-        let column = Column::new(board_id, "TODO", 0);
-
-        let mut model = Model::default();
-        let _ = model.apply_resolved(Resolved {
-            columns: Collection {
-                all: LoadState::Loaded(vec![column]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        let err = resolve_column_global(&model, "TODO").unwrap_err();
-        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("archived board markers"));
-        assert!(!err.message.contains("not found"));
-    }
-
-    #[test]
     fn test_resolve_sprint_in_board_reads_the_scoped_tier_with_the_supplied_head() {
         let board = Board::new("Kanban", None::<String>);
         let board_id = board.id;
@@ -468,83 +322,4 @@ mod tests {
         assert!(!err.message.contains("not found"));
     }
 
-    #[test]
-    fn test_resolve_sprint_global_reads_the_flat_sprint_and_board_tiers() {
-        let board = Board::new("Kanban", None::<String>);
-        let board_id = board.id;
-        let sprint = Sprint::new(board_id, 1, None, None::<String>);
-
-        let mut model = Model::default();
-        let _ = model.apply_resolved(Resolved {
-            boards: Collection {
-                all: LoadState::Loaded(vec![board]),
-                ..Default::default()
-            },
-            sprints: Collection {
-                all: LoadState::Loaded(vec![sprint]),
-                ..Default::default()
-            },
-            archived_boards: Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert!(resolve_sprint_global(&model, "1").is_ok());
-
-        let err = resolve_sprint_global(&Model::default(), "1").unwrap_err();
-        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-    }
-
-    #[test]
-    fn test_resolve_cards_reports_per_input_failures_and_distinguishes_an_unloaded_tier() {
-        let mut card = Card::new(Uuid::new_v4(), Uuid::new_v4(), "Title", 0);
-        card.prefix = "KAN".into();
-        card.card_number = 5;
-        let card_id = card.id;
-
-        let mut model = Model::default();
-        let _ = model.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Loaded(vec![card]),
-                ..Default::default()
-            },
-            archived_boards: Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        let ids = resolve_cards(&model, &["KAN-5".to_string(), "KAN-999".to_string()]);
-        assert!(ids.is_err());
-        let err = ids.unwrap_err();
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains("KAN-999"));
-        let _ = card_id;
-
-        let unloaded_err = resolve_cards(
-            &Model::default(),
-            &["KAN-5".to_string(), "KAN-999".to_string()],
-        )
-        .unwrap_err();
-        assert_eq!(unloaded_err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-        assert!(unloaded_err.message.contains("card list"));
-    }
-
-    #[test]
-    fn test_resolve_cards_with_only_uuid_references_does_not_require_the_card_list() {
-        let a = Uuid::new_v4().to_string();
-        let b = Uuid::new_v4().to_string();
-        let ids = resolve_cards(&Model::default(), &[a.clone(), b.clone()]).unwrap();
-        assert_eq!(
-            ids,
-            vec![Uuid::parse_str(&a).unwrap(), Uuid::parse_str(&b).unwrap()]
-        );
-
-        let mixed_err = resolve_cards(&Model::default(), &[a, "KAN-5".to_string()]).unwrap_err();
-        assert_eq!(mixed_err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
-        assert!(mixed_err.message.contains("card list"));
-    }
 }

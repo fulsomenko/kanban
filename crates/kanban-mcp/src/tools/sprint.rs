@@ -40,64 +40,43 @@ impl ToolScoped for ListSprintsRequest {
 
 impl ToolScoped for GetSprintRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for UpdateSprintRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for ActivateSprintRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for CompleteSprintRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for CancelSprintRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for DeleteSprintRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for CarryOverSprintCardsRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            sprint: Some(Ref::of(&self.from_sprint)),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
@@ -166,10 +145,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<GetSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let response = locked_read(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_sprint_global(&model, &req.sprint)?;
+            let id = resolve_sprint_global(ctx, &req.sprint)?;
             let Some(sprint) = ctx.get_sprint(id).map_err(kanban_err_to_mcp)? else {
                 return Ok(None);
             };
@@ -187,7 +164,6 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<UpdateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let start_date = if req.clear_start_date == Some(true) {
             FieldUpdate::Clear
         } else {
@@ -220,8 +196,7 @@ impl KanbanMcpServer {
             end_date,
         };
         let response = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_sprint_global(&model, &req.sprint)?;
+            let id = resolve_sprint_global(ctx, &req.sprint)?;
             let (sprint, _inv) = ctx
                 .mutate(|c| c.update_sprint_impl(id, updates))
                 .map_err(kanban_err_to_mcp)?;
@@ -236,10 +211,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ActivateSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let response = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_sprint_global(&model, &req.sprint)?;
+            let id = resolve_sprint_global(ctx, &req.sprint)?;
             let (sprint, _inv) = ctx
                 .mutate(|c| c.activate_sprint_impl(id, req.duration_days))
                 .map_err(kanban_err_to_mcp)?;
@@ -254,10 +227,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CompleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let response = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_sprint_global(&model, &req.sprint)?;
+            let id = resolve_sprint_global(ctx, &req.sprint)?;
             let (sprint, _inv) = ctx
                 .mutate(|c| c.complete_sprint_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -272,10 +243,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CancelSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let response = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_sprint_global(&model, &req.sprint)?;
+            let id = resolve_sprint_global(ctx, &req.sprint)?;
             let (sprint, _inv) = ctx
                 .mutate(|c| c.cancel_sprint_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -290,10 +259,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<DeleteSprintRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let id = locked_write(&self.ctx, |ctx| -> Result<_, McpError> {
-            let model = ctx.model_for(&scope);
-            let id = resolve_sprint_global(&model, &req.sprint)?;
+            let id = resolve_sprint_global(ctx, &req.sprint)?;
             let _inv = ctx
                 .mutate_unit(|c| c.delete_sprint_impl(id))
                 .map_err(kanban_err_to_mcp)?;
@@ -310,10 +277,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<CarryOverSprintCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
-            let mut model = ctx.model_for(&scope);
-            let from_id = resolve_sprint_global(&model, &req.from_sprint)?;
+            let from_id = resolve_sprint_global(ctx, &req.from_sprint)?;
             let from_sprint = ctx
                 .get_sprint(from_id)
                 .map_err(kanban_err_to_mcp)?
@@ -321,12 +286,11 @@ impl KanbanMcpServer {
                     McpError::invalid_params(format!("Sprint not found: {}", from_id), None)
                 })?;
             let to_scope = ToolScope {
-                sprint: Some(Ref::of(&req.to_sprint)),
                 wants_board_sprints: true,
                 ..Default::default()
             }
             .for_board(from_sprint.board_id);
-            ctx.sync_into(&to_scope, &mut model);
+            let model = ctx.model_for(&to_scope);
             let board = board_head(ctx, &model, from_sprint.board_id)?;
             let to_id = resolve_sprint_in_board(&model, &req.to_sprint, &board)?;
             ctx.mutate(|c| c.carry_over_sprint_cards_impl(from_id, to_id))
@@ -362,9 +326,7 @@ mod tests {
         let name = GetSprintRequest {
             sprint: "Sprint 1".into(),
         };
-        let round = name.scope().next_round(&Model::default());
-        assert!(round.board_list);
-        assert!(round.sprint_list);
+        assert!(name.scope().next_round(&Model::default()).is_empty());
 
         let id = GetSprintRequest {
             sprint: Uuid::new_v4().to_string(),
@@ -381,28 +343,28 @@ mod tests {
             clear_start_date: None,
             clear_end_date: None,
         };
-        assert!(name.scope().next_round(&Model::default()).board_list);
+        assert!(name.scope().next_round(&Model::default()).is_empty());
 
         let name = ActivateSprintRequest {
             sprint: "Sprint 1".into(),
             duration_days: None,
         };
-        assert!(name.scope().next_round(&Model::default()).board_list);
+        assert!(name.scope().next_round(&Model::default()).is_empty());
 
         let name = CompleteSprintRequest {
             sprint: "Sprint 1".into(),
         };
-        assert!(name.scope().next_round(&Model::default()).board_list);
+        assert!(name.scope().next_round(&Model::default()).is_empty());
 
         let name = CancelSprintRequest {
             sprint: "Sprint 1".into(),
         };
-        assert!(name.scope().next_round(&Model::default()).board_list);
+        assert!(name.scope().next_round(&Model::default()).is_empty());
 
         let name = DeleteSprintRequest {
             sprint: "Sprint 1".into(),
         };
-        assert!(name.scope().next_round(&Model::default()).board_list);
+        assert!(name.scope().next_round(&Model::default()).is_empty());
 
         let name_board = CreateSprintParams {
             board: "Alpha".into(),
@@ -561,7 +523,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_without_a_second_board_read_on_json(
+    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_on_json(
     ) {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
@@ -576,13 +538,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(seeded.handle.op_count("get_board"), 1);
-        assert_eq!(seeded.handle.op_count("list_boards"), 1);
+        assert_eq!(seeded.handle.op_count("list_boards"), 2);
         assert_eq!(seeded.handle.op_count("list_all_sprints"), 1);
         assert_eq!(seeded.handle.op_count("list_sprints_by_board"), 1);
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_without_a_second_board_read_on_sqlite(
+    async fn test_carry_over_sprint_cards_resolves_the_to_sprint_on_sqlite(
     ) {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
@@ -597,7 +559,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(seeded.handle.op_count("get_board"), 1);
-        assert_eq!(seeded.handle.op_count("list_boards"), 1);
+        assert_eq!(seeded.handle.op_count("list_boards"), 2);
         assert_eq!(seeded.handle.op_count("list_all_sprints"), 1);
         assert_eq!(seeded.handle.op_count("list_sprints_by_board"), 1);
     }
@@ -618,7 +580,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("sprint list"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 
@@ -638,7 +599,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("sprint list"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 

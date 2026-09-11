@@ -1,4 +1,4 @@
-use crate::helpers::model_read::{resolve_cards, resolve_column_in_board, resolve_sprint_in_board};
+use crate::helpers::model_read::{resolve_column_in_board, resolve_sprint_in_board};
 use crate::helpers::{
     board_head, card_board, kanban_err_to_mcp, locked_write, to_call_tool_result,
     to_call_tool_result_json,
@@ -19,18 +19,13 @@ use rmcp::{
 
 impl ToolScoped for ArchiveCardsRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: self.cards.iter().map(|r| Ref::of(r)).collect(),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for MoveCardsRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: self.cards.iter().map(|r| Ref::of(r)).collect(),
-            column: Some(Ref::of(&self.column)),
             wants_board_columns: matches!(Ref::of(&self.column), Ref::Name),
             ..Default::default()
         }
@@ -40,8 +35,6 @@ impl ToolScoped for MoveCardsRequest {
 impl ToolScoped for AssignCardsToSprintRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: self.cards.iter().map(|r| Ref::of(r)).collect(),
-            sprint: Some(Ref::of(&self.sprint)),
             wants_board_sprints: matches!(Ref::of(&self.sprint), Ref::Name),
             ..Default::default()
         }
@@ -51,7 +44,6 @@ impl ToolScoped for AssignCardsToSprintRequest {
 impl ToolScoped for AssignCardToSprintRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
             wants_board_sprints: matches!(Ref::of(&self.sprint), Ref::Name),
             ..Default::default()
         }
@@ -107,10 +99,8 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let ids = resolve_cards(&model, &req.cards)?;
+            let ids = ctx.resolve_card_ids(&req.cards).map_err(kanban_err_to_mcp)?;
             ctx.mutate(|c| c.archive_cards_impl(ids))
                 .map(|(count, _inv)| count)
                 .map_err(kanban_err_to_mcp)
@@ -129,7 +119,7 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
             let mut model = ctx.model_for(&scope);
-            let ids = resolve_cards(&model, &req.cards)?;
+            let ids = ctx.resolve_card_ids(&req.cards).map_err(kanban_err_to_mcp)?;
             let board_id = ctx.require_same_board(&ids).map_err(kanban_err_to_mcp)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
             let column_id = resolve_column_in_board(&model, &req.column, board_id)?;
@@ -151,7 +141,7 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
             let mut model = ctx.model_for(&scope);
-            let ids = resolve_cards(&model, &req.cards)?;
+            let ids = ctx.resolve_card_ids(&req.cards).map_err(kanban_err_to_mcp)?;
             let board_id = ctx.require_same_board(&ids).map_err(kanban_err_to_mcp)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
             let board = board_head(ctx, &model, board_id)?;
