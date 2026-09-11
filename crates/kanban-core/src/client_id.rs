@@ -14,6 +14,10 @@ impl ClientId {
     pub fn nil() -> Self {
         Self(Uuid::nil())
     }
+
+    pub fn is_nil(&self) -> bool {
+        self.0.is_nil()
+    }
 }
 
 impl Default for ClientId {
