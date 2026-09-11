@@ -615,8 +615,49 @@ mod backend_parity {
                 "{kind}: an empty board's sprint tier must resolve to Loaded(vec![]), not NotLoaded/Missing"
             );
             assert!(
-                model.cards_state().is_loaded(),
-                "{kind}: the flat card tier must resolve to Loaded(vec![])"
+                model.board_cards_state(board_id).is_loaded(),
+                "{kind}: the scoped card tier must resolve to Loaded(vec![])"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_the_startup_scope_never_reads_the_flat_tiers_on_any_backend() {
+        let (snapshot, board1, _board2) = seed_non_trivial_snapshot().await;
+        let kinds = ["memory", "json", "sqlite"];
+        let dirs = [
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        ];
+
+        for (kind, dir) in kinds.iter().zip(dirs.iter()) {
+            let ctx = open_seeded(kind, dir, &snapshot).await;
+            let model = populate_scope(&ctx, board1);
+
+            assert!(
+                model.columns_state().is_not_loaded(),
+                "{kind}: the flat column tier must stay unrequested"
+            );
+            assert!(
+                model.cards_state().is_not_loaded(),
+                "{kind}: the flat card tier must stay unrequested"
+            );
+            assert!(
+                model.sprints_state().is_not_loaded(),
+                "{kind}: the flat sprint tier must stay unrequested"
+            );
+            assert!(
+                model.board_columns_state(board1).is_loaded(),
+                "{kind}: the scoped column tier must be loaded"
+            );
+            assert!(
+                model.board_cards_state(board1).is_loaded(),
+                "{kind}: the scoped card tier must be loaded"
+            );
+            assert!(
+                model.board_sprints_state(board1).is_loaded(),
+                "{kind}: the scoped sprint tier must be loaded"
             );
         }
     }

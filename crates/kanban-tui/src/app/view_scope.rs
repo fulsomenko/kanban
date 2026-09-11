@@ -429,6 +429,34 @@ mod tests {
     }
 
     #[test]
+    fn test_a_board_screen_with_failed_flat_tiers_plans_an_empty_round() {
+        let board = Uuid::new_v4();
+        let c1 = Uuid::new_v4();
+        let stub = StubLoaded {
+            board_list: FetchStatus::Loaded,
+            column_list: FetchStatus::Failed,
+            card_list: FetchStatus::Failed,
+            sprint_list: FetchStatus::Failed,
+            columns_of_board: HashMap::from([(board, FetchStatus::Loaded)]),
+            sprints_of_board: FetchStatus::Loaded,
+            loaded_columns: HashMap::from([(board, vec![column(c1)])]),
+            cards_of_column: HashMap::from([(c1, FetchStatus::Loaded)]),
+            ..StubLoaded::default()
+        };
+
+        let scope = ViewScope {
+            board_list: true,
+            board: Some(board),
+            board_columns: true,
+            board_cards: true,
+            board_sprints: true,
+            ..Default::default()
+        };
+
+        assert!(scope.next_round(&stub).is_empty());
+    }
+
+    #[test]
     fn test_a_loaded_tier_is_not_requested_again() {
         let board = Uuid::new_v4();
         let stub = StubLoaded {

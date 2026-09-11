@@ -36,6 +36,34 @@ fn test_normal_mode_scopes_the_highlighted_board_when_none_is_opened() {
 }
 
 #[test]
+fn test_the_base_scope_requests_the_board_sprint_tier_in_normal_mode() {
+    let mut app = App::test_default();
+    let (board_id, ..) = seed_board_column_sprint_card(&mut app);
+    app.reload_model();
+    app.selection.active_board_id = Some(board_id);
+    app.mode = AppMode::Normal;
+
+    let scope = app.view_scope();
+
+    assert!(scope.board_sprints);
+}
+
+#[test]
+fn test_settings_scope_drops_the_board_sprint_tier() {
+    let mut app = App::test_default();
+    let (board_id, ..) = seed_board_column_sprint_card(&mut app);
+    app.reload_model();
+    app.selection.active_board_id = Some(board_id);
+    app.mode = AppMode::Settings;
+
+    let scope = app.view_scope();
+
+    assert!(!scope.board_columns);
+    assert!(!scope.board_cards);
+    assert!(!scope.board_sprints);
+}
+
+#[test]
 fn test_card_detail_scopes_the_active_card_the_sprints_and_the_graph() {
     let mut app = App::test_default();
     let (board_id, _column_id, _sprint_id, card_id) = seed_board_column_sprint_card(&mut app);

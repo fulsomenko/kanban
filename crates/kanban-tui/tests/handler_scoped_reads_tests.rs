@@ -346,3 +346,80 @@ fn test_sprint_dialogs_read_the_board_scoped_sprint_tier() {
         app.ui_state.banner
     );
 }
+
+#[test]
+fn test_the_tasks_panel_title_counts_from_the_scoped_tiers_while_the_flat_tiers_failed() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".into(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
+    app.ctx.create_sprint(board.id, None, None).unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            column.id,
+            "Card".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+
+    app.selection.active_board_id = Some(board.id);
+    app.reload_model();
+    app.prepare_frame();
+
+    fail_flat_tiers(&mut app);
+
+    let title = kanban_tui::ui::tasks_panel_title(&app, false);
+
+    assert!(title.contains('1'), "title: {title}");
+    assert!(!title.contains('\u{2026}'), "title: {title}");
+}
+
+#[test]
+fn test_search_filters_the_scoped_card_tier_without_flat_tiers() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".into(), None).unwrap();
+    let column = app
+        .ctx
+        .create_column(board.id, "Todo".into(), None)
+        .unwrap();
+    let alpha = app
+        .ctx
+        .create_card(
+            board.id,
+            column.id,
+            "alpha".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    app.ctx
+        .create_card(
+            board.id,
+            column.id,
+            "beta".into(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+
+    app.selection.active_board_id = Some(board.id);
+    app.reload_model();
+    app.prepare_frame();
+
+    fail_flat_tiers(&mut app);
+
+    app.mode = AppMode::Search;
+    app.filter.search.activate();
+    for c in "alpha".chars() {
+        app.filter.search.input.insert_char(c);
+    }
+    app.prepare_frame();
+
+    let active_list = app
+        .view
+        .strategy
+        .get_active_task_list()
+        .expect("active task list");
+    assert_eq!(active_list.cards, vec![alpha.id]);
+}
