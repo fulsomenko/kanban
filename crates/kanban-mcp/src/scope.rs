@@ -81,6 +81,9 @@ impl FetchPlan for ToolScope {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::requests::card::ArchiveCardsRequest;
+    use crate::requests::column::GetColumnRequest;
+    use crate::requests::sprint::GetSprintRequest;
     use kanban_domain::{EntityIds, KanbanError, LoadState, Model, Resolved};
     use std::sync::Arc;
 
@@ -113,29 +116,22 @@ mod tests {
     }
 
     #[test]
-    fn test_tool_scope_from_uuid_card_requests_no_card_tier() {
-        let scope = ToolScope {
-            cards: vec![Ref::Id],
-            ..Default::default()
+    fn test_a_card_batch_request_plans_an_empty_round() {
+        let uuid_batch = ArchiveCardsRequest {
+            cards: vec![Uuid::new_v4().to_string()],
         };
-        let round = scope.next_round(&Model::default());
+        assert!(uuid_batch.scope().next_round(&Model::default()).is_empty());
 
-        assert!(!round.card_list);
-        assert!(round.cards.is_empty());
-        assert!(round.is_empty());
-
-        let named_scope = ToolScope {
-            cards: vec![Ref::Name],
-            ..Default::default()
+        let named_batch = ArchiveCardsRequest {
+            cards: vec!["KAN-1".into()],
         };
-        assert!(named_scope.next_round(&Model::default()).card_list);
+        assert!(named_batch.scope().next_round(&Model::default()).is_empty());
     }
 
     #[test]
     fn test_a_named_column_in_board_resolves_after_a_second_round() {
         let scope = ToolScope {
             board: Some(Ref::Name),
-            column: Some(Ref::Name),
             wants_board_columns: true,
             ..Default::default()
         };
@@ -156,7 +152,6 @@ mod tests {
         let board_id = Uuid::new_v4();
         let round = scope.for_board(board_id).next_round(&model);
         assert_eq!(round.columns_by_board, vec![board_id]);
-        assert!(!round.column_list);
         assert!(!round.board_list);
     }
 
@@ -164,7 +159,6 @@ mod tests {
     fn test_a_named_sprint_in_board_resolves_after_a_second_round() {
         let scope = ToolScope {
             board: Some(Ref::Id),
-            sprint: Some(Ref::Name),
             wants_board_sprints: true,
             ..Default::default()
         };
@@ -172,7 +166,6 @@ mod tests {
         let board_id = Uuid::new_v4();
         let round = scope.for_board(board_id).next_round(&Model::default());
         assert_eq!(round.sprints_by_board, vec![board_id]);
-        assert!(!round.sprint_list);
         assert!(round.board_list);
     }
 
@@ -181,8 +174,6 @@ mod tests {
         let board_id = Uuid::new_v4();
         let scope = ToolScope {
             board: Some(Ref::Name),
-            column: Some(Ref::Name),
-            sprint: Some(Ref::Name),
             wants_board_columns: true,
             wants_board_sprints: true,
             ..Default::default()
@@ -214,21 +205,19 @@ mod tests {
         let board_id = Uuid::new_v4();
         let scope = ToolScope {
             board: Some(Ref::Id),
-            column: Some(Ref::Name),
             ..Default::default()
         }
         .for_board(board_id);
 
         let round = scope.next_round(&Model::default());
         assert!(round.columns_by_board.is_empty());
-        assert!(round.column_list);
+        assert!(round.is_empty());
     }
 
     #[test]
     fn test_by_parent_tiers_are_not_requested_before_the_board_is_resolved() {
         let scope = ToolScope {
             board: Some(Ref::Name),
-            column: Some(Ref::Name),
             wants_board_columns: true,
             wants_board_sprints: true,
             ..Default::default()
@@ -241,60 +230,38 @@ mod tests {
     }
 
     #[test]
-    fn test_a_wanted_by_parent_tier_suppresses_its_flat_tier() {
+    fn test_a_board_scoped_reference_requests_only_the_by_parent_tier() {
+        let board_id = Uuid::new_v4();
         let scope = ToolScope {
-            column: Some(Ref::Name),
-            sprint: Some(Ref::Name),
             wants_board_columns: true,
             wants_board_sprints: true,
             ..Default::default()
-        };
+        }
+        .for_board(board_id);
+
         let round = scope.next_round(&Model::default());
+        assert_eq!(round.columns_by_board, vec![board_id]);
+        assert_eq!(round.sprints_by_board, vec![board_id]);
         assert!(!round.column_list);
         assert!(!round.sprint_list);
-
-        let control = ToolScope {
-            column: Some(Ref::Name),
-            sprint: Some(Ref::Name),
-            ..Default::default()
-        };
-        let control_round = control.next_round(&Model::default());
-        assert!(control_round.column_list);
-        assert!(control_round.sprint_list);
+        assert!(!round.card_list);
+        assert!(!round.archived_board_list);
     }
 
     #[test]
     fn test_tool_scope_stops_requesting_once_everything_is_loaded() {
         let scope = ToolScope {
             board: Some(Ref::Name),
-            column: Some(Ref::Name),
-            sprint: Some(Ref::Name),
-            cards: vec![Ref::Name],
             wants_graph: true,
             resolved_board: None,
             wants_board_columns: false,
             wants_board_sprints: false,
+            ..Default::default()
         };
 
         let mut model = Model::default();
         let _ = model.apply_resolved(Resolved {
             boards: kanban_domain::resolved::Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            columns: kanban_domain::resolved::Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            cards: kanban_domain::resolved::Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            sprints: kanban_domain::resolved::Collection {
-                all: LoadState::Loaded(vec![]),
-                ..Default::default()
-            },
-            archived_boards: kanban_domain::resolved::Collection {
                 all: LoadState::Loaded(vec![]),
                 ..Default::default()
             },
@@ -331,33 +298,24 @@ mod tests {
     }
 
     #[test]
-    fn test_a_named_global_sprint_reference_also_requests_the_board_list() {
-        let scope = ToolScope {
-            sprint: Some(Ref::Name),
-            ..Default::default()
+    fn test_a_board_less_sprint_request_plans_an_empty_round() {
+        let req = GetSprintRequest {
+            sprint: "Sprint 1".into(),
         };
-
-        let round = scope.next_round(&Model::default());
-        assert!(round.board_list);
-        assert!(round.sprint_list);
+        assert!(req.scope().next_round(&Model::default()).is_empty());
     }
 
     #[test]
-    fn test_a_named_global_column_reference_also_requests_the_board_list() {
-        let scope = ToolScope {
-            column: Some(Ref::Name),
-            ..Default::default()
+    fn test_a_board_less_column_request_plans_an_empty_round() {
+        let req = GetColumnRequest {
+            column: "TODO".into(),
         };
-
-        let round = scope.next_round(&Model::default());
-        assert!(round.board_list);
-        assert!(round.column_list);
+        assert!(req.scope().next_round(&Model::default()).is_empty());
     }
 
     #[test]
     fn test_a_board_scoped_column_reference_requests_no_board_list() {
         let scoped = ToolScope {
-            column: Some(Ref::Name),
             wants_board_columns: true,
             ..Default::default()
         }
@@ -365,40 +323,40 @@ mod tests {
         assert!(!scoped.next_round(&Model::default()).board_list);
 
         let by_id = ToolScope {
-            column: Some(Ref::Id),
+            board: Some(Ref::Id),
             ..Default::default()
         };
         assert!(by_id.next_round(&Model::default()).is_empty());
     }
 
     #[test]
-    fn test_a_global_named_reference_requests_the_archived_board_markers() {
-        let column_scope = ToolScope {
-            column: Some(Ref::Name),
-            ..Default::default()
+    fn test_a_board_less_reference_requests_no_archived_marker_tier() {
+        let column_req = GetColumnRequest {
+            column: "TODO".into(),
         };
         assert!(
-            column_scope
+            !column_req
+                .scope()
                 .next_round(&Model::default())
                 .archived_board_list
         );
 
-        let sprint_scope = ToolScope {
-            sprint: Some(Ref::Name),
-            ..Default::default()
+        let sprint_req = GetSprintRequest {
+            sprint: "Sprint 1".into(),
         };
         assert!(
-            sprint_scope
+            !sprint_req
+                .scope()
                 .next_round(&Model::default())
                 .archived_board_list
         );
 
-        let cards_scope = ToolScope {
-            cards: vec![Ref::Name],
-            ..Default::default()
+        let cards_req = ArchiveCardsRequest {
+            cards: vec!["KAN-1".into()],
         };
         assert!(
-            cards_scope
+            !cards_req
+                .scope()
                 .next_round(&Model::default())
                 .archived_board_list
         );
@@ -409,7 +367,6 @@ mod tests {
         let board_id = Uuid::new_v4();
 
         let column_in_board = ToolScope {
-            column: Some(Ref::Name),
             wants_board_columns: true,
             ..Default::default()
         }
@@ -421,23 +378,12 @@ mod tests {
         );
 
         let sprint_in_board = ToolScope {
-            sprint: Some(Ref::Name),
             wants_board_sprints: true,
             ..Default::default()
         }
         .for_board(board_id);
         assert!(
             !sprint_in_board
-                .next_round(&Model::default())
-                .archived_board_list
-        );
-
-        let cards_by_id = ToolScope {
-            cards: vec![Ref::Id],
-            ..Default::default()
-        };
-        assert!(
-            !cards_by_id
                 .next_round(&Model::default())
                 .archived_board_list
         );

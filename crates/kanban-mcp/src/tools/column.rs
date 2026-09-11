@@ -493,8 +493,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_column_by_name_reads_the_column_list_and_the_board_list_exactly_once_on_json()
-    {
+    async fn test_get_column_by_name_reads_no_board_list_on_json() {
         let (server, _dir, handle) = seeded_server("test.json").await;
         handle.clear_ops();
 
@@ -506,12 +505,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(handle.op_count("list_all_columns"), 1);
-        assert_eq!(handle.op_count("list_boards"), 1);
+        assert_eq!(handle.op_count("list_boards"), 0);
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_get_column_by_name_reads_the_column_list_and_the_board_list_exactly_once_on_sqlite(
-    ) {
+    async fn test_get_column_by_name_reads_no_board_list_on_sqlite() {
         let (server, _dir, handle) = seeded_server("test.sqlite").await;
         handle.clear_ops();
 
@@ -523,7 +521,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(handle.op_count("list_all_columns"), 1);
-        assert_eq!(handle.op_count("list_boards"), 1);
+        assert_eq!(handle.op_count("list_boards"), 0);
     }
 
     #[tokio::test]
