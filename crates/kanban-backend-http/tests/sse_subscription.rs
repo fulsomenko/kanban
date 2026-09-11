@@ -9,13 +9,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
-async fn ctx_over(server: &TestServer) -> KanbanContext {
-    let backend = Arc::new(HttpBackend::new(&server.base_url()).unwrap());
-    KanbanContext::open(backend, AppConfig::default())
-        .await
-        .unwrap()
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_subscribe_delivers_synthetic_all_frame_on_connect() {
     let server = TestServer::start().await;
@@ -30,6 +23,8 @@ async fn test_subscribe_delivers_synthetic_all_frame_on_connect() {
     assert!(frame.invalidation.is_none());
     assert_eq!(frame.issued_by, ClientId::nil());
 
+    drop(rx);
+    drop(backend);
     server.shutdown().await;
 }
 
@@ -74,13 +69,15 @@ async fn test_foreign_mutation_produces_frame_with_converting_invalidation() {
         other => panic!("expected Invalidation::Entities, got {other:?}"),
     }
 
+    drop(rx);
+    drop(backend);
     server.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_own_mutation_frame_carries_own_instance_id_as_issued_by() {
     let server = TestServer::start().await;
-    let backend = HttpBackend::new(&server.base_url()).unwrap();
+    let backend = Arc::new(HttpBackend::new(&server.base_url()).unwrap());
     let own_instance_id = backend.instance_id();
 
     let mut rx = backend.subscribe();
@@ -89,7 +86,10 @@ async fn test_own_mutation_frame_carries_own_instance_id_as_issued_by() {
         .expect("timed out waiting for the connect synthetic")
         .expect("channel closed before delivering the connect synthetic");
 
-    let mut ctx = ctx_over(&server).await;
+    let dyn_backend: Arc<dyn kanban_service::KanbanBackend> = backend.clone();
+    let mut ctx = KanbanContext::open(dyn_backend, AppConfig::default())
+        .await
+        .unwrap();
     ctx.create_board("Own Board".to_string(), Some("OWN".to_string()))
         .unwrap();
 
@@ -101,5 +101,8 @@ async fn test_own_mutation_frame_carries_own_instance_id_as_issued_by() {
     assert_eq!(frame.issued_by, ClientId::from(own_instance_id));
     assert_ne!(frame.issued_by, ClientId::nil());
 
+    drop(rx);
+    drop(ctx);
+    drop(backend);
     server.shutdown().await;
 }
