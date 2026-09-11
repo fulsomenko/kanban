@@ -35,7 +35,7 @@ impl Model {
                 *self = Self::default();
                 return ModelChanged::new();
             }
-            Invalidation::Entities(ids) if ids.is_empty() => return ModelChanged::new(),
+            Invalidation::Entities(ids) if ids.is_empty() => return ModelChanged::unchanged(),
             Invalidation::Entities(ids) => ids,
         };
 
@@ -698,6 +698,22 @@ mod tests {
         let mut m = Model::default();
         let changed: ModelChanged = m.invalidate(Invalidation::All);
         NoProjections.resync(&m, changed);
+        assert!(m.cards_state().is_not_loaded());
+    }
+
+    #[test]
+    fn test_invalidate_of_an_empty_entity_set_reports_unchanged() {
+        let (mut m, ..) = seeded();
+        let changed = m.invalidate(Invalidation::Entities(EntityIds::default()));
+        assert!(!changed.any());
+        assert!(m.boards_state().is_loaded());
+    }
+
+    #[test]
+    fn test_invalidate_all_reports_changed() {
+        let (mut m, ..) = seeded();
+        let changed = m.invalidate(Invalidation::All);
+        assert!(changed.any());
         assert!(m.cards_state().is_not_loaded());
     }
 

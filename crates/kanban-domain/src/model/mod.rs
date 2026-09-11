@@ -90,9 +90,10 @@ fn scoped_state<T>(map: &HashMap<Uuid, LoadState<Vec<T>>>, parent: Uuid) -> Load
 }
 
 impl Model {
-    /// Returns a [`ModelChanged`] receipt: whatever derives from this
-    /// `Model` is stale until a [`DerivedProjections`] implementor consumes
-    /// it.
+    /// Returns a [`ModelChanged`] receipt that always reports `any()`: even
+    /// an empty `snapshot` moves every tier from whatever it held to
+    /// `Loaded`, which is itself a real change a `DerivedProjections`
+    /// implementor must observe.
     pub fn load_from_snapshot(&mut self, snapshot: Snapshot) -> ModelChanged {
         // Reference-marker model: `snapshot.cards`/`snapshot.boards` each carry
         // EVERY row — live AND archived — with archival recorded by markers
@@ -122,6 +123,15 @@ impl Model {
         self.rebuild_board_index();
         self.rebuild_board_scoped_tiers();
 
+        ModelChanged::new()
+    }
+
+    /// Replaces the whole `Model` with `other` and always reports `any()`.
+    /// For a caller restoring a kept-aside `Model` (e.g. a failed reload's
+    /// rollback), so the restore goes through a receipt instead of a direct
+    /// field assignment a `DerivedProjections` implementor never sees.
+    pub fn replace_with(&mut self, other: Model) -> ModelChanged {
+        *self = other;
         ModelChanged::new()
     }
 
@@ -234,6 +244,13 @@ mod tests {
         assert!(m.sprints_state().loaded_or_empty().is_empty());
         assert!(m.archived_card_markers().is_empty());
         assert!(m.archived_card_ids().is_empty());
+    }
+
+    #[test]
+    fn test_load_from_snapshot_always_reports_changed() {
+        let mut m = Model::default();
+        let changed = m.load_from_snapshot(Snapshot::default());
+        assert!(changed.any());
     }
 
     #[test]

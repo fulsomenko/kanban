@@ -66,6 +66,17 @@ impl DerivedProjections for CountingProjections {
     }
 }
 
+#[derive(Default)]
+struct RecordingProjections {
+    any_flags: Vec<bool>,
+}
+
+impl DerivedProjections for RecordingProjections {
+    fn resync(&mut self, _model: &Model, changed: ModelChanged) {
+        self.any_flags.push(changed.any());
+    }
+}
+
 fn ctx_with_seeded_board() -> (KanbanContext, Board) {
     let store = InMemoryStore::new();
     let board = Board::new("Seeded", None::<String>);
@@ -170,6 +181,43 @@ fn test_sync_invalidated_refetches_the_invalidated_card_before_planning() {
         model_b.card_by_id_state(card_b.id).loaded().unwrap().title,
         "before"
     );
+}
+
+#[test]
+fn test_sync_over_an_already_satisfied_plan_reports_an_unchanged_receipt() {
+    let (ctx, _board) = ctx_with_seeded_board();
+    let mut model = Model::default();
+    let mut recording = RecordingProjections::default();
+
+    ctx.sync(&BoardListPlan, &mut model, &mut recording);
+    ctx.sync(&BoardListPlan, &mut model, &mut recording);
+
+    assert_eq!(recording.any_flags, vec![true, false]);
+}
+
+#[test]
+fn test_sync_invalidated_with_an_empty_entity_set_and_a_satisfied_plan_reports_unchanged() {
+    let (ctx, board) = ctx_with_seeded_board();
+    let mut model = Model::default();
+    let mut recording = RecordingProjections::default();
+
+    ctx.sync(&BoardListPlan, &mut model, &mut recording);
+
+    ctx.sync_invalidated(
+        Invalidation::Entities(kanban_domain::EntityIds::default()),
+        &BoardListPlan,
+        &mut model,
+        &mut recording,
+    );
+    ctx.sync_invalidated(
+        Invalidation::Entities(kanban_domain::EntityIds::boards([board.id])),
+        &BoardListPlan,
+        &mut model,
+        &mut recording,
+    );
+
+    assert_eq!(recording.any_flags.last(), Some(&true));
+    assert!(!recording.any_flags[recording.any_flags.len() - 2]);
 }
 
 #[test]

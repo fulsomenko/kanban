@@ -2,7 +2,7 @@ use super::{App, AppMode, ViewScope};
 use crate::view_strategy::UnifiedViewStrategy;
 use kanban_domain::{
     filter_and_sort_boards, Board, BoardListFilter, Card, DerivedProjections, Invalidation,
-    KanbanResult, LoadState, Resolved, Snapshot, UndoOperations,
+    KanbanResult, LoadState, Snapshot, UndoOperations,
 };
 use kanban_view::view_strategy::{ViewRefreshContext, ViewStrategy};
 use std::collections::HashMap;
@@ -127,8 +127,7 @@ impl App {
             &mut self.controller,
         );
         if self.surface_load_failures() {
-            self.model = previous;
-            let changed = self.model.apply_resolved(Resolved::default());
+            let changed = self.model.replace_with(previous);
             self.controller.resync(&self.model, changed);
         }
     }
