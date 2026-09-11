@@ -110,12 +110,32 @@ mod tests {
         let c2 = Card::new(board.id, col_b.id, "two", 0);
         let sprint = Sprint::new(board.id, 1, None, None::<String>);
 
-        let model = Model::with_load_states(ModelLoadStates {
+        let mut model = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![board.clone()]),
-            columns: LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
-            cards: LoadState::Loaded(vec![c1.clone(), c2.clone()]),
-            sprints: LoadState::Loaded(vec![sprint.clone()]),
             graph: LoadState::Loaded(DependencyGraph::default()),
+            ..Default::default()
+        });
+
+        let mut columns_by_parent = HashMap::new();
+        columns_by_parent.insert(board.id, LoadState::Loaded(vec![col_a.clone(), col_b.clone()]));
+        let mut cards_by_parent = HashMap::new();
+        cards_by_parent.insert(col_a.id, LoadState::Loaded(vec![c1.clone()]));
+        cards_by_parent.insert(col_b.id, LoadState::Loaded(vec![c2.clone()]));
+        let mut sprints_by_parent = HashMap::new();
+        sprints_by_parent.insert(board.id, LoadState::Loaded(vec![sprint.clone()]));
+        let _ = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            cards: Collection {
+                by_parent: cards_by_parent,
+                ..Default::default()
+            },
+            sprints: Collection {
+                by_parent: sprints_by_parent,
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -179,9 +199,9 @@ mod tests {
         sprint: &Sprint,
     ) {
         assert!(m.boards_state().is_not_loaded());
-        assert!(m.columns_state().is_not_loaded());
-        assert!(m.cards_state().is_not_loaded());
-        assert!(m.sprints_state().is_not_loaded());
+        assert!(m.board_columns_state(board.id).is_not_loaded());
+        assert!(m.column_cards_state(col_a.id).is_not_loaded());
+        assert!(m.board_sprints_state(board.id).is_not_loaded());
         assert!(m.graph_state().is_not_loaded());
         assert!(m.board_by_id_state(board.id).is_not_loaded());
         assert!(m.column_id_status(col_a.id).is_not_loaded());
@@ -194,7 +214,6 @@ mod tests {
         assert!(m.board_columns_state(board.id).is_not_loaded());
         assert!(m.board_sprints_state(board.id).is_not_loaded());
         assert!(m.scoped_card_index.is_empty());
-        assert!(m.card_index.is_empty());
         assert!(m.board_index.is_empty());
         assert!(m.board_archived_cards_state(board.id).is_not_loaded());
     }
@@ -209,9 +228,9 @@ mod tests {
         sprint: &Sprint,
     ) {
         assert!(m.boards_state().is_loaded());
-        assert!(m.columns_state().is_loaded());
-        assert!(m.cards_state().is_loaded());
-        assert!(m.sprints_state().is_loaded());
+        assert!(m.board_columns_state(board.id).is_loaded());
+        assert!(m.column_cards_state(col_a.id).is_loaded());
+        assert!(m.board_sprints_state(board.id).is_loaded());
         assert!(m.graph_state().is_loaded());
         assert!(m.board_by_id_state(board.id).is_loaded());
         assert!(m.column_id_status(col_a.id).is_loaded());
@@ -222,7 +241,6 @@ mod tests {
         assert!(m.board_sprints_state(board.id).is_loaded());
         assert!(m.board_archived_cards_state(board.id).is_loaded());
         assert!(!m.scoped_card_index.is_empty());
-        assert!(!m.card_index.is_empty());
         assert!(!m.board_index.is_empty());
     }
 
@@ -368,25 +386,6 @@ mod tests {
 
         assert_eq!(m.scoped_card_index.len(), 1);
         assert_eq!(m.scoped_card_index.get(&c3.id), Some(&col_a.id));
-    }
-
-    #[test]
-    fn test_invalidating_a_card_clears_the_card_index() {
-        let board = Board::new("B", None::<String>);
-        let col = Column::new(board.id, "A", 0);
-        let c1 = Card::new(board.id, col.id, "one", 0);
-        let c2 = Card::new(board.id, col.id, "two", 0);
-
-        let mut m = Model::with_load_states(ModelLoadStates {
-            cards: LoadState::Loaded(vec![c1.clone(), c2.clone()]),
-            ..Default::default()
-        });
-
-        let _ = m.invalidate(Invalidation::Entities(EntityIds::cards([c1.id])));
-
-        assert!(m.cards_state().is_not_loaded());
-        assert!(m.card_by_id_state(c2.id).is_not_loaded());
-        assert!(m.card_index.is_empty());
     }
 
     #[test]
@@ -587,6 +586,7 @@ mod tests {
     fn test_invalidate_empty_entity_ids_keeps_the_snapshot_derived_archived_markers() {
         let board = Board::new("B", None::<String>);
         let card = Card::new(board.id, Uuid::new_v4(), "task", 0);
+        let card_id = card.id;
         let marker = ArchivedCard::new(card.id, board.id);
 
         let mut m = Model::default();
@@ -603,7 +603,7 @@ mod tests {
 
         assert!(!m.archived_card_markers().is_empty());
         assert!(!m.archived_card_ids().is_empty());
-        assert!(m.cards_state().is_loaded());
+        assert!(m.card_id_status(card_id).is_loaded());
     }
 
     #[test]
@@ -613,10 +613,10 @@ mod tests {
         let archived = Card::new(board.id, Uuid::new_v4(), "archived", 0);
 
         let mut m = Model::with_load_states(ModelLoadStates {
-            cards: LoadState::Loaded(vec![live.clone(), archived.clone()]),
             archived_cards: Some(vec![ArchivedCard::new(archived.id, board.id)]),
             ..Default::default()
         });
+        let _ = live;
         assert!(m.archived_cards_state().is_loaded());
         assert!(m.archived_card_ids().contains(&archived.id));
 
@@ -634,7 +634,6 @@ mod tests {
 
         let mut m = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![live_board.clone(), archived_board.clone()]),
-            cards: LoadState::Loaded(vec![card.clone()]),
             archived_boards: Some(vec![ArchivedBoard::now(archived_board.id)]),
             archived_cards: Some(vec![ArchivedCard::new(card.id, live_board.id)]),
             ..Default::default()
@@ -660,7 +659,6 @@ mod tests {
 
         let mut m = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![live_board.clone(), archived_board.clone()]),
-            cards: LoadState::Loaded(vec![card.clone()]),
             archived_boards: Some(vec![ArchivedBoard::now(archived_board.id)]),
             archived_cards: Some(vec![ArchivedCard::new(card.id, live_board.id)]),
             ..Default::default()
@@ -680,7 +678,6 @@ mod tests {
 
         let mut m = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![board.clone()]),
-            cards: LoadState::Loaded(vec![card.clone()]),
             sprints: LoadState::Loaded(vec![sprint.clone()]),
             archived_boards: Some(vec![]),
             archived_cards: Some(vec![ArchivedCard::new(card.id, board.id)]),
@@ -698,7 +695,7 @@ mod tests {
         let mut m = Model::default();
         let changed: ModelChanged = m.invalidate(Invalidation::All);
         NoProjections.resync(&m, changed);
-        assert!(m.cards_state().is_not_loaded());
+        assert!(m.card_id_status(Uuid::new_v4()).is_not_loaded());
     }
 
     #[test]
@@ -714,12 +711,12 @@ mod tests {
         let (mut m, ..) = seeded();
         let changed = m.invalidate(Invalidation::All);
         assert!(changed.any());
-        assert!(m.cards_state().is_not_loaded());
+        assert!(m.card_id_status(Uuid::new_v4()).is_not_loaded());
     }
 
     #[test]
     fn test_invalidate_a_column_id_drops_that_column_and_the_column_collection() {
-        let (mut m, _board, col_a, col_b, _c1, _c2, _sprint) = seeded();
+        let (mut m, board, col_a, col_b, c1, _c2, sprint) = seeded();
 
         let changed = m.apply_resolved(Resolved {
             columns: Collection {
@@ -738,11 +735,12 @@ mod tests {
 
         assert!(m.column_id_status(col_a.id).is_not_loaded());
         assert!(m.column_id_status(col_b.id).is_loaded());
-        assert!(m.columns_state().is_not_loaded());
+        assert!(m.board_columns_state(board.id).is_not_loaded());
         assert!(m.boards_state().is_loaded());
-        assert!(m.cards_state().is_loaded());
-        assert!(m.sprints_state().is_loaded());
+        assert!(m.column_cards_state(col_b.id).is_loaded());
+        assert!(m.board_sprints_state(board.id).is_loaded());
         assert!(m.graph_state().is_loaded());
+        let _ = (c1, sprint);
     }
 
     #[test]
@@ -753,13 +751,16 @@ mod tests {
 
         let mut m = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![board.clone()]),
-            columns: LoadState::Loaded(vec![]),
-            cards: LoadState::Loaded(vec![]),
-            sprints: LoadState::Loaded(vec![sa.clone(), sb.clone()]),
             graph: LoadState::Loaded(DependencyGraph::default()),
             ..Default::default()
         });
+        let mut columns_by_parent = HashMap::new();
+        columns_by_parent.insert(board.id, LoadState::Loaded(Vec::new()));
         let changed = m.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
             sprints: Collection {
                 by_id: [
                     (sa.id, LoadState::Loaded(sa.clone())),
@@ -776,10 +777,8 @@ mod tests {
 
         assert!(m.sprint_id_status(sa.id).is_not_loaded());
         assert!(m.sprint_id_status(sb.id).is_loaded());
-        assert!(m.sprints_state().is_not_loaded());
         assert!(m.boards_state().is_loaded());
-        assert!(m.columns_state().is_loaded());
-        assert!(m.cards_state().is_loaded());
+        assert!(m.board_columns_state(board.id).is_loaded());
         assert!(m.graph_state().is_loaded());
     }
 
@@ -799,13 +798,12 @@ mod tests {
         let _ = m.invalidate(Invalidation::Entities(EntityIds::boards([board.id])));
 
         assert!(m.boards_state().is_not_loaded());
-        assert!(m.columns_state().is_loaded());
-        assert!(m.cards_state().is_loaded());
-        assert!(m.sprints_state().is_loaded());
+        assert!(m.column_cards_state(col_a.id).is_loaded());
         assert!(m.graph_state().is_loaded());
         assert!(m.column_id_status(col_a.id).is_loaded());
         assert!(m.card_id_status(c1.id).is_loaded());
         assert!(m.sprint_id_status(sprint.id).is_loaded());
+        let _ = (c2, col_b);
     }
 
     #[test]
@@ -842,10 +840,10 @@ mod tests {
 
         let _ = m.invalidate(Invalidation::Entities(EntityIds::cards([c1.id])));
 
-        assert!(m.cards_state().is_not_loaded());
+        assert!(m.column_cards_state(col_a.id).is_not_loaded());
         assert!(m.boards_state().is_loaded());
-        assert!(m.columns_state().is_loaded());
-        assert!(m.sprints_state().is_loaded());
+        assert!(m.board_columns_state(board.id).is_loaded());
+        assert!(m.board_sprints_state(board.id).is_loaded());
         assert!(m.graph_state().is_loaded());
     }
 
@@ -858,9 +856,6 @@ mod tests {
 
         let mut m = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![board.clone()]),
-            columns: LoadState::Loaded(vec![col.clone()]),
-            cards: LoadState::Loaded(vec![card.clone()]),
-            sprints: LoadState::Loaded(vec![sprint.clone()]),
             graph: LoadState::Loaded(DependencyGraph::default()),
             ..Default::default()
         });
@@ -888,9 +883,6 @@ mod tests {
         let _ = m.invalidate(Invalidation::All);
 
         assert!(m.boards_state().is_not_loaded());
-        assert!(m.columns_state().is_not_loaded());
-        assert!(m.cards_state().is_not_loaded());
-        assert!(m.sprints_state().is_not_loaded());
         assert!(m.board_by_id_state(board.id).is_not_loaded());
         assert!(m.column_id_status(col.id).is_not_loaded());
         assert!(m.card_id_status(card.id).is_not_loaded());
@@ -905,29 +897,31 @@ mod tests {
         let _ = m.invalidate(Invalidation::Entities(EntityIds::default().with_prefixes()));
 
         assert!(m.boards_state().is_not_loaded());
-        assert!(m.columns_state().is_loaded());
-        assert!(m.cards_state().is_loaded());
-        assert!(m.sprints_state().is_loaded());
+        assert!(m.board_columns_state(board.id).is_loaded());
+        assert!(m.column_cards_state(col_a.id).is_loaded());
+        assert!(m.board_sprints_state(board.id).is_loaded());
         assert!(m.graph_state().is_loaded());
         assert!(m.column_id_status(col_a.id).is_loaded());
         assert!(m.card_id_status(c1.id).is_loaded());
         assert!(m.sprint_id_status(sprint.id).is_loaded());
         assert!(m.board_columns_state(board.id).is_loaded());
         assert!(m.board_sprints_state(board.id).is_loaded());
+        let _ = (col_b, c2);
     }
 
     #[test]
     fn test_invalidate_graph_flag_drops_only_the_graph() {
-        let (mut m, _board, col_a, col_b, c1, c2, sprint) = seeded();
-        load_every_tier(&mut m, &_board, &col_a, &col_b, &c1, &c2, &sprint);
+        let (mut m, board, col_a, col_b, c1, c2, sprint) = seeded();
+        load_every_tier(&mut m, &board, &col_a, &col_b, &c1, &c2, &sprint);
 
         let _ = m.invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
 
         assert!(m.graph_state().is_not_loaded());
         assert!(m.boards_state().is_loaded());
-        assert!(m.columns_state().is_loaded());
-        assert!(m.cards_state().is_loaded());
-        assert!(m.sprints_state().is_loaded());
+        assert!(m.board_columns_state(board.id).is_loaded());
+        assert!(m.column_cards_state(col_a.id).is_loaded());
+        assert!(m.board_sprints_state(board.id).is_loaded());
+        let _ = (col_b, c1, c2, sprint);
     }
 
     #[test]

@@ -286,9 +286,9 @@ mod tests {
     fn test_default_model_returns_empty_slices() {
         let m = Model::default();
         assert!(m.boards_state().loaded_or_empty().is_empty());
-        assert!(m.columns_state().loaded_or_empty().is_empty());
-        assert!(m.cards_state().loaded_or_empty().is_empty());
-        assert!(m.sprints_state().loaded_or_empty().is_empty());
+        assert!(m.board_columns_state(Uuid::new_v4()).is_not_loaded());
+        assert!(m.column_cards_state(Uuid::new_v4()).is_not_loaded());
+        assert!(m.board_sprints_state(Uuid::new_v4()).is_not_loaded());
         assert!(m.archived_card_markers().is_empty());
         assert!(m.archived_card_ids().is_empty());
     }
@@ -313,8 +313,10 @@ mod tests {
         });
         assert_eq!(m.boards_state().loaded_or_empty().len(), 1);
         assert_eq!(m.boards_state().loaded_or_empty()[0].id, board.id);
-        assert_eq!(m.columns_state().loaded_or_empty().len(), 1);
-        assert_eq!(m.columns_state().loaded_or_empty()[0].id, col.id);
+        let state = m.board_columns_state(board.id);
+        let loaded = state.loaded().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, col.id);
     }
 
     #[test]
@@ -464,7 +466,7 @@ mod tests {
     fn test_load_from_snapshot_returns_a_model_changed_receipt() {
         let mut m = Model::default();
         let changed: ModelChanged = m.load_from_snapshot(Snapshot::default());
-        assert!(m.cards_state().is_loaded());
+        assert!(m.boards_state().is_loaded());
         NoProjections.resync(&m, changed);
     }
 
@@ -491,7 +493,7 @@ mod tests {
         let cards_src = include_str!("cards.rs");
         assert!(
             !cards_src.contains("pub fn all_cards(&self)"),
-            "Model::all_cards must be deleted; callers should use cards_state().loaded_or_empty()"
+            "Model::all_cards must be deleted; callers should use board_cards_state(board_id)"
         );
         assert!(
             !cards_src.contains("pub fn card_by_id(&self,"),
@@ -504,11 +506,11 @@ mod tests {
         let collections_src = include_str!("collections.rs");
         assert!(
             !collections_src.contains("pub fn columns(&self)"),
-            "Model::columns must be deleted; callers should use columns_state().loaded_or_empty()"
+            "Model::columns must be deleted; callers should use board_columns_state(board_id)"
         );
         assert!(
             !collections_src.contains("pub fn sprints(&self)"),
-            "Model::sprints must be deleted; callers should use sprints_state().loaded_or_empty()"
+            "Model::sprints must be deleted; callers should use board_sprints_state(board_id)"
         );
     }
 

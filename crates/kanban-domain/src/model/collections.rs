@@ -82,46 +82,54 @@ mod tests {
     use crate::{Column, Snapshot, Sprint};
 
     #[test]
-    fn test_columns_state_is_not_loaded_before_load_from_snapshot() {
+    fn test_board_columns_state_is_not_loaded_before_load_from_snapshot() {
         let m = Model::default();
-        assert!(m.columns_state().is_not_loaded());
+        assert!(m.board_columns_state(Uuid::new_v4()).is_not_loaded());
     }
 
     #[test]
-    fn test_columns_state_is_loaded_and_empty_after_an_empty_snapshot() {
+    fn test_board_columns_state_is_loaded_and_empty_after_an_empty_snapshot() {
         let mut m = Model::default();
-        let _ = m.load_from_snapshot(Snapshot::default());
-        assert!(m.columns_state().is_loaded());
-        assert!(m.columns_state().loaded().unwrap().is_empty());
-        assert!(m.columns_state().loaded_or_empty().is_empty());
+        let board = Board::new("B", None::<String>);
+        let board_id = board.id;
+        let _ = m.load_from_snapshot(Snapshot {
+            boards: vec![board],
+            ..Default::default()
+        });
+        let state = m.board_columns_state(board_id);
+        assert!(state.is_loaded());
+        assert!(state.loaded().unwrap().is_empty());
     }
 
     #[test]
-    fn test_columns_state_is_loaded_after_load_from_snapshot() {
+    fn test_board_columns_state_is_loaded_after_load_from_snapshot() {
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);
         let col = Column::new(board.id, "Col", 0);
         let col_id = col.id;
+        let board_id = board.id;
         let _ = m.load_from_snapshot(Snapshot {
             boards: vec![board],
             columns: vec![col],
             ..Default::default()
         });
-        let loaded = m.columns_state().loaded().unwrap();
+        let state = m.board_columns_state(board_id);
+        let loaded = state.loaded().unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].id, col_id);
     }
 
     #[test]
-    fn test_sprints_state_is_not_loaded_before_load_from_snapshot() {
+    fn test_board_sprints_state_is_not_loaded_before_load_from_snapshot() {
         let m = Model::default();
-        assert!(m.sprints_state().is_not_loaded());
+        assert!(m.board_sprints_state(Uuid::new_v4()).is_not_loaded());
     }
 
     #[test]
-    fn test_sprints_state_is_loaded_after_load_from_snapshot() {
+    fn test_board_sprints_state_is_loaded_after_load_from_snapshot() {
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);
+        let board_id = board.id;
         let sprint = Sprint::new(board.id, 1, None, None::<String>);
         let sprint_id = sprint.id;
         let _ = m.load_from_snapshot(Snapshot {
@@ -129,8 +137,9 @@ mod tests {
             sprints: vec![sprint],
             ..Default::default()
         });
-        assert!(m.sprints_state().is_loaded());
-        let loaded = m.sprints_state().loaded().unwrap();
+        let state = m.board_sprints_state(board_id);
+        assert!(state.is_loaded());
+        let loaded = state.loaded().unwrap();
         assert!(loaded.iter().any(|s| s.id == sprint_id));
     }
 }

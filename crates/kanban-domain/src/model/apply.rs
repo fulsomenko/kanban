@@ -260,15 +260,23 @@ mod tests {
         let board = Board::new("B", None::<String>);
         let column = Column::new(board.id, "Col", 0);
         let card = Card::new(board.id, column.id, "task", 0);
+        let mut cards_by_parent = HashMap::new();
+        cards_by_parent.insert(column.id, LoadState::Loaded(vec![card]));
         let resolved = Resolved {
             cards: Collection {
-                all: LoadState::Loaded(vec![card]),
+                by_parent: cards_by_parent,
                 ..Default::default()
             },
             ..Default::default()
         };
         let changed: ModelChanged = m.apply_resolved(resolved);
-        assert_eq!(m.cards_state().loaded_or_empty().len(), 1);
+        assert_eq!(
+            m.column_cards_state(column.id)
+                .loaded()
+                .map(|v| v.len())
+                .unwrap_or(0),
+            1
+        );
         NoProjections.resync(&m, changed);
     }
 
@@ -357,7 +365,7 @@ mod tests {
         let changed = m.mark_failed(EntityIds::default(), err);
         assert!(!changed.any());
         assert!(m.boards_state().is_not_loaded());
-        assert!(m.cards_state().is_not_loaded());
+        assert!(m.card_id_status(Uuid::new_v4()).is_not_loaded());
     }
 
     #[test]
@@ -373,13 +381,26 @@ mod tests {
     fn test_mark_failed_returns_a_model_changed_receipt() {
         let mut m = Model::default();
         let card_id = Uuid::new_v4();
+        let mut by_id = HashMap::new();
+        by_id.insert(
+            card_id,
+            LoadState::Loaded(Card::new(Uuid::new_v4(), Uuid::new_v4(), "c", 0)),
+        );
+        let _ = m.apply_resolved(Resolved {
+            cards: Collection {
+                by_id,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
         let ids = EntityIds {
             cards: [card_id].into_iter().collect(),
             ..Default::default()
         };
         let err = Arc::new(KanbanError::unsupported("boom"));
         let changed: ModelChanged = m.mark_failed(ids, err);
-        assert!(m.cards_state().is_failed());
+        assert!(m.card_id_status(card_id).is_failed());
         NoProjections.resync(&m, changed);
     }
 
@@ -410,49 +431,32 @@ mod tests {
         let (mut m, board, column, sprint, _card_a, _card_b) = seed_full_model();
         let new_card = seed_card(&board, column.id);
 
+        let mut cards_by_parent = HashMap::new();
+        cards_by_parent.insert(column.id, LoadState::Loaded(vec![new_card.clone()]));
         let _ = m.apply_resolved(Resolved {
             cards: Collection {
-                all: LoadState::Loaded(vec![new_card.clone()]),
+                by_parent: cards_by_parent,
                 ..Default::default()
             },
             ..Default::default()
         });
 
-        assert!(m.columns_state().is_loaded());
-        assert_eq!(m.columns_state().loaded().unwrap(), &vec![column]);
-        assert!(m.sprints_state().is_loaded());
-        assert_eq!(m.sprints_state().loaded().unwrap(), &vec![sprint]);
+        assert!(m.board_columns_state(board.id).is_loaded());
+        assert_eq!(
+            m.board_columns_state(board.id).loaded().unwrap(),
+            &vec![column.clone()]
+        );
+        assert!(m.board_sprints_state(board.id).is_loaded());
+        assert_eq!(
+            m.board_sprints_state(board.id).loaded().unwrap(),
+            &vec![sprint.clone()]
+        );
         assert!(m.boards_state().is_loaded());
         assert_eq!(m.boards_state().loaded().unwrap(), &vec![board]);
         assert!(m.graph_state().is_loaded());
-        assert!(m.cards_state().is_loaded());
-        assert_eq!(m.cards_state().loaded().unwrap(), &vec![new_card]);
-    }
-
-    #[test]
-    fn test_applying_all_then_by_id_applies_the_whole_collection_first() {
-        let mut m = Model::default();
-        let board = Board::new("B", None::<String>);
-        let a = Column::new(board.id, "A", 0);
-        let b = Column::new(board.id, "B", 1);
-        let _ = m.load_from_snapshot(Snapshot {
-            boards: vec![board],
-            archived_boards: Vec::new(),
-            ..Default::default()
-        });
-
-        let mut by_id = HashMap::new();
-        by_id.insert(b.id, LoadState::Missing);
-        let _ = m.apply_resolved(Resolved {
-            columns: Collection {
-                all: LoadState::Loaded(vec![a.clone(), b]),
-                by_id,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert_eq!(m.columns_state().loaded().unwrap(), &vec![a]);
+        let state = m.column_cards_state(column.id);
+        assert!(state.is_loaded());
+        assert_eq!(state.loaded().unwrap(), &vec![new_card]);
     }
 
     #[test]
@@ -472,7 +476,7 @@ mod tests {
             ..Default::default()
         });
 
-        assert_eq!(m.cards_state().loaded().unwrap().len(), 2);
+        assert_eq!(m.column_cards_state(column.id).loaded().unwrap().len(), 2);
         assert_eq!(
             m.card_by_id_state(card_a.id)
                 .loaded()
@@ -485,8 +489,8 @@ mod tests {
             m.card_by_id_state(card_b.id).loaded().copied().unwrap(),
             &card_b
         );
-        assert!(m.cards_state().is_loaded());
-        let _ = (board, column);
+        assert!(m.column_cards_state(column.id).is_loaded());
+        let _ = board;
     }
 
     #[test]
@@ -496,14 +500,20 @@ mod tests {
 
         let _ = m.mark_failed(EntityIds::cards([card_a.id]), Arc::clone(&err));
 
-        match m.cards_state() {
-            LoadState::Failed(e) => assert!(Arc::ptr_eq(e, &err)),
+        match m.column_cards_state(column.id) {
+            LoadState::Failed(e) => assert!(Arc::ptr_eq(&e, &err)),
             other => panic!("expected Failed, got {other:?}"),
         }
-        assert!(m.columns_state().is_loaded());
-        assert_eq!(m.columns_state().loaded().unwrap(), &vec![column]);
-        assert!(m.sprints_state().is_loaded());
-        assert_eq!(m.sprints_state().loaded().unwrap(), &vec![sprint]);
+        assert!(m.board_columns_state(board.id).is_loaded());
+        assert_eq!(
+            m.board_columns_state(board.id).loaded().unwrap(),
+            &vec![column.clone()]
+        );
+        assert!(m.board_sprints_state(board.id).is_loaded());
+        assert_eq!(
+            m.board_sprints_state(board.id).loaded().unwrap(),
+            &vec![sprint.clone()]
+        );
         assert!(m.boards_state().is_loaded());
         assert_eq!(m.boards_state().loaded().unwrap(), &vec![board]);
         assert!(m.graph_state().is_loaded());
@@ -540,37 +550,6 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_resolved_rebuilds_the_card_index_for_a_replaced_collection() {
-        let (mut m, board, column, _sprint, a, _b) = seed_full_model();
-        let c = seed_card(&board, column.id);
-        let d = seed_card(&board, column.id);
-        let e = seed_card(&board, column.id);
-
-        let _ = m.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Loaded(vec![c.clone(), d.clone(), e.clone()]),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert_eq!(m.card_index.len(), 3);
-        for (i, card) in m.cards_state().loaded().unwrap().iter().enumerate() {
-            assert_eq!(m.card_index[&card.id], i);
-        }
-        assert!(m
-            .cards_state()
-            .loaded()
-            .unwrap()
-            .iter()
-            .all(|c| c.id != a.id));
-        assert_eq!(m.card_by_id_state(a.id).loaded().copied().unwrap(), &a);
-        assert_eq!(m.card_by_id_state(c.id).loaded().copied().unwrap(), &c);
-        assert_eq!(m.card_by_id_state(d.id).loaded().copied().unwrap(), &d);
-        assert_eq!(m.card_by_id_state(e.id).loaded().copied().unwrap(), &e);
-    }
-
-    #[test]
     fn test_applying_a_missing_by_id_entry_reindexes_the_remaining_cards() {
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);
@@ -603,12 +582,14 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_resolved_leaves_indexes_untouched_for_an_untouched_tier() {
+    fn test_apply_resolved_leaves_other_tiers_untouched_for_an_untouched_tier() {
         let mut m = Model::default();
         let board_live = Board::new("Live", None::<String>);
         let board_archived = Board::new("Archived", None::<String>);
         let board_archived_id = board_archived.id;
+        let board_live_id = board_live.id;
         let column = Column::new(board_live.id, "Col", 0);
+        let column_id = column.id;
         let live_card = seed_card(&board_live, column.id);
         let archived_card = seed_card(&board_live, column.id);
         let archived_card_id = archived_card.id;
@@ -623,29 +604,37 @@ mod tests {
             ..Default::default()
         });
 
-        let card_index_before = m.card_index.clone();
-        let board_index_before = m.board_index.clone();
-
-        let new_sprint = Sprint::new(board_live.id, 2, None, None::<String>);
+        let mut sprints_by_parent = HashMap::new();
+        sprints_by_parent.insert(
+            board_live_id,
+            LoadState::Loaded(vec![sprint.clone(), Sprint::new(board_live_id, 2, None, None::<String>)]),
+        );
         let _ = m.apply_resolved(Resolved {
             sprints: Collection {
-                all: LoadState::Loaded(vec![sprint, new_sprint]),
+                by_parent: sprints_by_parent,
                 ..Default::default()
             },
             ..Default::default()
         });
 
-        assert_eq!(m.card_index, card_index_before);
-        assert_eq!(m.board_index, board_index_before);
-        assert!(m.sprints_state().is_loaded());
-        assert_eq!(m.sprints_state().loaded().unwrap().len(), 2);
+        assert!(m.card_id_status(archived_card_id).is_loaded());
+        assert_eq!(
+            m.column_cards_state(column_id).loaded().unwrap().len(),
+            1
+        );
+        assert!(m.board_sprints_state(board_live_id).is_loaded());
+        assert_eq!(
+            m.board_sprints_state(board_live_id).loaded().unwrap().len(),
+            2
+        );
     }
 
     #[test]
-    fn test_applying_a_failed_collection_read_marks_the_model_collection_failed() {
+    fn test_applying_a_failed_collection_read_marks_the_scoped_tier_failed() {
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);
         let column = Column::new(board.id, "Col", 0);
+        let board_id = board.id;
         let _ = m.load_from_snapshot(Snapshot {
             boards: vec![board],
             columns: vec![column],
@@ -654,16 +643,18 @@ mod tests {
         });
 
         let err = Arc::new(KanbanError::unsupported("boom"));
+        let mut columns_by_parent = HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Failed(Arc::clone(&err)));
         let _ = m.apply_resolved(Resolved {
             columns: Collection {
-                all: LoadState::Failed(Arc::clone(&err)),
+                by_parent: columns_by_parent,
                 ..Default::default()
             },
             ..Default::default()
         });
 
-        match m.columns_state() {
-            LoadState::Failed(e) => assert!(Arc::ptr_eq(e, &err)),
+        match m.board_columns_state(board_id) {
+            LoadState::Failed(e) => assert!(Arc::ptr_eq(&e, &err)),
             other => panic!("expected Failed, got {other:?}"),
         }
     }
@@ -686,7 +677,7 @@ mod tests {
             ..Default::default()
         });
 
-        assert!(m.cards_state().is_not_loaded());
+        assert!(m.column_cards_state(Uuid::new_v4()).is_not_loaded());
         assert!(m.card_by_id_state(x_id).is_loaded());
         assert!(m.card_by_id_state(other_id).is_not_loaded());
         assert!(!m.card_by_id_state(other_id).is_missing());
@@ -700,16 +691,28 @@ mod tests {
         let _ = m.mark_failed(EntityIds::default(), err);
 
         assert!(m.boards_state().is_loaded());
-        assert_eq!(m.boards_state().loaded().unwrap(), &vec![board]);
-        assert!(m.columns_state().is_loaded());
-        assert_eq!(m.columns_state().loaded().unwrap(), &vec![column]);
-        assert!(m.cards_state().is_loaded());
+        assert_eq!(m.boards_state().loaded().unwrap(), &vec![board.clone()]);
+        assert!(m.board_columns_state(board.id).is_loaded());
         assert_eq!(
-            m.cards_state().loaded().unwrap(),
-            &vec![card_a.clone(), card_b.clone()]
+            m.board_columns_state(board.id).loaded().unwrap(),
+            &vec![column.clone()]
         );
-        assert!(m.sprints_state().is_loaded());
-        assert_eq!(m.sprints_state().loaded().unwrap(), &vec![sprint]);
+        let cards_state = m.column_cards_state(column.id);
+        assert!(cards_state.is_loaded());
+        assert_eq!(
+            cards_state
+                .loaded()
+                .unwrap()
+                .iter()
+                .map(|c| c.id)
+                .collect::<Vec<_>>(),
+            vec![card_a.id, card_b.id]
+        );
+        assert!(m.board_sprints_state(board.id).is_loaded());
+        assert_eq!(
+            m.board_sprints_state(board.id).loaded().unwrap(),
+            &vec![sprint.clone()]
+        );
         assert!(m.graph_state().is_loaded());
     }
 
@@ -752,7 +755,6 @@ mod tests {
             scoped.iter().map(|c| c.id).collect::<Vec<_>>(),
             vec![a.id, b.id]
         );
-        assert!(m.cards_state().is_not_loaded());
     }
 
     #[test]
@@ -771,7 +773,6 @@ mod tests {
 
         assert!(m.card_by_id_state(ghost).is_missing());
         assert!(m.card_id_status(ghost).is_missing());
-        assert!(m.cards_state().is_not_loaded());
     }
 
     #[test]
@@ -792,7 +793,6 @@ mod tests {
         });
 
         assert_eq!(m.card_by_id_state(x_id).loaded().copied().unwrap(), &x);
-        assert!(m.cards_state().is_not_loaded());
     }
 
     #[test]
@@ -823,7 +823,7 @@ mod tests {
     }
 
     #[test]
-    fn test_a_scoped_result_never_touches_the_flat_collection() {
+    fn test_a_scoped_write_replaces_the_columns_whole_bucket() {
         let (mut m, board, column, _sprint, card_a, card_b) = seed_full_model();
         let third = seed_card(&board, column.id);
 
@@ -837,16 +837,13 @@ mod tests {
             ..Default::default()
         });
 
-        assert_eq!(
-            m.cards_state().loaded().unwrap(),
-            &vec![card_a.clone(), card_b.clone()]
-        );
         let state = m.column_cards_state(column.id);
         let scoped = state.loaded().unwrap();
         assert_eq!(
             scoped.iter().map(|c| c.id).collect::<Vec<_>>(),
             vec![third.id]
         );
+        let _ = (card_a, card_b);
     }
 
     #[test]
@@ -984,32 +981,7 @@ mod tests {
     }
 
     #[test]
-    fn test_applying_all_and_by_parent_in_one_pass_keeps_them_independent() {
-        let mut m = Model::default();
-        let board = Board::new("B", None::<String>);
-        let column = Column::new(board.id, "Col", 0);
-        let x = seed_card(&board, column.id);
-        let y = seed_card(&board, column.id);
-
-        let mut by_parent = HashMap::new();
-        by_parent.insert(column.id, LoadState::Loaded(vec![y.clone()]));
-        let _ = m.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Loaded(vec![x.clone()]),
-                by_parent,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
-        assert_eq!(m.cards_state().loaded().unwrap(), &vec![x]);
-        let state = m.column_cards_state(column.id);
-        let scoped = state.loaded().unwrap();
-        assert_eq!(scoped.iter().map(|c| c.id).collect::<Vec<_>>(), vec![y.id]);
-    }
-
-    #[test]
-    fn test_a_by_id_result_wins_over_the_flat_collection() {
+    fn test_a_by_id_result_wins_over_the_scoped_tier() {
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);
         let column = Column::new(board.id, "Col", 0);
@@ -1017,9 +989,10 @@ mod tests {
         x_v1.title = "v1".to_string();
         let mut x_v2 = x_v1.clone();
         x_v2.title = "v2".to_string();
+        let x_id = x_v1.id;
 
         let mut by_id = HashMap::new();
-        by_id.insert(x_v1.id, LoadState::Loaded(x_v2));
+        by_id.insert(x_id, LoadState::Loaded(x_v2));
         let _ = m.apply_resolved(Resolved {
             cards: Collection {
                 by_id,
@@ -1028,22 +1001,21 @@ mod tests {
             ..Default::default()
         });
 
+        let mut by_parent = HashMap::new();
+        by_parent.insert(column.id, LoadState::Loaded(vec![x_v1]));
         let _ = m.apply_resolved(Resolved {
             cards: Collection {
-                all: LoadState::Loaded(vec![x_v1]),
+                by_parent,
                 ..Default::default()
             },
             ..Default::default()
         });
 
+        assert_eq!(m.card_by_id_state(x_id).loaded().unwrap().title, "v2");
         assert_eq!(
-            m.card_by_id_state(m.cards_state().loaded().unwrap()[0].id)
-                .loaded()
-                .unwrap()
-                .title,
-            "v2"
+            m.column_cards_state(column.id).loaded().unwrap()[0].title,
+            "v1"
         );
-        assert_eq!(m.cards_state().loaded().unwrap()[0].title, "v1");
     }
 
     #[test]

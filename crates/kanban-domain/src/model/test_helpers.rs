@@ -62,34 +62,19 @@ mod tests {
 
     #[test]
     fn test_with_load_states_leaves_unnamed_collections_not_loaded() {
-        let board = seed_board();
-        let card = seed_card(&board);
-        let model = Model::with_load_states(ModelLoadStates {
-            cards: LoadState::Loaded(vec![card]),
-            ..Default::default()
-        });
-        assert!(model.cards_state().is_loaded());
+        let model = Model::with_load_states(ModelLoadStates::default());
         assert!(model.boards_state().is_not_loaded());
-        assert!(model.columns_state().is_not_loaded());
-        assert!(model.sprints_state().is_not_loaded());
         assert!(model.graph_state().is_not_loaded());
     }
 
     #[test]
     fn test_with_load_states_supports_a_different_state_per_tier() {
-        let err = Arc::new(KanbanError::unsupported("boom"));
         let model = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![seed_board()]),
-            columns: LoadState::NotLoaded,
-            cards: LoadState::Failed(err),
-            sprints: LoadState::Missing,
             graph: LoadState::Loaded(DependencyGraph::default()),
             ..Default::default()
         });
         assert!(model.boards_state().is_loaded());
-        assert!(model.columns_state().is_not_loaded());
-        assert!(model.cards_state().is_failed());
-        assert!(model.sprints_state().is_missing());
         assert!(model.graph_state().is_loaded());
     }
 
@@ -173,17 +158,18 @@ mod tests {
             built.boards_state().is_not_loaded(),
             base.boards_state().is_not_loaded()
         );
+        let random_id = Uuid::new_v4();
         assert_eq!(
-            built.columns_state().is_not_loaded(),
-            base.columns_state().is_not_loaded()
+            built.board_columns_state(random_id).is_not_loaded(),
+            base.board_columns_state(random_id).is_not_loaded()
         );
         assert_eq!(
-            built.cards_state().is_not_loaded(),
-            base.cards_state().is_not_loaded()
+            built.column_cards_state(random_id).is_not_loaded(),
+            base.column_cards_state(random_id).is_not_loaded()
         );
         assert_eq!(
-            built.sprints_state().is_not_loaded(),
-            base.sprints_state().is_not_loaded()
+            built.board_sprints_state(random_id).is_not_loaded(),
+            base.board_sprints_state(random_id).is_not_loaded()
         );
         assert_eq!(
             built.graph_state().is_not_loaded(),
