@@ -89,6 +89,14 @@ impl App {
                 if let Some(ref f) = save_file {
                     tracing::info!("Remote storage location; skipping file watcher: {f}");
                 }
+                let backend = self.ctx.backend();
+                if let Some(http) = backend
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<kanban_backend_http::HttpBackend>())
+                {
+                    tracing::info!("Remote storage location; subscribing to SSE change events");
+                    self.persistence.remote_change_rx = Some(http.subscribe());
+                }
                 None
             }
         };
@@ -336,6 +344,15 @@ impl App {
                             tracing::warn!("External file change detected with local changes");
                             self.open_dialog(DialogMode::ExternalChangeDetected);
                         }
+                    }
+                    Some(frame) = async {
+                        if let Some(ref mut rx) = &mut self.persistence.remote_change_rx {
+                            rx.recv().await
+                        } else {
+                            std::future::pending().await
+                        }
+                    } => {
+                        self.handle_remote_change_frame(frame);
                     }
                 }
 

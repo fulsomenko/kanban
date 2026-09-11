@@ -55,6 +55,7 @@ mod main_loop;
 mod mode_stack;
 mod query;
 mod reload_watch;
+mod remote_change;
 mod sprint_management;
 mod ui_feedback;
 mod view_management;
