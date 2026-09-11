@@ -131,6 +131,54 @@ impl HttpBackend {
     pub(crate) fn client(&self) -> &reqwest::Client {
         &self.client
     }
+
+    pub fn subscribe(&self) -> tokio::sync::mpsc::Receiver<kanban_api::ChangeEventFrame> {
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
+        let client = self.client().clone();
+        let url = format!("{}/v1/events", self.base_url());
+        let runtime = self
+            .runtime
+            .as_ref()
+            .expect("the runtime is taken only while dropping");
+
+        runtime.handle().spawn(async move {
+            let mut backoff = std::time::Duration::from_secs(1);
+            loop {
+                if let Ok(mut resp) = client.get(&url).send().await {
+                    if resp.status().is_success() {
+                        backoff = std::time::Duration::from_secs(1);
+                        let synthetic = kanban_api::ChangeEventFrame::now(
+                            uuid::Uuid::nil(),
+                            uuid::Uuid::new_v4(),
+                            kanban_core::ClientId::nil(),
+                        );
+                        if tx.send(synthetic).await.is_err() {
+                            return;
+                        }
+                        let mut parser = events::SseParser::default();
+                        while let Ok(Some(chunk)) = resp.chunk().await {
+                            for frame in parser.push(&chunk) {
+                                if tx.send(frame).await.is_err() {
+                                    return;
+                                }
+                            }
+                        }
+                    } else {
+                        tracing::warn!(
+                            "SSE subscription to {url} rejected with status {}",
+                            resp.status()
+                        );
+                    }
+                } else {
+                    tracing::warn!("SSE subscription to {url} failed to connect");
+                }
+                tokio::time::sleep(backoff).await;
+                backoff = events::next_backoff(backoff);
+            }
+        });
+
+        rx
+    }
 }
 
 #[cfg(test)]
