@@ -1,3 +1,50 @@
+use kanban_api::ChangeEventFrame;
+use std::time::Duration;
+
+#[derive(Default)]
+pub(crate) struct SseParser {
+    buf: Vec<u8>,
+    data: String,
+}
+
+impl SseParser {
+    pub(crate) fn push(&mut self, chunk: &[u8]) -> Vec<ChangeEventFrame> {
+        self.buf.extend_from_slice(chunk);
+        let mut frames = Vec::new();
+
+        while let Some(pos) = self.buf.iter().position(|&b| b == b'\n') {
+            let line_bytes: Vec<u8> = self.buf.drain(..=pos).collect();
+            let line = String::from_utf8_lossy(&line_bytes[..line_bytes.len() - 1]);
+            let line = line.strip_suffix('\r').unwrap_or(&line).to_string();
+
+            if line.is_empty() {
+                if !self.data.is_empty() {
+                    let data = std::mem::take(&mut self.data);
+                    match serde_json::from_str::<ChangeEventFrame>(&data) {
+                        Ok(frame) => frames.push(frame),
+                        Err(e) => {
+                            tracing::warn!("dropping malformed SSE change frame: {e}");
+                        }
+                    }
+                }
+            } else if line.starts_with(':') {
+            } else if let Some(rest) = line.strip_prefix("data:") {
+                let rest = rest.strip_prefix(' ').unwrap_or(rest);
+                if !self.data.is_empty() {
+                    self.data.push('\n');
+                }
+                self.data.push_str(rest);
+            }
+        }
+
+        frames
+    }
+}
+
+pub(crate) fn next_backoff(cur: Duration) -> Duration {
+    (cur * 2).min(Duration::from_secs(30))
+}
+
 #[cfg(test)]
 mod tests {
     use kanban_api::{ChangeEventFrame, InvalidationDto};
