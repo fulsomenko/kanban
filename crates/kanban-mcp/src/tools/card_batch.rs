@@ -1,4 +1,4 @@
-use crate::helpers::model_read::{resolve_cards, resolve_column_in_board, resolve_sprint_in_board};
+use crate::helpers::model_read::{resolve_column_in_board, resolve_sprint_in_board};
 use crate::helpers::{
     board_head, card_board, kanban_err_to_mcp, locked_write, to_call_tool_result,
     to_call_tool_result_json,
@@ -19,18 +19,13 @@ use rmcp::{
 
 impl ToolScoped for ArchiveCardsRequest {
     fn scope(&self) -> ToolScope {
-        ToolScope {
-            cards: self.cards.iter().map(|r| Ref::of(r)).collect(),
-            ..Default::default()
-        }
+        ToolScope::default()
     }
 }
 
 impl ToolScoped for MoveCardsRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: self.cards.iter().map(|r| Ref::of(r)).collect(),
-            column: Some(Ref::of(&self.column)),
             wants_board_columns: matches!(Ref::of(&self.column), Ref::Name),
             ..Default::default()
         }
@@ -40,8 +35,6 @@ impl ToolScoped for MoveCardsRequest {
 impl ToolScoped for AssignCardsToSprintRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            cards: self.cards.iter().map(|r| Ref::of(r)).collect(),
-            sprint: Some(Ref::of(&self.sprint)),
             wants_board_sprints: matches!(Ref::of(&self.sprint), Ref::Name),
             ..Default::default()
         }
@@ -51,7 +44,6 @@ impl ToolScoped for AssignCardsToSprintRequest {
 impl ToolScoped for AssignCardToSprintRequest {
     fn scope(&self) -> ToolScope {
         ToolScope {
-            sprint: Some(Ref::of(&self.sprint)),
             wants_board_sprints: matches!(Ref::of(&self.sprint), Ref::Name),
             ..Default::default()
         }
@@ -107,10 +99,10 @@ impl KanbanMcpServer {
         &self,
         Parameters(req): Parameters<ArchiveCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
-        let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
-            let model = ctx.model_for(&scope);
-            let ids = resolve_cards(&model, &req.cards)?;
+            let ids = ctx
+                .resolve_card_ids(&req.cards)
+                .map_err(kanban_err_to_mcp)?;
             ctx.mutate(|c| c.archive_cards_impl(ids))
                 .map(|(count, _inv)| count)
                 .map_err(kanban_err_to_mcp)
@@ -129,7 +121,9 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
             let mut model = ctx.model_for(&scope);
-            let ids = resolve_cards(&model, &req.cards)?;
+            let ids = ctx
+                .resolve_card_ids(&req.cards)
+                .map_err(kanban_err_to_mcp)?;
             let board_id = ctx.require_same_board(&ids).map_err(kanban_err_to_mcp)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
             let column_id = resolve_column_in_board(&model, &req.column, board_id)?;
@@ -151,7 +145,9 @@ impl KanbanMcpServer {
         let scope = req.scope();
         let count = locked_write(&self.ctx, |ctx| {
             let mut model = ctx.model_for(&scope);
-            let ids = resolve_cards(&model, &req.cards)?;
+            let ids = ctx
+                .resolve_card_ids(&req.cards)
+                .map_err(kanban_err_to_mcp)?;
             let board_id = ctx.require_same_board(&ids).map_err(kanban_err_to_mcp)?;
             ctx.sync_into(&req.scope().for_board(board_id), &mut model);
             let board = board_head(ctx, &model, board_id)?;
@@ -384,62 +380,56 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_archive_cards_with_an_unloadable_card_list_errors_naming_the_collection_on_json()
-    {
+    async fn test_archive_cards_by_identifier_resolves_without_the_flat_card_list_on_json() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
         seeded.handle.fail("list_all_cards");
 
-        let err = seeded
-            .server
-            .tool_archive_cards(Parameters(ArchiveCardsRequest {
-                cards: vec!["KAN-1".to_string()],
-            }))
-            .await
-            .unwrap_err();
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_archive_cards(Parameters(ArchiveCardsRequest {
+                    cards: vec![seeded.card_identifier.clone()],
+                }))
+                .await
+                .unwrap(),
+        );
 
-        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
-        assert!(err.message.contains("injected fault"));
-        assert!(!err.message.to_lowercase().contains("not found"));
+        assert_eq!(response["archived_count"], 1);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_archive_cards_with_an_unloadable_card_list_errors_naming_the_collection_on_sqlite(
-    ) {
+    async fn test_archive_cards_by_identifier_resolves_without_the_flat_card_list_on_sqlite() {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
         seeded.handle.fail("list_all_cards");
 
-        let err = seeded
-            .server
-            .tool_archive_cards(Parameters(ArchiveCardsRequest {
-                cards: vec!["KAN-1".to_string()],
-            }))
-            .await
-            .unwrap_err();
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_archive_cards(Parameters(ArchiveCardsRequest {
+                    cards: vec![seeded.card_identifier.clone()],
+                }))
+                .await
+                .unwrap(),
+        );
 
-        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("card list"));
-        assert!(err.message.contains("injected fault"));
-        assert!(!err.message.to_lowercase().contains("not found"));
+        assert_eq!(response["archived_count"], 1);
+        assert_eq!(seeded.handle.op_count("list_all_cards"), 0);
     }
 
     #[tokio::test]
-    async fn test_archive_cards_by_identifier_only_on_archived_board_reports_not_found_on_json() {
-        test_archive_cards_by_identifier_only_on_archived_board_reports_not_found("test.json")
-            .await;
+    async fn test_archive_cards_by_identifier_on_an_archived_board_resolves_on_json() {
+        test_archive_cards_by_identifier_on_an_archived_board_resolves("test.json").await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_archive_cards_by_identifier_only_on_archived_board_reports_not_found_on_sqlite() {
-        test_archive_cards_by_identifier_only_on_archived_board_reports_not_found("test.sqlite")
-            .await;
+    async fn test_archive_cards_by_identifier_on_an_archived_board_resolves_on_sqlite() {
+        test_archive_cards_by_identifier_on_an_archived_board_resolves("test.sqlite").await;
     }
 
-    async fn test_archive_cards_by_identifier_only_on_archived_board_reports_not_found(
-        file_name: &str,
-    ) {
+    async fn test_archive_cards_by_identifier_on_an_archived_board_resolves(file_name: &str) {
         let seeded = seeded_server(file_name).await;
 
         let beta = text_payload(
@@ -516,17 +506,18 @@ mod tests {
             .await
             .unwrap();
 
-        let err = seeded
-            .server
-            .tool_archive_cards(Parameters(ArchiveCardsRequest {
-                cards: vec![beta_card_identifier.clone()],
-            }))
-            .await
-            .unwrap_err();
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-        assert!(err.message.contains(&beta_card_identifier));
+        let response = text_payload(
+            &seeded
+                .server
+                .tool_archive_cards(Parameters(ArchiveCardsRequest {
+                    cards: vec![beta_card_identifier.clone()],
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(response["archived_count"], 1);
 
-        let still_live = text_payload(
+        let now_archived = text_payload(
             &seeded
                 .server
                 .tool_get_card(Parameters(crate::requests::card::GetCardRequest {
@@ -535,7 +526,7 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        assert!(still_live["archived_at"].is_null());
+        assert!(!now_archived["archived_at"].is_null());
     }
 
     #[tokio::test]

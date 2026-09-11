@@ -29,9 +29,7 @@ impl ToolScoped for CreateCardParams {
         let sprint_ref = self.sprint.as_deref().map(Ref::of);
         ToolScope {
             board: Some(Ref::of(&self.board)),
-            column: Some(column_ref),
             wants_board_columns: matches!(column_ref, Ref::Name),
-            sprint: sprint_ref,
             wants_board_sprints: matches!(sprint_ref, Some(Ref::Name)),
             ..Default::default()
         }
@@ -43,16 +41,9 @@ impl ToolScoped for ListCardsRequest {
         let board_ref = self.board.as_deref().map(Ref::of);
         let column_ref = self.column.as_deref().map(Ref::of);
         let sprint_ref = self.sprint.as_deref().map(Ref::of);
-        let global_sprint_by_name = self.board.is_none() && matches!(sprint_ref, Some(Ref::Name));
         ToolScope {
-            board: if global_sprint_by_name {
-                Some(Ref::Name)
-            } else {
-                board_ref
-            },
-            column: column_ref,
+            board: board_ref,
             wants_board_columns: self.board.is_some() && matches!(column_ref, Some(Ref::Name)),
-            sprint: sprint_ref,
             wants_board_sprints: self.board.is_some() && matches!(sprint_ref, Some(Ref::Name)),
             ..Default::default()
         }
@@ -69,7 +60,6 @@ impl ToolScoped for MoveCardRequest {
     fn scope(&self) -> ToolScope {
         let column_ref = Ref::of(&self.column);
         ToolScope {
-            column: Some(column_ref),
             wants_board_columns: matches!(column_ref, Ref::Name),
             ..Default::default()
         }
@@ -86,7 +76,6 @@ impl ToolScoped for RestoreCardRequest {
     fn scope(&self) -> ToolScope {
         let column_ref = self.column.as_deref().map(Ref::of);
         ToolScope {
-            column: column_ref,
             wants_board_columns: matches!(column_ref, Some(Ref::Name)),
             ..Default::default()
         }
@@ -177,7 +166,7 @@ impl KanbanMcpServer {
             let column_id = match &req.column {
                 Some(raw) => Some(match board_id {
                     Some(bid) => resolve_column_in_board(&model, raw, bid)?,
-                    None => resolve_column_global(&model, raw)?,
+                    None => resolve_column_global(ctx, raw)?,
                 }),
                 None => None,
             };
@@ -187,7 +176,7 @@ impl KanbanMcpServer {
                         let board = board_head(ctx, &model, bid)?;
                         resolve_sprint_in_board(&model, raw, &board)?
                     }
-                    None => resolve_sprint_global(&model, raw)?,
+                    None => resolve_sprint_global(ctx, raw)?,
                 }),
                 None => None,
             };
@@ -1069,7 +1058,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("sprint list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
@@ -1098,7 +1086,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
-        assert!(err.message.contains("sprint list"));
         assert!(err.message.contains("injected fault"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }

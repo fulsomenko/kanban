@@ -637,8 +637,6 @@ mod tests {
 
         let scope = ToolScope {
             board: Some(crate::scope::Ref::Name),
-            column: Some(crate::scope::Ref::Name),
-            sprint: Some(crate::scope::Ref::Name),
             wants_board_columns: true,
             wants_board_sprints: true,
             ..Default::default()
