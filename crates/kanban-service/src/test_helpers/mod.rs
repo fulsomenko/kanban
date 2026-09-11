@@ -486,16 +486,16 @@ macro_rules! cache_contract_tests {
             $crate::test_helpers::contract::cache::test_a_backend_read_error_resolves_failed_not_missing($factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_a_backend_list_error_resolves_the_list_failed_not_empty() {
-            $crate::test_helpers::contract::cache::test_a_backend_list_error_resolves_the_list_failed_not_empty($factory_fn()).await;
+        async fn test_a_backend_scoped_card_list_error_resolves_failed_not_empty() {
+            $crate::test_helpers::contract::cache::test_a_backend_scoped_card_list_error_resolves_failed_not_empty($factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_a_backend_list_error_resolves_the_column_list_failed_not_empty() {
-            $crate::test_helpers::contract::cache::test_a_backend_list_error_resolves_the_column_list_failed_not_empty($factory_fn()).await;
+        async fn test_a_backend_scoped_column_list_error_resolves_failed_not_empty() {
+            $crate::test_helpers::contract::cache::test_a_backend_scoped_column_list_error_resolves_failed_not_empty($factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_a_backend_list_error_resolves_the_sprint_list_failed_not_empty() {
-            $crate::test_helpers::contract::cache::test_a_backend_list_error_resolves_the_sprint_list_failed_not_empty($factory_fn()).await;
+        async fn test_a_backend_scoped_sprint_list_error_resolves_failed_not_empty() {
+            $crate::test_helpers::contract::cache::test_a_backend_scoped_sprint_list_error_resolves_failed_not_empty($factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
         async fn test_a_failed_read_is_retried_on_the_next_resolve() {
@@ -530,28 +530,28 @@ macro_rules! cache_contract_tests {
             $crate::test_helpers::contract::cache::test_a_failed_scoped_read_is_failed_not_empty_on_every_backend($factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_a_card_resolved_by_id_matches_the_same_card_in_the_card_list() {
-            $crate::test_helpers::contract::cache::test_a_card_resolved_by_id_matches_the_same_card_in_the_card_list(&$factory_fn()).await;
+        async fn test_a_card_resolved_by_id_matches_the_same_card_in_the_column_scope() {
+            $crate::test_helpers::contract::cache::test_a_card_resolved_by_id_matches_the_same_card_in_the_column_scope(&$factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_a_column_resolved_by_id_matches_the_same_column_in_the_column_list() {
-            $crate::test_helpers::contract::cache::test_a_column_resolved_by_id_matches_the_same_column_in_the_column_list(&$factory_fn()).await;
+        async fn test_a_column_resolved_by_id_matches_the_same_column_in_the_board_scope() {
+            $crate::test_helpers::contract::cache::test_a_column_resolved_by_id_matches_the_same_column_in_the_board_scope(&$factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_sprint_list() {
-            $crate::test_helpers::contract::cache::test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_sprint_list(&$factory_fn()).await;
+        async fn test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_board_scope() {
+            $crate::test_helpers::contract::cache::test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_board_scope(&$factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
         async fn test_an_archived_card_resolves_loaded_by_id_on_every_backend() {
             $crate::test_helpers::contract::cache::test_an_archived_card_resolves_loaded_by_id_on_every_backend(&$factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_an_archived_card_is_absent_from_the_resolved_card_list_on_every_backend() {
-            $crate::test_helpers::contract::cache::test_an_archived_card_is_absent_from_the_resolved_card_list_on_every_backend(&$factory_fn()).await;
+        async fn test_an_archived_card_is_absent_from_the_resolved_column_scope_on_every_backend() {
+            $crate::test_helpers::contract::cache::test_an_archived_card_is_absent_from_the_resolved_column_scope_on_every_backend(&$factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
-        async fn test_a_restored_card_reappears_in_the_resolved_card_list() {
-            $crate::test_helpers::contract::cache::test_a_restored_card_reappears_in_the_resolved_card_list(&$factory_fn()).await;
+        async fn test_a_restored_card_reappears_in_the_resolved_column_scope() {
+            $crate::test_helpers::contract::cache::test_a_restored_card_reappears_in_the_resolved_column_scope(&$factory_fn()).await;
         }
         #[tokio::test(flavor = "multi_thread")]
         async fn test_a_deleted_then_undone_card_is_resolvable_again_on_every_backend() {

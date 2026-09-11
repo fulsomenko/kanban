@@ -7,6 +7,7 @@ use kanban_domain::{Board, CardUpdate, KanbanOperations, NoProjections};
 
 use super::*;
 use crate::fetch_plan::{requestable, FetchRound, LoadedEntities};
+use uuid::Uuid;
 
 struct BoardListPlan;
 impl FetchPlan for BoardListPlan {
@@ -38,11 +39,17 @@ impl FetchPlan for ForceArchivedBoardListPlan {
     }
 }
 
-struct CardListPlan;
-impl FetchPlan for CardListPlan {
+struct CardByIdPlan {
+    id: Uuid,
+}
+impl FetchPlan for CardByIdPlan {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
         FetchRound {
-            card_list: requestable(loaded.card_list()),
+            cards: if requestable(loaded.card(self.id)) {
+                vec![self.id]
+            } else {
+                Vec::new()
+            },
             ..Default::default()
         }
     }
@@ -121,7 +128,11 @@ fn test_sync_invalidated_refetches_the_invalidated_card_before_planning() {
         .unwrap();
 
     let mut model_a = Model::default();
-    ctx_a.sync(&CardListPlan, &mut model_a, &mut NoProjections);
+    ctx_a.sync(
+        &CardByIdPlan { id: card.id },
+        &mut model_a,
+        &mut NoProjections,
+    );
     assert_eq!(
         model_a.card_by_id_state(card.id).loaded().unwrap().title,
         "before"
@@ -137,7 +148,12 @@ fn test_sync_invalidated_refetches_the_invalidated_card_before_planning() {
         )
         .unwrap();
 
-    ctx_a.sync_invalidated(inv, &CardListPlan, &mut model_a, &mut NoProjections);
+    ctx_a.sync_invalidated(
+        inv,
+        &CardByIdPlan { id: card.id },
+        &mut model_a,
+        &mut NoProjections,
+    );
     assert_eq!(
         model_a.card_by_id_state(card.id).loaded().unwrap().title,
         "after"
@@ -159,7 +175,11 @@ fn test_sync_invalidated_refetches_the_invalidated_card_before_planning() {
         .unwrap();
 
     let mut model_b = Model::default();
-    ctx_b.sync(&CardListPlan, &mut model_b, &mut NoProjections);
+    ctx_b.sync(
+        &CardByIdPlan { id: card_b.id },
+        &mut model_b,
+        &mut NoProjections,
+    );
     assert_eq!(
         model_b.card_by_id_state(card_b.id).loaded().unwrap().title,
         "before"
@@ -176,7 +196,11 @@ fn test_sync_invalidated_refetches_the_invalidated_card_before_planning() {
         .unwrap();
     let _ = inv_b;
 
-    ctx_b.sync(&CardListPlan, &mut model_b, &mut NoProjections);
+    ctx_b.sync(
+        &CardByIdPlan { id: card_b.id },
+        &mut model_b,
+        &mut NoProjections,
+    );
     assert_eq!(
         model_b.card_by_id_state(card_b.id).loaded().unwrap().title,
         "before"
@@ -336,7 +360,11 @@ fn test_resync_invalidated_refetches_a_mutated_card_the_caller_plan_never_names(
     let card = seed_card(&mut ctx);
 
     let mut model = Model::default();
-    ctx.sync(&CardListPlan, &mut model, &mut NoProjections);
+    ctx.sync(
+        &CardByIdPlan { id: card.id },
+        &mut model,
+        &mut NoProjections,
+    );
     assert_eq!(
         model.card_by_id_state(card.id).loaded().unwrap().title,
         "before"
@@ -357,14 +385,18 @@ fn test_resync_invalidated_refetches_a_mutated_card_the_caller_plan_never_names(
         model.card_by_id_state(card.id).loaded().unwrap().title,
         "after"
     );
-    assert!(model.cards_state().is_loaded());
-
     let mut ctx_control =
         KanbanContext::open_deferred(Arc::new(InMemoryStore::new()), AppConfig::default());
     let card_control = seed_card(&mut ctx_control);
 
     let mut model_control = Model::default();
-    ctx_control.sync(&CardListPlan, &mut model_control, &mut NoProjections);
+    ctx_control.sync(
+        &CardByIdPlan {
+            id: card_control.id,
+        },
+        &mut model_control,
+        &mut NoProjections,
+    );
 
     let (_card_control, inv_control) = ctx_control
         .update_card_impl(
@@ -481,7 +513,11 @@ fn test_resync_invalidated_does_not_refetch_what_the_repair_pass_already_read() 
         .unwrap();
 
     let mut model = Model::default();
-    ctx.sync(&CardListPlan, &mut model, &mut NoProjections);
+    ctx.sync(
+        &CardByIdPlan { id: card.id },
+        &mut model,
+        &mut NoProjections,
+    );
 
     let (_card, inv) = ctx
         .update_card_impl(
@@ -494,9 +530,14 @@ fn test_resync_invalidated_does_not_refetch_what_the_repair_pass_already_read() 
         .unwrap();
 
     backend.clear_ops();
-    ctx.resync_invalidated(inv, &CardListPlan, &mut model, &mut NoProjections);
+    ctx.resync_invalidated(
+        inv,
+        &CardByIdPlan { id: card.id },
+        &mut model,
+        &mut NoProjections,
+    );
 
-    assert_eq!(backend.op_count("list_all_cards"), 1);
+    assert_eq!(backend.op_count("get_card"), 1);
 }
 
 #[cfg(feature = "test-helpers")]
@@ -527,7 +568,11 @@ fn test_resync_invalidated_records_a_failed_repair_read_as_failed_not_empty() {
         .unwrap();
 
     let mut model = Model::default();
-    ctx.sync(&CardListPlan, &mut model, &mut NoProjections);
+    ctx.sync(
+        &CardByIdPlan { id: card.id },
+        &mut model,
+        &mut NoProjections,
+    );
 
     let (_card, inv) = ctx
         .update_card_impl(
@@ -539,9 +584,9 @@ fn test_resync_invalidated_records_a_failed_repair_read_as_failed_not_empty() {
         )
         .unwrap();
 
-    backend.fail("list_all_cards");
+    backend.fail("get_card");
     ctx.resync_invalidated(inv, &NothingPlan, &mut model, &mut NoProjections);
 
-    assert!(model.cards_state().is_failed());
-    assert!(!model.cards_state().is_loaded());
+    assert!(model.card_by_id_state(card.id).is_failed());
+    assert!(!model.card_by_id_state(card.id).is_loaded());
 }

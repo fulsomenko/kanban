@@ -218,7 +218,6 @@ mod tests {
         };
         let round = named_board.scope().next_round(&Model::default());
         assert!(round.board_list);
-        assert!(!round.column_list);
         assert!(round.columns_by_board.is_empty());
         assert!(!named_board.scope().wants_board_columns);
 
@@ -240,7 +239,6 @@ mod tests {
         };
         let round = named_list.scope().next_round(&Model::default());
         assert!(round.board_list);
-        assert!(!round.column_list);
         assert!(!named_list.scope().wants_board_columns);
 
         let named_get = GetColumnRequest {

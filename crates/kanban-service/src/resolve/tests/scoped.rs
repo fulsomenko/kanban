@@ -190,23 +190,6 @@ fn test_a_scoped_fetch_leaves_the_list_and_id_tiers_untouched() {
 }
 
 #[test]
-fn test_a_whole_list_fetch_leaves_the_scoped_tier_untouched() {
-    let store = store();
-    let (board, column) = seed_board_with_column(&store);
-    seed_card(&store, &board, &column, "a");
-    let loaded = StubLoaded::default();
-    let plan = FixedPlan(FetchRound {
-        card_list: true,
-        ..Default::default()
-    });
-
-    let resolved = resolve(&plan, &loaded, &store);
-
-    assert!(resolved.cards.all.is_loaded());
-    assert!(resolved.cards.by_parent.is_empty());
-}
-
-#[test]
 fn test_a_loaded_scope_is_refetched_by_a_later_resolve_call() {
     let store = store();
     let (board, column) = seed_board_with_column(&store);

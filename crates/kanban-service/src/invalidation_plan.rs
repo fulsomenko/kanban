@@ -55,9 +55,6 @@ impl InvalidationPlan {
         let round = match invalidation {
             Invalidation::All => FetchRound {
                 board_list: was_read(loaded.board_list()),
-                column_list: was_read(loaded.column_list()),
-                card_list: was_read(loaded.card_list()),
-                sprint_list: was_read(loaded.sprint_list()),
                 graph: was_read(loaded.graph()),
                 boards: Vec::new(),
                 columns: Vec::new(),
@@ -85,9 +82,6 @@ impl InvalidationPlan {
 fn build_entities_round(ids: &EntityIds, loaded: &dyn LoadedState) -> FetchRound {
     FetchRound {
         board_list: (!ids.boards.is_empty() || ids.prefixes) && was_read(loaded.board_list()),
-        column_list: !ids.columns.is_empty() && was_read(loaded.column_list()),
-        card_list: !ids.cards.is_empty() && was_read(loaded.card_list()),
-        sprint_list: !ids.sprints.is_empty() && was_read(loaded.sprint_list()),
         graph: ids.graph && was_read(loaded.graph()),
         boards: already_read(&ids.boards, |id| loaded.board(id)),
         columns: already_read(&ids.columns, |id| loaded.column(id)),
@@ -110,13 +104,12 @@ impl FetchPlan for InvalidationPlan {
     /// defect this type exists to close, so a new tier must break the build
     /// here. Never repair such a break with `..Default::default()`; that
     /// trades the compile error for the silent gap. Add the field by name
-    /// and decide it.
+    /// and decide it. The same holds in reverse: retiring a tier removes its
+    /// named field from all three literals rather than leaving it to
+    /// `..Default::default()`.
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
         FetchRound {
             board_list: self.round.board_list && requestable(loaded.board_list()),
-            column_list: self.round.column_list && requestable(loaded.column_list()),
-            card_list: self.round.card_list && requestable(loaded.card_list()),
-            sprint_list: self.round.sprint_list && requestable(loaded.sprint_list()),
             graph: self.round.graph && requestable(loaded.graph()),
             boards: outstanding(&self.round.boards, |id| loaded.board(id)),
             columns: outstanding(&self.round.columns, |id| loaded.column(id)),

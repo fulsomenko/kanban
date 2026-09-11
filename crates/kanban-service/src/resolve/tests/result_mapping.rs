@@ -6,55 +6,68 @@ use crate::resolve::resolve;
 
 #[test]
 fn test_a_failing_list_read_is_failed_not_a_loaded_empty_collection() {
-    for (method, round) in [
-        (
-            "list_boards",
-            FetchRound {
-                board_list: true,
-                ..Default::default()
-            },
-        ),
-        (
-            "list_all_columns",
-            FetchRound {
-                column_list: true,
-                ..Default::default()
-            },
-        ),
-        (
-            "list_all_cards",
-            FetchRound {
-                card_list: true,
-                ..Default::default()
-            },
-        ),
-        (
-            "list_all_sprints",
-            FetchRound {
-                sprint_list: true,
-                ..Default::default()
-            },
-        ),
-    ] {
-        let store = store();
-        seed_board_with_column(&store);
-        store.fail_method(method);
-        let loaded = StubLoaded::default();
+    let store = store();
+    let (board, column) = seed_board_with_column(&store);
+    let loaded = StubLoaded::default();
 
-        let resolved = resolve(&FixedPlan(round), &loaded, &store);
+    store.fail_method("list_boards");
+    let resolved = resolve(
+        &FixedPlan(FetchRound {
+            board_list: true,
+            ..Default::default()
+        }),
+        &loaded,
+        &store,
+    );
+    assert!(
+        resolved.boards.all.is_failed(),
+        "list_boards: returned tier must be Failed, not Loaded(empty)"
+    );
+    store.clear_failures();
 
-        let returned = match method {
-            "list_boards" => resolved.boards.all.is_failed(),
-            "list_all_columns" => resolved.columns.all.is_failed(),
-            "list_all_cards" => resolved.cards.all.is_failed(),
-            _ => resolved.sprints.all.is_failed(),
-        };
+    store.fail_method("list_columns_by_board");
+    let resolved = resolve(
+        &FixedPlan(FetchRound {
+            columns_by_board: vec![board.id],
+            ..Default::default()
+        }),
+        &loaded,
+        &store,
+    );
+    assert!(
+        resolved.columns.by_parent[&board.id].is_failed(),
+        "list_columns_by_board: returned tier must be Failed, not Loaded(empty)"
+    );
+    store.clear_failures();
 
-        assert!(
-            returned,
-            "{method}: returned tier must be Failed, not Loaded(empty)"
-        );
-    }
+    store.fail_method("list_cards_by_column");
+    let resolved = resolve(
+        &FixedPlan(FetchRound {
+            cards_by_column: vec![column.id],
+            ..Default::default()
+        }),
+        &loaded,
+        &store,
+    );
+    assert!(
+        resolved.cards.by_parent[&column.id].is_failed(),
+        "list_cards_by_column: returned tier must be Failed, not Loaded(empty)"
+    );
+    store.clear_failures();
+
+    store.fail_method("list_sprints_by_board");
+    let resolved = resolve(
+        &FixedPlan(FetchRound {
+            sprints_by_board: vec![board.id],
+            ..Default::default()
+        }),
+        &loaded,
+        &store,
+    );
+    assert!(
+        resolved.sprints.by_parent[&board.id].is_failed(),
+        "list_sprints_by_board: returned tier must be Failed, not Loaded(empty)"
+    );
 }
 
 #[test]

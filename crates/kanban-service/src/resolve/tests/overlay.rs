@@ -63,13 +63,13 @@ fn test_a_scope_discovered_from_an_earlier_round_resolves_in_the_same_call() {
 fn test_the_overlay_reports_the_pass_over_the_base() {
     let base = StubLoaded::default();
     let mut resolved = Resolved::default();
-    resolved.cards.all = LoadState::Loaded(vec![]);
+    resolved.boards.all = LoadState::Loaded(vec![]);
     let overlay = Overlay {
         base: &base,
         pass: &resolved,
     };
 
-    assert_eq!(overlay.card_list(), FetchStatus::Loaded);
+    assert_eq!(overlay.board_list(), FetchStatus::Loaded);
 }
 
 #[test]
@@ -139,9 +139,6 @@ fn test_an_empty_base_and_empty_pass_project_every_dimension_as_not_loaded() {
 
     let observed = plan.last();
     assert_eq!(observed.board_list, FetchStatus::NotLoaded);
-    assert_eq!(observed.column_list, FetchStatus::NotLoaded);
-    assert_eq!(observed.card_list, FetchStatus::NotLoaded);
-    assert_eq!(observed.sprint_list, FetchStatus::NotLoaded);
     assert_eq!(observed.graph, FetchStatus::NotLoaded);
     assert_eq!(observed.column, FetchStatus::NotLoaded);
     assert_eq!(observed.card, FetchStatus::NotLoaded);

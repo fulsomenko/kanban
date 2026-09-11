@@ -229,9 +229,6 @@ mod tests {
         let round = scope.next_round(&Model::default());
         assert_eq!(round.columns_by_board, vec![board_id]);
         assert_eq!(round.sprints_by_board, vec![board_id]);
-        assert!(!round.column_list);
-        assert!(!round.sprint_list);
-        assert!(!round.card_list);
         assert!(!round.archived_board_list);
     }
 

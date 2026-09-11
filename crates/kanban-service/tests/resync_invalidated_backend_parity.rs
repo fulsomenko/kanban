@@ -10,6 +10,8 @@ use tempfile::tempdir;
 use uuid::Uuid;
 
 struct WarmPlan {
+    board_id: Uuid,
+    column_id: Uuid,
     card_id: Uuid,
     sprint_id: Uuid,
 }
@@ -18,9 +20,21 @@ impl FetchPlan for WarmPlan {
     fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
         FetchRound {
             board_list: requestable(loaded.board_list()),
-            column_list: requestable(loaded.column_list()),
-            card_list: requestable(loaded.card_list()),
-            sprint_list: requestable(loaded.sprint_list()),
+            columns_by_board: if requestable(loaded.columns_of_board(self.board_id)) {
+                vec![self.board_id]
+            } else {
+                vec![]
+            },
+            cards_by_column: if requestable(loaded.cards_of_column(self.column_id)) {
+                vec![self.column_id]
+            } else {
+                vec![]
+            },
+            sprints_by_board: if requestable(loaded.sprints_of_board(self.board_id)) {
+                vec![self.board_id]
+            } else {
+                vec![]
+            },
             graph: requestable(loaded.graph()),
             cards: if requestable(loaded.card(self.card_id)) {
                 vec![self.card_id]
@@ -71,6 +85,8 @@ fn assert_resync_invalidated_returns_the_updated_graph(ctx: &mut KanbanContext) 
     let mut model = kanban_domain::Model::default();
     ctx.sync(
         &WarmPlan {
+            board_id: board.id,
+            column_id: column.id,
             card_id: card.id,
             sprint_id: sprint.id,
         },
@@ -78,9 +94,9 @@ fn assert_resync_invalidated_returns_the_updated_graph(ctx: &mut KanbanContext) 
         &mut NoProjections,
     );
     assert!(model.boards_state().is_loaded());
-    assert!(model.columns_state().is_loaded());
-    assert!(model.cards_state().is_loaded());
-    assert!(model.sprints_state().is_loaded());
+    assert!(model.board_columns_state(board.id).is_loaded());
+    assert!(model.column_cards_state(column.id).is_loaded());
+    assert!(model.board_sprints_state(board.id).is_loaded());
     assert!(model.graph_state().is_loaded());
     assert!(model.card_by_id_state(card.id).loaded().is_some());
     assert!(model.sprint_by_id_state(sprint.id).loaded().is_some());
@@ -121,32 +137,25 @@ fn assert_resync_invalidated_returns_the_updated_graph(ctx: &mut KanbanContext) 
         model.sprint_by_id_state(sprint.id).loaded().unwrap().prefix,
         Some("REN".into())
     );
-    assert!(model.cards_state().is_loaded());
-    assert!(model.sprints_state().is_loaded());
-
     assert!(model.boards_state().is_loaded());
     assert!(model
         .boards_state()
         .loaded_or_empty()
         .iter()
         .any(|b| b.id == board.id));
-    assert!(model.columns_state().is_loaded());
-    assert!(model
-        .columns_state()
-        .loaded_or_empty()
-        .iter()
-        .any(|c| c.id == column.id));
     assert!(model.graph_state().is_loaded());
 }
 
 fn assert_resync_invalidated_classifies_a_restored_card_as_live(ctx: &mut KanbanContext) {
-    let (_board, _column, card, sprint) = seed(ctx);
+    let (board, column, card, sprint) = seed(ctx);
 
     let _ = ctx.archive_card_impl(card.id).unwrap();
 
     let mut model = kanban_domain::Model::default();
     ctx.sync(
         &WarmPlan {
+            board_id: board.id,
+            column_id: column.id,
             card_id: card.id,
             sprint_id: sprint.id,
         },
@@ -166,11 +175,13 @@ fn assert_resync_invalidated_classifies_a_restored_card_as_live(ctx: &mut Kanban
 }
 
 fn assert_resync_invalidated_classifies_an_archived_board_as_archived(ctx: &mut KanbanContext) {
-    let (board, _column, card, sprint) = seed(ctx);
+    let (board, column, card, sprint) = seed(ctx);
 
     let mut model = kanban_domain::Model::default();
     ctx.sync(
         &WarmPlan {
+            board_id: board.id,
+            column_id: column.id,
             card_id: card.id,
             sprint_id: sprint.id,
         },

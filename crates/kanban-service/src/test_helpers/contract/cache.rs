@@ -138,7 +138,7 @@ pub async fn test_a_deleted_card_resolves_missing_on_a_second_resolve(factory: &
         .unwrap();
 
     let plan_with_list = StaticPlan(FetchRound {
-        card_list: true,
+        cards_by_column: vec![column.id],
         cards: vec![card.id],
         ..Default::default()
     });
@@ -152,17 +152,19 @@ pub async fn test_a_deleted_card_resolves_missing_on_a_second_resolve(factory: &
         .is_loaded());
     apply(&mut model, resolved);
     assert!(model.card_by_id_state(card.id).is_loaded());
-    let cards = model.cards_state().loaded().expect("card list loaded");
+    let scope = model.column_cards_state(column.id);
+    let cards = scope.loaded().expect("column's card scope loaded");
     assert!(cards.iter().any(|c| c.id == card.id));
 
     let _invalidation = ctx.delete_card_impl(card.id).unwrap();
 
-    let plan_by_id_only = StaticPlan(FetchRound {
+    let plan_after_delete = StaticPlan(FetchRound {
+        cards_by_column: vec![column.id],
         cards: vec![card.id],
         ..Default::default()
     });
 
-    let resolved2 = ctx.resolve(&plan_by_id_only, &model);
+    let resolved2 = ctx.resolve(&plan_after_delete, &model);
     assert!(resolved2
         .cards
         .by_id
@@ -171,10 +173,10 @@ pub async fn test_a_deleted_card_resolves_missing_on_a_second_resolve(factory: &
         .is_missing());
     apply(&mut model, resolved2);
     assert!(model.card_by_id_state(card.id).is_missing());
-    let cards = model
-        .cards_state()
+    let scope = model.column_cards_state(column.id);
+    let cards = scope
         .loaded()
-        .expect("card list still loaded after the delete");
+        .expect("column's card scope still loaded after the delete");
     assert!(!cards.iter().any(|c| c.id == card.id));
 }
 
@@ -217,32 +219,7 @@ pub async fn test_a_backend_read_error_resolves_failed_not_missing(factory: Back
     assert!(!state.is_missing());
 }
 
-pub async fn test_a_backend_list_error_resolves_the_list_failed_not_empty(factory: BackendFactory) {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("test.store");
-    let (factory, handles) = faultable(factory);
-    let backend = factory(&path);
-    let handle = handles.lock().unwrap()[&path].last().unwrap().clone();
-    let ctx = KanbanContext::open(backend, AppConfig::default())
-        .await
-        .unwrap();
-    let model = Model::default();
-
-    handle.fail("list_all_cards");
-
-    let resolved = ctx.resolve(
-        &StaticPlan(FetchRound {
-            card_list: true,
-            ..Default::default()
-        }),
-        &model,
-    );
-
-    assert!(resolved.cards.all.is_failed());
-    assert!(!resolved.cards.all.is_loaded());
-}
-
-pub async fn test_a_backend_list_error_resolves_the_column_list_failed_not_empty(
+pub async fn test_a_backend_scoped_card_list_error_resolves_failed_not_empty(
     factory: BackendFactory,
 ) {
     let dir = TempDir::new().unwrap();
@@ -250,26 +227,36 @@ pub async fn test_a_backend_list_error_resolves_the_column_list_failed_not_empty
     let (factory, handles) = faultable(factory);
     let backend = factory(&path);
     let handle = handles.lock().unwrap()[&path].last().unwrap().clone();
-    let ctx = KanbanContext::open(backend, AppConfig::default())
+    let mut ctx = KanbanContext::open(backend, AppConfig::default())
         .await
         .unwrap();
     let model = Model::default();
 
-    handle.fail("list_all_columns");
+    let board = ctx
+        .create_board("Board".into(), Some("BRD".into()))
+        .unwrap();
+    let column = ctx.create_column(board.id, "Col".into(), None).unwrap();
+
+    handle.fail("list_cards_by_column");
 
     let resolved = ctx.resolve(
         &StaticPlan(FetchRound {
-            column_list: true,
+            cards_by_column: vec![column.id],
             ..Default::default()
         }),
         &model,
     );
 
-    assert!(resolved.columns.all.is_failed());
-    assert!(!resolved.columns.all.is_loaded());
+    let state = resolved
+        .cards
+        .by_parent
+        .get(&column.id)
+        .expect("column scope requested");
+    assert!(state.is_failed());
+    assert!(!state.is_loaded());
 }
 
-pub async fn test_a_backend_list_error_resolves_the_sprint_list_failed_not_empty(
+pub async fn test_a_backend_scoped_column_list_error_resolves_failed_not_empty(
     factory: BackendFactory,
 ) {
     let dir = TempDir::new().unwrap();
@@ -277,23 +264,68 @@ pub async fn test_a_backend_list_error_resolves_the_sprint_list_failed_not_empty
     let (factory, handles) = faultable(factory);
     let backend = factory(&path);
     let handle = handles.lock().unwrap()[&path].last().unwrap().clone();
-    let ctx = KanbanContext::open(backend, AppConfig::default())
+    let mut ctx = KanbanContext::open(backend, AppConfig::default())
         .await
         .unwrap();
     let model = Model::default();
 
-    handle.fail("list_all_sprints");
+    let board = ctx
+        .create_board("Board".into(), Some("BRD".into()))
+        .unwrap();
+
+    handle.fail("list_columns_by_board");
 
     let resolved = ctx.resolve(
         &StaticPlan(FetchRound {
-            sprint_list: true,
+            columns_by_board: vec![board.id],
             ..Default::default()
         }),
         &model,
     );
 
-    assert!(resolved.sprints.all.is_failed());
-    assert!(!resolved.sprints.all.is_loaded());
+    let state = resolved
+        .columns
+        .by_parent
+        .get(&board.id)
+        .expect("board scope requested");
+    assert!(state.is_failed());
+    assert!(!state.is_loaded());
+}
+
+pub async fn test_a_backend_scoped_sprint_list_error_resolves_failed_not_empty(
+    factory: BackendFactory,
+) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let (factory, handles) = faultable(factory);
+    let backend = factory(&path);
+    let handle = handles.lock().unwrap()[&path].last().unwrap().clone();
+    let mut ctx = KanbanContext::open(backend, AppConfig::default())
+        .await
+        .unwrap();
+    let model = Model::default();
+
+    let board = ctx
+        .create_board("Board".into(), Some("BRD".into()))
+        .unwrap();
+
+    handle.fail("list_sprints_by_board");
+
+    let resolved = ctx.resolve(
+        &StaticPlan(FetchRound {
+            sprints_by_board: vec![board.id],
+            ..Default::default()
+        }),
+        &model,
+    );
+
+    let state = resolved
+        .sprints
+        .by_parent
+        .get(&board.id)
+        .expect("board scope requested");
+    assert!(state.is_failed());
+    assert!(!state.is_loaded());
 }
 
 pub async fn test_a_failed_read_is_retried_on_the_next_resolve(factory: BackendFactory) {
@@ -797,7 +829,7 @@ pub async fn test_a_failed_scoped_read_is_failed_not_empty_on_every_backend(
     assert!(!state.is_loaded());
 }
 
-pub async fn test_a_card_resolved_by_id_matches_the_same_card_in_the_card_list(
+pub async fn test_a_card_resolved_by_id_matches_the_same_card_in_the_column_scope(
     factory: &BackendFactory,
 ) {
     let dir = TempDir::new().unwrap();
@@ -826,7 +858,7 @@ pub async fn test_a_card_resolved_by_id_matches_the_same_card_in_the_card_list(
 
     let resolved = ctx.resolve(
         &StaticPlan(FetchRound {
-            card_list: true,
+            cards_by_column: vec![column.id],
             cards: vec![card.id],
             ..Default::default()
         }),
@@ -840,18 +872,20 @@ pub async fn test_a_card_resolved_by_id_matches_the_same_card_in_the_card_list(
         .expect("card requested")
         .loaded()
         .expect("card loaded");
-    let in_list = resolved
+    let in_scope = resolved
         .cards
-        .all
+        .by_parent
+        .get(&column.id)
+        .expect("column scope requested")
         .loaded()
-        .expect("card list loaded")
+        .expect("column scope loaded")
         .iter()
         .find(|c| c.id == card.id)
-        .expect("card present in the resolved list");
-    assert_card_eq(by_id, in_list);
+        .expect("card present in the resolved column scope");
+    assert_card_eq(by_id, in_scope);
 }
 
-pub async fn test_a_column_resolved_by_id_matches_the_same_column_in_the_column_list(
+pub async fn test_a_column_resolved_by_id_matches_the_same_column_in_the_board_scope(
     factory: &BackendFactory,
 ) {
     let dir = TempDir::new().unwrap();
@@ -867,7 +901,7 @@ pub async fn test_a_column_resolved_by_id_matches_the_same_column_in_the_column_
 
     let resolved = ctx.resolve(
         &StaticPlan(FetchRound {
-            column_list: true,
+            columns_by_board: vec![board.id],
             columns: vec![column.id],
             ..Default::default()
         }),
@@ -881,26 +915,28 @@ pub async fn test_a_column_resolved_by_id_matches_the_same_column_in_the_column_
         .expect("column requested")
         .loaded()
         .expect("column loaded");
-    let in_list = resolved
+    let in_scope = resolved
         .columns
-        .all
+        .by_parent
+        .get(&board.id)
+        .expect("board scope requested")
         .loaded()
-        .expect("column list loaded")
+        .expect("board scope loaded")
         .iter()
         .find(|c| c.id == column.id)
-        .expect("column present in the resolved list");
-    assert_eq!(by_id.id, in_list.id, "column id");
-    assert_eq!(by_id.board_id, in_list.board_id, "column board_id");
-    assert_eq!(by_id.name, in_list.name, "column name");
-    assert_eq!(by_id.position, in_list.position, "column position");
-    assert_eq!(by_id.wip_limit, in_list.wip_limit, "column wip_limit");
+        .expect("column present in the resolved board scope");
+    assert_eq!(by_id.id, in_scope.id, "column id");
+    assert_eq!(by_id.board_id, in_scope.board_id, "column board_id");
+    assert_eq!(by_id.name, in_scope.name, "column name");
+    assert_eq!(by_id.position, in_scope.position, "column position");
+    assert_eq!(by_id.wip_limit, in_scope.wip_limit, "column wip_limit");
     assert_eq!(
-        by_id.default_status, in_list.default_status,
+        by_id.default_status, in_scope.default_status,
         "column default_status"
     );
 }
 
-pub async fn test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_sprint_list(
+pub async fn test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_board_scope(
     factory: &BackendFactory,
 ) {
     let dir = TempDir::new().unwrap();
@@ -918,7 +954,7 @@ pub async fn test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_sprint_
 
     let resolved = ctx.resolve(
         &StaticPlan(FetchRound {
-            sprint_list: true,
+            sprints_by_board: vec![board.id],
             sprints: vec![sprint.id],
             ..Default::default()
         }),
@@ -932,19 +968,21 @@ pub async fn test_a_sprint_resolved_by_id_matches_the_same_sprint_in_the_sprint_
         .expect("sprint requested")
         .loaded()
         .expect("sprint loaded");
-    let in_list = resolved
+    let in_scope = resolved
         .sprints
-        .all
+        .by_parent
+        .get(&board.id)
+        .expect("board scope requested")
         .loaded()
-        .expect("sprint list loaded")
+        .expect("board scope loaded")
         .iter()
         .find(|s| s.id == sprint.id)
-        .expect("sprint present in the resolved list");
-    assert_eq!(by_id.id, in_list.id, "sprint id");
-    assert_eq!(by_id.board_id, in_list.board_id, "sprint board_id");
-    assert_eq!(by_id.status, in_list.status, "sprint status");
-    assert_eq!(by_id.start_date, in_list.start_date, "sprint start_date");
-    assert_eq!(by_id.end_date, in_list.end_date, "sprint end_date");
+        .expect("sprint present in the resolved board scope");
+    assert_eq!(by_id.id, in_scope.id, "sprint id");
+    assert_eq!(by_id.board_id, in_scope.board_id, "sprint board_id");
+    assert_eq!(by_id.status, in_scope.status, "sprint status");
+    assert_eq!(by_id.start_date, in_scope.start_date, "sprint start_date");
+    assert_eq!(by_id.end_date, in_scope.end_date, "sprint end_date");
 }
 
 pub async fn test_an_archived_card_resolves_loaded_by_id_on_every_backend(
@@ -982,7 +1020,7 @@ pub async fn test_an_archived_card_resolves_loaded_by_id_on_every_backend(
     assert!(state.is_loaded());
 }
 
-pub async fn test_an_archived_card_is_absent_from_the_resolved_card_list_on_every_backend(
+pub async fn test_an_archived_card_is_absent_from_the_resolved_column_scope_on_every_backend(
     factory: &BackendFactory,
 ) {
     let dir = TempDir::new().unwrap();
@@ -1007,17 +1045,23 @@ pub async fn test_an_archived_card_is_absent_from_the_resolved_card_list_on_ever
 
     let resolved = ctx.resolve(
         &StaticPlan(FetchRound {
-            card_list: true,
+            cards_by_column: vec![column.id],
             ..Default::default()
         }),
         &Model::default(),
     );
 
-    let cards = resolved.cards.all.loaded().expect("card list loaded");
+    let cards = resolved
+        .cards
+        .by_parent
+        .get(&column.id)
+        .expect("column scope requested")
+        .loaded()
+        .expect("column scope loaded");
     assert!(!cards.iter().any(|c| c.id == card.id));
 }
 
-pub async fn test_a_restored_card_reappears_in_the_resolved_card_list(factory: &BackendFactory) {
+pub async fn test_a_restored_card_reappears_in_the_resolved_column_scope(factory: &BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");
     let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
@@ -1054,7 +1098,7 @@ pub async fn test_a_restored_card_reappears_in_the_resolved_card_list(factory: &
     NoProjections.resync(&model, changed);
 
     let plan = StaticPlan(FetchRound {
-        card_list: true,
+        cards_by_column: vec![column.id],
         cards: vec![card.id],
         graph: true,
         ..Default::default()
@@ -1079,7 +1123,8 @@ pub async fn test_a_restored_card_reappears_in_the_resolved_card_list(factory: &
     let resolved = ctx.resolve(&plan, &model);
     apply(&mut model, resolved);
 
-    let after_list = model.cards_state().loaded().expect("card list loaded");
+    let scope = model.column_cards_state(column.id);
+    let after_list = scope.loaded().expect("column scope loaded");
     assert!(after_list.iter().any(|c| c.id == card.id));
     let after_state = model.card_by_id_state(card.id);
     let after = after_state.loaded().expect("card loaded after restore");
@@ -1117,7 +1162,7 @@ pub async fn test_a_deleted_then_undone_card_is_resolvable_again_on_every_backen
         .unwrap();
 
     let plan = StaticPlan(FetchRound {
-        card_list: true,
+        cards_by_column: vec![column.id],
         cards: vec![card.id],
         ..Default::default()
     });
@@ -1146,7 +1191,8 @@ pub async fn test_a_deleted_then_undone_card_is_resolvable_again_on_every_backen
         .copied()
         .expect("card resolvable again after undo");
     assert_card_eq(&before, after);
-    let list = model.cards_state().loaded().expect("card list loaded");
+    let scope = model.column_cards_state(column.id);
+    let list = scope.loaded().expect("column scope loaded");
     assert!(list.iter().any(|c| c.id == card.id));
 }
 
@@ -1473,26 +1519,29 @@ pub async fn test_invalidate_all_clears_every_collection_on_every_backend(
     let _ = ctx.block_impl(a.id, b.id, Severity::Low).unwrap();
 
     let plan = StaticPlan(FetchRound {
-        card_list: true,
-        column_list: true,
-        sprint_list: true,
+        board_list: true,
+        columns_by_board: vec![board.id],
+        cards_by_column: vec![column.id],
+        sprints_by_board: vec![board.id],
         cards: vec![a.id, b.id],
         graph: true,
         ..Default::default()
     });
     let resolved = ctx.resolve(&plan, &model);
     apply(&mut model, resolved);
-    assert!(model.cards_state().is_loaded());
-    assert!(model.columns_state().is_loaded());
-    assert!(model.sprints_state().is_loaded());
+    assert!(model.boards_state().is_loaded());
+    assert!(model.column_cards_state(column.id).is_loaded());
+    assert!(model.board_columns_state(board.id).is_loaded());
+    assert!(model.board_sprints_state(board.id).is_loaded());
     assert!(model.graph_state().is_loaded());
 
     let changed = model.invalidate(Invalidation::All);
     NoProjections.resync(&model, changed);
 
-    assert!(model.cards_state().is_not_loaded());
-    assert!(model.columns_state().is_not_loaded());
-    assert!(model.sprints_state().is_not_loaded());
+    assert!(model.boards_state().is_not_loaded());
+    assert!(model.column_cards_state(column.id).is_not_loaded());
+    assert!(model.board_columns_state(board.id).is_not_loaded());
+    assert!(model.board_sprints_state(board.id).is_not_loaded());
     assert!(model.graph_state().is_not_loaded());
 }
 
