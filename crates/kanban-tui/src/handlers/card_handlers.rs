@@ -846,9 +846,13 @@ impl App {
         use kanban_domain::AnimationType;
         use std::time::Instant;
 
+        let Some(board_id) = self.scope_board_id() else {
+            return;
+        };
         if self
             .model
-            .archived_card_markers()
+            .board_archived_cards_state(board_id)
+            .loaded().copied().unwrap_or(&[])
             .iter()
             .any(|dc| dc.entity_id == card_id)
         {
@@ -941,9 +945,13 @@ impl App {
         use kanban_domain::AnimationType;
         use std::time::Instant;
 
+        let Some(board_id) = self.scope_board_id() else {
+            return;
+        };
         if self
             .model
-            .archived_card_markers()
+            .board_archived_cards_state(board_id)
+            .loaded().copied().unwrap_or(&[])
             .iter()
             .any(|dc| dc.entity_id == card_id)
         {

@@ -91,6 +91,10 @@ impl LoadedEntities for Model {
     fn loaded_archived_board_markers(&self) -> Option<&[ArchivedBoard]> {
         self.archived_boards_state().loaded().copied()
     }
+
+    fn loaded_archived_cards_of_board(&self, board_id: Uuid) -> Option<&[ArchivedCard]> {
+        self.board_archived_cards_state(board_id).loaded().copied()
+    }
 }
 
 #[cfg(test)]

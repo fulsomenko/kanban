@@ -2,6 +2,16 @@ use super::{App, AppMode};
 use kanban_domain::{Column, LoadState, Sprint};
 
 impl App {
+    /// The board the render-side scoped tiers (`Controller` card partitions,
+    /// `ViewScope`'s by-board requests) resolve against: the active board if
+    /// one is open, otherwise the board highlighted in the currently
+    /// displayed projects set.
+    pub(crate) fn scope_board_id(&self) -> Option<uuid::Uuid> {
+        self.selection
+            .active_board_id
+            .or_else(|| self.board_list.get_selected_board_id())
+    }
+
     /// One column tier per board-scoped feature: the scoped tier when it has
     /// resolved, otherwise the flat tier filtered to `board_id`. A scoped
     /// `Loaded` (including an empty one) is authoritative and never falls

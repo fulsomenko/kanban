@@ -1,6 +1,6 @@
 //! `ViewScope` is the TUI's `FetchPlan`: it names the tiers the current
-//! screen needs. The renderer reads the flat `*_list` tiers and the
-//! handlers read the by-parent tiers, so `next_round` requests both
+//! screen needs. The renderer reads the board-scoped tiers; the handlers
+//! still read the flat `*_list` tiers, so `next_round` requests both
 //! populations together whenever a board subtree is in scope.
 
 use uuid::Uuid;
@@ -79,28 +79,20 @@ impl FetchPlan for ViewScope {
                     }
                 }
             }
-        }
 
-        if self.archived_card_markers || self.archived_card_bodies {
-            if requestable(loaded.archived_card_list()) {
-                round.archived_card_list = true;
-            } else if self.archived_card_bodies {
-                // The per-id body merge only lands in the flat collection
-                // once that collection itself is `Loaded` (`apply_collection`
-                // upserts onto an existing Vec, it never creates one), so a
-                // body walk with no board in scope must still request the
-                // flat card list itself.
-                if !round.card_list && requestable(loaded.card_list()) {
-                    round.card_list = true;
-                }
-                if let Some(markers) = loaded.loaded_archived_card_markers() {
-                    let mut ids: Vec<Uuid> = markers
-                        .iter()
-                        .map(|m| m.entity_id)
-                        .filter(|&id| requestable(loaded.card_in_collection(id)))
-                        .collect();
-                    ids.sort_unstable();
-                    round.cards.extend(ids);
+            if self.archived_card_markers || self.archived_card_bodies {
+                if requestable(loaded.archived_cards_of_board(board_id)) {
+                    round.archived_cards_by_board.push(board_id);
+                } else if self.archived_card_bodies {
+                    if let Some(markers) = loaded.loaded_archived_cards_of_board(board_id) {
+                        let mut ids: Vec<Uuid> = markers
+                            .iter()
+                            .map(|m| m.entity_id)
+                            .filter(|&id| requestable(loaded.card(id)))
+                            .collect();
+                        ids.sort_unstable();
+                        round.cards.extend(ids);
+                    }
                 }
             }
         }
@@ -130,10 +122,7 @@ impl FetchPlan for ViewScope {
 
 impl App {
     pub fn view_scope(&self) -> ViewScope {
-        let board = self
-            .selection
-            .active_board_id
-            .or_else(|| self.board_list.get_selected_board_id());
+        let board = self.scope_board_id();
 
         let mut scope = ViewScope {
             board_list: true,

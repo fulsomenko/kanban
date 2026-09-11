@@ -278,23 +278,15 @@ impl App {
         let LoadState::Loaded(scoped_columns) = self.model.board_columns_state(board_id) else {
             return None;
         };
-        let col_ids: std::collections::HashSet<uuid::Uuid> =
-            scoped_columns.iter().map(|c| c.id).collect();
-        let columns = col_ids.len();
-        let LoadState::Loaded(cards_all) = self.controller.live_cards() else {
+        let columns = scoped_columns.len();
+        let LoadState::Loaded(cards_all) = self.model.board_cards_state(board_id) else {
             return None;
         };
-        let cards = cards_all
-            .iter()
-            .filter(|c| col_ids.contains(&c.column_id))
-            .count();
-        let LoadState::Loaded(markers) = self.model.archived_cards_state() else {
+        let cards = cards_all.len();
+        let LoadState::Loaded(markers) = self.model.board_archived_cards_state(board_id) else {
             return None;
         };
-        let archived = markers
-            .iter()
-            .filter(|a| a.context.board_id == board_id)
-            .count();
+        let archived = markers.len();
         let LoadState::Loaded(sprints) = self.model.board_sprints_state(board_id) else {
             return None;
         };

@@ -137,9 +137,13 @@ impl App {
     }
 
     fn complete_restore_animation(&mut self, card_id: uuid::Uuid) -> bool {
+        let Some(board_id) = self.scope_board_id() else {
+            return false;
+        };
         if let Some(archived_card) = self
             .model
-            .archived_card_markers()
+            .board_archived_cards_state(board_id)
+            .loaded().copied().unwrap_or(&[])
             .iter()
             .find(|dc| dc.entity_id == card_id)
             .cloned()
