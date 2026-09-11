@@ -3,6 +3,7 @@ mod command_store;
 mod conversions;
 mod conversions_out;
 mod data_store;
+mod events;
 mod http;
 mod http_mutation;
 mod remote_writes;
