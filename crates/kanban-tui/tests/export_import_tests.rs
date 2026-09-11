@@ -244,16 +244,25 @@ fn test_import_valid_format() {
     app.reload_model();
     app.prepare_frame();
     assert_eq!(app.model.boards_state().loaded_or_empty().len(), 1);
+    let board_id = app.model.boards_state().loaded_or_empty()[0].id;
     assert_eq!(
         app.model.boards_state().loaded_or_empty()[0].name,
         "Imported Board"
     );
-    assert_eq!(app.model.columns_state().loaded_or_empty().len(), 1);
-    assert_eq!(app.model.cards_state().loaded_or_empty().len(), 1);
-    assert_eq!(
-        app.model.cards_state().loaded_or_empty()[0].title,
-        "Imported Task"
-    );
+    app.selection.active_board_id = Some(board_id);
+    app.reload_model();
+    app.prepare_frame();
+    let cols = app
+        .model
+        .board_columns_state(board_id)
+        .loaded()
+        .copied()
+        .unwrap_or(&[]);
+    assert_eq!(cols.len(), 1);
+    let cards = app.model.board_cards_state(board_id);
+    let cards = cards.loaded().map(|v| v.as_slice()).unwrap_or(&[]);
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].title, "Imported Task");
 }
 
 #[test]
@@ -357,11 +366,14 @@ async fn test_async_load_initial_state_sqlite() {
         app.model.boards_state().loaded_or_empty()[0].name,
         "SQLite Board"
     );
-    assert_eq!(app.model.columns_state().loaded_or_empty().len(), 1);
-    assert_eq!(
-        app.model.columns_state().loaded_or_empty()[0].name,
-        "Backlog"
-    );
+    let cols = app
+        .model
+        .board_columns_state(board.id)
+        .loaded()
+        .copied()
+        .unwrap_or(&[]);
+    assert_eq!(cols.len(), 1);
+    assert_eq!(cols[0].name, "Backlog");
 }
 
 #[test]
@@ -436,19 +448,13 @@ fn test_export_import_sprint_and_card_prefixes() {
     app2.reload_model();
     app2.prepare_frame();
     assert_eq!(app2.model.boards_state().loaded_or_empty().len(), 1);
-    assert_eq!(
-        app2.model.boards_state().loaded_or_empty()[0].sprint_prefix,
-        Some("sprint".to_string())
-    );
-    assert_eq!(
-        app2.model.boards_state().loaded_or_empty()[0].card_prefix,
-        Some("task".to_string())
-    );
-    assert_eq!(app2.model.sprints_state().loaded_or_empty().len(), 1);
-    assert_eq!(
-        app2.model.sprints_state().loaded_or_empty()[0].card_prefix,
-        Some("hotfix".to_string())
-    );
+    let imported_board = app2.model.boards_state().loaded_or_empty()[0].clone();
+    assert_eq!(imported_board.sprint_prefix, Some("sprint".to_string()));
+    assert_eq!(imported_board.card_prefix, Some("task".to_string()));
+    let sprints = app2.model.board_sprints_state(imported_board.id);
+    let sprints = sprints.loaded().copied().unwrap_or(&[]);
+    assert_eq!(sprints.len(), 1);
+    assert_eq!(sprints[0].card_prefix, Some("hotfix".to_string()));
 }
 
 #[test]
@@ -536,11 +542,14 @@ fn test_backward_compat_old_export_format() {
     );
 
     // Verify cards still work
-    assert_eq!(app.model.cards_state().loaded_or_empty().len(), 1);
-    assert_eq!(
-        app.model.cards_state().loaded_or_empty()[0].title,
-        "Old Card"
-    );
+    let board_id = app.model.boards_state().loaded_or_empty()[0].id;
+    app.selection.active_board_id = Some(board_id);
+    app.reload_model();
+    app.prepare_frame();
+    let cards = app.model.board_cards_state(board_id);
+    let cards = cards.loaded().map(|v| v.as_slice()).unwrap_or(&[]);
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].title, "Old Card");
 }
 
 #[test]
@@ -584,9 +593,16 @@ fn test_import_column_missing_default_status_key_defaults_to_none() {
     app.reload_model();
     app.prepare_frame();
     assert_eq!(app.model.boards_state().loaded_or_empty().len(), 1);
-    assert_eq!(app.model.columns_state().loaded_or_empty().len(), 1);
-    assert_eq!(
-        app.model.columns_state().loaded_or_empty()[0].default_status,
-        None
-    );
+    let board_id = app.model.boards_state().loaded_or_empty()[0].id;
+    app.selection.active_board_id = Some(board_id);
+    app.reload_model();
+    app.prepare_frame();
+    let cols = app
+        .model
+        .board_columns_state(board_id)
+        .loaded()
+        .copied()
+        .unwrap_or(&[]);
+    assert_eq!(cols.len(), 1);
+    assert_eq!(cols[0].default_status, None);
 }

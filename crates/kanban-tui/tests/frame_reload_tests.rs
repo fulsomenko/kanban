@@ -111,10 +111,10 @@ fn test_card_mutation_is_visible_in_model_without_a_further_redraw() {
 
     let title_present = app
         .model
-        .cards_state()
-        .loaded_or_empty()
-        .iter()
-        .any(|c| c.title == "New card");
+        .board_cards_state(board.id)
+        .loaded()
+        .map(|v| v.iter().any(|c| c.title == "New card"))
+        .unwrap_or(false);
     assert!(
         title_present,
         "create_card's own reload_model must make the new card visible without a further redraw"

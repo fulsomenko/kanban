@@ -366,6 +366,7 @@ fn test_the_tasks_panel_title_counts_from_the_scoped_tiers_while_the_flat_tiers_
         .unwrap();
 
     app.selection.active_board_id = Some(board.id);
+    app.focus.active = kanban_tui::app::Focus::Cards;
     app.reload_model();
     app.prepare_frame();
 

@@ -126,7 +126,8 @@ async fn test_reload_model_never_calls_snapshot() {
         "expected no snapshot op, got {recorded:?}"
     );
     assert!(app.model.boards_state().is_loaded());
-    assert!(app.model.cards_state().is_loaded());
+    let board_id = app.model.boards_state().loaded_or_empty()[0].id;
+    assert!(app.model.board_cards_state(board_id).is_loaded());
 }
 
 #[tokio::test]

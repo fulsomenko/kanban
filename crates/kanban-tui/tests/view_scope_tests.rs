@@ -202,6 +202,7 @@ fn test_search_mode_needs_no_scope_beyond_the_board_it_filters() {
             board: Some(board_id),
             board_columns: true,
             board_cards: true,
+            board_sprints: true,
             ..Default::default()
         }
     );

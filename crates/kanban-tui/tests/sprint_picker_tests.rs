@@ -168,7 +168,11 @@ fn test_for_card_assignment_initial_selection_is_zero_when_card_has_no_sprint() 
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -186,7 +190,15 @@ fn test_for_card_assignment_initial_selection_is_index_of_current_sprint() {
     let active = add_active_sprint(&mut app, board_id);
     add_planning_sprint(&mut app, board_id);
     let now = Utc::now();
-    let entries = build_entries(app.model.sprints_state().loaded_or_empty(), board_id, now);
+    let entries = build_entries(
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
+        board_id,
+        now,
+    );
     let expected_idx = entries
         .iter()
         .position(|e| sprint_id_of(e) == Some(active))
@@ -200,7 +212,11 @@ fn test_for_card_assignment_initial_selection_is_index_of_current_sprint() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         Some(active),
         now,
@@ -224,7 +240,11 @@ fn test_for_card_assignment_render_shows_current_suffix_for_card_sprint() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         Some(active),
         now,
@@ -251,8 +271,15 @@ fn test_for_new_card_preselects_sole_active_non_ended_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker =
-        SprintPickerView::for_new_card(app.model.sprints_state().loaded_or_empty(), &board, now);
+    let picker = SprintPickerView::for_new_card(
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
+        &board,
+        now,
+    );
     let expected_idx = picker
         .index_of_sprint(Some(active))
         .expect("active sprint must appear in the new-card picker");
@@ -277,8 +304,15 @@ fn test_for_new_card_preselects_none_when_no_active_sprints() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker =
-        SprintPickerView::for_new_card(app.model.sprints_state().loaded_or_empty(), &board, now);
+    let picker = SprintPickerView::for_new_card(
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
+        &board,
+        now,
+    );
     assert_eq!(
         picker.initial_selection(),
         Some(0),
@@ -300,8 +334,15 @@ fn test_for_new_card_preselects_none_when_multiple_active_sprints() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let picker =
-        SprintPickerView::for_new_card(app.model.sprints_state().loaded_or_empty(), &board, now);
+    let picker = SprintPickerView::for_new_card(
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
+        &board,
+        now,
+    );
     assert_eq!(
         picker.initial_selection(),
         Some(0),
@@ -323,7 +364,11 @@ fn test_value_at_returns_none_uuid_for_none_row() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -340,7 +385,15 @@ fn test_value_at_returns_sprint_id_for_sprint_row() {
     let (mut app, board_id, _col) = make_app_with_board();
     let active = add_active_sprint(&mut app, board_id);
     let now = Utc::now();
-    let entries = build_entries(app.model.sprints_state().loaded_or_empty(), board_id, now);
+    let entries = build_entries(
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
+        board_id,
+        now,
+    );
     let idx = entries
         .iter()
         .position(|e| sprint_id_of(e) == Some(active))
@@ -354,7 +407,11 @@ fn test_value_at_returns_sprint_id_for_sprint_row() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -376,10 +433,22 @@ fn test_index_of_sprint_returns_row_index_for_known_sprint() {
         .find(|b| b.id == board_id)
         .cloned()
         .unwrap();
-    let entries = build_entries(app.model.sprints_state().loaded_or_empty(), board_id, now);
+    let entries = build_entries(
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
+        board_id,
+        now,
+    );
     let expected = entries.iter().position(|e| sprint_id_of(e) == Some(active));
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -401,7 +470,11 @@ fn test_index_of_sprint_returns_none_entry_index_when_no_sprint_selected() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -427,7 +500,11 @@ fn test_index_of_sprint_returns_none_when_sprint_is_not_in_list() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -444,7 +521,15 @@ fn test_value_at_indices_match_build_entries_order() {
     add_completed_sprint(&mut app, board_id);
     add_ended_sprint(&mut app, board_id);
     let now = Utc::now();
-    let entries = build_entries(app.model.sprints_state().loaded_or_empty(), board_id, now);
+    let entries = build_entries(
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
+        board_id,
+        now,
+    );
     let board = app
         .model
         .boards_state()
@@ -454,7 +539,11 @@ fn test_value_at_indices_match_build_entries_order() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -494,7 +583,11 @@ fn test_render_emits_active_planned_header_with_yellow_color() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -526,7 +619,11 @@ fn test_render_with_none_selection_leaves_all_rows_unselected() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,
@@ -556,7 +653,11 @@ fn test_render_with_out_of_bounds_selected_does_not_panic() {
         .cloned()
         .unwrap();
     let picker = SprintPickerView::for_card_assignment(
-        app.model.sprints_state().loaded_or_empty(),
+        app.model
+            .board_sprints_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[]),
         &board,
         None,
         now,

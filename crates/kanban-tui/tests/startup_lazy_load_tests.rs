@@ -279,8 +279,8 @@ async fn test_startup_loads_the_auto_selected_boards_subtree() {
 
     app.load_initial_state().await;
 
-    assert!(matches!(app.model.columns_state(), LoadState::Loaded(_)));
-    assert!(matches!(app.model.sprints_state(), LoadState::Loaded(_)));
+    assert!(app.model.board_columns_state(board1.id).is_loaded());
+    assert!(app.model.board_sprints_state(board1.id).is_loaded());
     assert_eq!(app.selection.active_board_id, None);
     assert_eq!(app.board_list.get_selected_board_id(), Some(board1.id));
 }
@@ -327,8 +327,10 @@ async fn test_startup_runs_the_sprint_log_migration_before_the_first_fetch() {
 
     let migrated_log_present = app
         .model
-        .cards_state()
-        .loaded_or_empty()
+        .board_cards_state(board.id)
+        .loaded()
+        .map(|v| v.as_slice())
+        .unwrap_or(&[])
         .iter()
         .find(|c| c.id == card.id)
         .map(|c| !c.sprint_logs.is_empty())
@@ -547,17 +549,22 @@ mod backend_parity {
                 "boards differ between {baseline_kind} and {kind}"
             );
 
-            let expected_columns =
-                sorted_by_id(baseline.columns_state().loaded().unwrap(), |c| c.id);
-            let actual_columns = sorted_by_id(model.columns_state().loaded().unwrap(), |c| c.id);
+            let expected_columns = sorted_by_id(
+                baseline.board_columns_state(board1).loaded().unwrap(),
+                |c| c.id,
+            );
+            let actual_columns =
+                sorted_by_id(model.board_columns_state(board1).loaded().unwrap(), |c| {
+                    c.id
+                });
             assert_eq!(
                 actual_columns, expected_columns,
                 "columns differ between {baseline_kind} and {kind}"
             );
 
-            let mut expected_cards = baseline.cards_state().loaded().unwrap().clone();
+            let mut expected_cards = baseline.board_cards_state(board1).loaded().unwrap().clone();
             expected_cards.sort_by_key(|c| c.id);
-            let mut actual_cards = model.cards_state().loaded().unwrap().clone();
+            let mut actual_cards = model.board_cards_state(board1).loaded().unwrap().clone();
             actual_cards.sort_by_key(|c| c.id);
             assert_eq!(
                 expected_cards.len(),
@@ -568,9 +575,14 @@ mod backend_parity {
                 assert_card_eq(a, b);
             }
 
-            let expected_sprints =
-                sorted_by_id(baseline.sprints_state().loaded().unwrap(), |s| s.id);
-            let actual_sprints = sorted_by_id(model.sprints_state().loaded().unwrap(), |s| s.id);
+            let expected_sprints = sorted_by_id(
+                baseline.board_sprints_state(board1).loaded().unwrap(),
+                |s| s.id,
+            );
+            let actual_sprints =
+                sorted_by_id(model.board_sprints_state(board1).loaded().unwrap(), |s| {
+                    s.id
+                });
             assert_eq!(
                 actual_sprints, expected_sprints,
                 "sprints differ between {baseline_kind} and {kind}"
