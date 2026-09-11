@@ -1,5 +1,7 @@
 use kanban_backend_http::HttpBackend;
-use kanban_domain::{ArchivedCard, ArchivedFilter, CardListFilter, DataStore, Model, NoProjections};
+use kanban_domain::{
+    ArchivedCard, ArchivedFilter, CardListFilter, DataStore, Model, NoProjections,
+};
 use kanban_server::test_helpers::TestServer;
 use kanban_service::fetch_plan::{requestable, FetchPlan, FetchRound, LoadedEntities};
 use kanban_service::{AppConfig, KanbanContext, KanbanError, KanbanOperations};
@@ -52,7 +54,12 @@ fn seed_board_with_live_and_archived_card(
         .unwrap();
     ctx.archive_card(archived.id).unwrap();
     let seeded = ctx.list_archived_cards_by_board(board.id).unwrap();
-    (board.id, live.id, archived.id, seeded[0].metadata.archived_at)
+    (
+        board.id,
+        live.id,
+        archived.id,
+        seeded[0].metadata.archived_at,
+    )
 }
 
 #[tokio::test(flavor = "multi_thread")]
