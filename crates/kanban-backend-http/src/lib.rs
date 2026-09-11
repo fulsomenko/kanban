@@ -38,6 +38,10 @@ impl kanban_backend::KanbanBackend for HttpBackend {
         self.instance_id
     }
 
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
     async fn probe(&self) -> kanban_domain::KanbanResult<()> {
         let url = format!("{}/health", self.base_url());
         let resp = self.client().get(&url).send().await.map_err(|e| {

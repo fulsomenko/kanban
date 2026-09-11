@@ -95,6 +95,12 @@ pub trait KanbanBackend: DataStore + CommandStore + Send + Sync {
         None
     }
 
+    /// Some(...) when a caller needs to downcast to the concrete backend type.
+    /// `None` (the default) for backends that offer no such hook.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
+
     /// Run `f` as an atomic batch: every mutation commits or rolls back
     /// together.
     ///
