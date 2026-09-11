@@ -35,6 +35,7 @@ pub enum RouteScope {
         sprint_id: Uuid,
     },
     CardGraph(Uuid),
+    Graph,
 }
 
 fn want_board(round: &mut FetchRound, loaded: &dyn LoadedEntities, board_id: Uuid) {
@@ -144,6 +145,9 @@ impl FetchPlan for RouteScope {
                 if requestable(loaded.card(id)) {
                     round.cards.push(id);
                 }
+            }
+            RouteScope::Graph => {
+                round.graph = requestable(loaded.graph());
             }
         }
 

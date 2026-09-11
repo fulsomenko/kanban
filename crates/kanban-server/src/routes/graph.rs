@@ -7,7 +7,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
-use kanban_domain::{Model, NoProjections};
+use kanban_domain::{DependencyGraph, Model, NoProjections};
 use kanban_service::api::{
     AddBlockRequest, AddRelatedRequest, AttachChildrenRequest, CardGraphResponse, ChangeKind,
     EntityType,
@@ -27,8 +27,18 @@ async fn get_card_graph(
     Ok(Json(CardGraphResponse::from_graph(id, graph)))
 }
 
+async fn get_graph(State(state): State<AppState>) -> Result<Json<DependencyGraph>, AppError> {
+    let guard = state.lock_session().await;
+    let mut model = Model::default();
+    guard.sync(&RouteScope::Graph, &mut model, &mut NoProjections);
+    let graph = require_loaded(model.graph_state().as_ref(), "dependency graph")?;
+    Ok(Json(graph.clone()))
+}
+
 pub fn read_router() -> Router<AppState> {
-    Router::new().route("/v1/cards/{id}/graph", get(get_card_graph))
+    Router::new()
+        .route("/v1/graph", get(get_graph))
+        .route("/v1/cards/{id}/graph", get(get_card_graph))
 }
 
 fn graph_mutation_response(
