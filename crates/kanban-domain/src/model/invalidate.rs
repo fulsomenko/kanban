@@ -702,6 +702,22 @@ mod tests {
     }
 
     #[test]
+    fn test_invalidate_of_an_empty_entity_set_reports_unchanged() {
+        let (mut m, ..) = seeded();
+        let changed = m.invalidate(Invalidation::Entities(EntityIds::default()));
+        assert!(!changed.any());
+        assert!(m.boards_state().is_loaded());
+    }
+
+    #[test]
+    fn test_invalidate_all_reports_changed() {
+        let (mut m, ..) = seeded();
+        let changed = m.invalidate(Invalidation::All);
+        assert!(changed.any());
+        assert!(m.cards_state().is_not_loaded());
+    }
+
+    #[test]
     fn test_invalidate_a_column_id_drops_that_column_and_the_column_collection() {
         let (mut m, _board, col_a, col_b, _c1, _c2, _sprint) = seeded();
 

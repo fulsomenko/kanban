@@ -237,6 +237,13 @@ mod tests {
     }
 
     #[test]
+    fn test_load_from_snapshot_always_reports_changed() {
+        let mut m = Model::default();
+        let changed = m.load_from_snapshot(Snapshot::default());
+        assert!(changed.any());
+    }
+
+    #[test]
     fn test_load_from_snapshot_populates_boards_and_columns() {
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);

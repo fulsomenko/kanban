@@ -257,6 +257,103 @@ mod tests {
     }
 
     #[test]
+    fn test_a_receipt_from_an_untouched_apply_reports_nothing_changed() {
+        let mut m = Model::default();
+        let changed = m.apply_resolved(Resolved::default());
+        assert!(!changed.any());
+        NoProjections.resync(&m, changed);
+    }
+
+    #[test]
+    fn test_a_receipt_from_a_touched_apply_reports_changed() {
+        let mut m = Model::default();
+        assert!(m
+            .apply_resolved(Resolved {
+                boards: Collection {
+                    all: LoadState::Loaded(Vec::new()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .any());
+
+        let card_id = Uuid::new_v4();
+        let mut cards_by_id = HashMap::new();
+        cards_by_id.insert(
+            card_id,
+            LoadState::Loaded(Card::new(Uuid::new_v4(), Uuid::new_v4(), "c", 0)),
+        );
+        assert!(m
+            .apply_resolved(Resolved {
+                cards: Collection {
+                    by_id: cards_by_id,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .any());
+
+        let board_id = Uuid::new_v4();
+        let mut columns_by_parent = HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(Vec::new()));
+        assert!(m
+            .apply_resolved(Resolved {
+                columns: Collection {
+                    by_parent: columns_by_parent,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .any());
+
+        assert!(m
+            .apply_resolved(Resolved {
+                archived_cards: Collection {
+                    all: LoadState::Loaded(Vec::new()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .any());
+
+        assert!(m
+            .apply_resolved(Resolved {
+                archived_boards: Collection {
+                    all: LoadState::Loaded(Vec::new()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .any());
+
+        assert!(m
+            .apply_resolved(Resolved {
+                graph: LoadState::Loaded(DependencyGraph::default()),
+                ..Default::default()
+            })
+            .any());
+    }
+
+    #[test]
+    fn test_mark_failed_with_empty_ids_reports_unchanged() {
+        let mut m = Model::default();
+        let err = Arc::new(KanbanError::unsupported("x"));
+        let changed = m.mark_failed(EntityIds::default(), err);
+        assert!(!changed.any());
+        assert!(m.boards_state().is_not_loaded());
+        assert!(m.cards_state().is_not_loaded());
+    }
+
+    #[test]
+    fn test_mark_failed_with_ids_reports_changed() {
+        let mut m = Model::default();
+        let card_id = Uuid::new_v4();
+        let err = Arc::new(KanbanError::unsupported("x"));
+        let changed = m.mark_failed(EntityIds::cards([card_id]), err);
+        assert!(changed.any());
+    }
+
+    #[test]
     fn test_mark_failed_returns_a_model_changed_receipt() {
         let mut m = Model::default();
         let card_id = Uuid::new_v4();

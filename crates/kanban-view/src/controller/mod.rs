@@ -289,6 +289,175 @@ mod tests {
         );
     }
 
+    fn seed_non_empty_model() -> (Model, Controller) {
+        let board = seed_board("B", 0);
+        let column = Column::new(board.id, "Col", 0);
+        let live = Card::new(board.id, column.id, "live", 0);
+        let archived = Card::new(board.id, column.id, "archived", 1);
+        let archived_id = archived.id;
+        let mut model = Model::default();
+        let changed = model.load_from_snapshot(Snapshot {
+            boards: vec![board],
+            columns: vec![column],
+            cards: vec![live, archived],
+            archived_cards: vec![ArchivedCard::new(archived_id, Uuid::nil())],
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model, changed);
+        (model, controller)
+    }
+
+    #[test]
+    fn test_resync_with_an_unchanged_receipt_leaves_the_cached_partitions_untouched() {
+        let (mut model, mut controller) = seed_non_empty_model();
+        let cards_before = controller
+            .displayed_cards(false)
+            .loaded()
+            .copied()
+            .unwrap()
+            .as_ptr();
+        let boards_before = controller
+            .displayed_boards(false)
+            .loaded()
+            .copied()
+            .unwrap()
+            .as_ptr();
+
+        let unchanged = model.apply_resolved(Resolved::default());
+        assert!(!unchanged.any());
+        controller.resync(&model, unchanged);
+
+        assert_eq!(
+            controller
+                .displayed_cards(false)
+                .loaded()
+                .copied()
+                .unwrap()
+                .as_ptr(),
+            cards_before
+        );
+        assert_eq!(
+            controller
+                .displayed_boards(false)
+                .loaded()
+                .copied()
+                .unwrap()
+                .as_ptr(),
+            boards_before
+        );
+    }
+
+    #[test]
+    fn test_resync_with_a_changed_receipt_rebuilds_the_partitions() {
+        let (mut model, mut controller) = seed_non_empty_model();
+        let cards_before = controller
+            .displayed_cards(false)
+            .loaded()
+            .copied()
+            .unwrap()
+            .as_ptr();
+
+        let board = seed_board("B", 0);
+        let column = Column::new(board.id, "Col", 0);
+        let mut live_edited = Card::new(board.id, column.id, "live edited", 0);
+        let live_id = model.cards_state().loaded().unwrap()[0].id;
+        live_edited.id = live_id;
+        let changed = model.apply_resolved(Resolved {
+            cards: Collection {
+                all: LoadState::Loaded(vec![live_edited.clone()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        assert!(changed.any());
+        controller.resync(&model, changed);
+
+        let cards_after = controller.displayed_cards(false).loaded().copied().unwrap();
+        assert_ne!(cards_after.as_ptr(), cards_before);
+        assert_eq!(cards_after[0].title, "live edited");
+    }
+
+    #[test]
+    fn test_resync_after_a_whole_model_replacement_rebuilds_the_partitions() {
+        let board_a1 = seed_board("A1", 0);
+        let board_a2 = seed_board("A2", 1);
+        let mut model_a = Model::default();
+        let changed = model_a.load_from_snapshot(Snapshot {
+            boards: vec![board_a1, board_a2],
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model_a, changed);
+        assert_eq!(
+            controller
+                .displayed_boards(false)
+                .loaded()
+                .copied()
+                .unwrap()
+                .len(),
+            2
+        );
+
+        let board_b = seed_board("B", 0);
+        let board_b_id = board_b.id;
+        let mut model_b = Model::default();
+        let _ = model_b.load_from_snapshot(Snapshot {
+            boards: vec![board_b],
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+
+        let changed = model_a.replace_with(model_b);
+        assert!(changed.any());
+        controller.resync(&model_a, changed);
+
+        let boards: Vec<Uuid> = controller
+            .displayed_boards(false)
+            .loaded()
+            .copied()
+            .unwrap()
+            .iter()
+            .map(|b| b.id)
+            .collect();
+        assert_eq!(boards, vec![board_b_id]);
+    }
+
+    #[test]
+    fn test_board_sort_change_after_a_skipped_resync_still_reorders() {
+        let mut zed = Board::new("Zed", None::<String>);
+        zed.position = 0;
+        let mut alpha = Board::new("Alpha", None::<String>);
+        alpha.position = 1;
+        let zed_id = zed.id;
+        let alpha_id = alpha.id;
+        let mut model = Model::default();
+        let changed = model.load_from_snapshot(Snapshot {
+            boards: vec![zed, alpha],
+            archived_boards: Vec::new(),
+            ..Default::default()
+        });
+        let mut controller = Controller::default();
+        controller.resync(&model, changed);
+
+        let unchanged = model.apply_resolved(Resolved::default());
+        assert!(!unchanged.any());
+        controller.resync(&model, unchanged);
+
+        controller.set_board_sort(false, BoardSortField::Name, SortOrder::Descending);
+        let order: Vec<Uuid> = controller
+            .displayed_boards(false)
+            .loaded()
+            .copied()
+            .unwrap()
+            .iter()
+            .map(|b| b.id)
+            .collect();
+        assert_eq!(order, vec![zed_id, alpha_id]);
+    }
+
     #[test]
     fn test_a_projections_implementor_cannot_mint_a_receipt() {
         let src = std::fs::read_to_string(concat!(

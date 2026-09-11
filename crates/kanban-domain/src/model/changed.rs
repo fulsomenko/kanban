@@ -63,7 +63,30 @@ mod tests {
         assert!(prod.contains(
             "#[must_use = \"derived projections are stale until resync consumes this\"]"
         ));
-        assert!(prod.contains("pub struct ModelChanged(());"));
+        assert!(prod.contains("pub struct ModelChanged {"));
+        assert!(prod.contains("\n    dirty: bool,\n"));
+        assert!(!prod.contains("pub dirty"));
+    }
+
+    #[test]
+    fn test_merge_of_an_unchanged_and_a_changed_receipt_reports_changed() {
+        let mut m = Model::default();
+
+        let unchanged_a = m.apply_resolved(crate::Resolved::default());
+        let unchanged_b = m.apply_resolved(crate::Resolved::default());
+        assert!(!unchanged_a.merge(unchanged_b).any());
+
+        let unchanged = m.apply_resolved(crate::Resolved::default());
+        let changed = m.load_from_snapshot(Snapshot::default());
+        assert!(unchanged.merge(changed).any());
+
+        let changed = m.load_from_snapshot(Snapshot::default());
+        let unchanged = m.apply_resolved(crate::Resolved::default());
+        assert!(changed.merge(unchanged).any());
+
+        let changed_a = m.load_from_snapshot(Snapshot::default());
+        let changed_b = m.load_from_snapshot(Snapshot::default());
+        assert!(changed_a.merge(changed_b).any());
     }
 
     #[test]
