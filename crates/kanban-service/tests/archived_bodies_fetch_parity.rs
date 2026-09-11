@@ -27,11 +27,7 @@ impl FetchPlan for ArchivedBodiesPlan {
             if requestable(loaded.archived_card_list()) {
                 round.archived_card_list = true;
             } else if let Some(markers) = loaded.loaded_archived_card_markers() {
-                let mut ids: Vec<Uuid> = markers
-                    .iter()
-                    .map(|m| m.entity_id)
-                    .filter(|&id| requestable(loaded.card_in_collection(id)))
-                    .collect();
+                let mut ids: Vec<Uuid> = markers.iter().map(|m| m.entity_id).collect();
                 ids.sort_unstable();
                 round.cards.extend(ids);
             }

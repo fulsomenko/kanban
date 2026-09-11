@@ -59,12 +59,6 @@ pub trait LoadedState {
     fn archived_card_list(&self) -> FetchStatus;
     fn archived_cards_of_board(&self, board_id: Uuid) -> FetchStatus;
     fn archived_board_list(&self) -> FetchStatus;
-    /// The flat-collection tier alone, never the composed per-id tier.
-    /// `NotLoaded` for an id absent from a `Loaded` flat list, because the
-    /// flat lists exclude archived rows by design; use this, not `card`/
-    /// `board`, to decide whether an archived body still needs fetching
-    /// after the flat tier has been replaced by a live-only refetch.
-    fn card_in_collection(&self, id: Uuid) -> FetchStatus;
     fn board_in_collection(&self, id: Uuid) -> FetchStatus;
 }
 
@@ -211,9 +205,6 @@ mod tests {
             FetchStatus::NotLoaded
         }
         fn archived_board_list(&self) -> FetchStatus {
-            FetchStatus::NotLoaded
-        }
-        fn card_in_collection(&self, _id: Uuid) -> FetchStatus {
             FetchStatus::NotLoaded
         }
         fn board_in_collection(&self, _id: Uuid) -> FetchStatus {

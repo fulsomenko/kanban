@@ -1,7 +1,5 @@
-//! `ViewScope` is the TUI's `FetchPlan`: it names the tiers the current
-//! screen needs. The renderer reads the board-scoped tiers; the handlers
-//! still read the flat `*_list` tiers, so `next_round` requests both
-//! populations together whenever a board subtree is in scope.
+//! `ViewScope` is the TUI's `FetchPlan`: handlers and renderer read the
+//! board-scoped tiers, so `next_round` requests only those.
 
 use uuid::Uuid;
 
@@ -49,21 +47,10 @@ impl FetchPlan for ViewScope {
         }
 
         if let Some(board_id) = self.board {
-            let board_subtree = self.board_columns || self.board_cards;
-
-            if board_subtree {
-                if requestable(loaded.column_list()) {
-                    round.column_list = true;
-                }
-                if requestable(loaded.card_list()) {
-                    round.card_list = true;
-                }
-                if requestable(loaded.sprint_list()) {
-                    round.sprint_list = true;
-                }
-                if requestable(loaded.columns_of_board(board_id)) {
-                    round.columns_by_board.push(board_id);
-                }
+            if (self.board_columns || self.board_cards)
+                && requestable(loaded.columns_of_board(board_id))
+            {
+                round.columns_by_board.push(board_id);
             }
 
             if self.board_sprints && requestable(loaded.sprints_of_board(board_id)) {
@@ -129,6 +116,7 @@ impl App {
             board,
             board_columns: true,
             board_cards: true,
+            board_sprints: true,
             ..Default::default()
         };
 
@@ -140,19 +128,15 @@ impl App {
         match base {
             AppMode::CardDetail => {
                 scope.card = self.selection.active_card_id;
-                scope.board_sprints = true;
                 scope.graph = true;
-            }
-            AppMode::BoardDetail => {
-                scope.board_sprints = true;
             }
             AppMode::SprintDetail => {
                 scope.sprint = self.selection.active_sprint_id;
-                scope.board_sprints = true;
             }
             AppMode::Settings => {
                 scope.board_columns = false;
                 scope.board_cards = false;
+                scope.board_sprints = false;
             }
             AppMode::ArchivedCardsView => {
                 scope.archived_card_markers = true;
@@ -162,7 +146,6 @@ impl App {
                 scope.archived_board_markers = true;
                 scope.archived_board_bodies = true;
                 scope.archived_card_markers = true;
-                scope.board_sprints = true;
             }
             // Card search filters the board already in scope (`board_cards`
             // covers it) and board search filters the board list
@@ -176,23 +159,11 @@ impl App {
             current = inner.as_ref();
         }
 
-        match current {
-            AppMode::Dialog(DialogMode::ManageParents | DialogMode::ManageChildren) => {
-                scope.graph = true;
-            }
-            AppMode::Dialog(
-                DialogMode::CarryOverSprint
-                | DialogMode::AssignCardToSprint
-                | DialogMode::AssignMultipleCardsToSprint
-                | DialogMode::CreateCard
-                | DialogMode::CreateSprint
-                | DialogMode::FilterOptions
-                | DialogMode::SetSprintPrefix
-                | DialogMode::DeleteBoardConfirm,
-            ) => {
-                scope.board_sprints = true;
-            }
-            _ => {}
+        if matches!(
+            current,
+            AppMode::Dialog(DialogMode::ManageParents | DialogMode::ManageChildren)
+        ) {
+            scope.graph = true;
         }
 
         if matches!(current, AppMode::Dialog(DialogMode::DeleteBoardConfirm)) {
@@ -231,7 +202,6 @@ mod tests {
         archived_card_list: FetchStatus,
         archived_cards_of_board: HashMap<Uuid, FetchStatus>,
         archived_board_list: FetchStatus,
-        card_in_collection: HashMap<Uuid, FetchStatus>,
         card_status_by_id: HashMap<Uuid, FetchStatus>,
         board_in_collection: HashMap<Uuid, FetchStatus>,
         archived_card_markers: Option<Vec<kanban_domain::ArchivedCard>>,
@@ -256,7 +226,6 @@ mod tests {
                 archived_card_list: FetchStatus::NotLoaded,
                 archived_cards_of_board: HashMap::new(),
                 archived_board_list: FetchStatus::NotLoaded,
-                card_in_collection: HashMap::new(),
                 card_status_by_id: HashMap::new(),
                 board_in_collection: HashMap::new(),
                 archived_card_markers: None,
@@ -324,12 +293,6 @@ mod tests {
         fn archived_board_list(&self) -> FetchStatus {
             self.archived_board_list
         }
-        fn card_in_collection(&self, id: Uuid) -> FetchStatus {
-            self.card_in_collection
-                .get(&id)
-                .copied()
-                .unwrap_or(FetchStatus::NotLoaded)
-        }
         fn board_in_collection(&self, id: Uuid) -> FetchStatus {
             self.board_in_collection
                 .get(&id)
@@ -376,22 +339,18 @@ mod tests {
             board: Some(board),
             board_columns: true,
             board_cards: true,
+            board_sprints: true,
             ..Default::default()
         };
 
         let round1 = scope.next_round(&stub);
         assert!(round1.board_list);
-        assert!(round1.column_list);
-        assert!(round1.card_list);
-        assert!(round1.sprint_list);
         assert_eq!(round1.columns_by_board, vec![board]);
+        assert_eq!(round1.sprints_by_board, vec![board]);
         assert!(round1.cards_by_column.is_empty());
 
         let stub2 = StubLoaded {
             board_list: FetchStatus::Loaded,
-            column_list: FetchStatus::Loaded,
-            card_list: FetchStatus::Loaded,
-            sprint_list: FetchStatus::Loaded,
             columns_of_board: HashMap::from([(board, FetchStatus::Loaded)]),
             sprints_of_board: FetchStatus::Loaded,
             loaded_columns: HashMap::from([(board, vec![column(c1), column(c2)])]),
@@ -400,9 +359,6 @@ mod tests {
 
         let round2 = scope.next_round(&stub2);
         assert!(!round2.board_list);
-        assert!(!round2.column_list);
-        assert!(!round2.card_list);
-        assert!(!round2.sprint_list);
         assert!(round2.columns_by_board.is_empty());
         assert!(round2.sprints_by_board.is_empty());
         let mut cards_by_column = round2.cards_by_column.clone();
@@ -413,9 +369,6 @@ mod tests {
 
         let stub3 = StubLoaded {
             board_list: FetchStatus::Loaded,
-            column_list: FetchStatus::Loaded,
-            card_list: FetchStatus::Loaded,
-            sprint_list: FetchStatus::Loaded,
             columns_of_board: HashMap::from([(board, FetchStatus::Loaded)]),
             sprints_of_board: FetchStatus::Loaded,
             loaded_columns: HashMap::from([(board, vec![column(c1), column(c2)])]),
@@ -581,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn test_board_cards_alone_still_requests_the_flat_and_by_parent_column_tiers() {
+    fn test_board_cards_alone_requests_only_the_by_parent_tiers() {
         let board = Uuid::new_v4();
         let stub = StubLoaded::default();
         let scope = ViewScope {
@@ -593,9 +546,6 @@ mod tests {
 
         let round = scope.next_round(&stub);
         assert_eq!(round.columns_by_board, vec![board]);
-        assert!(round.column_list);
-        assert!(round.card_list);
-        assert!(round.sprint_list);
     }
 
     #[test]

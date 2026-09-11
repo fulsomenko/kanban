@@ -48,12 +48,7 @@ impl App {
                     .iter()
                     .find(|col| col.board_id == board_id)
                     .map(|col| col.id),
-                _ => self.model.columns_state().loaded().and_then(|columns| {
-                    columns
-                        .iter()
-                        .find(|col| col.board_id == board_id)
-                        .map(|col| col.id)
-                }),
+                _ => None,
             }
         };
 
@@ -1035,18 +1030,11 @@ impl App {
         let column_ids: std::collections::HashSet<_> =
             match self.model.board_columns_state(board_id) {
                 LoadState::Loaded(columns) => columns.iter().map(|c| c.id).collect(),
-                _ => match self.model.columns_state() {
-                    LoadState::Loaded(columns) => columns
-                        .iter()
-                        .filter(|c| c.board_id == board_id)
-                        .map(|c| c.id)
-                        .collect(),
-                    _ => {
-                        self.pop_mode();
-                        self.set_error("Columns are not loaded yet");
-                        return;
-                    }
-                },
+                _ => {
+                    self.pop_mode();
+                    self.set_error("Columns are not loaded yet");
+                    return;
+                }
             };
 
         let archived_ids = self.board_archived_ids(board_id);

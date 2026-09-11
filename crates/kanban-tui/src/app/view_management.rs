@@ -220,8 +220,8 @@ impl App {
                 LoadState::Loaded(all_sprints),
             ) = (
                 cards_for_display,
-                self.model.columns_state().as_ref(),
-                self.model.sprints_state().as_ref(),
+                self.model.board_columns_state(board.id),
+                self.model.board_sprints_state(board.id),
             ) {
                 let search_query = if self.filter.search.is_active {
                     Some(self.filter.search.query())

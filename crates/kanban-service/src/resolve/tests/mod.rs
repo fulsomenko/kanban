@@ -112,14 +112,6 @@ impl LoadedStateTrait for StubLoaded {
     fn archived_board_list(&self) -> FetchStatus {
         (&self.archived_boards.all).into()
     }
-    fn card_in_collection(&self, id: Uuid) -> FetchStatus {
-        self.cards
-            .all
-            .loaded()
-            .and_then(|cards| cards.iter().find(|c| c.id == id))
-            .map(|_| FetchStatus::Loaded)
-            .unwrap_or(FetchStatus::NotLoaded)
-    }
     fn board_in_collection(&self, id: Uuid) -> FetchStatus {
         self.boards
             .all

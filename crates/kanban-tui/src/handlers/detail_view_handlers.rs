@@ -2546,15 +2546,22 @@ mod tests {
     #[test]
     fn test_handle_board_detail_navigation_key_declines_column_navigation_when_columns_not_loaded()
     {
-        use kanban_domain::{Board, LoadState, Model, ModelLoadStates};
+        use kanban_domain::{Board, LoadState, Resolved};
         let mut app = App::test_default();
         let board = Board::new("Board", None::<String>);
         let board_id = board.id;
-        app.model = Model::with_load_states(ModelLoadStates {
-            boards: LoadState::Loaded(vec![board]),
-            sprints: LoadState::Loaded(Vec::new()),
+        let changed = app.model.apply_resolved(Resolved {
+            boards: kanban_domain::resolved::Collection {
+                all: LoadState::Loaded(vec![board]),
+                ..Default::default()
+            },
+            sprints: kanban_domain::resolved::Collection {
+                by_parent: [(board_id, LoadState::Loaded(Vec::new()))].into(),
+                ..Default::default()
+            },
             ..Default::default()
         });
+        NoProjections.resync(&app.model, changed);
         app.selection.active_board_id = Some(board_id);
         app.focus.board_focus = BoardFocus::Sprints;
 
@@ -2792,7 +2799,8 @@ mod tests {
                 ..Default::default()
             },
             columns: Collection {
-                all: LoadState::Loaded(vec![column]),
+                all: LoadState::Loaded(vec![column.clone()]),
+                by_parent: [(board_id, LoadState::Loaded(vec![column]))].into(),
                 ..Default::default()
             },
             cards: Collection {
@@ -2928,9 +2936,8 @@ mod visible_board_columns_tests {
     }
 
     #[test]
-    fn test_visible_board_columns_prefers_the_scoped_tier_and_falls_back_to_the_flat_one() {
+    fn test_visible_board_columns_reads_only_the_scoped_tier() {
         let board = Board::new("B", None::<String>);
-        let other_board = Board::new("Other", None::<String>);
         let col_a = Column::new(board.id, "A", 1);
         let col_b = Column::new(board.id, "B", 0);
 
@@ -2953,21 +2960,6 @@ mod visible_board_columns_tests {
                 );
             }
             other => panic!("expected the scoped tier, got {other:?}"),
-        }
-
-        let col_other = Column::new(other_board.id, "Other", 0);
-        let mut app = App::test_default();
-        let mut resolved = base_resolved(&board);
-        resolved.columns = Collection {
-            all: LoadState::Loaded(vec![col_a.clone(), col_other.clone()]),
-            ..Default::default()
-        };
-        let _ = app.model.apply_resolved(resolved);
-        match app.visible_board_columns(board.id) {
-            LoadState::Loaded(columns) => {
-                assert_eq!(columns, vec![col_a.clone()]);
-            }
-            other => panic!("expected fallback to the flat tier, got {other:?}"),
         }
 
         let app = App::test_default();
