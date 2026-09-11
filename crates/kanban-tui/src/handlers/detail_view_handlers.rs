@@ -2968,6 +2968,18 @@ mod visible_board_columns_tests {
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
         resolved.columns = Collection {
+            all: LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        assert!(
+            app.visible_board_columns(board.id).is_not_loaded(),
+            "a populated flat tier must not stand in for a not-loaded scoped tier"
+        );
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
             by_parent: HashMap::from([(
                 board.id,
                 LoadState::Failed(std::sync::Arc::new(

@@ -178,11 +178,11 @@ async fn test_startup_reads_the_board_list_and_board_scoped_tiers_instead_of_one
             )
         })
         .count();
-    assert!(
-        whole_store_list_reads <= 5,
-        "expected at most 5 whole-store list reads (1 list_all_columns + 1 list_all_cards \
-         + 1 list_all_sprints from ViewScope's transitional flat arms, plus 1 list_all_cards \
-         + 1 list_all_sprints from migrate_sprint_logs), got {whole_store_list_reads} in {ops:?}"
+    assert_eq!(
+        whole_store_list_reads, 2,
+        "expected exactly 2 whole-store list reads (1 list_all_cards + 1 list_all_sprints \
+         from migrate_sprint_logs; ViewScope no longer requests any flat tier), \
+         got {whole_store_list_reads} in {ops:?}"
     );
     assert!(
         !ops.iter()

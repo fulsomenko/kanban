@@ -235,6 +235,18 @@ mod board_columns_view_tests {
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);
         resolved.columns = Collection {
+            all: LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        assert!(
+            app.board_columns_view(board.id).is_not_loaded(),
+            "a populated flat tier must not stand in for a not-loaded scoped tier"
+        );
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.columns = Collection {
             by_parent: HashMap::from([(
                 board.id,
                 LoadState::Failed(std::sync::Arc::new(
@@ -281,6 +293,18 @@ mod board_sprints_view_tests {
 
         let app = App::test_default();
         assert!(app.board_sprints_view(board.id).is_not_loaded());
+
+        let mut app = App::test_default();
+        let mut resolved = base_resolved(&board);
+        resolved.sprints = Collection {
+            all: LoadState::Loaded(vec![s_on_board.clone()]),
+            ..Default::default()
+        };
+        let _ = app.model.apply_resolved(resolved);
+        assert!(
+            app.board_sprints_view(board.id).is_not_loaded(),
+            "a populated flat tier must not stand in for a not-loaded scoped tier"
+        );
 
         let mut app = App::test_default();
         let mut resolved = base_resolved(&board);

@@ -152,7 +152,7 @@ fn test_resolve_relationship_cards_resolves_archived_related_card() {
 }
 
 #[test]
-fn test_resolve_relationship_cards_resolves_cross_board_related_card() {
+fn test_resolve_relationship_cards_resolves_a_cross_board_card_whose_body_was_fetched() {
     let mut app = App::test_default();
     let (board_b_id, column_b_id) = create_board_and_column(&mut app, "Board B");
     let (board_c_id, column_c_id) = create_board_and_column(&mut app, "Board C");
@@ -272,7 +272,7 @@ fn test_resolve_relationship_cards_with_no_ids_returns_empty() {
 }
 
 #[test]
-fn test_card_detail_children_box_shows_cross_board_child_title() {
+fn test_card_detail_children_box_shows_a_cross_board_child_whose_body_was_fetched() {
     use kanban_tui::app::mode::AppMode;
 
     let mut app = App::test_default();
