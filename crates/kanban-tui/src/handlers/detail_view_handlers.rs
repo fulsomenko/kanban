@@ -7,8 +7,8 @@ use crossterm::event::KeyCode;
 use kanban_core::Editable;
 use kanban_domain::card_lifecycle::sorted_board_columns;
 use kanban_domain::{
-    BoardSettingsDto, CardMetadataDto, Column, FieldSearcher, LoadState, MutationOperations,
-    Searcher,
+    BoardSettingsDto, CardMetadataDto, Column, DependencyGraph, FieldSearcher, LoadState,
+    MutationOperations, Searcher,
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -1271,30 +1271,24 @@ impl App {
         self.open_dialog(DialogMode::ManageChildren);
     }
 
+    fn related_ids(
+        &self,
+        pick: impl FnOnce(&DependencyGraph, uuid::Uuid) -> Vec<uuid::Uuid>,
+    ) -> Option<Vec<uuid::Uuid>> {
+        let Some(active_id) = self.selection.active_card_id else {
+            return Some(Vec::new());
+        };
+        let card = self.model.card_by_id_state(active_id).loaded().copied()?;
+        let graph = self.model.graph_state().loaded()?;
+        Some(pick(graph, card.id))
+    }
+
     pub fn get_current_card_parents(&self) -> Option<Vec<uuid::Uuid>> {
-        if let Some(active_id) = self.selection.active_card_id {
-            if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
-                return self
-                    .model
-                    .graph_state()
-                    .loaded()
-                    .map(|graph| graph.parents(card.id));
-            }
-        }
-        Some(Vec::new())
+        self.related_ids(|graph, id| graph.parents(id))
     }
 
     pub fn get_current_card_children(&self) -> Option<Vec<uuid::Uuid>> {
-        if let Some(active_id) = self.selection.active_card_id {
-            if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
-                return self
-                    .model
-                    .graph_state()
-                    .loaded()
-                    .map(|graph| graph.children(card.id));
-            }
-        }
-        Some(Vec::new())
+        self.related_ids(|graph, id| graph.children(id))
     }
 
     pub(crate) fn refresh_relationship_counts(&mut self) {
