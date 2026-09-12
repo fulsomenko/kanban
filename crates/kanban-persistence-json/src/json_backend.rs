@@ -794,6 +794,24 @@ mod tests {
         assert!(!jds.needs_flush(), "second flush must stay a no-op");
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_flush_after_mark_dirty_on_an_unreadable_file_returns_the_load_error() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("corrupt.json");
+        std::fs::write(&path, b"{ not json").unwrap();
+        let jds = make_store(&path);
+
+        jds.mark_dirty();
+        assert!(jds.needs_flush());
+
+        let err = jds.flush().await.unwrap_err();
+        assert!(matches!(err, KanbanError::Serialization(_)));
+        assert!(
+            jds.needs_flush(),
+            "a failed load must leave the backend dirty"
+        );
+    }
+
     // ─── F2 (KAN-871): JSON file seam round-trips the reference archival model ──
     //
     // After F1 an archived card stays LIVE in `cards` behind a marker. These
