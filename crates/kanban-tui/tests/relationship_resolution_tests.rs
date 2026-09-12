@@ -198,7 +198,7 @@ fn test_resolve_relationship_cards_omits_id_with_no_card() {
 }
 
 #[test]
-fn test_resolve_relationship_cards_resolves_same_set_as_full_collection_scan() {
+fn test_resolve_relationship_cards_returns_live_archived_and_cross_board_bodies_in_input_order() {
     let mut app = App::test_default();
     let (board_b_id, column_b_id) = create_board_and_column(&mut app, "Board B");
     let (board_c_id, column_c_id) = create_board_and_column(&mut app, "Board C");
@@ -234,18 +234,26 @@ fn test_resolve_relationship_cards_resolves_same_set_as_full_collection_scan() {
     ids.push(archived_parent);
     ids.push(Uuid::new_v4());
 
-    let expected: Vec<Uuid> = ids
-        .iter()
-        .filter_map(|id| app.model.card_by_id_state(*id).loaded().map(|c| c.id))
-        .collect();
-    assert_eq!(expected.len(), 3);
+    assert!(
+        !app.model
+            .graph_state()
+            .loaded()
+            .unwrap_or_else(|| Model::empty_graph())
+            .parents(subject)
+            .contains(&archived_parent),
+        "archiving a card archives its spawns edge, so it must be reintroduced by id"
+    );
 
     let actual: Vec<Uuid> = resolve_relationship_cards(&app.model, &ids)
         .iter()
         .map(|c| c.id)
         .collect();
 
-    assert_eq!(actual, expected);
+    assert_eq!(
+        actual,
+        vec![live_parent, cross_child, archived_parent],
+        "input order is preserved; the archived parent resolves from the per-id tier even though its spawns edge is archived, and the unknown id drops"
+    );
 }
 
 #[test]
