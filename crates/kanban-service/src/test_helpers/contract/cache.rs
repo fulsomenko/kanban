@@ -215,6 +215,7 @@ pub async fn test_a_created_cards_invalidation_names_the_card_on_every_backend(
         Invalidation::All => panic!("expected a scoped invalidation"),
     };
     assert!(ids.cards.contains(&card.id));
+    assert!(ids.prefixes);
 
     let plan = StaticPlan(FetchRound {
         cards_by_column: vec![column.id],
@@ -222,9 +223,13 @@ pub async fn test_a_created_cards_invalidation_names_the_card_on_every_backend(
     });
     let resolved = ctx.resolve(&plan, &model);
     apply(&mut model, resolved);
+    assert!(model.column_cards_state(column.id).loaded().is_some());
 
-    let changed = model.invalidate(Invalidation::Entities(ids));
-    let _ = changed;
+    let _ = model.invalidate(Invalidation::Entities(ids));
+    assert!(
+        model.column_cards_state(column.id).loaded().is_none(),
+        "a card-named invalidation must drop the column's card scope"
+    );
 
     let resolved = ctx.resolve(&plan, &model);
     apply(&mut model, resolved);
