@@ -95,9 +95,9 @@ pub enum Invalidation {
 /// any command in the batch returns `None`, or when the batch (or its
 /// accumulated ids) is empty.
 ///
-/// A forward batch and its own inverse are different commands and can imply
-/// different results: `CreateCard` names its card and board, while its
-/// inverse `DeleteCard` is unenumerable and yields `All`.
+/// A forward batch and its own inverse are different commands and can name
+/// different sets: `CreateCard` names its card, its board and the prefixes,
+/// while its inverse `DeleteCard` names only the card and the graph.
 pub fn invalidation_from_inverse(inverse: &[crate::commands::Command]) -> Invalidation {
     if inverse.is_empty() {
         return Invalidation::All;
