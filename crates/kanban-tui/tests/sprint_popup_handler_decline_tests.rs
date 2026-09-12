@@ -30,6 +30,16 @@ fn seed_model_with_board(
     board_id
 }
 
+fn seed_missing_sprint(app: &mut App, sprint_id: Uuid) {
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        sprints: kanban_domain::resolved::Collection {
+            by_id: [(sprint_id, LoadState::Missing)].into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+}
+
 fn assert_error_banner_mentions(app: &App, needle: &str) {
     let banner = app
         .ui_state
@@ -73,8 +83,10 @@ fn test_handle_activate_sprint_key_distinguishes_missing_from_not_loaded() {
         LoadState::Loaded(vec![]),
         LoadState::Loaded(vec![]),
     );
+    let missing_sprint_id = Uuid::new_v4();
+    seed_missing_sprint(&mut app, missing_sprint_id);
     app.selection.active_board_id = Some(board_id);
-    app.selection.active_sprint_id = Some(Uuid::new_v4());
+    app.selection.active_sprint_id = Some(missing_sprint_id);
     app.handle_activate_sprint_key();
     assert_no_banner(&app);
 
@@ -109,8 +121,10 @@ fn test_handle_complete_sprint_key_distinguishes_missing_from_not_loaded() {
         LoadState::Loaded(vec![]),
         LoadState::Loaded(vec![]),
     );
+    let missing_sprint_id = Uuid::new_v4();
+    seed_missing_sprint(&mut app, missing_sprint_id);
     app.selection.active_board_id = Some(board_id);
-    app.selection.active_sprint_id = Some(Uuid::new_v4());
+    app.selection.active_sprint_id = Some(missing_sprint_id);
     app.handle_complete_sprint_key();
     assert_no_banner(&app);
 
@@ -137,7 +151,9 @@ fn test_handle_carry_over_for_sprint_with_a_not_loaded_sprint_tier_declines() {
 fn test_handle_carry_over_for_sprint_distinguishes_missing_from_not_loaded() {
     let mut app = App::test_default();
     seed_model_with_board(&mut app, LoadState::NotLoaded, LoadState::Loaded(vec![]));
-    app.handle_carry_over_for_sprint(Uuid::new_v4());
+    let missing_sprint_id = Uuid::new_v4();
+    seed_missing_sprint(&mut app, missing_sprint_id);
+    app.handle_carry_over_for_sprint(missing_sprint_id);
     assert_no_banner(&app);
 
     let mut app = App::test_default();
@@ -223,6 +239,7 @@ fn test_handle_carry_over_sprint_popup_distinguishes_missing_from_not_loaded() {
     let mut app = App::test_default();
     seed_model_with_board(&mut app, LoadState::NotLoaded, LoadState::Loaded(vec![]));
     let source_id = Uuid::new_v4();
+    seed_missing_sprint(&mut app, source_id);
     app.dialog_input.carry_over_source_sprint_id = Some(source_id);
     app.handle_carry_over_sprint_popup(KeyCode::Down);
     assert_no_banner(&app);

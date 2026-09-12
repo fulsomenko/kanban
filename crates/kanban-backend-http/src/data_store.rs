@@ -51,6 +51,7 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// missing-route: no route creates or replaces a prefix directly.
     fn upsert_prefix(&self, _prefix: Prefix) -> KanbanResult<()> {
         Err(KanbanError::unsupported("upsert_prefix"))
     }
@@ -79,6 +80,7 @@ impl DataStore for HttpBackend {
         Err(KanbanError::unsupported("upsert_board"))
     }
 
+    /// write-backstop-via-RemoteWrites: board deletes route through `RemoteWrites::delete_board`; this decline firing at all is a routing bug.
     fn delete_board(&self, _id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_board"))
     }
@@ -104,6 +106,7 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// missing-route: no workspace-wide column list route exists.
     fn list_all_columns(&self) -> KanbanResult<Vec<Column>> {
         Err(KanbanError::unsupported("list_all_columns"))
     }
@@ -117,10 +120,12 @@ impl DataStore for HttpBackend {
         Err(KanbanError::unsupported("upsert_column"))
     }
 
+    /// write-backstop-via-RemoteWrites: column deletes route through `RemoteWrites::delete_column`; this decline firing at all is a routing bug.
     fn delete_column(&self, _id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_column"))
     }
 
+    /// bulk-deletes-never-fan-out: no route deletes every column of a board in one call.
     fn delete_columns_by_board(&self, _board_id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_columns_by_board"))
     }
@@ -132,6 +137,7 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// missing-route: no workspace-wide card list route exists.
     fn list_all_cards(&self) -> KanbanResult<Vec<Card>> {
         Err(KanbanError::unsupported("list_all_cards"))
     }
@@ -189,6 +195,7 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// count-methods-never-fake-O(1): no cheap count route exists; a real count would mean fetching and counting the whole list.
     fn count_cards_in_column(&self, _column_id: Uuid) -> KanbanResult<usize> {
         Err(KanbanError::unsupported("count_cards_in_column"))
     }
@@ -206,6 +213,7 @@ impl DataStore for HttpBackend {
         }
     }
 
+    /// count-methods-never-fake-O(1): same as `count_cards_in_column`.
     fn count_cards_in_column_excluding(
         &self,
         _column_id: Uuid,
@@ -224,14 +232,17 @@ impl DataStore for HttpBackend {
         Err(KanbanError::unsupported("upsert_card"))
     }
 
+    /// write-backstop-via-RemoteWrites: card deletes route through `RemoteWrites::delete_card`; this decline firing at all is a routing bug.
     fn delete_card(&self, _id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_card"))
     }
 
+    /// bulk-deletes-never-fan-out: no route deletes every card of a set of columns in one call.
     fn delete_cards_by_columns(&self, _column_ids: &[Uuid]) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_cards_by_columns"))
     }
 
+    /// missing-route: no route clears a sprint id from live cards in bulk.
     fn clear_sprint_from_cards(
         &self,
         _sprint_id: Uuid,
@@ -252,10 +263,12 @@ impl DataStore for HttpBackend {
         Err(KanbanError::unsupported("clear_sprint_from_archived_cards"))
     }
 
+    /// missing-route: no route fetches a single archived-card marker by id.
     fn get_archived_card(&self, _card_id: Uuid) -> KanbanResult<Option<ArchivedCard>> {
         Err(KanbanError::unsupported("get_archived_card"))
     }
 
+    /// missing-route: no whole-store archived-card list route exists; only the board-scoped one does.
     fn list_archived_cards(&self) -> KanbanResult<Vec<ArchivedCard>> {
         Err(KanbanError::unsupported("list_archived_cards"))
     }
@@ -274,30 +287,37 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// missing-route: archiving happens via the card's own archive action server-side, not a direct marker insert.
     fn insert_archived_card(&self, _ac: ArchivedCard) -> KanbanResult<()> {
         Err(KanbanError::unsupported("insert_archived_card"))
     }
 
+    /// missing-route: no route deletes a single archived-card marker.
     fn delete_archived_card(&self, _card_id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_archived_card"))
     }
 
+    /// missing-route: no route fetches a single archived-board marker by id.
     fn get_archived_board(&self, _board_id: Uuid) -> KanbanResult<Option<ArchivedBoard>> {
         Err(KanbanError::unsupported("get_archived_board"))
     }
 
+    /// missing-route: no whole-store archived-board list route exists.
     fn list_archived_boards(&self) -> KanbanResult<Vec<ArchivedBoard>> {
         Err(KanbanError::unsupported("list_archived_boards"))
     }
 
+    /// missing-route: archiving happens via the board's own archive action server-side, not a direct marker insert.
     fn insert_archived_board(&self, _ab: ArchivedBoard) -> KanbanResult<()> {
         Err(KanbanError::unsupported("insert_archived_board"))
     }
 
+    /// missing-route: no route deletes a single archived-board marker.
     fn delete_archived_board(&self, _board_id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_archived_board"))
     }
 
+    /// missing-route: unarchiving happens via the board's own restore action server-side, not this trait method.
     fn unarchive_board(&self, _board_id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("unarchive_board"))
     }
@@ -323,6 +343,7 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// missing-route: no workspace-wide sprint list route exists.
     fn list_all_sprints(&self) -> KanbanResult<Vec<Sprint>> {
         Err(KanbanError::unsupported("list_all_sprints"))
     }
@@ -336,10 +357,12 @@ impl DataStore for HttpBackend {
         Err(KanbanError::unsupported("upsert_sprint"))
     }
 
+    /// missing-route: sprint mutations have no `RemoteWrites` counterpart at all.
     fn delete_sprint(&self, _id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_sprint"))
     }
 
+    /// bulk-deletes-never-fan-out: no route deletes every sprint of a board in one call.
     fn delete_sprints_by_board(&self, _board_id: Uuid) -> KanbanResult<()> {
         Err(KanbanError::unsupported("delete_sprints_by_board"))
     }
@@ -355,6 +378,7 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// architecture-mismatch: graph writes route server-side, never through this trait method.
     fn set_graph(&self, _graph: DependencyGraph) -> KanbanResult<()> {
         Err(KanbanError::unsupported("set_graph"))
     }
