@@ -431,3 +431,31 @@ fn test_manage_parents_still_opens_and_filters_when_the_graph_is_loaded() {
     assert_eq!(app.mode, AppMode::Dialog(DialogMode::ManageParents));
     assert!(!app.relationship.card_ids.contains(&b));
 }
+
+#[test]
+fn test_a_cross_board_graph_neighbour_body_is_fetched_for_card_detail() {
+    let mut app = App::test_default();
+    let (board_b_id, column_b_id) = create_board_and_column(&mut app, "Board B");
+    let (board_c_id, column_c_id) = create_board_and_column(&mut app, "Board C");
+
+    let subject = create_card(&mut app, board_b_id, column_b_id, "Subject");
+    let cross = create_card(&mut app, board_c_id, column_c_id, "CrossBoardChildXYZ");
+    app.ctx.attach_child(subject, cross).unwrap();
+
+    app.selection.active_board_id = Some(board_b_id);
+    app.selection.active_card_id = Some(subject);
+    app.mode = AppMode::CardDetail;
+    app.reload_model();
+
+    let graph = app
+        .model
+        .graph_state()
+        .loaded()
+        .unwrap_or_else(|| Model::empty_graph());
+    let children = graph.children(subject);
+
+    let resolved = resolve_relationship_cards(&app.model, &children);
+    assert_eq!(resolved.len(), 1);
+    assert_eq!(resolved[0].id, cross);
+    assert_eq!(resolved[0].title, "CrossBoardChildXYZ");
+}

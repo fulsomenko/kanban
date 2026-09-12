@@ -125,6 +125,9 @@ impl LoadedEntities for StubWorld {
     ) -> Option<&[kanban_domain::ArchivedCard]> {
         None
     }
+    fn loaded_graph_neighbours(&self, _card_id: Uuid) -> Option<Vec<Uuid>> {
+        None
+    }
 }
 
 fn all_loaded() -> StubWorld {
@@ -370,16 +373,16 @@ fn test_empty_entities_invalidation_plans_nothing_and_wipes_nothing() {
             ..Default::default()
         },
         columns: Collection {
-            all: LoadState::Loaded(vec![column.clone()]),
             by_id: [(column.id, LoadState::Loaded(column.clone()))].into(),
+            by_parent: [(board.id, LoadState::Loaded(vec![column.clone()]))].into(),
             ..Default::default()
         },
         cards: Collection {
-            all: LoadState::Loaded(vec![card.clone()]),
+            by_parent: [(column.id, LoadState::Loaded(vec![card.clone()]))].into(),
             ..Default::default()
         },
         sprints: Collection {
-            all: LoadState::Loaded(vec![sprint.clone()]),
+            by_parent: [(board.id, LoadState::Loaded(vec![sprint.clone()]))].into(),
             ..Default::default()
         },
         graph: LoadState::Loaded(DependencyGraph::default()),
@@ -394,9 +397,9 @@ fn test_empty_entities_invalidation_plans_nothing_and_wipes_nothing() {
     let _ = model.invalidate(inv);
 
     assert_eq!(LoadedState::board_list(&model), FetchStatus::Loaded);
-    assert!(model.columns_state().is_loaded());
-    assert!(model.cards_state().is_loaded());
-    assert!(model.sprints_state().is_loaded());
+    assert!(model.board_columns_state(board.id).is_loaded());
+    assert!(model.column_cards_state(column.id).is_loaded());
+    assert!(model.board_sprints_state(board.id).is_loaded());
     assert_eq!(LoadedState::graph(&model), FetchStatus::Loaded);
     assert_eq!(LoadedState::column(&model, column.id), FetchStatus::Loaded);
 }
@@ -581,15 +584,15 @@ fn test_invalidate_all_over_seeded_flat_collections_issues_no_flat_list_read() {
             ..Default::default()
         },
         columns: Collection {
-            all: LoadState::Loaded(vec![]),
+            by_parent: [(board.id, LoadState::Loaded(Vec::new()))].into(),
             ..Default::default()
         },
         cards: Collection {
-            all: LoadState::Loaded(vec![card.clone()]),
+            by_parent: [(column.id, LoadState::Loaded(vec![card.clone()]))].into(),
             ..Default::default()
         },
         sprints: Collection {
-            all: LoadState::Loaded(vec![]),
+            by_parent: [(board.id, LoadState::Loaded(Vec::new()))].into(),
             ..Default::default()
         },
         ..Default::default()
@@ -597,7 +600,7 @@ fn test_invalidate_all_over_seeded_flat_collections_issues_no_flat_list_read() {
     NoProjections.resync(&model, changed);
 
     let plan = InvalidationPlan::for_invalidation(&Invalidation::All, &model)
-        .expect("board_list and flat collections were loaded");
+        .expect("board_list was loaded");
     let _ = model.invalidate(Invalidation::All);
 
     let store = crate::read_recorder::RecordingStore::new();

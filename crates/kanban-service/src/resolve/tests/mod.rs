@@ -134,6 +134,9 @@ impl LoadedEntities for StubLoaded {
             .and_then(LoadState::loaded)
             .map(Vec::as_slice)
     }
+    fn loaded_graph_neighbours(&self, card_id: Uuid) -> Option<Vec<Uuid>> {
+        self.graph.loaded().map(|g| g.neighbours(card_id))
+    }
 }
 
 fn apply_collection<T: Clone>(target: &mut Collection<T>, incoming: Collection<T>) {

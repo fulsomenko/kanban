@@ -906,24 +906,8 @@ mod tests {
     }
 
     #[test]
-    fn test_scoped_loaded_model_with_flat_tiers_failed_renders_live_partition() {
-        let err = std::sync::Arc::new(kanban_domain::KanbanError::unsupported("boom"));
+    fn test_scoped_loaded_model_renders_live_partition() {
         let mut model = Model::default();
-        let _ = model.apply_resolved(Resolved {
-            cards: Collection {
-                all: LoadState::Failed(err.clone()),
-                ..Default::default()
-            },
-            columns: Collection {
-                all: LoadState::Failed(err.clone()),
-                ..Default::default()
-            },
-            sprints: Collection {
-                all: LoadState::Failed(err),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
 
         let board = seed_board("B", 0);
         let board_id = board.id;

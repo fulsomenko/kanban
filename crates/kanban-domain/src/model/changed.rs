@@ -61,6 +61,7 @@ impl DerivedProjections for NoProjections {
 mod tests {
     use super::super::Model;
     use crate::{DerivedProjections, NoProjections, Snapshot};
+    use uuid::Uuid;
 
     #[test]
     fn test_merge_folds_two_receipts_into_one() {
@@ -112,8 +113,9 @@ mod tests {
     fn test_no_projections_is_a_usable_derived_projections_substitute() {
         use crate::{Board, Card, Column};
 
-        fn drive(p: &mut impl DerivedProjections, m: &mut Model) {
+        fn drive(p: &mut impl DerivedProjections, m: &mut Model) -> Uuid {
             let board = Board::new("B", None::<String>);
+            let board_id = board.id;
             let col = Column::new(board.id, "Col", 0);
             let card = Card::new(board.id, col.id, "task", 0);
             let changed = m.load_from_snapshot(Snapshot {
@@ -124,13 +126,15 @@ mod tests {
                 ..Default::default()
             });
             p.resync(m, changed);
+            board_id
         }
 
         let mut m = Model::default();
         let mut p = NoProjections;
-        drive(&mut p, &mut m);
+        let board_id = drive(&mut p, &mut m);
 
-        assert!(m.cards_state().is_loaded());
-        assert_eq!(m.cards_state().loaded_or_empty().len(), 1);
+        let state = m.board_cards_state(board_id);
+        assert!(state.is_loaded());
+        assert_eq!(state.loaded().unwrap().len(), 1);
     }
 }

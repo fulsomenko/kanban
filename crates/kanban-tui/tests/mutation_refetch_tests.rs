@@ -421,14 +421,6 @@ async fn test_a_card_mutation_repairs_the_column_scope_without_reading_the_whole
     let seed = seed_two_columns_two_cards(&mut app);
     let ops = prime(&mut app).await;
 
-    let _ = app.model.apply_resolved(kanban_domain::Resolved {
-        cards: kanban_domain::resolved::Collection {
-            all: kanban_domain::LoadState::Loaded(vec![]),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-
     app.selection.active_board_id = Some(seed.board);
     app.focus.active = Focus::Cards;
     app.selection.active_card_id = Some(seed.k1);

@@ -952,3 +952,83 @@ async fn test_remote_graph_tier_resolves_loaded_and_serves_relation_children() {
 
     server.shutdown().await;
 }
+
+struct BoardScopedPlan {
+    board_id: Uuid,
+}
+
+impl FetchPlan for BoardScopedPlan {
+    fn next_round(&self, loaded: &dyn LoadedEntities) -> FetchRound {
+        let mut round = FetchRound {
+            board_list: requestable(loaded.board_list()),
+            graph: requestable(loaded.graph()),
+            ..Default::default()
+        };
+
+        if requestable(loaded.columns_of_board(self.board_id)) {
+            round.columns_by_board.push(self.board_id);
+        }
+        if requestable(loaded.sprints_of_board(self.board_id)) {
+            round.sprints_by_board.push(self.board_id);
+        }
+        if requestable(loaded.archived_cards_of_board(self.board_id)) {
+            round.archived_cards_by_board.push(self.board_id);
+        }
+        if let Some(columns) = loaded.loaded_columns_of_board(self.board_id) {
+            for column in columns {
+                if requestable(loaded.cards_of_column(column.id)) {
+                    round.cards_by_column.push(column.id);
+                }
+            }
+        }
+
+        round
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_full_scoped_resolve_over_http_never_hits_a_declining_route() {
+    let server = TestServer::start().await;
+    let board_id = seed_board(&server, "Scoped Board").await;
+    let column_id = seed_column(&server, board_id, "Todo", None, None).await;
+    let card_a = seed_card(&server, column_id, "A", None).await;
+    let card_b = seed_card(&server, column_id, "B", None).await;
+    let _sprint_id = seed_sprint(&server, board_id, "Sprint 1").await;
+    archive_card(&server, card_b).await;
+
+    let backend: Arc<dyn KanbanBackend> = Arc::new(HttpBackend::new(&server.base_url()).unwrap());
+    let ctx = KanbanContext::open(Arc::clone(&backend), AppConfig::default())
+        .await
+        .unwrap();
+
+    let mut model = Model::default();
+    let plan = BoardScopedPlan { board_id };
+    ctx.sync(&plan, &mut model, &mut NoProjections);
+
+    assert!(model.boards_state().is_loaded());
+    assert!(!model.boards_state().is_failed());
+    assert!(model.board_columns_state(board_id).is_loaded());
+    assert!(!model.board_columns_state(board_id).is_failed());
+    assert!(model.column_cards_state(column_id).is_loaded());
+    assert!(!model.column_cards_state(column_id).is_failed());
+    assert!(model.board_sprints_state(board_id).is_loaded());
+    assert!(!model.board_sprints_state(board_id).is_failed());
+    assert!(model.board_archived_cards_state(board_id).is_loaded());
+    assert!(!model.board_archived_cards_state(board_id).is_failed());
+    assert!(model.graph_state().is_loaded());
+    assert!(!model.graph_state().is_failed());
+
+    let live_ids: Vec<Uuid> = model
+        .column_cards_state(column_id)
+        .loaded()
+        .unwrap()
+        .iter()
+        .map(|c| c.id)
+        .collect();
+    assert_eq!(live_ids, vec![card_a]);
+
+    drop(ctx);
+    drop(backend);
+
+    server.shutdown().await;
+}

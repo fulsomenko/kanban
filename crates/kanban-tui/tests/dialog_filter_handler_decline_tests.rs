@@ -20,7 +20,13 @@ fn seed_model_with_board(
     };
     app.model = kanban_domain::Model::with_load_states(ModelLoadStates {
         boards,
-        sprints,
+        ..Default::default()
+    });
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        sprints: kanban_domain::resolved::Collection {
+            by_parent: [(board_id, sprints)].into(),
+            ..Default::default()
+        },
         ..Default::default()
     });
     board_id
@@ -81,7 +87,15 @@ fn test_handle_prefix_dialog_impl_distinguishes_missing_from_not_loaded() {
         LoadState::Loaded(vec![]),
         LoadState::Loaded(vec![]),
     );
-    app.selection.active_sprint_id = Some(Uuid::new_v4());
+    let missing_sprint_id = Uuid::new_v4();
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        sprints: kanban_domain::resolved::Collection {
+            by_id: [(missing_sprint_id, LoadState::Missing)].into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    app.selection.active_sprint_id = Some(missing_sprint_id);
     app.input.clear();
     app.handle_set_sprint_prefix_dialog(KeyCode::Enter);
     assert_no_banner(&app);

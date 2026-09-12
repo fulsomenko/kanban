@@ -211,17 +211,14 @@ fn seed_model_states(
             ..Default::default()
         },
         cards: Collection {
-            all: cards,
             by_parent: cards_by_parent,
             ..Default::default()
         },
         columns: Collection {
-            all: columns,
             by_parent: columns_by_parent,
             ..Default::default()
         },
         sprints: Collection {
-            all: sprints,
             by_parent: sprints_by_parent,
             ..Default::default()
         },

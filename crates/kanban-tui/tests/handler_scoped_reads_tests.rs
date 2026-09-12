@@ -1,38 +1,13 @@
 //! Pins the TUI handlers to the board-scoped tiers
 //! (`App::board_columns_view`/`board_sprints_view`, `Controller::live_cards`/
-//! `archived_cards`, `Model::card_by_id_state`/`column_cards_state`) rather
-//! than the flat `Model::cards_state`/`columns_state`/`sprints_state`
-//! collections. Each test seeds a healthy scoped state via `reload_model` +
-//! `prepare_frame`, then fails ONLY the three flat tiers and proves the
-//! handler still acts.
+//! `archived_cards`, `Model::card_by_id_state`/`column_cards_state`).
+//! Each test seeds a healthy scoped state via `reload_model` +
+//! `prepare_frame` and proves the handler acts on it.
 
-use kanban_domain::resolved::Collection;
-use kanban_domain::{
-    CreateCardOptions, DerivedProjections, KanbanError, KanbanOperations, LoadState, Resolved,
-};
+use kanban_domain::{CreateCardOptions, KanbanOperations};
 use kanban_tui::app::mode::{AppMode, DialogMode};
 use kanban_tui::App;
-use std::sync::Arc;
 use uuid::Uuid;
-
-fn fail_flat_tiers(app: &mut App) {
-    let changed = app.model.apply_resolved(Resolved {
-        cards: Collection {
-            all: LoadState::Failed(Arc::new(KanbanError::unsupported("flat declined"))),
-            ..Default::default()
-        },
-        columns: Collection {
-            all: LoadState::Failed(Arc::new(KanbanError::unsupported("flat declined"))),
-            ..Default::default()
-        },
-        sprints: Collection {
-            all: LoadState::Failed(Arc::new(KanbanError::unsupported("flat declined"))),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    app.controller.resync(&app.model, changed);
-}
 
 fn select_card_in_active_task_list(app: &mut App, card_id: Uuid) {
     let list = app
@@ -75,17 +50,6 @@ fn test_handler_acts_on_scoped_tiers_while_flat_tiers_failed() {
     select_card_in_active_task_list(&mut app, card.id);
     app.focus.active = kanban_tui::app::Focus::Cards;
 
-    fail_flat_tiers(&mut app);
-
-    assert!(
-        app.model.sprints_state().is_failed(),
-        "fixture sanity: flat sprints tier must be Failed"
-    );
-    assert!(
-        app.model.board_sprints_state(board.id).is_loaded(),
-        "fixture sanity: scoped sprints tier must survive the flat failure"
-    );
-
     app.handle_assign_to_sprint_key();
 
     assert_eq!(app.mode, AppMode::Dialog(DialogMode::AssignCardToSprint));
@@ -123,8 +87,6 @@ fn test_move_card_uses_the_scoped_column_and_partition_reads() {
     app.prepare_frame();
     select_card_in_active_task_list(&mut app, card.id);
     app.focus.active = kanban_tui::app::Focus::Cards;
-
-    fail_flat_tiers(&mut app);
 
     app.handle_move_card_right();
 
@@ -166,8 +128,6 @@ fn test_create_card_position_derives_from_the_column_tier() {
     app.reload_model();
     app.prepare_frame();
     app.focus.active = kanban_tui::app::Focus::Cards;
-
-    fail_flat_tiers(&mut app);
 
     app.input.set("Third".into());
     app.create_card();
@@ -215,8 +175,6 @@ fn test_toggle_completion_resolves_cards_by_id() {
     app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
-
-    fail_flat_tiers(&mut app);
 
     assert!(app.model.card_by_id_state(a.id).loaded().is_some());
     assert!(app.model.card_by_id_state(b.id).loaded().is_some());
@@ -335,8 +293,6 @@ fn test_sprint_dialogs_read_the_board_scoped_sprint_tier() {
     app.push_mode(AppMode::Dialog(DialogMode::CreateCard));
     app.reload_model();
 
-    fail_flat_tiers(&mut app);
-
     app.dialog_input.create_card_focus = kanban_tui::app::dialog_input::CreateCardFocus::Sprint;
     app.handle_create_card_dialog(crossterm::event::KeyCode::Down);
 
@@ -369,8 +325,6 @@ fn test_the_tasks_panel_title_counts_from_the_scoped_tiers_while_the_flat_tiers_
     app.focus.active = kanban_tui::app::Focus::Cards;
     app.reload_model();
     app.prepare_frame();
-
-    fail_flat_tiers(&mut app);
 
     let title = kanban_tui::ui::tasks_panel_title(&app, false);
 
@@ -407,8 +361,6 @@ fn test_search_filters_the_scoped_card_tier_without_flat_tiers() {
     app.selection.active_board_id = Some(board.id);
     app.reload_model();
     app.prepare_frame();
-
-    fail_flat_tiers(&mut app);
 
     app.mode = AppMode::Search;
     app.filter.search.activate();

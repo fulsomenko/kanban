@@ -265,9 +265,9 @@ fn test_sync_leaves_untouched_tiers_alone() {
     ctx.sync(&BoardListPlan, &mut model, &mut NoProjections);
 
     assert!(model.boards_state().is_loaded());
-    assert!(model.cards_state().is_not_loaded());
-    assert!(!model.cards_state().is_loaded());
-    assert!(model.columns_state().is_not_loaded());
+    assert!(model.column_cards_state(column.id).is_not_loaded());
+    assert!(!model.column_cards_state(column.id).is_loaded());
+    assert!(model.board_columns_state(board.id).is_not_loaded());
 }
 
 #[test]
@@ -443,9 +443,15 @@ fn test_resync_invalidated_does_not_fetch_a_tier_the_model_never_read() {
     ctx.resync_invalidated(inv, &NothingPlan, &mut model, &mut NoProjections);
 
     assert!(model.boards_state().is_not_loaded());
-    assert!(model.columns_state().is_not_loaded());
-    assert!(model.cards_state().is_not_loaded());
-    assert!(model.sprints_state().is_not_loaded());
+    assert!(model
+        .board_columns_state(uuid::Uuid::new_v4())
+        .is_not_loaded());
+    assert!(model
+        .column_cards_state(uuid::Uuid::new_v4())
+        .is_not_loaded());
+    assert!(model
+        .board_sprints_state(uuid::Uuid::new_v4())
+        .is_not_loaded());
     assert!(model.graph_state().is_not_loaded());
     assert!(model.card_by_id_state(card.id).loaded().is_none());
 }
@@ -464,9 +470,15 @@ fn test_resync_invalidated_still_invalidates_when_there_is_no_bounded_repair() {
     );
 
     assert!(model.boards_state().is_not_loaded());
-    assert!(model.columns_state().is_not_loaded());
-    assert!(model.cards_state().is_not_loaded());
-    assert!(model.sprints_state().is_not_loaded());
+    assert!(model
+        .board_columns_state(uuid::Uuid::new_v4())
+        .is_not_loaded());
+    assert!(model
+        .column_cards_state(uuid::Uuid::new_v4())
+        .is_not_loaded());
+    assert!(model
+        .board_sprints_state(uuid::Uuid::new_v4())
+        .is_not_loaded());
     assert!(model.graph_state().is_not_loaded());
 }
 

@@ -1156,10 +1156,11 @@ mod create_card_factory_tests {
         let board_id = app.selection.active_board_id.unwrap();
         let column_id = app
             .model
-            .columns_state()
-            .loaded_or_empty()
-            .iter()
-            .find(|c| c.board_id == board_id)
+            .board_columns_state(board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .first()
             .unwrap()
             .id;
         (board_id, column_id)
@@ -1594,7 +1595,7 @@ mod cards_tier_decline_tests {
     }
 
     #[test]
-    fn test_toggle_selected_cards_completion_with_a_failed_flat_cards_tier_for_an_unresolvable_id_declines(
+    fn test_toggle_selected_cards_completion_with_a_failed_per_id_entry_for_an_unresolvable_id_declines(
     ) {
         let mut app = App::test_default();
         let (board_id, _column_id, card_id) = seed_board_column_card(&mut app);
@@ -1608,9 +1609,13 @@ mod cards_tier_decline_tests {
 
         let changed = app.model.apply_resolved(kanban_domain::Resolved {
             cards: kanban_domain::resolved::Collection {
-                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
-                    kanban_domain::KanbanError::unsupported("flat declined"),
-                )),
+                by_id: [(
+                    unresolvable_id,
+                    kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                        kanban_domain::KanbanError::unsupported("boom"),
+                    )),
+                )]
+                .into(),
                 ..Default::default()
             },
             ..Default::default()

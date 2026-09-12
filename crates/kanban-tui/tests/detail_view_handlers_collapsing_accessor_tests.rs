@@ -23,6 +23,16 @@ fn set_sprint_by_id(app: &mut App, sprint_id: Uuid, state: LoadState<Sprint>) {
     });
 }
 
+fn set_card_by_id(app: &mut App, card_id: Uuid, state: LoadState<Card>) {
+    let _ = app.model.apply_resolved(Resolved {
+        cards: Collection {
+            by_id: HashMap::from([(card_id, state)]),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+}
+
 fn set_column_by_id(app: &mut App, column_id: Uuid, state: LoadState<Column>) {
     let _ = app.model.apply_resolved(Resolved {
         columns: Collection {
@@ -119,10 +129,10 @@ fn test_open_assign_sprint_dialog_for_declines_when_sprints_not_loaded() {
         &mut app,
         ModelLoadStates {
             boards: LoadState::Loaded(vec![board]),
-            cards: LoadState::Loaded(vec![card]),
             ..Default::default()
         },
     );
+    set_card_by_id(&mut app, card_id, LoadState::Loaded(card));
     app.selection.active_board_id = Some(board_id);
     app.sprint_view.panel = kanban_tui::app::SprintTaskPanel::Uncompleted;
     app.sprint_view
@@ -230,10 +240,10 @@ fn test_handle_manage_parents_declines_when_the_cards_column_is_not_loaded() {
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card]),
             ..Default::default()
         },
     );
+    set_card_by_id(&mut app, card_id, LoadState::Loaded(card));
     app.selection.active_card_id = Some(card_id);
 
     app.handle_manage_parents();
@@ -256,10 +266,10 @@ fn test_handle_manage_parents_declines_when_the_boards_column_list_is_not_loaded
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card]),
             ..Default::default()
         },
     );
+    set_card_by_id(&mut app, card_id, LoadState::Loaded(card));
     set_column_by_id(&mut app, column_id, LoadState::Loaded(column));
     app.selection.active_card_id = Some(card_id);
 
@@ -285,8 +295,6 @@ fn test_handle_manage_parents_still_opens_the_dialog_when_everything_is_loaded()
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card.clone(), other_card.clone()]),
-            columns: LoadState::Loaded(vec![column.clone()]),
             graph: LoadState::Loaded(kanban_domain::DependencyGraph::default()),
             ..Default::default()
         },
@@ -320,10 +328,10 @@ fn test_handle_manage_children_declines_when_the_cards_column_is_not_loaded() {
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card]),
             ..Default::default()
         },
     );
+    set_card_by_id(&mut app, card_id, LoadState::Loaded(card));
     app.selection.active_card_id = Some(card_id);
 
     app.handle_manage_children();
@@ -346,10 +354,10 @@ fn test_handle_manage_children_declines_when_the_boards_column_list_is_not_loade
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card]),
             ..Default::default()
         },
     );
+    set_card_by_id(&mut app, card_id, LoadState::Loaded(card));
     set_column_by_id(&mut app, column_id, LoadState::Loaded(column));
     app.selection.active_card_id = Some(card_id);
 
@@ -375,8 +383,6 @@ fn test_handle_manage_children_still_opens_the_dialog_when_everything_is_loaded(
     set_model(
         &mut app,
         ModelLoadStates {
-            cards: LoadState::Loaded(vec![card.clone(), other_card.clone()]),
-            columns: LoadState::Loaded(vec![column.clone()]),
             graph: LoadState::Loaded(kanban_domain::DependencyGraph::default()),
             ..Default::default()
         },
@@ -419,20 +425,14 @@ fn seed_move_fixture(app: &mut App, columns_loaded: bool) -> (Uuid, Uuid, Uuid, 
             kanban_domain::CreateCardOptions::default(),
         )
         .unwrap();
-    let columns = if columns_loaded {
-        LoadState::Loaded(vec![left.clone(), right.clone()])
-    } else {
-        LoadState::NotLoaded
-    };
     set_model(
         app,
         ModelLoadStates {
             boards: LoadState::Loaded(vec![board.clone()]),
-            cards: LoadState::Loaded(vec![card.clone()]),
-            columns,
             ..Default::default()
         },
     );
+    set_card_by_id(app, card.id, LoadState::Loaded(card.clone()));
     if columns_loaded {
         seed_scoped_partitions(
             app,
@@ -462,10 +462,8 @@ fn test_move_selected_card_column_declines_when_the_column_tier_is_not_loaded() 
     assert_error_banner(&app);
     let stored_column = app
         .model
-        .cards_state()
-        .loaded_or_empty()
-        .iter()
-        .find(|c| c.id == card_id)
+        .card_by_id_state(card_id)
+        .loaded()
         .map(|c| c.column_id)
         .expect("card still present");
     assert_eq!(stored_column, left_id);

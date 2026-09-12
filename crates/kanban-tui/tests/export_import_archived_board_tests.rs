@@ -1,11 +1,11 @@
-//! KAN-895 regression: the TUI File→Export-All path must fully round-trip an
+//! Regression: the TUI File→Export-All path must fully round-trip an
 //! archived board — its HEAD, its entire subtree (columns / cards / sprints,
-//! which live in the flat collections under the archived board_id), AND its
+//! keyed under the archived board_id), AND its
 //! `archived_boards` marker (so it re-imports still archived, hidden from the
 //! live list).
 //!
-//! Before the fix, `export_all_boards_with_filename` / `auto_save` read the
-//! live-scoped `model.boards_state().loaded_or_empty()` / `model.cards_state().loaded_or_empty()`, so an archived board's head
+//! Before the fix, `export_all_boards_with_filename` / `auto_save` read only
+//! the live-scoped board and card tiers, so an archived board's head
 //! and subtree were omitted and the exported `archived_boards` marker referenced
 //! a board absent from the file → orphan / silent data loss on re-import. These
 //! tests drive the ACTUAL TUI export entry point (not the snapshot path

@@ -811,7 +811,13 @@ mod tests {
         let sprint = app.ctx.create_sprint(fx.board_id, None, None).unwrap();
         load_with_card_order(app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
-        let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+        let sprints = app
+            .model
+            .board_sprints_state(fx.board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .to_vec();
         let board = app
             .model
             .boards_state()
@@ -861,7 +867,13 @@ mod tests {
         load_with_card_order(&mut app, &[fx.a_id, fx.p_id, fx.b_id, fx.c_id, fx.d_id]);
 
         // Prime the picker with the target sprint pre-checked.
-        let sprints = app.model.sprints_state().loaded_or_empty().to_vec();
+        let sprints = app
+            .model
+            .board_sprints_state(fx.board_id)
+            .loaded()
+            .copied()
+            .unwrap_or(&[])
+            .to_vec();
         let board = app
             .model
             .boards_state()
@@ -1041,7 +1053,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relationship_search_with_failed_cards_tier_for_an_unresolvable_id_banners() {
+    fn test_relationship_search_with_failed_per_id_entry_for_an_unresolvable_id_banners() {
         let mut app = App::test_default();
         let (_board_id, card_id) = seed_relationship_dialog(&mut app);
         let unresolvable_id = uuid::Uuid::new_v4();
@@ -1050,9 +1062,13 @@ mod tests {
 
         let changed = app.model.apply_resolved(kanban_domain::Resolved {
             cards: kanban_domain::resolved::Collection {
-                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
-                    kanban_domain::KanbanError::unsupported("flat declined"),
-                )),
+                by_id: [(
+                    unresolvable_id,
+                    kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                        kanban_domain::KanbanError::unsupported("boom"),
+                    )),
+                )]
+                .into(),
                 ..Default::default()
             },
             ..Default::default()

@@ -16,10 +16,6 @@ fn base_resolved(board: &Board) -> Resolved {
             all: LoadState::Loaded(vec![board.clone()]),
             ..Default::default()
         },
-        cards: Collection {
-            all: LoadState::Loaded(vec![]),
-            ..Default::default()
-        },
         graph: LoadState::Loaded(DependencyGraph::default()),
         ..Default::default()
     }
@@ -34,7 +30,6 @@ fn app_with_board_and_column_state(state: LoadState<Vec<Column>>) -> (App, Board
         ..Default::default()
     };
     resolved.sprints = Collection {
-        all: LoadState::Loaded(vec![]),
         by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![]))]),
         ..Default::default()
     };
@@ -47,10 +42,6 @@ fn app_with_board_and_sprint_state(state: LoadState<Vec<Sprint>>) -> (App, Board
     let mut app = App::test_default();
     let board = Board::new("TestBoard", None::<String>);
     let mut resolved = base_resolved(&board);
-    resolved.columns = Collection {
-        all: LoadState::Loaded(vec![]),
-        ..Default::default()
-    };
     resolved.sprints = Collection {
         by_parent: HashMap::from([(board.id, state)]),
         ..Default::default()
@@ -67,11 +58,11 @@ fn app_with_card_and_sprint_state(state: LoadState<Vec<Sprint>>) -> (App, Board,
     let card = Card::new(board.id, column.id, "Task", 0);
     let mut resolved = base_resolved(&board);
     resolved.cards = Collection {
-        all: LoadState::Loaded(vec![card.clone()]),
+        by_parent: HashMap::from([(column.id, LoadState::Loaded(vec![card.clone()]))]),
         ..Default::default()
     };
     resolved.columns = Collection {
-        all: LoadState::Loaded(vec![column.clone()]),
+        by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![column.clone()]))]),
         ..Default::default()
     };
     resolved.sprints = Collection {
@@ -91,15 +82,15 @@ fn app_with_card_and_graph_state(state: LoadState<DependencyGraph>) -> (App, Boa
     let card = Card::new(board.id, column.id, "Task", 0);
     let mut resolved = base_resolved(&board);
     resolved.cards = Collection {
-        all: LoadState::Loaded(vec![card.clone()]),
+        by_parent: HashMap::from([(column.id, LoadState::Loaded(vec![card.clone()]))]),
         ..Default::default()
     };
     resolved.columns = Collection {
-        all: LoadState::Loaded(vec![column.clone()]),
+        by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![column.clone()]))]),
         ..Default::default()
     };
     resolved.sprints = Collection {
-        all: LoadState::Loaded(vec![]),
+        by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![]))]),
         ..Default::default()
     };
     resolved.graph = state;
@@ -115,12 +106,11 @@ fn app_with_asymmetric_column_tier(board_columns_state: LoadState<Vec<Column>>) 
     let column = Column::new(board.id, "Backlog", 0);
     let mut resolved = base_resolved(&board);
     resolved.columns = Collection {
-        all: LoadState::Loaded(vec![column.clone()]),
         by_parent: HashMap::from([(board.id, board_columns_state)]),
         ..Default::default()
     };
     resolved.sprints = Collection {
-        all: LoadState::Loaded(vec![]),
+        by_parent: HashMap::from([(board.id, LoadState::Loaded(vec![]))]),
         ..Default::default()
     };
     let changed = app.model.apply_resolved(resolved);
@@ -128,10 +118,9 @@ fn app_with_asymmetric_column_tier(board_columns_state: LoadState<Vec<Column>>) 
     app.selection.active_board_id = Some(board.id);
     app.switch_view_strategy(kanban_domain::TaskListView::ColumnView);
 
-    // The board-scoped column tier under test is deliberately asymmetric
-    // with the flat one, so `prepare_frame`'s all-scoped-tiers-Loaded gate
-    // would decline here; drive `refresh_task_lists` directly with the flat
-    // column so the task-list skeleton exists and the render's own
+    // `prepare_frame`'s all-scoped-tiers-Loaded gate would decline for a
+    // non-Loaded `board_columns_state`, so drive `refresh_task_lists`
+    // directly to build the task-list skeleton; the render's own
     // `board_columns_state` name lookup is what's under test.
     let ctx = kanban_view::view_strategy::ViewRefreshContext {
         board: &board,

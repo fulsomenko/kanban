@@ -646,18 +646,19 @@ mod backend_parity {
         for (kind, dir) in kinds.iter().zip(dirs.iter()) {
             let ctx = open_seeded(kind, dir, &snapshot).await;
             let model = populate_scope(&ctx, board1);
+            let untouched_id = Uuid::new_v4();
 
             assert!(
-                model.columns_state().is_not_loaded(),
-                "{kind}: the flat column tier must stay unrequested"
+                model.board_columns_state(untouched_id).is_not_loaded(),
+                "{kind}: an unrelated board's column tier must stay unrequested"
             );
             assert!(
-                model.cards_state().is_not_loaded(),
-                "{kind}: the flat card tier must stay unrequested"
+                model.column_cards_state(untouched_id).is_not_loaded(),
+                "{kind}: an unrelated column's card tier must stay unrequested"
             );
             assert!(
-                model.sprints_state().is_not_loaded(),
-                "{kind}: the flat sprint tier must stay unrequested"
+                model.board_sprints_state(untouched_id).is_not_loaded(),
+                "{kind}: an unrelated board's sprint tier must stay unrequested"
             );
             assert!(
                 model.board_columns_state(board1).is_loaded(),

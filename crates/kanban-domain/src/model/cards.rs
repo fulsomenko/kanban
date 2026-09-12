@@ -1,18 +1,9 @@
 use super::*;
 
 impl Model {
-    /// The full unified live+archived collection. Only for callers that
-    /// genuinely need id resolution regardless of archival status — see the
-    /// view layer's `Controller` for the common display case.
-    pub fn cards_state(&self) -> &LoadState<Vec<Card>> {
-        &self.cards
-    }
-
-    /// Resolves a card by id in per-id, parent-scoped, then flat-collection
-    /// precedence order: a per-id result always wins, then a card found in a
-    /// loaded column scope, then the single unified collection (live AND
-    /// archived rows). A card is a card regardless of whether its head is
-    /// archived.
+    /// Resolves a card by id in per-id, then parent-scoped precedence order:
+    /// a per-id result always wins, then a card found in a loaded column
+    /// scope. `NotLoaded` when neither tier names the id.
     pub fn card_by_id_state(&self, id: Uuid) -> LoadState<&Card> {
         if let Some(state) = self.cards_by_id.get(&id) {
             return state.as_ref();
@@ -24,21 +15,11 @@ impl Model {
                 }
             }
         }
-        match self.cards.as_ref() {
-            LoadState::Loaded(cards) => {
-                match self.card_index.get(&id).and_then(|&idx| cards.get(idx)) {
-                    Some(card) => LoadState::Loaded(card),
-                    None => LoadState::Missing,
-                }
-            }
-            LoadState::NotLoaded => LoadState::NotLoaded,
-            LoadState::Missing => LoadState::Missing,
-            LoadState::Failed(e) => LoadState::Failed(e),
-        }
+        LoadState::NotLoaded
     }
 
-    /// The parent-scoped card tier for one column. Independent of
-    /// `cards_state()`: a scoped result never touches the flat collection.
+    /// The parent-scoped card tier for one column, independent of the per-id
+    /// tier.
     pub fn column_cards_state(&self, column_id: Uuid) -> LoadState<&[Card]> {
         scoped_state(&self.cards_by_column, column_id)
     }
@@ -47,7 +28,7 @@ impl Model {
     /// column order, of every column's `column_cards_state`. `Loaded` only
     /// when the board's column tier and every one of its columns' card
     /// tiers are `Loaded`; `Failed` takes precedence over `Missing` over
-    /// `NotLoaded`. Never reads `cards_state()`.
+    /// `NotLoaded`.
     pub fn board_cards_state(&self, board_id: Uuid) -> LoadState<Vec<&Card>> {
         let columns = match self.board_columns_state(board_id) {
             LoadState::Loaded(columns) => columns,
@@ -115,10 +96,11 @@ impl Model {
         self.archived_cards.is_some()
     }
 
-    /// Ids of the archived cards. Rows themselves live in the unified `cards_state()`
-    /// collection; this set records which of them are archived (built from the
-    /// markers). The live/archived partition is a presentation concern and lives
-    /// on the view layer's `Controller`; this set is what backs that split.
+    /// Ids of the archived cards. Rows themselves live in the scoped and
+    /// per-id tiers; this set records which of them are archived (built from
+    /// the markers). The live/archived partition is a presentation concern
+    /// and lives on the view layer's `Controller`; this set is what backs
+    /// that split.
     pub fn archived_card_ids(&self) -> &std::collections::HashSet<Uuid> {
         &self.archived_card_ids
     }
@@ -185,9 +167,6 @@ mod tests {
 
     #[test]
     fn test_card_by_id_resolves_live_and_archived_from_one_collection() {
-        // After unification `cards_state()` holds live AND archived rows, and
-        // `card_by_id_state` resolves either from the single collection — no
-        // `or_else(archived_card())` re-join.
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);
         let col_id = Uuid::new_v4();
@@ -202,8 +181,10 @@ mod tests {
             ..Default::default()
         });
 
-        // Both live and archived rows live in the single unified collection.
-        assert_eq!(m.cards_state().loaded_or_empty().len(), 2);
+        // The live row lives in the scoped column tier, the archived row in
+        // the per-id tier.
+        assert_eq!(m.column_cards_state(col_id).loaded().unwrap().len(), 1);
+        assert!(m.card_id_status(archived_id).is_loaded());
 
         // The single index resolves both.
         assert_eq!(
@@ -224,10 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn test_archived_view_filter_shows_archived_card_from_unified_collection() {
-        // `archived_card_ids` records the archived subset of the unified `cards_state()`
-        // collection. Assert an
-        // archived card is reachable by filtering `cards_state()` through that set.
+    fn test_archived_view_filter_finds_the_archived_card_through_the_per_id_tier() {
         let mut m = Model::default();
         let board = Board::new("B", None::<String>);
         let col_id = Uuid::new_v4();
@@ -242,11 +220,10 @@ mod tests {
         });
 
         let displayed: Vec<Uuid> = m
-            .cards_state()
-            .loaded_or_empty()
+            .archived_card_ids()
             .iter()
-            .filter(|c| m.archived_card_ids().contains(&c.id))
-            .map(|c| c.id)
+            .filter(|id| m.card_id_status(**id).is_loaded())
+            .copied()
             .collect();
         assert_eq!(displayed, vec![archived_id]);
     }
@@ -262,43 +239,11 @@ mod tests {
     }
 
     #[test]
-    fn test_cards_state_is_not_loaded_before_load_from_snapshot() {
-        let m = Model::default();
-        assert!(m.cards_state().is_not_loaded());
-    }
-
-    #[test]
-    fn test_cards_state_is_loaded_and_empty_after_an_empty_snapshot() {
-        let mut m = Model::default();
-        let _ = m.load_from_snapshot(Snapshot::default());
-        assert!(m.cards_state().is_loaded());
-        assert!(m.cards_state().loaded().unwrap().is_empty());
-        assert!(m.cards_state().loaded_or_empty().is_empty());
-    }
-
-    #[test]
     fn test_card_by_id_state_is_not_loaded_before_any_snapshot() {
         let m = Model::default();
         let state = m.card_by_id_state(Uuid::new_v4());
         assert!(state.is_not_loaded());
         assert!(!state.is_missing());
-    }
-
-    #[test]
-    fn test_card_by_id_state_is_missing_for_an_absent_card_after_load() {
-        let mut m = Model::default();
-        let board = Board::new("B", None::<String>);
-        let col_id = Uuid::new_v4();
-        let card = make_card(&board, col_id);
-        let _ = m.load_from_snapshot(Snapshot {
-            archived_boards: Vec::new(),
-            cards: vec![card],
-            ..Default::default()
-        });
-        let state = m.card_by_id_state(Uuid::new_v4());
-        assert!(state.is_missing());
-        assert!(state.is_terminal());
-        assert!(!state.is_not_loaded());
     }
 
     #[test]
@@ -337,6 +282,43 @@ mod tests {
         assert!(state.is_loaded());
         assert!(!state.is_missing());
         assert!(m.archived_card_ids().contains(&archived_id));
+    }
+
+    #[test]
+    fn test_load_from_snapshot_lands_archived_card_bodies_in_the_per_id_tier() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col_id = Uuid::new_v4();
+        let live = make_card(&board, col_id);
+        let archived = make_card(&board, col_id);
+        let archived_id = archived.id;
+        let _ = m.load_from_snapshot(Snapshot {
+            archived_boards: Vec::new(),
+            cards: vec![live, archived.clone()],
+            archived_cards: vec![ArchivedCard::new(archived_id, uuid::Uuid::nil())],
+            ..Default::default()
+        });
+
+        let state = m.card_id_status(archived_id);
+        assert!(state.is_loaded());
+        assert_eq!(state.loaded().copied().unwrap().title, archived.title);
+    }
+
+    #[test]
+    fn test_card_by_id_state_answers_not_loaded_for_an_id_absent_from_a_loaded_snapshot() {
+        let mut m = Model::default();
+        let board = Board::new("B", None::<String>);
+        let col_id = Uuid::new_v4();
+        let card = make_card(&board, col_id);
+        let _ = m.load_from_snapshot(Snapshot {
+            archived_boards: Vec::new(),
+            cards: vec![card],
+            ..Default::default()
+        });
+
+        let state = m.card_by_id_state(Uuid::new_v4());
+        assert!(state.is_not_loaded());
+        assert!(!state.is_missing());
     }
 
     #[test]
@@ -469,27 +451,5 @@ mod tests {
         });
         let state = m.board_cards_state(random_board);
         assert!(matches!(state, LoadState::Failed(e) if std::sync::Arc::ptr_eq(&e, &err)));
-    }
-
-    #[test]
-    fn test_board_cards_state_ignores_a_failed_flat_collection() {
-        let err = std::sync::Arc::new(KanbanError::unsupported("boom"));
-        let mut m = Model::with_load_states(crate::model::ModelLoadStates {
-            cards: LoadState::Failed(err.clone()),
-            columns: LoadState::Failed(err),
-            ..Default::default()
-        });
-
-        let board = Board::new("B", None::<String>);
-        let col = crate::Column::new(board.id, "A", 0);
-        let col_id = col.id;
-        seed_columns_for_board(&mut m, board.id, vec![col]);
-        let card = make_card(&board, col_id);
-        let card_id = card.id;
-        seed_cards_for_column(&mut m, col_id, LoadState::Loaded(vec![card]));
-
-        let state = m.board_cards_state(board.id);
-        let ids: Vec<Uuid> = state.loaded().unwrap().iter().map(|c| c.id).collect();
-        assert_eq!(ids, vec![card_id]);
     }
 }

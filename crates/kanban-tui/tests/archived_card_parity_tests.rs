@@ -212,8 +212,13 @@ fn test_move_in_archived_view_matches_c1() {
 #[test]
 fn test_create_not_offered_in_archived_view() {
     let mut app = App::test_default();
-    let (_, _, _, _) = seed_archived_card(&mut app);
-    let live_before = app.model.cards_state().loaded_or_empty().len();
+    let (board_id, _, _, _) = seed_archived_card(&mut app);
+    let live_before = app
+        .model
+        .board_cards_state(board_id)
+        .loaded()
+        .map(|v| v.len())
+        .unwrap_or(0);
 
     app.handle_archived_cards_view_mode(KeyCode::Char('n'));
 
@@ -225,7 +230,11 @@ fn test_create_not_offered_in_archived_view() {
     app.reload_model();
     app.prepare_frame();
     assert_eq!(
-        app.model.cards_state().loaded_or_empty().len(),
+        app.model
+            .board_cards_state(board_id)
+            .loaded()
+            .map(|v| v.len())
+            .unwrap_or(0),
         live_before,
         "`n` must not create an invisible live card from the archived view"
     );

@@ -6,23 +6,21 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
 
-/// The unified, per-Model view of every entity kind's flat, per-id and
+/// The unified, per-Model view of every entity kind's per-id and
 /// parent-scoped tiers, chained by precedence in accessors like
-/// `card_by_id_state`. This differs from [`crate::resolved::Collection`],
-/// whose three tiers stay mutually independent so that a resolve pass can
-/// touch one tier without silently inferring another: a `Model` accessor
-/// answers "what do we know about this id, from any source", while a
-/// `Collection` answers "what did this specific resolve pass say about this
-/// tier", and conflating the two would let an archived-excluding tier
-/// silently mark an id `Missing` that another tier still holds.
+/// `card_by_id_state`. Boards alone keep a flat collection, since the board
+/// list itself has no parent to scope under. This differs from
+/// [`crate::resolved::Collection`], whose three tiers stay mutually
+/// independent so that a resolve pass can touch one tier without silently
+/// inferring another: a `Model` accessor answers "what do we know about this
+/// id, from any source", while a `Collection` answers "what did this
+/// specific resolve pass say about this tier", and conflating the two would
+/// let an archived-excluding tier silently mark an id `Missing` that another
+/// tier still holds.
 #[derive(Clone)]
 pub struct Model {
     boards: LoadState<Vec<Board>>,
-    columns: LoadState<Vec<Column>>,
-    cards: LoadState<Vec<Card>>,
-    card_index: HashMap<Uuid, usize>,
     board_index: HashMap<Uuid, usize>,
-    sprints: LoadState<Vec<Sprint>>,
     archived_cards: Option<Vec<ArchivedCard>>,
     archived_cards_error: Option<Arc<KanbanError>>,
     archived_card_ids: HashSet<Uuid>,
@@ -32,8 +30,8 @@ pub struct Model {
     graph: LoadState<DependencyGraph>,
     /// The per-id tier beside each unified collection. Not a second row
     /// store: a `Loaded` entry here can name an entity even while the
-    /// matching flat collection is `NotLoaded`, and it is the only tier that
-    /// can ever hold `LoadState::Missing` for a single id. Nothing writes
+    /// scoped tier is `NotLoaded`, and it is the only tier that can ever
+    /// hold `LoadState::Missing` for a single id. Nothing writes
     /// `boards_by_id` today; it exists for symmetry of the mutators.
     boards_by_id: HashMap<Uuid, LoadState<Board>>,
     columns_by_id: HashMap<Uuid, LoadState<Column>>,
@@ -42,7 +40,7 @@ pub struct Model {
     /// The parent-scoped tier, keyed by the fixed parent id per kind
     /// (`columns_by_board`/`sprints_by_board`/`archived_cards_by_board` by
     /// board id, `cards_by_column` by column id). A scoped result never
-    /// mutates the flat collection or the per-id tier, and vice versa.
+    /// mutates the per-id tier, and vice versa.
     columns_by_board: HashMap<Uuid, LoadState<Vec<Column>>>,
     cards_by_column: HashMap<Uuid, LoadState<Vec<Card>>>,
     sprints_by_board: HashMap<Uuid, LoadState<Vec<Sprint>>>,
@@ -58,11 +56,7 @@ impl Default for Model {
     fn default() -> Self {
         Self {
             boards: LoadState::NotLoaded,
-            columns: LoadState::NotLoaded,
-            cards: LoadState::NotLoaded,
-            card_index: HashMap::new(),
             board_index: HashMap::new(),
-            sprints: LoadState::NotLoaded,
             archived_cards: None,
             archived_cards_error: None,
             archived_card_ids: HashSet::new(),
@@ -101,9 +95,6 @@ impl Model {
         // records which are archived; the live/archived split is a consumption
         // decision the view layer applies on top.
         self.boards = LoadState::Loaded(snapshot.boards);
-        self.columns = LoadState::Loaded(snapshot.columns);
-        self.sprints = LoadState::Loaded(snapshot.sprints);
-        self.cards = LoadState::Loaded(snapshot.cards);
         self.graph = LoadState::Loaded(snapshot.graph);
 
         self.boards_by_id.clear();
@@ -119,9 +110,8 @@ impl Model {
             Some(snapshot.archived_boards),
         );
 
-        self.rebuild_card_index();
         self.rebuild_board_index();
-        self.rebuild_scoped_tiers();
+        self.rebuild_scoped_tiers(snapshot.columns, snapshot.cards, snapshot.sprints);
 
         ModelChanged::new()
     }
@@ -135,7 +125,12 @@ impl Model {
         ModelChanged::new()
     }
 
-    fn rebuild_scoped_tiers(&mut self) {
+    fn rebuild_scoped_tiers(
+        &mut self,
+        columns: Vec<Column>,
+        cards: Vec<Card>,
+        sprints: Vec<Sprint>,
+    ) {
         self.columns_by_board.clear();
         self.sprints_by_board.clear();
 
@@ -147,52 +142,42 @@ impl Model {
                     .insert(b.id, LoadState::Loaded(Vec::new()));
             }
         }
-        if let LoadState::Loaded(columns) = &self.columns {
-            for c in columns {
-                let LoadState::Loaded(bucket) = self
-                    .columns_by_board
-                    .entry(c.board_id)
-                    .or_insert_with(|| LoadState::Loaded(Vec::new()))
-                else {
-                    unreachable!("entry is always seeded as Loaded above")
-                };
-                bucket.push(c.clone());
-            }
+        for c in &columns {
+            let LoadState::Loaded(bucket) = self
+                .columns_by_board
+                .entry(c.board_id)
+                .or_insert_with(|| LoadState::Loaded(Vec::new()))
+            else {
+                unreachable!("entry is always seeded as Loaded above")
+            };
+            bucket.push(c.clone());
         }
-        if let LoadState::Loaded(sprints) = &self.sprints {
-            for s in sprints {
-                let LoadState::Loaded(bucket) = self
-                    .sprints_by_board
-                    .entry(s.board_id)
-                    .or_insert_with(|| LoadState::Loaded(Vec::new()))
-                else {
-                    unreachable!("entry is always seeded as Loaded above")
-                };
-                bucket.push(s.clone());
-            }
+        for s in &sprints {
+            let LoadState::Loaded(bucket) = self
+                .sprints_by_board
+                .entry(s.board_id)
+                .or_insert_with(|| LoadState::Loaded(Vec::new()))
+            else {
+                unreachable!("entry is always seeded as Loaded above")
+            };
+            bucket.push(s.clone());
         }
 
-        self.rebuild_card_column_buckets();
+        self.rebuild_card_column_buckets(&columns, cards);
         self.rebuild_archived_card_board_buckets();
     }
 
-    fn rebuild_card_column_buckets(&mut self) {
+    fn rebuild_card_column_buckets(&mut self, columns: &[Column], cards: Vec<Card>) {
         let mut buckets: HashMap<Uuid, Vec<Card>> = HashMap::new();
-        if let LoadState::Loaded(columns) = &self.columns {
-            for c in columns {
-                buckets.entry(c.id).or_default();
-            }
+        for c in columns {
+            buckets.entry(c.id).or_default();
         }
-        if let LoadState::Loaded(cards) = &self.cards {
-            for card in cards {
-                if self.archived_card_ids.contains(&card.id) {
-                    continue;
-                }
-                buckets
-                    .entry(card.column_id)
-                    .or_default()
-                    .push(card.clone());
+        for card in cards {
+            if self.archived_card_ids.contains(&card.id) {
+                self.cards_by_id.insert(card.id, LoadState::Loaded(card));
+                continue;
             }
+            buckets.entry(card.column_id).or_default().push(card);
         }
         for (column_id, cards) in buckets {
             self.set_cards_of_column(column_id, LoadState::Loaded(cards));
@@ -229,18 +214,6 @@ impl Model {
         self.archived_cards_error = None;
         self.archived_boards = boards;
         self.archived_boards_error = None;
-    }
-
-    fn rebuild_card_index(&mut self) {
-        self.card_index = self
-            .cards
-            .loaded()
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-            .iter()
-            .enumerate()
-            .map(|(i, c)| (c.id, i))
-            .collect();
     }
 
     fn rebuild_board_index(&mut self) {
@@ -284,9 +257,9 @@ mod tests {
     fn test_default_model_returns_empty_slices() {
         let m = Model::default();
         assert!(m.boards_state().loaded_or_empty().is_empty());
-        assert!(m.columns_state().loaded_or_empty().is_empty());
-        assert!(m.cards_state().loaded_or_empty().is_empty());
-        assert!(m.sprints_state().loaded_or_empty().is_empty());
+        assert!(m.board_columns_state(Uuid::new_v4()).is_not_loaded());
+        assert!(m.column_cards_state(Uuid::new_v4()).is_not_loaded());
+        assert!(m.board_sprints_state(Uuid::new_v4()).is_not_loaded());
         assert!(m.archived_card_markers().is_empty());
         assert!(m.archived_card_ids().is_empty());
     }
@@ -311,8 +284,10 @@ mod tests {
         });
         assert_eq!(m.boards_state().loaded_or_empty().len(), 1);
         assert_eq!(m.boards_state().loaded_or_empty()[0].id, board.id);
-        assert_eq!(m.columns_state().loaded_or_empty().len(), 1);
-        assert_eq!(m.columns_state().loaded_or_empty()[0].id, col.id);
+        let state = m.board_columns_state(board.id);
+        let loaded = state.loaded().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, col.id);
     }
 
     #[test]
@@ -462,7 +437,7 @@ mod tests {
     fn test_load_from_snapshot_returns_a_model_changed_receipt() {
         let mut m = Model::default();
         let changed: ModelChanged = m.load_from_snapshot(Snapshot::default());
-        assert!(m.cards_state().is_loaded());
+        assert!(m.boards_state().is_loaded());
         NoProjections.resync(&m, changed);
     }
 
@@ -489,7 +464,7 @@ mod tests {
         let cards_src = include_str!("cards.rs");
         assert!(
             !cards_src.contains("pub fn all_cards(&self)"),
-            "Model::all_cards must be deleted; callers should use cards_state().loaded_or_empty()"
+            "Model::all_cards must be deleted; callers should use board_cards_state(board_id)"
         );
         assert!(
             !cards_src.contains("pub fn card_by_id(&self,"),
@@ -502,11 +477,11 @@ mod tests {
         let collections_src = include_str!("collections.rs");
         assert!(
             !collections_src.contains("pub fn columns(&self)"),
-            "Model::columns must be deleted; callers should use columns_state().loaded_or_empty()"
+            "Model::columns must be deleted; callers should use board_columns_state(board_id)"
         );
         assert!(
             !collections_src.contains("pub fn sprints(&self)"),
-            "Model::sprints must be deleted; callers should use sprints_state().loaded_or_empty()"
+            "Model::sprints must be deleted; callers should use board_sprints_state(board_id)"
         );
     }
 
@@ -587,7 +562,7 @@ mod tests {
         let err = Arc::new(KanbanError::unsupported("boom"));
         let _ = m.apply_resolved(crate::Resolved {
             cards: crate::resolved::Collection {
-                all: LoadState::Failed(err),
+                by_id: [(Uuid::new_v4(), LoadState::Failed(err))].into(),
                 ..Default::default()
             },
             ..Default::default()
