@@ -113,7 +113,10 @@ mod tests {
         });
 
         let mut columns_by_parent = HashMap::new();
-        columns_by_parent.insert(board.id, LoadState::Loaded(vec![col_a.clone(), col_b.clone()]));
+        columns_by_parent.insert(
+            board.id,
+            LoadState::Loaded(vec![col_a.clone(), col_b.clone()]),
+        );
         let mut cards_by_parent = HashMap::new();
         cards_by_parent.insert(col_a.id, LoadState::Loaded(vec![c1.clone()]));
         cards_by_parent.insert(col_b.id, LoadState::Loaded(vec![c2.clone()]));

@@ -594,7 +594,10 @@ mod tests {
         let mut sprints_by_parent = HashMap::new();
         sprints_by_parent.insert(
             board_live_id,
-            LoadState::Loaded(vec![sprint.clone(), Sprint::new(board_live_id, 2, None, None::<String>)]),
+            LoadState::Loaded(vec![
+                sprint.clone(),
+                Sprint::new(board_live_id, 2, None, None::<String>),
+            ]),
         );
         let _ = m.apply_resolved(Resolved {
             sprints: Collection {
@@ -605,10 +608,7 @@ mod tests {
         });
 
         assert!(m.card_id_status(archived_card_id).is_loaded());
-        assert_eq!(
-            m.column_cards_state(column_id).loaded().unwrap().len(),
-            1
-        );
+        assert_eq!(m.column_cards_state(column_id).loaded().unwrap().len(), 1);
         assert!(m.board_sprints_state(board_live_id).is_loaded());
         assert_eq!(
             m.board_sprints_state(board_live_id).loaded().unwrap().len(),

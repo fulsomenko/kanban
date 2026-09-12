@@ -319,7 +319,12 @@ mod tests {
         }
         fn loaded_graph_neighbours(&self, card_id: Uuid) -> Option<Vec<Uuid>> {
             if self.graph == FetchStatus::Loaded {
-                Some(self.graph_neighbours.get(&card_id).cloned().unwrap_or_default())
+                Some(
+                    self.graph_neighbours
+                        .get(&card_id)
+                        .cloned()
+                        .unwrap_or_default(),
+                )
             } else {
                 None
             }

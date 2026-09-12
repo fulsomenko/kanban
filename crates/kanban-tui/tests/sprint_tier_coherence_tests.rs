@@ -65,8 +65,9 @@ fn test_filter_dialog_sprint_toggle_targets_rendered_sprint() {
 
 #[test]
 fn test_filter_dialog_sprint_nav_counts_the_rendered_rows() {
-    let (mut app, _board) =
-        seed_board_with_scoped_sprints(|board_id| vec![Sprint::new(board_id, 2, None, None::<String>)]);
+    let (mut app, _board) = seed_board_with_scoped_sprints(|board_id| {
+        vec![Sprint::new(board_id, 2, None, None::<String>)]
+    });
 
     open_filter_dialog(&mut app);
     {

@@ -183,10 +183,7 @@ mod tests {
 
         // The live row lives in the scoped column tier, the archived row in
         // the per-id tier.
-        assert_eq!(
-            m.column_cards_state(col_id).loaded().unwrap().len(),
-            1
-        );
+        assert_eq!(m.column_cards_state(col_id).loaded().unwrap().len(), 1);
         assert!(m.card_id_status(archived_id).is_loaded());
 
         // The single index resolves both.

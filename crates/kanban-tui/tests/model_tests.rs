@@ -45,25 +45,30 @@ fn test_load_from_snapshot_populates_all_fields() {
 
     let _ = model.load_from_snapshot(snapshot);
     let board_id = model.boards_state().loaded_or_empty()[0].id;
-    let column_id = model
-        .board_columns_state(board_id)
-        .loaded()
-        .unwrap()[0]
-        .id;
+    let column_id = model.board_columns_state(board_id).loaded().unwrap()[0].id;
 
     assert_eq!(model.boards_state().loaded_or_empty().len(), 1);
     assert_eq!(model.boards_state().loaded_or_empty()[0].name, "Board1");
-    assert_eq!(model.board_columns_state(board_id).loaded().unwrap().len(), 1);
+    assert_eq!(
+        model.board_columns_state(board_id).loaded().unwrap().len(),
+        1
+    );
     assert_eq!(
         model.board_columns_state(board_id).loaded().unwrap()[0].name,
         "Col1"
     );
-    assert_eq!(model.column_cards_state(column_id).loaded().unwrap().len(), 1);
+    assert_eq!(
+        model.column_cards_state(column_id).loaded().unwrap().len(),
+        1
+    );
     assert_eq!(
         model.column_cards_state(column_id).loaded().unwrap()[0].title,
         "Card1"
     );
-    assert_eq!(model.board_sprints_state(board_id).loaded().unwrap().len(), 1);
+    assert_eq!(
+        model.board_sprints_state(board_id).loaded().unwrap().len(),
+        1
+    );
     assert_eq!(
         model.board_sprints_state(board_id).loaded().unwrap()[0].sprint_number,
         1
