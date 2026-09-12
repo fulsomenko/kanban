@@ -492,7 +492,7 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => match self.focus.board_focus {
                 BoardFocus::Sprints => {
-                    if let Some(board_id) = self.active_board().map(|board| board.id) {
+                    if let Some(board_id) = self.board_in_context().map(|board| board.id) {
                         match self.board_sprints_view(board_id) {
                             LoadState::Loaded(sprints) => {
                                 let sprint_count = sprints.len();
@@ -513,7 +513,7 @@ impl App {
                     }
                 }
                 BoardFocus::Columns => {
-                    if let Some(board_id) = self.active_board().map(|board| board.id) {
+                    if let Some(board_id) = self.board_in_context().map(|board| board.id) {
                         if self.visible_board_columns(board_id).is_loaded() {
                             let column_count = self.column_count_for_board(board_id);
                             self.dialog_input
@@ -546,8 +546,8 @@ impl App {
                     if self.focus.board_focus == BoardFocus::Sprints {
                         self.selection.sprint.set(Some(0));
                     } else if self.focus.board_focus == BoardFocus::Columns {
-                        if let Some(board) = self.active_board() {
-                            self.enter_column_focus_at_top(board.id);
+                        if let Some(board_id) = self.board_in_context().map(|b| b.id) {
+                            self.enter_column_focus_at_top(board_id);
                         }
                     }
                 }
@@ -562,7 +562,7 @@ impl App {
                     }
                 }
                 BoardFocus::Columns => {
-                    let board_id = self.board_list.get_selected_board_id();
+                    let board_id = self.board_in_context().map(|b| b.id);
                     let columns_ready = match board_id {
                         None => true,
                         Some(id) => self.visible_board_columns(id).is_loaded(),
@@ -603,8 +603,8 @@ impl App {
                         BoardFocus::Columns => BoardFocus::Sprints,
                     };
                     if self.focus.board_focus == BoardFocus::Columns {
-                        if let Some(board) = self.active_board() {
-                            self.enter_column_focus_at_top(board.id);
+                        if let Some(board_id) = self.board_in_context().map(|b| b.id) {
+                            self.enter_column_focus_at_top(board_id);
                         }
                     }
                 }
