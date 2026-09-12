@@ -1,16 +1,34 @@
 use crate::theme::*;
 use kanban_domain::AnimationType;
+use kanban_domain::LoadState;
 use kanban_domain::{Board, Card, CardStatus, Sprint};
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SprintTier {
+    Loaded,
+    Pending,
+    Unavailable,
+}
+
+impl SprintTier {
+    pub fn from_state<T>(state: &LoadState<T>) -> Self {
+        match state {
+            LoadState::Loaded(_) => Self::Loaded,
+            LoadState::NotLoaded => Self::Pending,
+            LoadState::Missing | LoadState::Failed(_) => Self::Unavailable,
+        }
+    }
+}
+
 pub struct CardListItemConfig<'a> {
     pub card: &'a Card,
     pub board: &'a Board,
     pub sprints: &'a [Sprint],
-    pub sprints_loaded: bool,
+    pub sprints_tier: SprintTier,
     pub is_selected: bool,
     pub is_focused: bool,
     pub is_multi_selected: bool,
@@ -52,8 +70,11 @@ pub fn render_card_list_item(config: CardListItemConfig) -> Line<'static> {
         if let Some(sprint_id) = config.card.sprint_id {
             match config.sprints.iter().find(|s| s.id == sprint_id) {
                 Some(s) => format!(" ({})", s.formatted_name(config.board, None)),
-                None if !config.sprints_loaded => " (\u{2026})".to_string(),
-                None => String::new(),
+                None => match config.sprints_tier {
+                    SprintTier::Loaded => String::new(),
+                    SprintTier::Pending => " (\u{2026})".to_string(),
+                    SprintTier::Unavailable => " (?)".to_string(),
+                },
             }
         } else {
             String::new()

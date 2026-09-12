@@ -245,7 +245,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
 
         let board_sprints_view = app.board_sprints_view(board.id);
         let sprints = board_sprints_view.loaded_or_empty();
-        let sprints_loaded = board_sprints_view.is_loaded();
+        let sprints_tier = SprintTier::from_state(&board_sprints_view);
 
         for card_idx in &render_info.visible_card_indices {
             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -260,7 +260,7 @@ pub(super) fn render_sprint_task_panel_with_selection(
                         card,
                         board,
                         sprints,
-                        sprints_loaded,
+                        sprints_tier,
                         is_selected,
                         is_focused,
                         is_multi_selected: false,
