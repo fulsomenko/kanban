@@ -299,7 +299,9 @@ impl App {
                 let mut config = self.app_config.clone();
                 config.storage_location = Some(path);
                 self.set_app_config(config);
-                self.spawn_save_worker(save_rx, None);
+                let deferred_watch_path =
+                    tokio::task::block_in_place(|| handle.block_on(self.rewire_freshness()));
+                self.spawn_save_worker(save_rx, deferred_watch_path);
                 self.ctx.save_coordinator.queue_flush();
                 true
             }

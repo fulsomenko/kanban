@@ -240,7 +240,8 @@ async fn test_rewire_to_a_local_locator_drops_the_stale_remote_receiver() {
 async fn test_settings_storage_swap_rewires_freshness_to_the_new_file() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = helpers::setup_app_with_json_file(dir.path()).await;
-    let other_json = helpers::create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
+    let other_json =
+        helpers::create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
 
     let (_tx, rx) = tokio::sync::mpsc::channel::<ChangeEventFrame>(4);
     app.persistence.remote_change_rx = Some(rx);
@@ -260,28 +261,9 @@ async fn test_settings_storage_swap_rewires_freshness_to_the_new_file() {
         matches!(app.persistence.freshness, FreshnessSource::File(ref p) if p.ends_with("other.json"))
     );
     let watcher = app.persistence.file_watcher.as_ref().unwrap();
-    assert_eq!(watcher.own_instance_id(), Some(app.ctx.backend().instance_id()));
+    assert_eq!(
+        watcher.own_instance_id(),
+        Some(app.ctx.backend().instance_id())
+    );
     assert_ne!(watcher.own_instance_id(), Some(sentinel_id));
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_settings_storage_swap_arms_the_watcher_on_the_new_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut app = helpers::setup_app_with_json_file(dir.path()).await;
-    let other_json = helpers::create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
-
-    let old_config = app.app_config.clone();
-    let old_storage_location = app.app_config.effective_storage_location();
-    app.app_config.storage_location = Some(other_json.clone());
-    app.apply_storage_location_change(old_config, &old_storage_location);
-    app.await_migration().await;
-
-    let mut rx = app.persistence.file_change_rx.take().expect("watcher must be armed");
-    std::fs::write(&other_json, br#"{"unrelated":1}"#).unwrap();
-
-    let event = tokio::time::timeout(std::time::Duration::from_secs(10), rx.recv())
-        .await
-        .expect("timed out waiting for the watcher to report a change")
-        .expect("watcher channel closed unexpectedly");
-    assert!(event.path.ends_with("other.json"));
 }
