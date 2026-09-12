@@ -321,4 +321,73 @@ mod tests {
         assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
         assert!(!err.message.contains("not found"));
     }
+
+    fn test_store_manager() -> kanban_service::StoreManager {
+        let mut registry = kanban_persistence::StoreRegistry::new();
+        let mut backends = kanban_backend::KanbanBackendRegistry::new();
+        backends.register(Box::new(kanban_persistence_sqlite::SqliteBackendFactory));
+        registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+        backends.register(Box::new(kanban_persistence_json::JsonBackendFactory));
+        kanban_service::StoreManager::new(registry, backends)
+    }
+
+    #[tokio::test]
+    async fn test_global_sprint_miss_caps_the_enumerated_alternatives() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = test_store_manager();
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx.create_board("Board".into(), None).unwrap();
+        for _ in 0..25 {
+            ctx.create_sprint(board.id, None, None).unwrap();
+        }
+
+        let err = resolve_sprint_global(&ctx, "no-such-sprint").unwrap_err();
+        assert!(err.message.contains("and 5 more"));
+        assert!(!err.message.contains("#25"));
+    }
+
+    #[tokio::test]
+    async fn test_global_column_miss_caps_the_enumerated_alternatives() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = test_store_manager();
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx.create_board("Board".into(), None).unwrap();
+        for i in 0..25 {
+            ctx.create_column(board.id, format!("C{i}"), None).unwrap();
+        }
+
+        let err = resolve_column_global(&ctx, "no-such-column").unwrap_err();
+        assert!(err.message.contains("and 5 more"));
+        assert!(!err.message.contains("C24"));
+    }
+
+    #[test]
+    fn test_sprint_alternatives_labels_a_sprint_whose_board_is_absent_as_unknown_board() {
+        let sprint = Sprint::new(Uuid::new_v4(), 1, None, None::<String>);
+        let labels = sprint_alternatives(&[sprint], &[]);
+        assert_eq!(labels, vec!["#1 (unknown board)".to_string()]);
+
+        let board = Board::new("Board", None::<String>);
+        let sprint_on_board = Sprint::new(board.id, 1, None, None::<String>);
+        let labels = sprint_alternatives(&[sprint_on_board], &[board]);
+        assert_eq!(labels, vec!["#1 (unnamed)".to_string()]);
+    }
 }

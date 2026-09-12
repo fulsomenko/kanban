@@ -537,7 +537,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(seeded.handle.op_count("get_board"), 1);
-        assert_eq!(seeded.handle.op_count("list_boards"), 2);
+        assert_eq!(seeded.handle.op_count("list_boards"), 1);
         assert_eq!(seeded.handle.op_count("list_all_sprints"), 1);
         assert_eq!(seeded.handle.op_count("list_sprints_by_board"), 1);
     }
@@ -557,7 +557,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(seeded.handle.op_count("get_board"), 1);
-        assert_eq!(seeded.handle.op_count("list_boards"), 2);
+        assert_eq!(seeded.handle.op_count("list_boards"), 1);
         assert_eq!(seeded.handle.op_count("list_all_sprints"), 1);
         assert_eq!(seeded.handle.op_count("list_sprints_by_board"), 1);
     }
