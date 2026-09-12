@@ -1847,4 +1847,189 @@ mod tests {
     async fn test_update_card_by_identifier_on_an_archived_board_still_mutates_it_on_sqlite() {
         assert_update_card_on_an_archived_board_still_mutates_it("test.sqlite").await;
     }
+
+    struct ArchivedBoardWithColumns {
+        seeded: Seeded,
+        column_ids: Vec<String>,
+        card_identifier: String,
+    }
+
+    async fn seed_archived_board_with_columns(
+        file_name: &str,
+        column_count: usize,
+    ) -> ArchivedBoardWithColumns {
+        let seeded = seeded_server(file_name).await;
+
+        let second_board = text_payload(
+            &seeded
+                .server
+                .tool_create_board(Parameters(crate::requests::board::CreateBoardParams {
+                    content: CreateBoardRequest {
+                        id: None,
+                        name: "Beta".to_string(),
+                        description: None,
+                        sprint_prefix: None,
+                        card_prefix: Some("BETA".to_string()),
+                        task_sort_field: None,
+                        task_sort_order: None,
+                        sprint_duration_days: None,
+                        task_list_view: None,
+                    },
+                    with_default_columns: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_board_id = second_board["id"].as_str().unwrap().to_string();
+
+        let mut column_ids = Vec::with_capacity(column_count);
+        for i in 0..column_count {
+            let column = text_payload(
+                &seeded
+                    .server
+                    .tool_create_column(Parameters(CreateColumnParams {
+                        board: second_board_id.clone(),
+                        content: kanban_service::api::CreateColumnRequest {
+                            id: None,
+                            name: format!("Column {i}"),
+                            wip_limit: None,
+                            default_status: None,
+                        },
+                    }))
+                    .await
+                    .unwrap(),
+            );
+            column_ids.push(column["id"].as_str().unwrap().to_string());
+        }
+
+        let card = text_payload(
+            &seeded
+                .server
+                .tool_create_card(Parameters(CreateCardParams {
+                    board: second_board_id.clone(),
+                    column: column_ids[0].clone(),
+                    sprint: None,
+                    content: kanban_service::api::CreateCardRequest {
+                        id: None,
+                        title: "Card on archived board".to_string(),
+                        description: None,
+                        priority: None,
+                        due_date: None,
+                        points: None,
+                        sprint_id: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let card_identifier = format!(
+            "{}-{}",
+            card["prefix"].as_str().unwrap(),
+            card["card_number"].as_u64().unwrap()
+        );
+
+        seeded
+            .server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: second_board_id,
+            }))
+            .await
+            .unwrap();
+
+        ArchivedBoardWithColumns {
+            seeded,
+            column_ids,
+            card_identifier,
+        }
+    }
+
+    async fn assert_move_card_on_an_archived_board_still_moves_it(file_name: &str) {
+        let fixture = seed_archived_board_with_columns(file_name, 2).await;
+
+        let moved = text_payload(
+            &fixture
+                .seeded
+                .server
+                .tool_move_card(Parameters(MoveCardRequest {
+                    card: fixture.card_identifier,
+                    column: fixture.column_ids[1].clone(),
+                    position: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(moved["column_id"], fixture.column_ids[1]);
+    }
+
+    #[tokio::test]
+    async fn test_move_card_by_identifier_on_an_archived_board_still_moves_it_on_json() {
+        assert_move_card_on_an_archived_board_still_moves_it("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_move_card_by_identifier_on_an_archived_board_still_moves_it_on_sqlite() {
+        assert_move_card_on_an_archived_board_still_moves_it("test.sqlite").await;
+    }
+
+    async fn assert_archive_card_on_an_archived_board_still_archives_it(file_name: &str) {
+        let fixture = seed_archived_board_with_columns(file_name, 1).await;
+
+        let archived = text_payload(
+            &fixture
+                .seeded
+                .server
+                .tool_archive_card(Parameters(ArchiveCardRequest {
+                    card: fixture.card_identifier,
+                }))
+                .await
+                .unwrap(),
+        );
+        assert!(archived["archived"].as_str().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_archive_card_by_identifier_on_an_archived_board_still_archives_it_on_json() {
+        assert_archive_card_on_an_archived_board_still_archives_it("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_archive_card_by_identifier_on_an_archived_board_still_archives_it_on_sqlite() {
+        assert_archive_card_on_an_archived_board_still_archives_it("test.sqlite").await;
+    }
+
+    async fn assert_delete_card_on_an_archived_board_still_deletes_it(file_name: &str) {
+        let fixture = seed_archived_board_with_columns(file_name, 1).await;
+
+        let deleted = text_payload(
+            &fixture
+                .seeded
+                .server
+                .tool_delete_card(Parameters(DeleteCardRequest {
+                    card: fixture.card_identifier.clone(),
+                }))
+                .await
+                .unwrap(),
+        );
+        assert!(deleted["deleted"].as_str().is_some());
+
+        let err = fixture
+            .seeded
+            .server
+            .tool_delete_card(Parameters(DeleteCardRequest {
+                card: fixture.card_identifier,
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn test_delete_card_by_identifier_on_an_archived_board_still_deletes_it_on_json() {
+        assert_delete_card_on_an_archived_board_still_deletes_it("test.json").await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_delete_card_by_identifier_on_an_archived_board_still_deletes_it_on_sqlite() {
+        assert_delete_card_on_an_archived_board_still_deletes_it("test.sqlite").await;
+    }
 }
