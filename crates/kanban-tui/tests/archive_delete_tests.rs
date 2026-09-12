@@ -615,18 +615,11 @@ fn test_no_board_in_scope_leaves_restore_and_permanent_delete_animations_unstart
         "fixture sanity: board 2's archived tier is warm"
     );
 
-    if let Some(list) = app.view.strategy.get_active_task_list_mut() {
-        list.set_selected_index(Some(0));
-    }
-    assert_eq!(
-        app.get_selected_card_id(),
-        Some(card2_id),
-        "fixture sanity: board 2's archived card must be selected before scope is cleared"
-    );
-
     app.selection.active_board_id = None;
     app.board_list.inner_mut().set_selected_index(None);
 
+    app.multi_select.selected_cards.insert(card_id);
+    app.multi_select.selected_cards.insert(card2_id);
     app.handle_restore_card();
     assert!(
         !app.animation.animating.contains_key(&card_id),
@@ -637,6 +630,8 @@ fn test_no_board_in_scope_leaves_restore_and_permanent_delete_animations_unstart
         "restore must not start an animation for board 2's card with no board in scope"
     );
 
+    app.multi_select.selected_cards.insert(card_id);
+    app.multi_select.selected_cards.insert(card2_id);
     app.handle_delete_card_permanent();
     assert!(
         !app.animation.animating.contains_key(&card_id),
@@ -648,12 +643,8 @@ fn test_no_board_in_scope_leaves_restore_and_permanent_delete_animations_unstart
     );
 
     app.selection.active_board_id = Some(board2.id);
-    app.board_list.inner_mut().set_selected_index(Some(0));
-    if let Some(list) = app.view.strategy.get_active_task_list_mut() {
-        list.set_selected_index(Some(0));
-    }
-    assert_eq!(app.get_selected_card_id(), Some(card2_id));
-
+    app.multi_select.selected_cards.insert(card_id);
+    app.multi_select.selected_cards.insert(card2_id);
     app.handle_restore_card();
     assert!(
         app.animation.animating.contains_key(&card2_id),
