@@ -1,14 +1,6 @@
 use super::*;
 
 impl Model {
-    pub fn columns_state(&self) -> &LoadState<Vec<Column>> {
-        &self.columns
-    }
-
-    pub fn sprints_state(&self) -> &LoadState<Vec<Sprint>> {
-        &self.sprints
-    }
-
     pub fn board_columns_state(&self, board_id: Uuid) -> LoadState<&[Column]> {
         scoped_state(&self.columns_by_board, board_id)
     }
@@ -28,15 +20,7 @@ impl Model {
                 }
             }
         }
-        match self.columns.as_ref() {
-            LoadState::Loaded(columns) => match columns.iter().find(|c| c.id == id) {
-                Some(column) => LoadState::Loaded(column),
-                None => LoadState::Missing,
-            },
-            LoadState::NotLoaded => LoadState::NotLoaded,
-            LoadState::Missing => LoadState::Missing,
-            LoadState::Failed(e) => LoadState::Failed(e),
-        }
+        LoadState::NotLoaded
     }
 
     pub fn sprint_by_id_state(&self, id: Uuid) -> LoadState<&Sprint> {
@@ -50,15 +34,7 @@ impl Model {
                 }
             }
         }
-        match self.sprints.as_ref() {
-            LoadState::Loaded(sprints) => match sprints.iter().find(|s| s.id == id) {
-                Some(sprint) => LoadState::Loaded(sprint),
-                None => LoadState::Missing,
-            },
-            LoadState::NotLoaded => LoadState::NotLoaded,
-            LoadState::Missing => LoadState::Missing,
-            LoadState::Failed(e) => LoadState::Failed(e),
-        }
+        LoadState::NotLoaded
     }
 
     pub fn column_id_status(&self, id: Uuid) -> LoadState<&Column> {

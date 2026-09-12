@@ -54,7 +54,6 @@ impl Model {
         }
 
         if !ids.columns.is_empty() {
-            self.columns = LoadState::NotLoaded;
             for id in &ids.columns {
                 self.columns_by_id.remove(id);
                 self.cards_by_column.remove(id);
@@ -64,8 +63,6 @@ impl Model {
         }
 
         if !ids.cards.is_empty() {
-            self.cards = LoadState::NotLoaded;
-            self.card_index.clear();
             for id in &ids.cards {
                 self.cards_by_id.remove(id);
             }
@@ -78,7 +75,6 @@ impl Model {
         }
 
         if !ids.sprints.is_empty() {
-            self.sprints = LoadState::NotLoaded;
             for id in &ids.sprints {
                 self.sprints_by_id.remove(id);
             }
@@ -678,7 +674,6 @@ mod tests {
 
         let mut m = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![board.clone()]),
-            sprints: LoadState::Loaded(vec![sprint.clone()]),
             archived_boards: Some(vec![]),
             archived_cards: Some(vec![ArchivedCard::new(card.id, board.id)]),
             ..Default::default()

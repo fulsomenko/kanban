@@ -2611,9 +2611,9 @@ mod tests {
         let card_id = card.id;
         app.model = Model::with_load_states(ModelLoadStates {
             boards: LoadState::Loaded(vec![board]),
-            cards: LoadState::Loaded(vec![card]),
             ..Default::default()
         });
+        let _ = card;
         app.selection.active_board_id = Some(board_id);
         app.selection.active_card_id = Some(card_id);
 

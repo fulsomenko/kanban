@@ -37,6 +37,15 @@ fn apply_collection<T: Clone>(
     }
 }
 
+fn apply_by_id<T>(target: &mut HashMap<Uuid, LoadState<T>>, by_id: HashMap<Uuid, LoadState<T>>) {
+    for (id, state) in by_id {
+        if state.is_not_loaded() {
+            continue;
+        }
+        target.insert(id, state);
+    }
+}
+
 fn apply_scopes<T>(
     target: &mut HashMap<Uuid, LoadState<Vec<T>>>,
     incoming: HashMap<Uuid, LoadState<Vec<T>>>,
@@ -70,19 +79,19 @@ fn apply_flat_archival<T>(
 }
 
 impl Model {
-    /// Applies one resolve pass across the three independent tiers per
-    /// entity kind: `all`, then `by_id`, then `by_parent`. A tier left
-    /// `NotLoaded`/empty is untouched; the flat and scoped tiers never merge
-    /// into each other or into the per-id tier.
+    /// Applies one resolve pass across each entity kind's tiers. Boards keep
+    /// a flat collection (`all`, then `by_id`); every other kind is per-id
+    /// and parent-scoped only (`by_id`, then `by_parent`) — their `all` tier
+    /// is never consulted, since nothing populates it anymore. A tier left
+    /// `NotLoaded`/empty is untouched.
     ///
     /// Maintains the id indexes only. Returns a [`ModelChanged`] receipt:
     /// whatever derives from this `Model` is stale until a
     /// [`DerivedProjections`] implementor consumes it.
     pub fn apply_resolved(&mut self, resolved: Resolved) -> ModelChanged {
         let boards_touched = !resolved.boards.is_untouched();
-        let cards_touched = !resolved.cards.is_untouched();
         let touched = boards_touched
-            || cards_touched
+            || !resolved.cards.is_untouched()
             || !resolved.columns.is_untouched()
             || !resolved.sprints.is_untouched()
             || !resolved.archived_cards.is_untouched()
@@ -108,13 +117,8 @@ impl Model {
             by_id: columns_by_id,
             by_parent: columns_by_parent,
         } = resolved.columns;
-        apply_collection(
-            &mut self.columns,
-            &mut self.columns_by_id,
-            columns_all,
-            columns_by_id,
-            |c| c.id,
-        );
+        debug_assert!(columns_all.is_not_loaded(), "columns have no flat tier");
+        apply_by_id(&mut self.columns_by_id, columns_by_id);
         apply_scopes(&mut self.columns_by_board, columns_by_parent);
 
         let Collection {
@@ -122,13 +126,8 @@ impl Model {
             by_id: cards_by_id,
             by_parent: cards_by_parent,
         } = resolved.cards;
-        apply_collection(
-            &mut self.cards,
-            &mut self.cards_by_id,
-            cards_all,
-            cards_by_id,
-            |c| c.id,
-        );
+        debug_assert!(cards_all.is_not_loaded(), "cards have no flat tier");
+        apply_by_id(&mut self.cards_by_id, cards_by_id);
         for (column_id, state) in cards_by_parent {
             if state.is_not_loaded() {
                 continue;
@@ -141,13 +140,8 @@ impl Model {
             by_id: sprints_by_id,
             by_parent: sprints_by_parent,
         } = resolved.sprints;
-        apply_collection(
-            &mut self.sprints,
-            &mut self.sprints_by_id,
-            sprints_all,
-            sprints_by_id,
-            |s| s.id,
-        );
+        debug_assert!(sprints_all.is_not_loaded(), "sprints have no flat tier");
+        apply_by_id(&mut self.sprints_by_id, sprints_by_id);
         apply_scopes(&mut self.sprints_by_board, sprints_by_parent);
 
         apply_scopes(
@@ -173,9 +167,6 @@ impl Model {
             self.graph = resolved.graph;
         }
 
-        if cards_touched {
-            self.rebuild_card_index();
-        }
         if boards_touched {
             self.rebuild_board_index();
         }
@@ -187,10 +178,10 @@ impl Model {
         }
     }
 
-    /// Marks the flat collection, the per-id entries and the parent scopes
-    /// of every kind named in `ids` as `Failed(err)`, without removing any
-    /// of them. An empty `EntityIds` changes nothing. `ids.prefixes` has no
-    /// corresponding `Model` field.
+    /// Marks the boards flat collection, and the per-id entries and parent
+    /// scopes of every kind named in `ids`, as `Failed(err)`, without
+    /// removing any of them. An empty `EntityIds` changes nothing.
+    /// `ids.prefixes` has no corresponding `Model` field.
     ///
     /// Maintains the id indexes only. Returns a [`ModelChanged`] receipt:
     /// whatever derives from this `Model` is stale until a
@@ -205,7 +196,6 @@ impl Model {
             }
         }
         if !ids.columns.is_empty() {
-            self.columns = LoadState::Failed(Arc::clone(&err));
             for state in self.columns_by_board.values_mut() {
                 *state = LoadState::Failed(Arc::clone(&err));
             }
@@ -214,8 +204,6 @@ impl Model {
             }
         }
         if !ids.cards.is_empty() {
-            self.cards = LoadState::Failed(Arc::clone(&err));
-            self.rebuild_card_index();
             for state in self.cards_by_column.values_mut() {
                 *state = LoadState::Failed(Arc::clone(&err));
             }
@@ -227,7 +215,6 @@ impl Model {
             }
         }
         if !ids.sprints.is_empty() {
-            self.sprints = LoadState::Failed(Arc::clone(&err));
             for state in self.sprints_by_board.values_mut() {
                 *state = LoadState::Failed(Arc::clone(&err));
             }

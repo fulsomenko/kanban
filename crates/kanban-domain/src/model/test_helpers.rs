@@ -1,14 +1,13 @@
 use super::*;
 
-/// The settable half of a [`Model`]: the five fetchable collections plus the
-/// two archival marker vectors. The id indexes and the archived-id sets are
-/// derived and are rebuilt by [`Model::with_load_states`].
+/// The settable half of a [`Model`]: the boards flat collection, the graph,
+/// and the two archival marker vectors. The board id index and the
+/// archived-id sets are derived and are rebuilt by
+/// [`Model::with_load_states`]. Columns/cards/sprints have no flat tier to
+/// seed here; use `apply_resolved` with `by_id`/`by_parent` for those.
 #[derive(Default)]
 pub struct ModelLoadStates {
     pub boards: LoadState<Vec<Board>>,
-    pub columns: LoadState<Vec<Column>>,
-    pub cards: LoadState<Vec<Card>>,
-    pub sprints: LoadState<Vec<Sprint>>,
     pub graph: LoadState<DependencyGraph>,
     pub archived_cards: Option<Vec<ArchivedCard>>,
     pub archived_boards: Option<Vec<ArchivedBoard>>,
@@ -16,15 +15,12 @@ pub struct ModelLoadStates {
 
 impl Model {
     /// A `Model` with per-collection load states chosen by the caller, in the
-    /// same internally-consistent shape `load_from_snapshot` produces: the id
-    /// indexes and the archived-id sets are rebuilt from the values supplied.
-    /// Test-only surface.
+    /// same internally-consistent shape `load_from_snapshot` produces: the
+    /// board id index and the archived-id sets are rebuilt from the values
+    /// supplied. Test-only surface.
     pub fn with_load_states(states: ModelLoadStates) -> Self {
         let ModelLoadStates {
             boards,
-            columns,
-            cards,
-            sprints,
             graph,
             archived_cards,
             archived_boards,
@@ -32,15 +28,11 @@ impl Model {
 
         let mut model = Self {
             boards,
-            columns,
-            cards,
-            sprints,
             graph,
             ..Self::default()
         };
 
         model.absorb_archival_markers(archived_cards, archived_boards);
-        model.rebuild_card_index();
         model.rebuild_board_index();
         model
     }
@@ -89,19 +81,6 @@ mod tests {
     }
 
     #[test]
-    fn test_with_load_states_rebuilds_the_card_index() {
-        let board = seed_board();
-        let a = seed_card(&board);
-        let b = seed_card(&board);
-        let b_id = b.id;
-        let model = Model::with_load_states(ModelLoadStates {
-            cards: LoadState::Loaded(vec![a, b]),
-            ..Default::default()
-        });
-        assert!(model.card_by_id_state(b_id).loaded().is_some());
-    }
-
-    #[test]
     fn test_with_load_states_rebuilds_the_board_index() {
         let a = seed_board();
         let b = Board::new("C", None::<String>);
@@ -116,12 +95,10 @@ mod tests {
     #[test]
     fn test_with_load_states_records_the_archived_card_ids_from_the_markers() {
         let board = seed_board();
-        let live = seed_card(&board);
         let archived = seed_card(&board);
         let archived_id = archived.id;
         let marker = ArchivedCard::new(archived_id, board.id);
         let model = Model::with_load_states(ModelLoadStates {
-            cards: LoadState::Loaded(vec![live, archived]),
             archived_cards: Some(vec![marker]),
             ..Default::default()
         });

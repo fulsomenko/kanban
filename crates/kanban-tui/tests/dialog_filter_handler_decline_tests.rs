@@ -20,7 +20,13 @@ fn seed_model_with_board(
     };
     app.model = kanban_domain::Model::with_load_states(ModelLoadStates {
         boards,
-        sprints,
+        ..Default::default()
+    });
+    let _ = app.model.apply_resolved(kanban_domain::Resolved {
+        sprints: kanban_domain::resolved::Collection {
+            by_parent: [(board_id, sprints)].into(),
+            ..Default::default()
+        },
         ..Default::default()
     });
     board_id
