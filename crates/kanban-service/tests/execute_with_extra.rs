@@ -53,9 +53,7 @@ async fn test_execute_with_extra_does_not_downgrade_all_to_entities() -> KanbanR
 
     let inv = ctx.execute_with_extra(EntityIds::default().with_prefixes(), |_| {
         Ok(vec![Command::Card(CardCommand::Archive(
-            kanban_domain::commands::ArchiveCards {
-                ids: vec![card.id],
-            },
+            kanban_domain::commands::ArchiveCards { ids: vec![card.id] },
         ))])
     })?;
 
