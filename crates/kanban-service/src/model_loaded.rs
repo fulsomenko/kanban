@@ -137,7 +137,14 @@ mod tests {
         let column_id = Uuid::new_v4();
         let card = card_in(column_id);
         let mut model = Model::default();
-        model.set_cards_of_column(column_id, LoadState::Loaded(vec![card]));
+        let mut cards = Collection::<Card>::default();
+        cards
+            .by_parent
+            .insert(column_id, LoadState::Loaded(vec![card]));
+        let _ = model.apply_resolved(Resolved {
+            cards,
+            ..Default::default()
+        });
 
         assert_eq!(LoadedState::board_list(&model), FetchStatus::NotLoaded);
         assert_eq!(

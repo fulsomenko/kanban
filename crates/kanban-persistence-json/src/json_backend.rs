@@ -111,6 +111,8 @@ impl JsonDataStore {
     /// Performs the actual flush I/O. Called by `flush()` after the dirty flag
     /// has been cleared; `flush()` restores it if this returns an error.
     async fn do_flush(&self) -> KanbanResult<()> {
+        self.ensure_loaded()?;
+
         // Collect everything we need from the inner store before any await.
         let snapshot = {
             let guard = self
@@ -118,10 +120,11 @@ impl JsonDataStore {
                 .read()
                 .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
 
-            let store = match guard.as_ref() {
-                Some(s) => s,
-                None => return Ok(()), // Never loaded — nothing to flush.
-            };
+            let store = guard.as_ref().ok_or_else(|| {
+                KanbanError::Internal(
+                    "json_backend: inner store vanished after ensure_loaded".into(),
+                )
+            })?;
 
             // `guard` is dropped here, before any await.
             store.snapshot_impl()?
@@ -441,7 +444,6 @@ impl KanbanBackend for JsonDataStore {
     }
 
     fn mark_dirty(&self) {
-        let _ = self.ensure_loaded();
         self.dirty.store(true, Ordering::Release);
     }
 
@@ -792,6 +794,24 @@ mod tests {
 
         jds.flush().await.unwrap();
         assert!(!jds.needs_flush(), "second flush must stay a no-op");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_flush_after_mark_dirty_on_an_unreadable_file_returns_the_load_error() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("corrupt.json");
+        std::fs::write(&path, b"{ not json").unwrap();
+        let jds = make_store(&path);
+
+        jds.mark_dirty();
+        assert!(jds.needs_flush());
+
+        let err = jds.flush().await.unwrap_err();
+        assert!(matches!(err, KanbanError::Serialization(_)));
+        assert!(
+            jds.needs_flush(),
+            "a failed load must leave the backend dirty"
+        );
     }
 
     // ─── F2 (KAN-871): JSON file seam round-trips the reference archival model ──

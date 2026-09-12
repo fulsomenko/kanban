@@ -3,7 +3,7 @@ use crate::helpers::error_mapping::kanban_err_to_mcp;
 use kanban_domain::{
     find_boards_by_name, find_columns_by_name, find_sprints_by_query_global,
     find_sprints_by_query_on_board, AmbiguousMatch, Board, KanbanError, KanbanOperations,
-    LoadState, Model,
+    LoadState, Model, Sprint,
 };
 use rmcp::model::ErrorData as McpError;
 use uuid::Uuid;
@@ -79,6 +79,32 @@ pub(crate) fn resolve_column_in_board(
     }
 }
 
+const MAX_ENUMERATED: usize = 20;
+
+fn capped(mut labels: Vec<String>) -> Vec<String> {
+    if labels.len() > MAX_ENUMERATED {
+        let extra = labels.len() - MAX_ENUMERATED;
+        labels.truncate(MAX_ENUMERATED);
+        labels.push(format!("... and {extra} more"));
+    }
+    labels
+}
+
+fn sprint_alternatives(sprints: &[Sprint], boards: &[Board]) -> Vec<String> {
+    capped(
+        sprints
+            .iter()
+            .map(|s| {
+                let label = match boards.iter().find(|b| b.id == s.board_id) {
+                    Some(b) => s.get_name(b).unwrap_or("(unnamed)").to_string(),
+                    None => "(unknown board)".to_string(),
+                };
+                format!("#{} {}", s.sprint_number, label)
+            })
+            .collect(),
+    )
+}
+
 pub(crate) fn resolve_column_global(ctx: &McpContext, raw: &str) -> Result<Uuid, McpError> {
     if let Ok(uuid) = Uuid::parse_str(raw) {
         return Ok(uuid);
@@ -89,7 +115,7 @@ pub(crate) fn resolve_column_global(ctx: &McpContext, raw: &str) -> Result<Uuid,
         [] => Err(kanban_err_to_mcp(KanbanError::not_found_by_name(
             "Column",
             raw,
-            columns.iter().map(|c| c.name.clone()).collect(),
+            capped(columns.iter().map(|c| c.name.clone()).collect()),
         ))),
         [c] => Ok(c.id),
         many => {
@@ -156,30 +182,29 @@ pub(crate) fn resolve_sprint_in_board(
 }
 
 pub(crate) fn resolve_sprint_global(ctx: &McpContext, raw: &str) -> Result<Uuid, McpError> {
+    resolve_sprint_global_with_boards(ctx, raw).map(|(id, _)| id)
+}
+
+/// The resolved sprint id plus the board list the name-based lookup had to
+/// fetch; `None` when `raw` parsed as a UUID and no board list was read.
+pub(crate) fn resolve_sprint_global_with_boards(
+    ctx: &McpContext,
+    raw: &str,
+) -> Result<(Uuid, Option<Vec<Board>>), McpError> {
     if let Ok(uuid) = Uuid::parse_str(raw) {
-        return Ok(uuid);
+        return Ok((uuid, None));
     }
     let all_sprints = ctx.list_all_sprints().map_err(kanban_err_to_mcp)?;
     let boards = ctx.list_boards().map_err(kanban_err_to_mcp)?;
     let matches = find_sprints_by_query_global(raw, &all_sprints, &boards);
     match matches.as_slice() {
         [] => {
-            let available = all_sprints
-                .iter()
-                .map(|s| {
-                    let label = boards
-                        .iter()
-                        .find(|b| b.id == s.board_id)
-                        .and_then(|b| s.get_name(b))
-                        .unwrap_or("(unnamed)");
-                    format!("#{} {}", s.sprint_number, label)
-                })
-                .collect();
+            let available = sprint_alternatives(&all_sprints, &boards);
             Err(kanban_err_to_mcp(KanbanError::not_found_by_name(
                 "Sprint", raw, available,
             )))
         }
-        [s] => Ok(s.id),
+        [s] => Ok((s.id, Some(boards))),
         many => {
             let matches: Vec<AmbiguousMatch> = many
                 .iter()
@@ -320,5 +345,74 @@ mod tests {
         let err = resolve_sprint_in_board(&Model::default(), "1", &board).unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
         assert!(!err.message.contains("not found"));
+    }
+
+    fn test_store_manager() -> kanban_service::StoreManager {
+        let mut registry = kanban_persistence::StoreRegistry::new();
+        let mut backends = kanban_backend::KanbanBackendRegistry::new();
+        backends.register(Box::new(kanban_persistence_sqlite::SqliteBackendFactory));
+        registry.register(Box::new(kanban_persistence_json::JsonStoreFactory));
+        backends.register(Box::new(kanban_persistence_json::JsonBackendFactory));
+        kanban_service::StoreManager::new(registry, backends)
+    }
+
+    #[tokio::test]
+    async fn test_global_sprint_miss_caps_the_enumerated_alternatives() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = test_store_manager();
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx.create_board("Board".into(), None).unwrap();
+        for _ in 0..25 {
+            ctx.create_sprint(board.id, None, None).unwrap();
+        }
+
+        let err = resolve_sprint_global(&ctx, "no-such-sprint").unwrap_err();
+        assert!(err.message.contains("and 5 more"));
+        assert!(!err.message.contains("#25"));
+    }
+
+    #[tokio::test]
+    async fn test_global_column_miss_caps_the_enumerated_alternatives() {
+        use kanban_core::AppConfig;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.json");
+        let store_manager = test_store_manager();
+        let mut ctx = McpContext::new(
+            &store_manager,
+            &path.to_string_lossy(),
+            AppConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let board = ctx.create_board("Board".into(), None).unwrap();
+        for i in 0..25 {
+            ctx.create_column(board.id, format!("C{i}"), None).unwrap();
+        }
+
+        let err = resolve_column_global(&ctx, "no-such-column").unwrap_err();
+        assert!(err.message.contains("and 5 more"));
+        assert!(!err.message.contains("C24"));
+    }
+
+    #[test]
+    fn test_sprint_alternatives_labels_a_sprint_whose_board_is_absent_as_unknown_board() {
+        let sprint = Sprint::new(Uuid::new_v4(), 1, None, None::<String>);
+        let labels = sprint_alternatives(&[sprint], &[]);
+        assert_eq!(labels, vec!["#1 (unknown board)".to_string()]);
+
+        let board = Board::new("Board", None::<String>);
+        let sprint_on_board = Sprint::new(board.id, 1, None, None::<String>);
+        let labels = sprint_alternatives(&[sprint_on_board], &[board]);
+        assert_eq!(labels, vec!["#1 (unnamed)".to_string()]);
     }
 }
