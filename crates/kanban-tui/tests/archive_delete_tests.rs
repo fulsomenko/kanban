@@ -574,18 +574,54 @@ fn test_no_board_in_scope_leaves_restore_and_permanent_delete_animations_unstart
     let card_id = card.id;
     app.ctx.archive_card(card_id).unwrap();
 
+    let board2 = app.ctx.create_board("Board 2".to_string(), None).unwrap();
+    let column2 = app
+        .ctx
+        .create_column(board2.id, "Todo".to_string(), None)
+        .unwrap();
+    let card2 = app
+        .ctx
+        .create_card(
+            board2.id,
+            column2.id,
+            "ArchiveMeToo".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    let card2_id = card2.id;
+    app.ctx.archive_card(card2_id).unwrap();
+
     app.selection.active_board_id = Some(board.id);
     app.mode = AppMode::ArchivedCardsView;
-    app.reload_model();
-    app.prepare_frame();
+    app.refresh_view();
+
+    app.selection.active_board_id = Some(board2.id);
+    app.refresh_view();
+
+    assert_eq!(
+        app.model
+            .board_archived_cards_state(board.id)
+            .loaded()
+            .map(|v| v.len()),
+        Some(1),
+        "fixture sanity: board 1's archived tier stays warm"
+    );
+    assert_eq!(
+        app.model
+            .board_archived_cards_state(board2.id)
+            .loaded()
+            .map(|v| v.len()),
+        Some(1),
+        "fixture sanity: board 2's archived tier is warm"
+    );
 
     if let Some(list) = app.view.strategy.get_active_task_list_mut() {
         list.set_selected_index(Some(0));
     }
     assert_eq!(
         app.get_selected_card_id(),
-        Some(card_id),
-        "fixture sanity: the archived card must be selected before scope is cleared"
+        Some(card2_id),
+        "fixture sanity: board 2's archived card must be selected before scope is cleared"
     );
 
     app.selection.active_board_id = None;
@@ -594,12 +630,37 @@ fn test_no_board_in_scope_leaves_restore_and_permanent_delete_animations_unstart
     app.handle_restore_card();
     assert!(
         !app.animation.animating.contains_key(&card_id),
-        "restore must not start an animation with no board in scope"
+        "restore must not start an animation for board 1's card with no board in scope"
+    );
+    assert!(
+        !app.animation.animating.contains_key(&card2_id),
+        "restore must not start an animation for board 2's card with no board in scope"
     );
 
     app.handle_delete_card_permanent();
     assert!(
         !app.animation.animating.contains_key(&card_id),
-        "permanent delete must not start an animation with no board in scope"
+        "permanent delete must not start an animation for board 1's card with no board in scope"
+    );
+    assert!(
+        !app.animation.animating.contains_key(&card2_id),
+        "permanent delete must not start an animation for board 2's card with no board in scope"
+    );
+
+    app.selection.active_board_id = Some(board2.id);
+    app.board_list.inner_mut().set_selected_index(Some(0));
+    if let Some(list) = app.view.strategy.get_active_task_list_mut() {
+        list.set_selected_index(Some(0));
+    }
+    assert_eq!(app.get_selected_card_id(), Some(card2_id));
+
+    app.handle_restore_card();
+    assert!(
+        app.animation.animating.contains_key(&card2_id),
+        "restore must start an animation for board 2's card once board 2 is back in scope"
+    );
+    assert!(
+        !app.animation.animating.contains_key(&card_id),
+        "board 1's card must not animate off board 2's scope"
     );
 }
