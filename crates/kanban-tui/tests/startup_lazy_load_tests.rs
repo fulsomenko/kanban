@@ -674,4 +674,50 @@ mod backend_parity {
             );
         }
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_the_startup_scope_never_reads_the_flat_tiers_over_http() {
+        let (snapshot, board1, _board2) = seed_non_trivial_snapshot().await;
+        let server = kanban_server::test_helpers::TestServer::start_with(move |ctx| {
+            kanban_service::write_full_snapshot(ctx.data_store(), snapshot).unwrap();
+        })
+        .await;
+
+        let backend: Arc<dyn kanban_service::KanbanBackend> =
+            Arc::new(kanban_backend_http::HttpBackend::new(&server.base_url()).unwrap());
+        let ctx = KanbanContext::open(backend, AppConfig::default())
+            .await
+            .unwrap();
+
+        let model = populate_scope(&ctx, board1);
+        let untouched_id = Uuid::new_v4();
+
+        assert!(
+            model.board_columns_state(untouched_id).is_not_loaded(),
+            "an unrelated board's column tier must stay unrequested over http"
+        );
+        assert!(
+            model.column_cards_state(untouched_id).is_not_loaded(),
+            "an unrelated column's card tier must stay unrequested over http"
+        );
+        assert!(
+            model.board_sprints_state(untouched_id).is_not_loaded(),
+            "an unrelated board's sprint tier must stay unrequested over http"
+        );
+        assert!(
+            model.board_columns_state(board1).is_loaded(),
+            "the scoped column tier must be loaded over http"
+        );
+        assert!(
+            model.board_cards_state(board1).is_loaded(),
+            "the scoped card tier must be loaded over http"
+        );
+        assert!(
+            model.board_sprints_state(board1).is_loaded(),
+            "the scoped sprint tier must be loaded over http"
+        );
+
+        drop(ctx);
+        server.shutdown().await;
+    }
 }
