@@ -1684,6 +1684,7 @@ dependencies = [
  "kanban-persistence",
  "kanban-persistence-json",
  "kanban-persistence-sqlite",
+ "kanban-server",
  "kanban-service",
  "kanban-view",
  "pulldown-cmark",
