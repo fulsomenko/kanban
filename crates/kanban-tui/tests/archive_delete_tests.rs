@@ -654,4 +654,17 @@ fn test_no_board_in_scope_leaves_restore_and_permanent_delete_animations_unstart
         !app.animation.animating.contains_key(&card_id),
         "board 1's card must not animate off board 2's scope"
     );
+
+    app.animation.animating.clear();
+    app.multi_select.selected_cards.insert(card_id);
+    app.multi_select.selected_cards.insert(card2_id);
+    app.handle_delete_card_permanent();
+    assert!(
+        app.animation.animating.contains_key(&card2_id),
+        "permanent delete must start an animation for board 2's card once board 2 is back in scope"
+    );
+    assert!(
+        !app.animation.animating.contains_key(&card_id),
+        "board 1's card must not animate a permanent delete off board 2's scope"
+    );
 }
