@@ -216,7 +216,23 @@ async fn test_delete_column_refetches_the_card_tier_because_the_batch_moved_card
         3,
         "the three cards moved out of c2 must all report c1"
     );
-    let _ = c3;
+
+    let untouched: Vec<_> = app
+        .model
+        .column_cards_state(c3.id)
+        .loaded()
+        .copied()
+        .unwrap_or(&[])
+        .iter()
+        .filter(|card| card.column_id == c3.id)
+        .collect();
+    let mut untouched_titles: Vec<_> = untouched.iter().map(|card| card.title.clone()).collect();
+    untouched_titles.sort();
+    assert_eq!(
+        untouched_titles,
+        vec!["M0".to_string(), "M1".to_string()],
+        "c3's own cards must be untouched by the c2 -> c1 move"
+    );
 }
 
 #[tokio::test]
@@ -272,6 +288,61 @@ async fn test_move_column_up_leaves_an_untouched_columns_card_scope_loaded() {
         "got {refetch:?}"
     );
     assert!(app.model.column_cards_state(c1.id).is_loaded());
+}
+
+#[tokio::test]
+async fn test_move_column_down_leaves_an_untouched_columns_card_scope_loaded() {
+    let mut app = App::test_default();
+    let board = app.ctx.create_board("Board".to_string(), None).unwrap();
+    let c1 = app
+        .ctx
+        .create_column(board.id, "C1".to_string(), Some(0))
+        .unwrap();
+    let c2 = app
+        .ctx
+        .create_column(board.id, "C2".to_string(), Some(1))
+        .unwrap();
+    let c3 = app
+        .ctx
+        .create_column(board.id, "C3".to_string(), Some(2))
+        .unwrap();
+    for (col, name) in [(&c1, "k1"), (&c2, "k2"), (&c3, "k3")] {
+        app.ctx
+            .create_card(
+                board.id,
+                col.id,
+                name.to_string(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+    }
+
+    let ops = prime(&mut app).await;
+
+    app.selection.active_board_id = Some(board.id);
+    app.mode = AppMode::BoardDetail;
+    select_column(&mut app, board.id, c1.id);
+    app.handle_move_column_down();
+
+    let refetch = refetch_ops(&ops);
+    assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
+    assert!(
+        has_op_with_id(&refetch, "list_columns_by_board", board.id),
+        "got {refetch:?}"
+    );
+    assert!(
+        has_op_with_id(&refetch, "list_cards_by_column", c1.id),
+        "got {refetch:?}"
+    );
+    assert!(
+        has_op_with_id(&refetch, "list_cards_by_column", c2.id),
+        "got {refetch:?}"
+    );
+    assert!(
+        !has_op_with_id(&refetch, "list_cards_by_column", c3.id),
+        "got {refetch:?}"
+    );
+    assert!(app.model.column_cards_state(c3.id).is_loaded());
 }
 
 #[tokio::test]
@@ -626,6 +697,9 @@ async fn test_create_card_refetches_the_card_tiers_named_by_its_inverse() {
     assert!(!has_op(&refetch, "get_graph"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_archived_cards"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_archived_boards"), "got {refetch:?}");
+    assert!(!has_op(&refetch, "list_all_columns"), "got {refetch:?}");
+    assert!(!has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
+    assert!(!has_op(&refetch, "list_all_cards"), "got {refetch:?}");
 }
 
 #[tokio::test]

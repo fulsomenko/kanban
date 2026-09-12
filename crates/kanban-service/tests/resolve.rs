@@ -305,6 +305,61 @@ async fn test_resolve_card_ids_resolves_a_card_on_an_archived_board() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_resolve_card_ids_reports_ambiguous_for_a_bare_number_spanning_an_archived_board() {
+    use kanban_domain::{BatchResolutionCause, DomainError, KanbanError};
+    let (mut ctx, _dir) = open_ctx().await;
+
+    let alpha = ctx
+        .create_board("Alpha".into(), Some("ALPHA".into()))
+        .unwrap();
+    let alpha_col = ctx.create_column(alpha.id, "TODO".into(), None).unwrap();
+    let alpha_card = ctx
+        .create_card(
+            alpha.id,
+            alpha_col.id,
+            "Alpha card".into(),
+            Default::default(),
+        )
+        .unwrap();
+
+    let beta = ctx
+        .create_board("Beta".into(), Some("BETA".into()))
+        .unwrap();
+    let beta_col = ctx.create_column(beta.id, "TODO".into(), None).unwrap();
+    let beta_card = ctx
+        .create_card(beta.id, beta_col.id, "Beta card".into(), Default::default())
+        .unwrap();
+
+    assert_eq!(
+        alpha_card.card_number, beta_card.card_number,
+        "fixture sanity: distinct prefixes each start their counter at 1"
+    );
+
+    ctx.archive_board(beta.id).unwrap();
+
+    let bare_number = alpha_card.card_number.to_string();
+    let err = ctx
+        .resolve_card_ids(std::slice::from_ref(&bare_number))
+        .unwrap_err();
+    let KanbanError::Domain(DomainError::BatchResolutionFailed { entity, failures }) = err else {
+        panic!("expected BatchResolutionFailed");
+    };
+    assert_eq!(entity, "Card");
+    assert_eq!(failures.len(), 1);
+    let BatchResolutionCause::Ambiguous(matches) = &failures[0].cause else {
+        panic!(
+            "expected BatchResolutionCause::Ambiguous, got: {:?}",
+            failures[0].cause
+        );
+    };
+    let mut ids: Vec<_> = matches.iter().map(|m| m.id).collect();
+    ids.sort();
+    let mut expected = vec![alpha_card.id, beta_card.id];
+    expected.sort();
+    assert_eq!(ids, expected);
+}
+
 // ---------- require_same_board ----------
 
 #[tokio::test(flavor = "multi_thread")]

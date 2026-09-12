@@ -502,6 +502,11 @@ mod tests {
         let model_changed_block = prod.split("pub struct ModelChanged").next().unwrap();
         assert!(prod.contains("pub(crate) fn new()"));
         assert!(!prod.contains("pub fn new("));
+        assert!(prod.contains("pub(crate) fn unchanged()"));
+        assert!(
+            !prod.contains("pub fn unchanged("),
+            "a pub unchanged() would let an external caller mint a resync-skipping receipt"
+        );
         assert!(!model_changed_block.contains("derive(Debug, Default)"));
     }
 

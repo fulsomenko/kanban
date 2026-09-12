@@ -8,14 +8,14 @@ use kanban_backend_memory::InMemoryStore;
 use kanban_core::{AppConfig, Edge};
 use kanban_domain::commands::{BoardCommand, Command, CreateBoard};
 use kanban_domain::{
-    Archived, ArchivedBoard, ArchivedCard, Board, Card, Column, CommandBatch, CommandStore,
-    DataStore, KanbanResult, Prefix, Sprint, SprintLog,
+    Archived, ArchivedBoard, ArchivedCard, ArchivedEntity, Board, Card, Column, CommandBatch,
+    CommandStore, DataStore, KanbanResult, Prefix, Snapshot, Sprint, SprintLog,
 };
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_persistence_sqlite::SqliteBackend;
 use kanban_service::test_helpers::contract::assert_card_eq;
 use kanban_service::test_helpers::BackendFactory;
-use kanban_service::{KanbanBackend, KanbanContext, TransactionFn};
+use kanban_service::{read_full_snapshot, KanbanBackend, KanbanContext, TransactionFn};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -602,6 +602,16 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
         let src_ctx = open_ctx(&in_memory_backend_factory(), &src_path).await;
         let fixture = seed_rich(src_ctx.data_store()).unwrap();
 
+        let src_edge_created = src_ctx
+            .data_store()
+            .get_graph()
+            .unwrap()
+            .blocks_edges()
+            .iter()
+            .find(|e| (e.source(), e.target()) == fixture.live_block_edge)
+            .unwrap()
+            .created_at();
+
         src_ctx
             .transfer_state_to(&*dst_ctx.backend())
             .unwrap_or_else(|e| panic!("transfer into populated {dst_name} failed: {e}"));
@@ -646,7 +656,172 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
             "target's pre-existing block edge must survive the transfer on {dst_name}, got {kept_blocks:?}"
         );
 
+        let dst_edge = store
+            .get_graph()
+            .unwrap()
+            .blocks_edges()
+            .iter()
+            .find(|e| (e.source(), e.target()) == fixture.live_block_edge)
+            .unwrap()
+            .created_at();
+        assert_ne!(
+            dst_edge, src_edge_created,
+            "merge_from regenerates timestamps on a non-empty target graph on {dst_name}"
+        );
+
         assert_transfer_matches(&fixture, store);
+    }
+}
+
+fn normalize(snapshot: &mut Snapshot) {
+    snapshot.boards.sort_by_key(|b| b.id);
+    snapshot.columns.sort_by_key(|c| c.id);
+    snapshot.cards.sort_by_key(|c| c.id);
+    snapshot.sprints.sort_by_key(|s| s.id);
+    snapshot.archived_cards.sort_by_key(|a| a.entity_id());
+    snapshot.archived_boards.sort_by_key(|a| a.entity_id());
+    snapshot.prefixes.sort_by_key(|p| p.name.clone());
+}
+
+fn edge_pairs<E: Edge<NodeId = Uuid>>(edges: &[E]) -> Vec<(Uuid, Uuid)> {
+    let mut pairs: Vec<(Uuid, Uuid)> = edges.iter().map(|e| (e.source(), e.target())).collect();
+    pairs.sort_unstable();
+    pairs
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_transfer_state_to_a_target_whose_graph_conflicts_leaves_the_target_unchanged() {
+    for (dst_name, dst_factory) in backends() {
+        let dir = TempDir::new().unwrap();
+        let dst_path = dir.path().join("dst.store");
+        let dst_ctx = open_ctx(&dst_factory, &dst_path).await;
+
+        let a_id = Uuid::new_v4();
+        let b_id = Uuid::new_v4();
+
+        let unrelated_board = Board::new("Unrelated", Some("unr"));
+        let unrelated_column = Column::new(unrelated_board.id, "Todo", 0);
+        let mut card_a = Card::new(unrelated_board.id, unrelated_column.id, "A", 0);
+        card_a.id = a_id;
+        card_a.prefix = "unr".into();
+        card_a.card_number = 1;
+        let mut card_b = Card::new(unrelated_board.id, unrelated_column.id, "B", 1);
+        card_b.id = b_id;
+        card_b.prefix = "unr".into();
+        card_b.card_number = 2;
+        let unrelated_sprint = Sprint::new(unrelated_board.id, 1, None, None::<String>);
+        let unrelated_prefix = Prefix {
+            name: "unr".into(),
+            card_counter: 2,
+            sprint_counter: 1,
+        };
+
+        dst_ctx
+            .data_store()
+            .upsert_prefix(unrelated_prefix)
+            .unwrap();
+        dst_ctx
+            .data_store()
+            .upsert_board(unrelated_board.clone())
+            .unwrap();
+        dst_ctx
+            .data_store()
+            .upsert_column(unrelated_column.clone())
+            .unwrap();
+        dst_ctx.data_store().upsert_card(card_a.clone()).unwrap();
+        dst_ctx.data_store().upsert_card(card_b.clone()).unwrap();
+        dst_ctx
+            .data_store()
+            .upsert_sprint(unrelated_sprint.clone())
+            .unwrap();
+        dst_ctx
+            .data_store()
+            .modify_graph(Box::new(move |g| g.set_parent(a_id, b_id)))
+            .unwrap();
+        dst_ctx.save().await.unwrap();
+
+        let before = {
+            let mut s = read_full_snapshot(dst_ctx.data_store()).unwrap();
+            normalize(&mut s);
+            s
+        };
+
+        let src_path = dir.path().join("src.store");
+        let src_ctx = open_ctx(&in_memory_backend_factory(), &src_path).await;
+        src_ctx
+            .data_store()
+            .upsert_prefix(Prefix {
+                name: "src".into(),
+                card_counter: 2,
+                sprint_counter: 0,
+            })
+            .unwrap();
+        let src_board = Board::new("Src", Some("src"));
+        let src_column = Column::new(src_board.id, "Todo", 0);
+        let mut src_card_a = Card::new(src_board.id, src_column.id, "SrcA", 0);
+        src_card_a.id = a_id;
+        src_card_a.prefix = "src".into();
+        src_card_a.card_number = 1;
+        let mut src_card_b = Card::new(src_board.id, src_column.id, "SrcB", 1);
+        src_card_b.id = b_id;
+        src_card_b.prefix = "src".into();
+        src_card_b.card_number = 2;
+        src_ctx
+            .data_store()
+            .upsert_board(src_board.clone())
+            .unwrap();
+        src_ctx
+            .data_store()
+            .upsert_column(src_column.clone())
+            .unwrap();
+        src_ctx.data_store().upsert_card(src_card_a).unwrap();
+        src_ctx.data_store().upsert_card(src_card_b).unwrap();
+        src_ctx
+            .data_store()
+            .modify_graph(Box::new(move |g| g.set_parent(b_id, a_id)))
+            .unwrap();
+
+        let err = src_ctx.transfer_state_to(&*dst_ctx.backend()).unwrap_err();
+        assert!(
+            err.is_cycle_detected(),
+            "expected a cycle-detected error on {dst_name}, got: {err}"
+        );
+
+        let reopened = open_ctx(&dst_factory, &dst_path).await;
+        let after = {
+            let mut s = read_full_snapshot(reopened.data_store()).unwrap();
+            normalize(&mut s);
+            s
+        };
+
+        assert_eq!(before.boards, after.boards, "boards on {dst_name}");
+        assert_eq!(before.columns, after.columns, "columns on {dst_name}");
+        assert_eq!(before.cards, after.cards, "cards on {dst_name}");
+        assert_eq!(before.sprints, after.sprints, "sprints on {dst_name}");
+        assert_eq!(
+            before.archived_cards, after.archived_cards,
+            "archived cards on {dst_name}"
+        );
+        assert_eq!(
+            before.archived_boards, after.archived_boards,
+            "archived boards on {dst_name}"
+        );
+        assert_eq!(before.prefixes, after.prefixes, "prefixes on {dst_name}");
+        assert_eq!(
+            edge_pairs(before.graph.spawns_edges()),
+            edge_pairs(after.graph.spawns_edges()),
+            "spawns edges on {dst_name}"
+        );
+        assert_eq!(
+            edge_pairs(before.graph.blocks_edges()),
+            edge_pairs(after.graph.blocks_edges()),
+            "blocks edges on {dst_name}"
+        );
+        assert_eq!(
+            edge_pairs(before.graph.relates_edges()),
+            edge_pairs(after.graph.relates_edges()),
+            "relates edges on {dst_name}"
+        );
     }
 }
 

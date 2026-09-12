@@ -734,7 +734,20 @@ async fn test_carry_over_sprint_refetches_the_card_tiers_not_the_sprint_list() {
     assert!(!has_op(&refetch, "snapshot"), "got {refetch:?}");
     assert!(has_op(&refetch, "list_cards_by_column"), "got {refetch:?}");
     assert!(!has_op(&refetch, "list_all_sprints"), "got {refetch:?}");
-    let _ = target;
+
+    let state = app.model.column_cards_state(c1.id);
+    let cards = state
+        .loaded()
+        .expect("card tier must be loaded after the carry-over refetch");
+    let moved = cards
+        .iter()
+        .find(|c| c.id == card.id)
+        .expect("the seeded card must still be present");
+    assert_eq!(
+        moved.sprint_id,
+        Some(target.id),
+        "the card must have been carried over onto the target sprint"
+    );
 }
 
 #[tokio::test]

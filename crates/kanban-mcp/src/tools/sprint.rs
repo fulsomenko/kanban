@@ -563,8 +563,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sprint_tool_with_an_unloadable_sprint_list_errors_instead_of_reporting_not_found_on_json(
-    ) {
+    async fn test_sprint_tool_with_an_unloadable_sprint_list_errors_naming_the_collection_on_json()
+    {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
         seeded.handle.fail("list_all_sprints");
@@ -578,11 +578,12 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("injected fault: list_all_sprints"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_sprint_tool_with_an_unloadable_sprint_list_errors_instead_of_reporting_not_found_on_sqlite(
+    async fn test_sprint_tool_with_an_unloadable_sprint_list_errors_naming_the_collection_on_sqlite(
     ) {
         let seeded = seeded_server("test.sqlite").await;
         seeded.handle.clear_ops();
@@ -597,6 +598,7 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert!(err.message.contains("injected fault: list_all_sprints"));
         assert!(!err.message.to_lowercase().contains("not found"));
     }
 
