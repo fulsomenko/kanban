@@ -76,7 +76,18 @@ async fn test_pressing_delete_after_navigating_off_the_active_board_opens_the_co
         )
         .unwrap();
     app.ctx
+        .create_card(
+            board2.id,
+            col2.id,
+            "Card 3".to_string(),
+            CreateCardOptions::default(),
+        )
+        .unwrap();
+    app.ctx
         .create_sprint(board2.id, None, Some("Sprint 2".to_string()))
+        .unwrap();
+    app.ctx
+        .create_sprint(board2.id, None, Some("Sprint 3".to_string()))
         .unwrap();
 
     app.load_initial_state().await;
@@ -117,12 +128,12 @@ async fn test_pressing_delete_after_navigating_off_the_active_board_opens_the_co
 
     let output = render_to_string(&mut app, 140, 30);
     assert!(
-        output.contains("1 task(s)"),
+        output.contains("2 task(s)"),
         "expected board 2's task count, got:\n{}",
         output
     );
     assert!(
-        output.contains("1 sprint(s)"),
+        output.contains("2 sprint(s)"),
         "expected board 2's sprint count, got:\n{}",
         output
     );
