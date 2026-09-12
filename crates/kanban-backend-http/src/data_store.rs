@@ -1,3 +1,12 @@
+//! Every `DataStore` method the server has no route for declines with
+//! `KanbanError::unsupported(<its own method name>)`, tagged with one of six
+//! categories: `missing-route` (no route exists at all), `architecture-mismatch`
+//! (the operation's shape doesn't map onto this transport), `write-backstop-via-RemoteWrites`
+//! (writes route through `RemoteWrites`, so this decline firing at all is a
+//! routing bug surfacing loudly), `archived-family-gap` (no route filters by
+//! archival status), `count-methods-never-fake-O(1)` (no cheap count route
+//! exists), and `bulk-deletes-never-fan-out` (no route deletes by parent).
+
 use crate::conversions::{
     archived_card_from_response, board_from_response, card_from_response, column_from_response,
     prefix_from_response, sprint_from_response,
@@ -146,6 +155,21 @@ impl DataStore for HttpBackend {
         })
     }
 
+    /// archived-family-gap: the server has no route filtering cards by
+    /// archival status, so only `LiveOnly` can be served (by delegating to
+    /// `list_cards_by_column`); any archived-aware filter declines under its
+    /// own name.
+    fn list_cards_by_column_filtered(
+        &self,
+        column_id: Uuid,
+        archived: kanban_domain::ArchivedFilter,
+    ) -> KanbanResult<Vec<Card>> {
+        match archived {
+            kanban_domain::ArchivedFilter::LiveOnly => self.list_cards_by_column(column_id),
+            _ => Err(KanbanError::unsupported("list_cards_by_column_filtered")),
+        }
+    }
+
     fn list_cards_by_sprint(&self, sprint_id: Uuid) -> KanbanResult<Vec<Card>> {
         self.block_on(async {
             let sprint: Option<SprintResponse> =
@@ -167,6 +191,19 @@ impl DataStore for HttpBackend {
 
     fn count_cards_in_column(&self, _column_id: Uuid) -> KanbanResult<usize> {
         Err(KanbanError::unsupported("count_cards_in_column"))
+    }
+
+    /// count-methods-never-fake-O(1): same archived-family-gap as
+    /// `list_cards_by_column_filtered`, mirrored for the count method.
+    fn count_cards_in_column_filtered(
+        &self,
+        column_id: Uuid,
+        archived: kanban_domain::ArchivedFilter,
+    ) -> KanbanResult<usize> {
+        match archived {
+            kanban_domain::ArchivedFilter::LiveOnly => self.count_cards_in_column(column_id),
+            _ => Err(KanbanError::unsupported("count_cards_in_column_filtered")),
+        }
     }
 
     fn count_cards_in_column_excluding(
@@ -201,6 +238,18 @@ impl DataStore for HttpBackend {
         _timestamp: chrono::DateTime<chrono::Utc>,
     ) -> KanbanResult<()> {
         Err(KanbanError::unsupported("clear_sprint_from_cards"))
+    }
+
+    /// missing-route: no server route clears a sprint id from archived
+    /// cards. Declines under its own name rather than inheriting the
+    /// default, which would walk `list_archived_cards` and report that
+    /// method's name instead.
+    fn clear_sprint_from_archived_cards(
+        &self,
+        _sprint_id: Uuid,
+        _timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> KanbanResult<()> {
+        Err(KanbanError::unsupported("clear_sprint_from_archived_cards"))
     }
 
     fn get_archived_card(&self, _card_id: Uuid) -> KanbanResult<Option<ArchivedCard>> {
@@ -308,6 +357,14 @@ impl DataStore for HttpBackend {
 
     fn set_graph(&self, _graph: DependencyGraph) -> KanbanResult<()> {
         Err(KanbanError::unsupported("set_graph"))
+    }
+
+    /// architecture-mismatch: graph writes route server-side; the inherited
+    /// default would call `get_graph()` then `set_graph()` as two
+    /// operations, and `set_graph` always declines here, so the default
+    /// would surface a transport/route error instead of an honest decline.
+    fn modify_graph(&self, _f: kanban_domain::GraphMutFn) -> KanbanResult<()> {
+        Err(KanbanError::unsupported("modify_graph"))
     }
 
     /// No route filters cards by a bare `board_id` + `card_number` pair, and
