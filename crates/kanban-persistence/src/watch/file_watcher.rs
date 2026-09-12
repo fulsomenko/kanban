@@ -702,4 +702,26 @@ mod tests {
             result
         );
     }
+
+    #[tokio::test]
+    async fn test_start_watching_after_stop_watching_does_not_rearm_the_watcher() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+        tokio::fs::write(&file_path, b"initial content")
+            .await
+            .unwrap();
+
+        let watcher = FileWatcher::new();
+        watcher.start_watching(file_path.clone()).await.unwrap();
+        assert!(watcher.is_watching());
+
+        watcher.stop_watching().await.unwrap();
+        assert!(!watcher.is_watching());
+
+        assert!(watcher.start_watching(file_path).await.is_ok());
+        assert!(
+            !watcher.is_watching(),
+            "start_watching after stop_watching must not rearm the watcher"
+        );
+    }
 }
