@@ -111,6 +111,8 @@ impl JsonDataStore {
     /// Performs the actual flush I/O. Called by `flush()` after the dirty flag
     /// has been cleared; `flush()` restores it if this returns an error.
     async fn do_flush(&self) -> KanbanResult<()> {
+        self.ensure_loaded()?;
+
         // Collect everything we need from the inner store before any await.
         let snapshot = {
             let guard = self
@@ -118,10 +120,11 @@ impl JsonDataStore {
                 .read()
                 .map_err(|_| KanbanError::Internal("json_backend: inner RwLock poisoned".into()))?;
 
-            let store = match guard.as_ref() {
-                Some(s) => s,
-                None => return Ok(()), // Never loaded — nothing to flush.
-            };
+            let store = guard.as_ref().ok_or_else(|| {
+                KanbanError::Internal(
+                    "json_backend: inner store vanished after ensure_loaded".into(),
+                )
+            })?;
 
             // `guard` is dropped here, before any await.
             store.snapshot_impl()?
@@ -441,7 +444,6 @@ impl KanbanBackend for JsonDataStore {
     }
 
     fn mark_dirty(&self) {
-        let _ = self.ensure_loaded();
         self.dirty.store(true, Ordering::Release);
     }
 
