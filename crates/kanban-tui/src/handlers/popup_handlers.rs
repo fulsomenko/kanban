@@ -689,11 +689,9 @@ impl App {
                     self.relationship.search_active = false;
                 }
                 KeyCode::Backspace => {
-                    let popped = self.relationship.search.pop();
+                    self.relationship.search.pop();
                     if !self.update_relationship_selection_after_search() {
-                        if let Some(c) = popped {
-                            self.relationship.search.push(c);
-                        }
+                        self.relationship.selection.clear();
                     }
                 }
                 KeyCode::Char(c) => {
@@ -1139,7 +1137,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relationship_search_backspace_with_a_failed_per_id_entry_leaves_the_buffer_unchanged() {
+    fn test_relationship_search_backspace_with_a_failed_entry_shrinks_and_drops_selection() {
         let mut app = App::test_default();
         let (_board_id, card_id) = seed_relationship_dialog(&mut app);
         let unresolvable_id = uuid::Uuid::new_v4();
@@ -1166,8 +1164,16 @@ mod tests {
         app.handle_manage_parents_popup(KeyCode::Backspace);
 
         assert_eq!(
-            app.relationship.search, "ab",
-            "a declined recompute must restore the popped char"
+            app.relationship.search, "a",
+            "backspace always shrinks the buffer, so the filter stays clearable"
+        );
+        assert!(
+            app.relationship.selection.get().is_none(),
+            "a declined recompute must drop the selection rather than leave a stale index"
+        );
+        assert!(
+            app.ui_state.banner.is_some(),
+            "a declined recompute must tell the user why"
         );
     }
 
