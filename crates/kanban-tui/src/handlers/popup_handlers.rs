@@ -1053,7 +1053,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relationship_search_with_failed_cards_tier_for_an_unresolvable_id_banners() {
+    fn test_relationship_search_with_failed_per_id_entry_for_an_unresolvable_id_banners() {
         let mut app = App::test_default();
         let (_board_id, card_id) = seed_relationship_dialog(&mut app);
         let unresolvable_id = uuid::Uuid::new_v4();
@@ -1062,9 +1062,13 @@ mod tests {
 
         let changed = app.model.apply_resolved(kanban_domain::Resolved {
             cards: kanban_domain::resolved::Collection {
-                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
-                    kanban_domain::KanbanError::unsupported("flat declined"),
-                )),
+                by_id: [(
+                    unresolvable_id,
+                    kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                        kanban_domain::KanbanError::unsupported("boom"),
+                    )),
+                )]
+                .into(),
                 ..Default::default()
             },
             ..Default::default()

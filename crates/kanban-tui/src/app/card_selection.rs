@@ -1,5 +1,7 @@
 use super::{App, SprintTaskPanel};
-use kanban_domain::{partition_sprint_cards, sort_card_ids, Card, LoadState, SortField, SortOrder};
+use kanban_domain::{
+    partition_sprint_cards, sort_card_ids, Card, KanbanOperations, LoadState, SortField, SortOrder,
+};
 
 impl App {
     pub fn get_selected_card_in_context(&self) -> Option<Card> {
@@ -70,15 +72,23 @@ impl App {
     }
 
     /// Sets `active_card_id` to `id` when the card is loaded, clears it when
-    /// the card is genuinely `Missing` (the archived-card / file-watcher
-    /// reload race this exists for), and otherwise leaves the current
-    /// selection untouched: a `NotLoaded` or `Failed` tier means the card's
-    /// existence is unknown, not that it is gone.
+    /// the card is genuinely gone, and otherwise leaves the current
+    /// selection untouched (`Failed` means the card's existence is unknown,
+    /// not that it is gone). Neither the per-id nor the scoped tier can
+    /// prove absence on their own, so a `NotLoaded` id falls back to one
+    /// direct store read to settle it; every caller passes an id already
+    /// visible in the model except the navigation-history recall this
+    /// exists for, so the read is rare, not per-frame.
     pub(crate) fn set_active_card_or_clear(&mut self, id: uuid::Uuid) {
         match self.model.card_by_id_state(id) {
             LoadState::Loaded(card) => self.selection.active_card_id = Some(card.id),
             LoadState::Missing => self.selection.active_card_id = None,
-            LoadState::NotLoaded | LoadState::Failed(_) => {}
+            LoadState::Failed(_) => {}
+            LoadState::NotLoaded => match self.ctx.get_card(id) {
+                Ok(Some(_)) => self.selection.active_card_id = Some(id),
+                Ok(None) => self.selection.active_card_id = None,
+                Err(_) => {}
+            },
         }
     }
 

@@ -2756,7 +2756,7 @@ mod tests {
     }
 
     #[test]
-    fn test_toggle_completion_for_card_ids_with_a_failed_flat_cards_tier_for_an_unresolvable_id_declines(
+    fn test_toggle_completion_for_card_ids_with_a_failed_per_id_entry_for_an_unresolvable_id_declines(
     ) {
         let mut app = App::test_default();
         let card_id = seed_sprint_with_card(&mut app, "task");
@@ -2764,9 +2764,13 @@ mod tests {
 
         let changed = app.model.apply_resolved(kanban_domain::Resolved {
             cards: kanban_domain::resolved::Collection {
-                all: kanban_domain::LoadState::Failed(std::sync::Arc::new(
-                    kanban_domain::KanbanError::unsupported("flat declined"),
-                )),
+                by_id: [(
+                    unresolvable_id,
+                    kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                        kanban_domain::KanbanError::unsupported("boom"),
+                    )),
+                )]
+                .into(),
                 ..Default::default()
             },
             ..Default::default()
