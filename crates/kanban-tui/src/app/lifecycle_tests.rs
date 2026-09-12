@@ -1116,3 +1116,35 @@ async fn test_adopt_storage_file_still_refuses_an_existing_path() {
         banner.message
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_adopt_storage_file_rewires_freshness_to_the_adopted_file() {
+    use crossterm::event::KeyCode;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let target = dir.path().join("adopted.json");
+
+    let sm = default_store_manager();
+    let (mut app, _save_rx) = App::new_with_store_and_config(sm, None, Default::default())
+        .await
+        .unwrap();
+
+    let (_tx, rx) = tokio::sync::mpsc::channel::<kanban_service::api::ChangeEventFrame>(4);
+    app.persistence.remote_change_rx = Some(rx);
+
+    app.maybe_push_startup_file_dialog();
+    app.input.clear();
+    app.input.set(target.to_str().unwrap().to_string());
+    app.handle_choose_storage_file_dialog(KeyCode::Enter);
+
+    assert!(app.persistence.remote_change_rx.is_none());
+    assert!(app.persistence.file_change_rx.is_some());
+    assert!(
+        matches!(app.persistence.freshness, FreshnessSource::File(ref p) if p.ends_with("adopted.json"))
+    );
+    let watcher = app.persistence.file_watcher.as_ref().unwrap();
+    assert_eq!(
+        watcher.own_instance_id(),
+        Some(app.ctx.backend().instance_id())
+    );
+}

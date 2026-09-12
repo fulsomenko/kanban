@@ -3,9 +3,12 @@ mod helpers;
 use helpers::{CountingBackend, ReadOpLog};
 use kanban_core::ClientId;
 use kanban_domain::{CreateCardOptions, KanbanOperations};
+use kanban_persistence::ChangeDetector;
 use kanban_service::api::{ChangeEventFrame, EntityIdsDto, InvalidationDto};
 use kanban_tui::app::mode::{AppMode, DialogMode};
+use kanban_tui::app::FreshnessSource;
 use kanban_tui::App;
+use std::sync::Arc;
 use uuid::Uuid;
 
 struct Seed {
@@ -192,4 +195,93 @@ async fn test_dirty_model_frame_opens_external_change_dialog() {
     let board = app.model.board_by_id_state(seed.board).loaded().copied();
     assert_eq!(board.map(|b| b.name.clone()), Some("Board".to_string()));
     assert!(ops.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_rewire_to_a_remote_locator_wires_the_sse_receiver_only() {
+    let mut app = App::test_default();
+    let watcher = kanban_persistence::FileWatcher::new();
+    app.persistence.file_change_rx = Some(watcher.subscribe());
+    app.persistence.file_watcher = Some(watcher);
+
+    let backend = Arc::new(kanban_backend_http::HttpBackend::new("http://127.0.0.1:1").unwrap());
+    app.ctx.replace_backend(backend);
+    app.persistence.save_file = Some("http://127.0.0.1:1".to_string());
+
+    app.rewire_freshness().await;
+
+    assert!(app.persistence.remote_change_rx.is_some());
+    assert!(app.persistence.file_change_rx.is_none());
+    assert!(app.persistence.file_watcher.is_none());
+    assert_eq!(app.persistence.freshness, FreshnessSource::Remote);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_rewire_to_a_local_locator_drops_the_stale_remote_receiver() {
+    let mut app = App::test_default();
+    let (_tx, rx) = tokio::sync::mpsc::channel::<ChangeEventFrame>(4);
+    app.persistence.remote_change_rx = Some(rx);
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = helpers::create_test_json_file(dir.path(), "local.json", &["Board"]).await;
+    app.persistence.save_file = Some(path);
+
+    app.rewire_freshness().await;
+
+    assert!(app.persistence.remote_change_rx.is_none());
+    assert!(app.persistence.file_change_rx.is_some());
+    assert!(app.persistence.file_watcher.is_some());
+    assert!(
+        matches!(app.persistence.freshness, FreshnessSource::File(ref p) if p.ends_with("local.json"))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_settings_storage_swap_rewires_freshness_to_the_new_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = helpers::setup_app_with_json_file(dir.path()).await;
+    let other_json = helpers::create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
+
+    let (_tx, rx) = tokio::sync::mpsc::channel::<ChangeEventFrame>(4);
+    app.persistence.remote_change_rx = Some(rx);
+    let sentinel_watcher = kanban_persistence::FileWatcher::new();
+    let sentinel_id = Uuid::new_v4();
+    sentinel_watcher.set_own_instance_id(sentinel_id);
+    app.persistence.file_watcher = Some(sentinel_watcher);
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+    app.app_config.storage_location = Some(other_json.clone());
+    app.apply_storage_location_change(old_config, &old_storage_location);
+    app.await_migration().await;
+
+    assert!(app.persistence.remote_change_rx.is_none());
+    assert!(
+        matches!(app.persistence.freshness, FreshnessSource::File(ref p) if p.ends_with("other.json"))
+    );
+    let watcher = app.persistence.file_watcher.as_ref().unwrap();
+    assert_eq!(watcher.own_instance_id(), Some(app.ctx.backend().instance_id()));
+    assert_ne!(watcher.own_instance_id(), Some(sentinel_id));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_settings_storage_swap_arms_the_watcher_on_the_new_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = helpers::setup_app_with_json_file(dir.path()).await;
+    let other_json = helpers::create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+    app.app_config.storage_location = Some(other_json.clone());
+    app.apply_storage_location_change(old_config, &old_storage_location);
+    app.await_migration().await;
+
+    let mut rx = app.persistence.file_change_rx.take().expect("watcher must be armed");
+    std::fs::write(&other_json, br#"{"unrelated":1}"#).unwrap();
+
+    let event = tokio::time::timeout(std::time::Duration::from_secs(10), rx.recv())
+        .await
+        .expect("timed out waiting for the watcher to report a change")
+        .expect("watcher channel closed unexpectedly");
+    assert!(event.path.ends_with("other.json"));
 }
