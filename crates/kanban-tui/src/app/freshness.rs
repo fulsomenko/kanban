@@ -59,9 +59,7 @@ impl App {
             Some(path.clone())
         };
 
-        self.persistence.file_watcher = Some(watcher.clone());
-        let watcher_arc = std::sync::Arc::new(watcher);
-        self.ctx.save_coordinator.set_file_watcher(watcher_arc);
+        self.persistence.file_watcher = Some(watcher);
         self.persistence.freshness = FreshnessSource::File(path);
 
         deferred_watch_path
