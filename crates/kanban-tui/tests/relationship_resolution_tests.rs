@@ -15,11 +15,8 @@ fn invalidate_graph(app: &mut App) {
         .invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
 }
 
-/// `ViewScope` scopes the board-cards tier to the active board only, so a
-/// card on a different board (a cross-board `spawns` relative) never lands
-/// in `card_by_id_state` via `reload_model`/`prepare_frame`. Seed its body
-/// directly, the same way `warm_archived_card_markers` backfills the
-/// archived-marker tier.
+/// Seeds one card's per-id tier directly. Required for any card outside the
+/// active board, which `ViewScope`'s board-scoped card tier never reaches.
 fn warm_card_body(app: &mut App, card_id: Uuid) {
     let card = app.ctx.get_card(card_id).unwrap().unwrap();
     let _ = app.model.apply_resolved(kanban_domain::Resolved {
