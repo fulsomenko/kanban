@@ -35,7 +35,6 @@ impl App {
 
         self.populate(self.view_scope());
         self.prepare_frame();
-        self.check_ended_sprints();
     }
 
     pub async fn run(
