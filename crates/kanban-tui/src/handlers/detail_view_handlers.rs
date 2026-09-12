@@ -2286,6 +2286,42 @@ mod tests {
     }
 
     #[test]
+    fn test_board_detail_k_from_columns_counts_the_open_boards_columns_not_the_highlighted_ones()
+    {
+        let mut app = App::test_default();
+        let board_a = app.ctx.create_board("A".into(), None).unwrap();
+        for i in 0..3 {
+            app.ctx
+                .create_column(board_a.id, format!("A{i:02}"), None)
+                .unwrap();
+        }
+        let board_b = app.ctx.create_board("B".into(), None).unwrap();
+        app.ctx
+            .create_column(board_b.id, "B00".into(), None)
+            .unwrap();
+
+        app.selection.active_board_id = Some(board_a.id);
+        load_with_card_order(&mut app, &[]);
+        app.prepare_frame();
+
+        app.board_list.select_board(board_b.id);
+        app.push_mode(AppMode::BoardDetail);
+        app.focus.board_focus = BoardFocus::Columns;
+        app.dialog_input.column_list.update_item_count(3);
+        app.dialog_input.column_list.set_selected_index(Some(2));
+
+        app.handle_board_detail_navigation_key(KeyCode::Char('k'));
+
+        assert_eq!(
+            app.dialog_input.column_list.get_selected_index(),
+            Some(1),
+            "up-navigation must count board A's (the board in context) 3 columns, not board B's highlighted 1"
+        );
+        assert_eq!(app.focus.board_focus, BoardFocus::Columns);
+        assert_no_banner(&app);
+    }
+
+    #[test]
     fn test_column_list_scroll_offset_keeps_selected_column_visible_after_migration() {
         use ratatui::{backend::TestBackend, Terminal};
 
