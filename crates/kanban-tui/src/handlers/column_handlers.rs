@@ -432,8 +432,6 @@ impl App {
                     None => 0,
                 };
 
-                tracing::warn!("Cannot delete the last column");
-
                 // Build the full operation as one batch: move every
                 // card to the first column, then delete the column.
                 // One user action → one undo entry.
