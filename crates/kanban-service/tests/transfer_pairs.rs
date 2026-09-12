@@ -602,6 +602,16 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
         let src_ctx = open_ctx(&in_memory_backend_factory(), &src_path).await;
         let fixture = seed_rich(src_ctx.data_store()).unwrap();
 
+        let src_edge_created = src_ctx
+            .data_store()
+            .get_graph()
+            .unwrap()
+            .blocks_edges()
+            .iter()
+            .find(|e| (e.source(), e.target()) == fixture.live_block_edge)
+            .unwrap()
+            .created_at();
+
         src_ctx
             .transfer_state_to(&*dst_ctx.backend())
             .unwrap_or_else(|e| panic!("transfer into populated {dst_name} failed: {e}"));
@@ -644,6 +654,19 @@ async fn test_transfer_state_to_into_a_populated_target_is_an_upsert_not_a_wipe(
         assert!(
             kept_blocks.contains(&(unrelated_card.id, unrelated_card_2.id)),
             "target's pre-existing block edge must survive the transfer on {dst_name}, got {kept_blocks:?}"
+        );
+
+        let dst_edge = store
+            .get_graph()
+            .unwrap()
+            .blocks_edges()
+            .iter()
+            .find(|e| (e.source(), e.target()) == fixture.live_block_edge)
+            .unwrap()
+            .created_at();
+        assert_ne!(
+            dst_edge, src_edge_created,
+            "merge_from regenerates timestamps on a non-empty target graph on {dst_name}"
         );
 
         assert_transfer_matches(&fixture, store);
