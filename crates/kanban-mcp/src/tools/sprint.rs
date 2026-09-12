@@ -1,4 +1,7 @@
-use crate::helpers::model_read::{resolve_board, resolve_sprint_global, resolve_sprint_in_board};
+use crate::helpers::model_read::{
+    resolve_board, resolve_sprint_global, resolve_sprint_global_with_boards,
+    resolve_sprint_in_board,
+};
 use crate::helpers::{
     board_head, core_err_to_mcp, kanban_err_to_mcp, locked_read, locked_write, parse_datetime,
     project_sprint, to_call_tool_result, to_call_tool_result_json,
@@ -11,7 +14,9 @@ use crate::requests::sprint::{
 use crate::scope::{Ref, ToolScope, ToolScoped};
 use crate::KanbanMcpServer;
 use kanban_core::{resolve_page_params, PaginatedList};
-use kanban_domain::{FieldUpdate, KanbanOperations, SprintUpdate};
+use kanban_domain::{
+    resolved::Collection, FieldUpdate, KanbanOperations, LoadState, Model, Resolved, SprintUpdate,
+};
 use kanban_service::api::SprintResponse;
 use kanban_service::{resolve_sprint_name, resolve_sprint_names};
 use rmcp::{
@@ -278,7 +283,7 @@ impl KanbanMcpServer {
         Parameters(req): Parameters<CarryOverSprintCardsRequest>,
     ) -> Result<CallToolResult, McpError> {
         let count = locked_write(&self.ctx, |ctx| {
-            let from_id = resolve_sprint_global(ctx, &req.from_sprint)?;
+            let (from_id, boards) = resolve_sprint_global_with_boards(ctx, &req.from_sprint)?;
             let from_sprint = ctx
                 .get_sprint(from_id)
                 .map_err(kanban_err_to_mcp)?
@@ -290,7 +295,17 @@ impl KanbanMcpServer {
                 ..Default::default()
             }
             .for_board(from_sprint.board_id);
-            let model = ctx.model_for(&to_scope);
+            let mut model = Model::default();
+            if let Some(boards) = boards {
+                let _ = model.apply_resolved(Resolved {
+                    boards: Collection {
+                        all: LoadState::Loaded(boards),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+            }
+            ctx.sync_into(&to_scope, &mut model);
             let board = board_head(ctx, &model, from_sprint.board_id)?;
             let to_id = resolve_sprint_in_board(&model, &req.to_sprint, &board)?;
             ctx.mutate(|c| c.carry_over_sprint_cards_impl(from_id, to_id))
