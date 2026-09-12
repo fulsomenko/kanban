@@ -267,3 +267,32 @@ async fn test_settings_storage_swap_rewires_freshness_to_the_new_file() {
     );
     assert_ne!(watcher.own_instance_id(), Some(sentinel_id));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_settings_storage_swap_arms_the_watcher_on_the_new_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = helpers::setup_app_with_json_file(dir.path()).await;
+    let other_json =
+        helpers::create_test_json_file(dir.path(), "other.json", &["SecondBoard"]).await;
+
+    let old_config = app.app_config.clone();
+    let old_storage_location = app.app_config.effective_storage_location();
+    app.app_config.storage_location = Some(other_json.clone());
+    app.apply_storage_location_change(old_config, &old_storage_location);
+    app.await_migration().await;
+
+    let mut rx = app
+        .persistence
+        .file_change_rx
+        .take()
+        .expect("watcher must be armed");
+    let scratch = dir.path().join("scratch.tmp");
+    std::fs::write(&scratch, br#"{"unrelated":1}"#).unwrap();
+    std::fs::rename(&scratch, &other_json).unwrap();
+
+    let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+        .await
+        .expect("timed out waiting for the watcher to report a change")
+        .expect("watcher channel closed unexpectedly");
+    assert!(event.path.ends_with("other.json"));
+}
