@@ -270,9 +270,6 @@ impl App {
         }
 
         self.ctx.replace_backend(new_backend);
-        if let Some(watcher) = &self.persistence.file_watcher {
-            watcher.set_own_instance_id(self.ctx.backend().instance_id());
-        }
         let (save_rx, completion_rx) = self.ctx.save_coordinator.reset_save_channels();
         if let Some(board_id) = self.selection.active_board_id {
             if let Ok(Some(board)) = self.ctx.data_store().get_board(board_id) {
@@ -299,7 +296,8 @@ impl App {
 
         self.persistence.save_file = Some(new_storage_location.clone());
         self.persistence.save_completion_rx = Some(completion_rx);
-        self.spawn_save_worker(save_rx, None);
+        let deferred_watch_path = self.rewire_freshness().await;
+        self.spawn_save_worker(save_rx, deferred_watch_path);
         self.cli_file_override = false;
         self.cli_file_provided = false;
         let msg = if file_existed {

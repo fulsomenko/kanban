@@ -1,3 +1,11 @@
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum FreshnessSource {
+    #[default]
+    Off,
+    File(std::path::PathBuf),
+    Remote,
+}
+
 #[derive(Default)]
 pub struct PersistenceState {
     pub save_file: Option<String>,
@@ -8,6 +16,9 @@ pub struct PersistenceState {
     pub save_error_rx: Option<tokio::sync::mpsc::UnboundedReceiver<String>>,
     pub remote_change_rx:
         Option<tokio::sync::mpsc::Receiver<kanban_service::api::ChangeEventFrame>>,
+    /// Written only by `App::rewire_freshness`; mirrors which of
+    /// `file_change_rx`/`file_watcher`/`remote_change_rx` is live.
+    pub freshness: FreshnessSource,
 }
 
 impl PersistenceState {
@@ -23,6 +34,7 @@ impl PersistenceState {
             save_completion_rx,
             save_error_rx: None,
             remote_change_rx: None,
+            freshness: FreshnessSource::default(),
         }
     }
 }
