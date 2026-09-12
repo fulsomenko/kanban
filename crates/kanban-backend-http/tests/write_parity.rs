@@ -2,7 +2,8 @@ use kanban_backend_http::HttpBackend;
 use kanban_domain::{
     ArchivedBoard, ArchivedCard, Board, BoardUpdate, Card, CardPriority, CardStatus, CardUpdate,
     Column, ColumnUpdate, CreateCardOptions, FieldUpdate, GraphOperations, KanbanOperations,
-    NewBoard, NewCard, NewColumn, Prefix, RelatesKind, Severity, Sprint,
+    NewBoard, NewCard, NewColumn, Prefix, RelatesKind, Severity, SortField, SortOrder, Sprint,
+    TaskListView,
 };
 use kanban_persistence_json::{JsonDataStore, JsonFileStore};
 use kanban_persistence_sqlite::SqliteBackend;
@@ -67,14 +68,20 @@ async fn ctx_over(server: &TestServer) -> KanbanContext {
 fn a_new_board(name: &str, prefix: Option<&str>) -> NewBoard {
     NewBoard {
         name: name.to_string(),
-        description: None,
-        sprint_prefix: None,
+        description: Some("parity fixture".to_string()),
+        sprint_prefix: Some("SPR".to_string()),
         card_prefix: prefix.map(str::to_string),
-        task_sort_field: None,
-        task_sort_order: None,
-        sprint_duration_days: None,
-        task_list_view: None,
+        task_sort_field: Some(SortField::Priority),
+        task_sort_order: Some(SortOrder::Descending),
+        sprint_duration_days: Some(14),
+        task_list_view: Some(TaskListView::ColumnView),
     }
+}
+
+fn fixed_due() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339("2030-06-01T12:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc)
 }
 
 fn a_new_column(board_id: Uuid, name: &str) -> NewColumn {
@@ -130,7 +137,15 @@ fn snapshot(ctx: &KanbanContext) -> GraphSnapshot {
 
     let mut archived_card_rows: Vec<Card> = archived_cards
         .iter()
-        .map(|marker| ds.get_card(marker.entity_id).unwrap().unwrap())
+        .map(|marker| {
+            ds.get_card(marker.entity_id).unwrap().unwrap_or_else(|| {
+                panic!(
+                    "archived marker {} has no live card row; the reference-marker \
+                     model requires the row to outlive the marker",
+                    marker.entity_id
+                )
+            })
+        })
         .collect();
     archived_card_rows.sort_by_key(|c| c.id);
 
@@ -539,14 +554,27 @@ async fn lifecycle_parity(kind: Backend) {
     let (column_b, _) = remote
         .create_column_from_spec(None, a_new_column(board.id, "Doing"))
         .unwrap();
+    let (column_c, _) = remote
+        .create_column_from_spec(None, a_new_column(board.id, "Kept"))
+        .unwrap();
 
     let card_a_id = Uuid::new_v4();
     let card_b_id = Uuid::new_v4();
+    let card_c_id = Uuid::new_v4();
     let (card_a, _) = remote
         .create_card_from_spec(Some(card_a_id), a_new_card(column_a.id, "Card A"))
         .unwrap();
     let (card_b, _) = remote
         .create_card_from_spec(Some(card_b_id), a_new_card(column_a.id, "Card B"))
+        .unwrap();
+    let _ = remote
+        .create_card_from_spec(
+            Some(card_c_id),
+            NewCard {
+                due_date: Some(fixed_due()),
+                ..a_new_card(column_c.id, "Card C")
+            },
+        )
         .unwrap();
 
     let _ = remote
@@ -611,11 +639,23 @@ async fn lifecycle_parity(kind: Backend) {
     let (l_column_b, _) = local
         .create_column_from_spec(Some(column_b.id), a_new_column(l_board.id, "Doing"))
         .unwrap();
+    let (l_column_c, _) = local
+        .create_column_from_spec(Some(column_c.id), a_new_column(l_board.id, "Kept"))
+        .unwrap();
     let (l_card_a, _) = local
         .create_card_from_spec(Some(card_a_id), a_new_card(l_column_a.id, "Card A"))
         .unwrap();
     let (l_card_b, _) = local
         .create_card_from_spec(Some(card_b_id), a_new_card(l_column_a.id, "Card B"))
+        .unwrap();
+    let _ = local
+        .create_card_from_spec(
+            Some(card_c_id),
+            NewCard {
+                due_date: Some(fixed_due()),
+                ..a_new_card(l_column_c.id, "Card C")
+            },
+        )
         .unwrap();
 
     let _ = local
