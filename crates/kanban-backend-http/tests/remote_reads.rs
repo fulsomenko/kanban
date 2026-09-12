@@ -5,8 +5,8 @@ use kanban_api::{
 };
 use kanban_backend_http::HttpBackend;
 use kanban_domain::{
-    Board, Card, Column, DataStore, DependencyGraph, KanbanOperations, LoadState, Model,
-    NoProjections, Prefix, RelatesKind, Severity, Sprint,
+    Board, Card, Column, DataStore, DependencyGraph, EntityIds, Invalidation, KanbanOperations,
+    LoadState, Model, NoProjections, Prefix, RelatesKind, Severity, Sprint,
 };
 use kanban_server::test_helpers::TestServer;
 use kanban_service::{
@@ -946,6 +946,55 @@ async fn test_remote_graph_tier_resolves_loaded_and_serves_relation_children() {
         other => panic!("expected LoadState::Loaded, got {other:?}"),
     };
     assert_eq!(graph.children(parent), vec![child]);
+
+    drop(ctx);
+    drop(backend);
+
+    server.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_invalidating_the_graph_tier_refetches_it_over_http_and_lands_loaded() {
+    let server = TestServer::start().await;
+    let board_id = seed_board(&server, "Invalidate Board").await;
+    let column_id = seed_column(&server, board_id, "Todo", None, None).await;
+    let parent = seed_card(&server, column_id, "Parent", None).await;
+    let child_a = seed_card(&server, column_id, "Child A", None).await;
+    let child_b = seed_card(&server, column_id, "Child B", None).await;
+    attach_children(&server, parent, &[child_a]).await;
+
+    let backend: Arc<dyn KanbanBackend> = Arc::new(HttpBackend::new(&server.base_url()).unwrap());
+    let ctx = KanbanContext::open(Arc::clone(&backend), AppConfig::default())
+        .await
+        .unwrap();
+
+    let mut model = Model::default();
+    ctx.sync(&GraphOnly, &mut model, &mut NoProjections);
+
+    let graph = match model.graph_state() {
+        LoadState::Loaded(graph) => graph,
+        other => panic!("expected LoadState::Loaded, got {other:?}"),
+    };
+    assert_eq!(graph.children(parent), vec![child_a]);
+
+    attach_children(&server, parent, &[child_b]).await;
+
+    let _ = model.invalidate(Invalidation::Entities(EntityIds::default().with_graph()));
+    assert!(
+        model.graph_state().is_not_loaded(),
+        "graph:true must drop the tier"
+    );
+
+    ctx.sync(&GraphOnly, &mut model, &mut NoProjections);
+
+    let mut children = match model.graph_state() {
+        LoadState::Loaded(graph) => graph.children(parent),
+        other => panic!("expected the refetch to land Loaded, got {other:?}"),
+    };
+    children.sort();
+    let mut expected = vec![child_a, child_b];
+    expected.sort();
+    assert_eq!(children, expected);
 
     drop(ctx);
     drop(backend);

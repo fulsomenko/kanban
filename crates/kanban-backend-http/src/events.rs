@@ -115,6 +115,44 @@ mod tests {
     }
 
     #[test]
+    fn test_sse_parser_accepts_crlf_line_endings() {
+        let frame = ChangeEventFrame::now(Uuid::new_v4(), Uuid::new_v4(), ClientId::nil());
+        let json = serde_json::to_string(&frame).unwrap();
+        let wire = format!("data: {json}\r\n\r\n");
+
+        let mut parser = super::SseParser::default();
+        let frames = parser.push(wire.as_bytes());
+
+        assert_eq!(frames.len(), 1, "a CRLF-delimited frame must parse");
+        assert_eq!(frames[0].writer_instance_id, frame.writer_instance_id);
+    }
+
+    #[test]
+    fn test_sse_parser_joins_consecutive_data_lines_with_a_newline() {
+        let frame = ChangeEventFrame::now(Uuid::new_v4(), Uuid::new_v4(), ClientId::nil());
+        let json = serde_json::to_string_pretty(&frame).unwrap();
+        let mut wire = String::new();
+        for line in json.lines() {
+            wire.push_str("data: ");
+            wire.push_str(line);
+            wire.push('\n');
+        }
+
+        let mut parser = super::SseParser::default();
+        let pending = parser.push(wire.as_bytes());
+
+        assert!(pending.is_empty(), "no blank line yet, so no frame yet");
+        assert_eq!(
+            parser.data, json,
+            "consecutive data lines must be rejoined with a newline, byte for byte"
+        );
+
+        let frames = parser.push(b"\n");
+        assert_eq!(frames.len(), 1, "multi-line data must parse as one payload");
+        assert_eq!(frames[0].writer_instance_id, frame.writer_instance_id);
+    }
+
+    #[test]
     fn test_next_backoff_doubles_and_caps_at_thirty_seconds() {
         assert_eq!(
             super::next_backoff(Duration::from_secs(1)),
