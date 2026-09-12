@@ -690,11 +690,15 @@ impl App {
                 }
                 KeyCode::Backspace => {
                     self.relationship.search.pop();
-                    self.update_relationship_selection_after_search();
+                    if !self.update_relationship_selection_after_search() {
+                        self.relationship.selection.clear();
+                    }
                 }
                 KeyCode::Char(c) => {
                     self.relationship.search.push(c);
-                    self.update_relationship_selection_after_search();
+                    if !self.update_relationship_selection_after_search() {
+                        self.relationship.search.pop();
+                    }
                 }
                 _ => {}
             }
@@ -779,16 +783,17 @@ impl App {
         }
     }
 
-    fn update_relationship_selection_after_search(&mut self) {
+    fn update_relationship_selection_after_search(&mut self) -> bool {
         let Some(filtered) = self.filtered_relationship_card_ids() else {
             self.set_error("Cards are not loaded yet");
-            return;
+            return false;
         };
         if filtered.is_empty() {
             self.relationship.selection.clear();
         } else {
             self.relationship.selection.set(Some(0));
         }
+        true
     }
 }
 
@@ -1096,6 +1101,79 @@ mod tests {
             banner.message.to_lowercase().contains("not loaded"),
             "banner should explain the cards tier is not loaded, got: {}",
             banner.message
+        );
+    }
+
+    #[test]
+    fn test_relationship_search_char_with_a_not_loaded_cards_tier_leaves_the_buffer_unchanged() {
+        let mut app = App::test_default();
+        let (_board_id, _card_id) = seed_relationship_dialog(&mut app);
+        app.relationship.selection.set(Some(0));
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::cards([
+                uuid::Uuid::new_v4(),
+            ])));
+
+        app.relationship.search_active = true;
+        app.handle_manage_parents_popup(KeyCode::Char('f'));
+
+        assert!(
+            app.relationship.search.is_empty(),
+            "a declined recompute must not leave the typed char in the buffer, got: {:?}",
+            app.relationship.search
+        );
+        let banner = app
+            .ui_state
+            .banner
+            .as_ref()
+            .expect("a declined recompute must still banner");
+        assert!(
+            banner.message.to_lowercase().contains("not loaded"),
+            "banner should explain the cards tier is not loaded, got: {}",
+            banner.message
+        );
+    }
+
+    #[test]
+    fn test_relationship_search_backspace_with_a_failed_entry_shrinks_and_drops_selection() {
+        let mut app = App::test_default();
+        let (_board_id, card_id) = seed_relationship_dialog(&mut app);
+        let unresolvable_id = uuid::Uuid::new_v4();
+        app.relationship.card_ids = vec![card_id, unresolvable_id];
+        app.relationship.selection.set(Some(0));
+        app.relationship.search = "ab".to_string();
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                by_id: [(
+                    unresolvable_id,
+                    kanban_domain::LoadState::Failed(std::sync::Arc::new(
+                        kanban_domain::KanbanError::unsupported("boom"),
+                    )),
+                )]
+                .into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        app.relationship.search_active = true;
+        app.handle_manage_parents_popup(KeyCode::Backspace);
+
+        assert_eq!(
+            app.relationship.search, "a",
+            "backspace always shrinks the buffer, so the filter stays clearable"
+        );
+        assert!(
+            app.relationship.selection.get().is_none(),
+            "a declined recompute must drop the selection rather than leave a stale index"
+        );
+        assert!(
+            app.ui_state.banner.is_some(),
+            "a declined recompute must tell the user why"
         );
     }
 

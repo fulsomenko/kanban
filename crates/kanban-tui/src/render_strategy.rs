@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::components::{
-    card_list_item::{render_card_list_item, CardListItemConfig},
+    card_list_item::{render_card_list_item, CardListItemConfig, SprintTier},
     PanelConfig,
 };
 use crate::theme::{deleted_view_focused_border, label_text};
@@ -150,7 +150,7 @@ impl RenderStrategy for SinglePanelRenderer {
                             let mut columns_shown = std::collections::HashSet::new();
                             let board_sprints_view = app.board_sprints_view(board.id);
                             let sprints = board_sprints_view.loaded_or_empty();
-                            let sprints_loaded = board_sprints_view.is_loaded();
+                            let sprints_tier = SprintTier::from_state(&board_sprints_view);
 
                             for card_idx in &render_info.visible_card_indices {
                                 // Find which column this card belongs to
@@ -190,7 +190,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                             card,
                                             board,
                                             sprints,
-                                            sprints_loaded,
+                                            sprints_tier,
                                             is_selected,
                                             is_focused: app.focus.active
                                                 == crate::app::Focus::Cards,
@@ -273,7 +273,7 @@ impl RenderStrategy for SinglePanelRenderer {
 
                         let board_sprints_view = app.board_sprints_view(board.id);
                         let sprints = board_sprints_view.loaded_or_empty();
-                        let sprints_loaded = board_sprints_view.is_loaded();
+                        let sprints_tier = SprintTier::from_state(&board_sprints_view);
 
                         for card_idx in &render_info.visible_card_indices {
                             if let Some(card_id) = task_list.cards.get(*card_idx) {
@@ -289,7 +289,7 @@ impl RenderStrategy for SinglePanelRenderer {
                                         card,
                                         board,
                                         sprints,
-                                        sprints_loaded,
+                                        sprints_tier,
                                         is_selected: task_list.get_selected_index()
                                             == Some(*card_idx),
                                         is_focused: app.focus.active == crate::app::Focus::Cards,
@@ -382,7 +382,7 @@ impl RenderStrategy for MultiPanelRenderer {
                 let active_task_list = app.view.strategy.get_active_task_list();
                 let board_sprints_view = app.board_sprints_view(board.id);
                 let sprints = board_sprints_view.loaded_or_empty();
-                let sprints_loaded = board_sprints_view.is_loaded();
+                let sprints_tier = SprintTier::from_state(&board_sprints_view);
 
                 for (col_idx, task_list) in task_lists.iter().enumerate() {
                     let mut lines = vec![];
@@ -439,7 +439,7 @@ impl RenderStrategy for MultiPanelRenderer {
                                         card,
                                         board,
                                         sprints,
-                                        sprints_loaded,
+                                        sprints_tier,
                                         is_selected,
                                         is_focused: app.focus.active == crate::app::Focus::Cards
                                             && is_focused_column,
