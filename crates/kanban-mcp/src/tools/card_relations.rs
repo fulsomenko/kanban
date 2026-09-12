@@ -653,7 +653,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_card_children_resolves_the_card_by_name_from_the_model() {
+    async fn test_list_card_children_resolves_the_card_by_identifier_from_the_model() {
         let seeded = seeded_server("test.json").await;
         seeded.handle.clear_ops();
 
@@ -717,5 +717,176 @@ mod tests {
         assert_ne!(not_found_err.code, fault_err.code);
         assert_ne!(not_found_err.message, fault_err.message);
         let _ = (&seeded.card_a_id, &seeded.card_b_id);
+    }
+
+    async fn assert_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph(
+        file_name: &str,
+    ) {
+        let seeded = seeded_server(file_name).await;
+
+        let second_board = text_payload(
+            &seeded
+                .server
+                .tool_create_board(Parameters(crate::requests::board::CreateBoardParams {
+                    content: CreateBoardRequest {
+                        id: None,
+                        name: "Beta".to_string(),
+                        description: None,
+                        sprint_prefix: None,
+                        card_prefix: Some("BETA".to_string()),
+                        task_sort_field: None,
+                        task_sort_order: None,
+                        sprint_duration_days: None,
+                        task_list_view: None,
+                    },
+                    with_default_columns: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_board_id = second_board["id"].as_str().unwrap().to_string();
+
+        let second_column = text_payload(
+            &seeded
+                .server
+                .tool_create_column(Parameters(CreateColumnParams {
+                    board: second_board_id.clone(),
+                    content: kanban_service::api::CreateColumnRequest {
+                        id: None,
+                        name: "TODO".to_string(),
+                        wip_limit: None,
+                        default_status: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let second_column_id = second_column["id"].as_str().unwrap().to_string();
+
+        let beta_a = text_payload(
+            &seeded
+                .server
+                .tool_create_card(Parameters(CreateCardParams {
+                    board: second_board_id.clone(),
+                    column: second_column_id.clone(),
+                    sprint: None,
+                    content: kanban_service::api::CreateCardRequest {
+                        id: None,
+                        title: "Beta A".to_string(),
+                        description: None,
+                        priority: None,
+                        due_date: None,
+                        points: None,
+                        sprint_id: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let beta_a_id = beta_a["id"].as_str().unwrap().to_string();
+        let beta_a_identifier = format!(
+            "{}-{}",
+            beta_a["prefix"].as_str().unwrap(),
+            beta_a["card_number"].as_u64().unwrap()
+        );
+
+        let beta_b = text_payload(
+            &seeded
+                .server
+                .tool_create_card(Parameters(CreateCardParams {
+                    board: second_board_id.clone(),
+                    column: second_column_id,
+                    sprint: None,
+                    content: kanban_service::api::CreateCardRequest {
+                        id: None,
+                        title: "Beta B".to_string(),
+                        description: None,
+                        priority: None,
+                        due_date: None,
+                        points: None,
+                        sprint_id: None,
+                    },
+                }))
+                .await
+                .unwrap(),
+        );
+        let beta_b_id = beta_b["id"].as_str().unwrap().to_string();
+        let beta_b_identifier = format!(
+            "{}-{}",
+            beta_b["prefix"].as_str().unwrap(),
+            beta_b["card_number"].as_u64().unwrap()
+        );
+
+        seeded
+            .server
+            .tool_archive_board(Parameters(crate::requests::board::ArchiveBoardRequest {
+                board: second_board_id,
+            }))
+            .await
+            .unwrap();
+
+        let set_response = text_payload(
+            &seeded
+                .server
+                .tool_set_card_parent(Parameters(SetCardParentRequest {
+                    parent: beta_a_identifier.clone(),
+                    child: beta_b_identifier.clone(),
+                }))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(set_response["parent"], beta_a_id);
+        assert_eq!(set_response["child"], beta_b_id);
+
+        let children_after_set = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: beta_a_identifier.clone(),
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items_after_set = children_after_set["items"].as_array().unwrap();
+        assert_eq!(items_after_set.len(), 1);
+        assert_eq!(items_after_set[0]["id"], beta_b_id);
+
+        seeded
+            .server
+            .tool_remove_card_parent(Parameters(RemoveCardParentRequest {
+                parent: beta_a_identifier.clone(),
+                child: beta_b_identifier,
+            }))
+            .await
+            .unwrap();
+
+        let children_after_remove = text_payload(
+            &seeded
+                .server
+                .tool_list_card_children(Parameters(ListCardChildrenRequest {
+                    card: beta_a_identifier,
+                    page: None,
+                    page_size: None,
+                }))
+                .await
+                .unwrap(),
+        );
+        let items_after_remove = children_after_remove["items"].as_array().unwrap();
+        assert!(items_after_remove.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph_on_json() {
+        assert_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph("test.json")
+            .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph_on_sqlite(
+    ) {
+        assert_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph("test.sqlite")
+            .await;
     }
 }
