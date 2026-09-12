@@ -243,6 +243,7 @@ impl DataStore for CountingBackend {
     }
     fn list_archived_cards_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<ArchivedCard>> {
         self.record("list_archived_cards_by_board", vec![board_id]);
+        self.fault("list_archived_cards_by_board")?;
         self.inner.list_archived_cards_by_board(board_id)
     }
     fn insert_archived_card(&self, ac: ArchivedCard) -> KanbanResult<()> {
@@ -265,6 +266,7 @@ impl DataStore for CountingBackend {
     }
     fn list_archived_boards(&self) -> KanbanResult<Vec<ArchivedBoard>> {
         self.record("list_archived_boards", vec![]);
+        self.fault("list_archived_boards")?;
         self.inner.list_archived_boards()
     }
     fn insert_archived_board(&self, ab: ArchivedBoard) -> KanbanResult<()> {
@@ -282,6 +284,7 @@ impl DataStore for CountingBackend {
     }
     fn list_sprints_by_board(&self, board_id: Uuid) -> KanbanResult<Vec<Sprint>> {
         self.record("list_sprints_by_board", vec![board_id]);
+        self.fault("list_sprints_by_board")?;
         self.inner.list_sprints_by_board(board_id)
     }
     fn list_all_sprints(&self) -> KanbanResult<Vec<Sprint>> {
@@ -299,6 +302,7 @@ impl DataStore for CountingBackend {
     }
     fn get_graph(&self) -> KanbanResult<DependencyGraph> {
         self.record("get_graph", vec![]);
+        self.fault("get_graph")?;
         self.inner.get_graph()
     }
     fn set_graph(&self, graph: DependencyGraph) -> KanbanResult<()> {
