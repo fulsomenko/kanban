@@ -17,7 +17,7 @@ kanban init boards.json --board "Project"  # Create file + first board, exit
 2. `KANBAN_FILE` environment variable
 3. Config file `storage_location`
 
-All commands output JSON to stdout. Errors are written to stderr.
+Successful commands write a `CliResponse` JSON envelope to stdout. Every failure, whatever stage it occurred at, writes exactly one `CliResponse` envelope with `success: false` to stderr.
 
 ---
 
