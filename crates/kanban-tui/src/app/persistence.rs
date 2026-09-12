@@ -1,3 +1,7 @@
+/// The source the app intended to wire for freshness, not proof a watch is
+/// armed. `File` is set even when the watched path did not exist yet (the
+/// save worker arms the watch after the first flush) and when
+/// `start_watching` failed and was only logged.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum FreshnessSource {
     #[default]
