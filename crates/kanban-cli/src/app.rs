@@ -317,7 +317,23 @@ impl CliApp {
     /// Like [`run`], but accepts an explicit argument list instead of reading
     /// from `std::env::args_os()`. Useful for testing without spawning a
     /// subprocess.
+    ///
+    /// On failure, writes the `CliResponse` error envelope to stderr before
+    /// returning, so every non-zero exit emits exactly one envelope regardless
+    /// of whether the failure happened during startup or inside a handler.
     pub async fn run_with_args<I, T>(self, args: I) -> anyhow::Result<()>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let result = self.run_inner(args).await;
+        if let Err(ref e) = result {
+            output::emit_error(&e.to_string());
+        }
+        result
+    }
+
+    async fn run_inner<I, T>(self, args: I) -> anyhow::Result<()>
     where
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
