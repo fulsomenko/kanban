@@ -83,11 +83,7 @@ async fn test_redo_records_the_invalidation_of_the_forward_batch() -> KanbanResu
     let (card, create_inv) =
         ctx.create_card_impl(board.id, col.id, "A".into(), Default::default())?;
 
-    assert_eq!(
-        create_inv,
-        Invalidation::All,
-        "create's inverse is DeleteCard, which is unenumerable"
-    );
+    assert_eq!(entities(create_inv).cards, HashSet::from([card.id]));
 
     let _ = ctx.undo()?.expect("undo applied");
     let inv = ctx.redo()?.expect("redo applied");
@@ -105,7 +101,8 @@ async fn test_undo_of_a_batch_whose_inverse_is_unenumerable_records_all() -> Kan
     let board = ctx.create_board("B".into(), None)?;
     let col = ctx.create_column(board.id, "C".into(), None)?;
     let card_a = ctx.create_card(board.id, col.id, "A".into(), Default::default())?;
-    let _card_c = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    let card_c = ctx.create_card(board.id, col.id, "C".into(), Default::default())?;
+    ctx.archive_card(card_c.id)?;
 
     let (_card, update_inv) = ctx.update_card_impl(
         card_a.id,

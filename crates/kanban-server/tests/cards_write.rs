@@ -78,7 +78,7 @@ async fn test_post_card_creates_with_append_position_and_returns_201() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_post_card_response_carries_a_parseable_invalidation() {
+async fn test_post_card_response_carries_an_invalidation_naming_the_card() {
     let dir = tempdir().unwrap();
     let state = make_state(&dir.path().join("s.json"));
 
@@ -96,9 +96,11 @@ async fn test_post_card_response_carries_a_parseable_invalidation() {
     let body = json_of(response).await;
     let entity: kanban_service::api::CardResponse = serde_json::from_value(body.clone()).unwrap();
     assert_eq!(entity.title, "A card");
-    let _invalidation: kanban_service::api::InvalidationDto =
-        serde_json::from_value(body["invalidation"].clone())
-            .expect("body must carry a parseable invalidation");
+    let card_id = body["id"].as_str().unwrap();
+    let invalidated_cards = body["invalidation"]["entities"]["cards"]
+        .as_array()
+        .expect("entities invalidation must name cards");
+    assert!(invalidated_cards.iter().any(|v| v == card_id));
 }
 
 #[tokio::test(flavor = "multi_thread")]

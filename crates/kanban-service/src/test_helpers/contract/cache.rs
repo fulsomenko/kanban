@@ -180,6 +180,65 @@ pub async fn test_a_deleted_card_resolves_missing_on_a_second_resolve(factory: &
     assert!(!cards.iter().any(|c| c.id == card.id));
 }
 
+pub async fn test_a_created_cards_invalidation_names_the_card_on_every_backend(
+    factory: &BackendFactory,
+) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("test.store");
+    let mut ctx = KanbanContext::open(factory(&path), AppConfig::default())
+        .await
+        .unwrap();
+    let mut model = Model::default();
+
+    let board = ctx
+        .create_board("Board".into(), Some("BRD".into()))
+        .unwrap();
+    let column = ctx.create_column(board.id, "Col".into(), None).unwrap();
+
+    let (card, inv) = ctx
+        .create_card_from_spec(
+            None,
+            kanban_domain::NewCard {
+                column_id: column.id,
+                title: "A".into(),
+                description: None,
+                priority: kanban_domain::CardPriority::Medium,
+                due_date: None,
+                points: None,
+                sprint_id: None,
+            },
+        )
+        .unwrap();
+
+    let ids = match inv {
+        Invalidation::Entities(ids) => ids,
+        Invalidation::All => panic!("expected a scoped invalidation"),
+    };
+    assert!(ids.cards.contains(&card.id));
+    assert!(ids.prefixes);
+
+    let plan = StaticPlan(FetchRound {
+        cards_by_column: vec![column.id],
+        ..Default::default()
+    });
+    let resolved = ctx.resolve(&plan, &model);
+    apply(&mut model, resolved);
+    assert!(model.column_cards_state(column.id).loaded().is_some());
+
+    let _ = model.invalidate(Invalidation::Entities(ids));
+    assert!(
+        model.column_cards_state(column.id).loaded().is_none(),
+        "a card-named invalidation must drop the column's card scope"
+    );
+
+    let resolved = ctx.resolve(&plan, &model);
+    apply(&mut model, resolved);
+
+    let scope = model.column_cards_state(column.id);
+    let cards = scope.loaded().expect("column's card scope loaded");
+    assert!(cards.iter().any(|c| c.id == card.id));
+}
+
 pub async fn test_a_backend_read_error_resolves_failed_not_missing(factory: BackendFactory) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.store");

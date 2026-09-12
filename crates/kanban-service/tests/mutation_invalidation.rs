@@ -500,7 +500,7 @@ async fn test_create_card_from_spec_returns_an_invalidation_naming_the_card() ->
     let board = ctx.create_board("B".into(), Some("KAN".into()))?;
     let col = ctx.create_column(board.id, "C".into(), None)?;
 
-    let (_card, inv) = ctx.create_card_from_spec(
+    let (card, inv) = ctx.create_card_from_spec(
         None,
         NewCard {
             column_id: col.id,
@@ -513,7 +513,15 @@ async fn test_create_card_from_spec_returns_an_invalidation_naming_the_card() ->
         },
     )?;
 
-    assert_eq!(inv, Invalidation::All);
+    match inv {
+        Invalidation::Entities(ids) => {
+            assert!(ids.cards.contains(&card.id));
+            assert!(ids.prefixes);
+            assert!(ids.graph);
+            assert!(ids.boards.is_empty());
+        }
+        Invalidation::All => panic!("expected a scoped invalidation"),
+    }
     Ok(())
 }
 
@@ -539,7 +547,10 @@ async fn test_create_or_replace_card_returns_the_create_invalidation_on_the_crea
     )?;
 
     assert!(outcome.created);
-    assert_eq!(inv, Invalidation::All);
+    match inv {
+        Invalidation::Entities(ids) => assert!(ids.cards.contains(&id)),
+        Invalidation::All => panic!("expected a scoped invalidation"),
+    }
     Ok(())
 }
 
