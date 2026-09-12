@@ -328,12 +328,7 @@ async fn test_resolve_card_ids_reports_ambiguous_for_a_bare_number_spanning_an_a
         .unwrap();
     let beta_col = ctx.create_column(beta.id, "TODO".into(), None).unwrap();
     let beta_card = ctx
-        .create_card(
-            beta.id,
-            beta_col.id,
-            "Beta card".into(),
-            Default::default(),
-        )
+        .create_card(beta.id, beta_col.id, "Beta card".into(), Default::default())
         .unwrap();
 
     assert_eq!(

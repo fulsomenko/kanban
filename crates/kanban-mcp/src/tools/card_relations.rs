@@ -884,9 +884,11 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph_on_sqlite(
-    ) {
-        assert_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph("test.sqlite")
-            .await;
+    async fn test_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph_on_sqlite()
+    {
+        assert_set_and_remove_card_parent_on_an_archived_board_still_mutate_the_graph(
+            "test.sqlite",
+        )
+        .await;
     }
 }

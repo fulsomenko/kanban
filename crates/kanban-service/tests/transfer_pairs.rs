@@ -655,12 +655,8 @@ fn normalize(snapshot: &mut Snapshot) {
     snapshot.columns.sort_by_key(|c| c.id);
     snapshot.cards.sort_by_key(|c| c.id);
     snapshot.sprints.sort_by_key(|s| s.id);
-    snapshot
-        .archived_cards
-        .sort_by_key(|a| a.entity_id());
-    snapshot
-        .archived_boards
-        .sort_by_key(|a| a.entity_id());
+    snapshot.archived_cards.sort_by_key(|a| a.entity_id());
+    snapshot.archived_boards.sort_by_key(|a| a.entity_id());
     snapshot.prefixes.sort_by_key(|p| p.name.clone());
 }
 
@@ -697,7 +693,10 @@ async fn test_transfer_state_to_a_target_whose_graph_conflicts_leaves_the_target
             sprint_counter: 1,
         };
 
-        dst_ctx.data_store().upsert_prefix(unrelated_prefix).unwrap();
+        dst_ctx
+            .data_store()
+            .upsert_prefix(unrelated_prefix)
+            .unwrap();
         dst_ctx
             .data_store()
             .upsert_board(unrelated_board.clone())
@@ -744,7 +743,10 @@ async fn test_transfer_state_to_a_target_whose_graph_conflicts_leaves_the_target
         src_card_b.id = b_id;
         src_card_b.prefix = "src".into();
         src_card_b.card_number = 2;
-        src_ctx.data_store().upsert_board(src_board.clone()).unwrap();
+        src_ctx
+            .data_store()
+            .upsert_board(src_board.clone())
+            .unwrap();
         src_ctx
             .data_store()
             .upsert_column(src_column.clone())
@@ -756,9 +758,7 @@ async fn test_transfer_state_to_a_target_whose_graph_conflicts_leaves_the_target
             .modify_graph(Box::new(move |g| g.set_parent(b_id, a_id)))
             .unwrap();
 
-        let err = src_ctx
-            .transfer_state_to(&*dst_ctx.backend())
-            .unwrap_err();
+        let err = src_ctx.transfer_state_to(&*dst_ctx.backend()).unwrap_err();
         assert!(
             err.is_cycle_detected(),
             "expected a cycle-detected error on {dst_name}, got: {err}"
