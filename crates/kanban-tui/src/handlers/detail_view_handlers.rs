@@ -7,8 +7,8 @@ use crossterm::event::KeyCode;
 use kanban_core::Editable;
 use kanban_domain::card_lifecycle::sorted_board_columns;
 use kanban_domain::{
-    BoardSettingsDto, CardMetadataDto, Column, FieldSearcher, LoadState, MutationOperations,
-    Searcher,
+    BoardSettingsDto, CardMetadataDto, Column, DependencyGraph, FieldSearcher, LoadState,
+    MutationOperations, Searcher,
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
@@ -492,7 +492,7 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => match self.focus.board_focus {
                 BoardFocus::Sprints => {
-                    if let Some(board_id) = self.active_board().map(|board| board.id) {
+                    if let Some(board_id) = self.board_in_context().map(|board| board.id) {
                         match self.board_sprints_view(board_id) {
                             LoadState::Loaded(sprints) => {
                                 let sprint_count = sprints.len();
@@ -513,7 +513,7 @@ impl App {
                     }
                 }
                 BoardFocus::Columns => {
-                    if let Some(board_id) = self.active_board().map(|board| board.id) {
+                    if let Some(board_id) = self.board_in_context().map(|board| board.id) {
                         if self.visible_board_columns(board_id).is_loaded() {
                             let column_count = self.column_count_for_board(board_id);
                             self.dialog_input
@@ -546,8 +546,8 @@ impl App {
                     if self.focus.board_focus == BoardFocus::Sprints {
                         self.selection.sprint.set(Some(0));
                     } else if self.focus.board_focus == BoardFocus::Columns {
-                        if let Some(board) = self.active_board() {
-                            self.enter_column_focus_at_top(board.id);
+                        if let Some(board_id) = self.board_in_context().map(|b| b.id) {
+                            self.enter_column_focus_at_top(board_id);
                         }
                     }
                 }
@@ -562,7 +562,7 @@ impl App {
                     }
                 }
                 BoardFocus::Columns => {
-                    let board_id = self.board_list.get_selected_board_id();
+                    let board_id = self.board_in_context().map(|b| b.id);
                     let columns_ready = match board_id {
                         None => true,
                         Some(id) => self.visible_board_columns(id).is_loaded(),
@@ -603,8 +603,8 @@ impl App {
                         BoardFocus::Columns => BoardFocus::Sprints,
                     };
                     if self.focus.board_focus == BoardFocus::Columns {
-                        if let Some(board) = self.active_board() {
-                            self.enter_column_focus_at_top(board.id);
+                        if let Some(board_id) = self.board_in_context().map(|b| b.id) {
+                            self.enter_column_focus_at_top(board_id);
                         }
                     }
                 }
@@ -1271,30 +1271,24 @@ impl App {
         self.open_dialog(DialogMode::ManageChildren);
     }
 
+    fn related_ids(
+        &self,
+        pick: impl FnOnce(&DependencyGraph, uuid::Uuid) -> Vec<uuid::Uuid>,
+    ) -> Option<Vec<uuid::Uuid>> {
+        let Some(active_id) = self.selection.active_card_id else {
+            return Some(Vec::new());
+        };
+        let card = self.model.card_by_id_state(active_id).loaded().copied()?;
+        let graph = self.model.graph_state().loaded()?;
+        Some(pick(graph, card.id))
+    }
+
     pub fn get_current_card_parents(&self) -> Option<Vec<uuid::Uuid>> {
-        if let Some(active_id) = self.selection.active_card_id {
-            if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
-                return self
-                    .model
-                    .graph_state()
-                    .loaded()
-                    .map(|graph| graph.parents(card.id));
-            }
-        }
-        Some(Vec::new())
+        self.related_ids(|graph, id| graph.parents(id))
     }
 
     pub fn get_current_card_children(&self) -> Option<Vec<uuid::Uuid>> {
-        if let Some(active_id) = self.selection.active_card_id {
-            if let Some(card) = self.model.card_by_id_state(active_id).loaded().copied() {
-                return self
-                    .model
-                    .graph_state()
-                    .loaded()
-                    .map(|graph| graph.children(card.id));
-            }
-        }
-        Some(Vec::new())
+        self.related_ids(|graph, id| graph.children(id))
     }
 
     pub(crate) fn refresh_relationship_counts(&mut self) {
@@ -2002,6 +1996,89 @@ mod tests {
     }
 
     #[test]
+    fn test_get_current_card_parents_with_a_not_loaded_card_body_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_parents(), Some(vec![fx.p_id]));
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::cards([fx.a_id])));
+
+        assert_eq!(
+            app.get_current_card_parents(),
+            None,
+            "a NotLoaded card body must be reported as a tier gap, not as zero parents"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_children_with_a_failed_card_body_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_children(), Some(vec![fx.d_id]));
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                by_id: [(
+                    fx.a_id,
+                    LoadState::Failed(std::sync::Arc::new(
+                        kanban_domain::KanbanError::unsupported("boom"),
+                    )),
+                )]
+                .into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        assert_eq!(
+            app.get_current_card_children(),
+            None,
+            "a Failed card body must be reported as a tier gap, not as zero children"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_parents_with_a_missing_card_body_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_parents(), Some(vec![fx.p_id]));
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                by_id: [(fx.a_id, LoadState::Missing)].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        assert_eq!(
+            app.get_current_card_parents(),
+            None,
+            "a Missing card body is unknowable, not known-empty"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_parents_with_no_active_card_returns_empty() {
+        let mut app = App::test_default();
+        let _fx = setup_reload_resort_fixture(&mut app);
+        app.selection.active_card_id = None;
+
+        assert_eq!(
+            app.get_current_card_parents(),
+            Some(Vec::new()),
+            "no active card is a real empty state, distinct from a not-loaded tier"
+        );
+    }
+
+    #[test]
     fn test_refresh_relationship_counts_with_a_not_loaded_graph_leaves_the_list_counts_untouched() {
         let mut app = App::test_default();
         let _fx = setup_reload_resort_fixture(&mut app);
@@ -2206,6 +2283,41 @@ mod tests {
             Some(1),
             "focus-exit must land on the last sprint (count - 1)"
         );
+    }
+
+    #[test]
+    fn test_board_detail_k_from_columns_counts_the_open_boards_columns_not_the_highlighted_ones() {
+        let mut app = App::test_default();
+        let board_a = app.ctx.create_board("A".into(), None).unwrap();
+        for i in 0..3 {
+            app.ctx
+                .create_column(board_a.id, format!("A{i:02}"), None)
+                .unwrap();
+        }
+        let board_b = app.ctx.create_board("B".into(), None).unwrap();
+        app.ctx
+            .create_column(board_b.id, "B00".into(), None)
+            .unwrap();
+
+        app.selection.active_board_id = Some(board_a.id);
+        load_with_card_order(&mut app, &[]);
+        app.prepare_frame();
+
+        app.board_list.select_board(board_b.id);
+        app.push_mode(AppMode::BoardDetail);
+        app.focus.board_focus = BoardFocus::Columns;
+        app.dialog_input.column_list.update_item_count(3);
+        app.dialog_input.column_list.set_selected_index(Some(2));
+
+        app.handle_board_detail_navigation_key(KeyCode::Char('k'));
+
+        assert_eq!(
+            app.dialog_input.column_list.get_selected_index(),
+            Some(1),
+            "up-navigation must count board A's (the board in context) 3 columns, not board B's highlighted 1"
+        );
+        assert_eq!(app.focus.board_focus, BoardFocus::Columns);
+        assert_no_banner(&app);
     }
 
     #[test]

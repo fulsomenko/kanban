@@ -1175,6 +1175,110 @@ mod tests {
     }
 
     #[test]
+    fn test_archived_partition_reports_failed_when_a_failed_body_follows_a_not_loaded_one() {
+        let board = seed_board("B", 0);
+        let board_id = board.id;
+        let column = Column::new(board_id, "Col", 0);
+        let not_loaded_id = Uuid::new_v4();
+        let failed_id = Uuid::new_v4();
+
+        let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column]));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(
+            board_id,
+            LoadState::Loaded(vec![
+                ArchivedCard::new(not_loaded_id, board_id),
+                ArchivedCard::new(failed_id, board_id),
+            ]),
+        );
+        let mut cards_by_id = std::collections::HashMap::new();
+        cards_by_id.insert(
+            failed_id,
+            LoadState::Failed(std::sync::Arc::new(
+                kanban_domain::KanbanError::unsupported("boom"),
+            )),
+        );
+        let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                by_parent: archived_by_parent,
+                ..Default::default()
+            },
+            cards: Collection {
+                by_id: cards_by_id,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
+        controller.resync(&model, changed);
+
+        assert!(
+            controller.displayed_cards(true).is_failed(),
+            "a Failed body must win over an earlier NotLoaded marker in the walk"
+        );
+    }
+
+    #[test]
+    fn test_archived_partition_reports_failed_when_a_failed_body_precedes_a_not_loaded_one() {
+        let board = seed_board("B", 0);
+        let board_id = board.id;
+        let column = Column::new(board_id, "Col", 0);
+        let not_loaded_id = Uuid::new_v4();
+        let failed_id = Uuid::new_v4();
+
+        let mut model = Model::default();
+        let mut columns_by_parent = std::collections::HashMap::new();
+        columns_by_parent.insert(board_id, LoadState::Loaded(vec![column]));
+        let mut archived_by_parent = std::collections::HashMap::new();
+        archived_by_parent.insert(
+            board_id,
+            LoadState::Loaded(vec![
+                ArchivedCard::new(failed_id, board_id),
+                ArchivedCard::new(not_loaded_id, board_id),
+            ]),
+        );
+        let mut cards_by_id = std::collections::HashMap::new();
+        cards_by_id.insert(
+            failed_id,
+            LoadState::Failed(std::sync::Arc::new(
+                kanban_domain::KanbanError::unsupported("boom"),
+            )),
+        );
+        let changed = model.apply_resolved(Resolved {
+            columns: Collection {
+                by_parent: columns_by_parent,
+                ..Default::default()
+            },
+            archived_cards: Collection {
+                by_parent: archived_by_parent,
+                ..Default::default()
+            },
+            cards: Collection {
+                by_id: cards_by_id,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let mut controller = Controller::default();
+        controller.set_scope_board(Some(board_id), &model);
+        controller.resync(&model, changed);
+
+        assert!(
+            controller.displayed_cards(true).is_failed(),
+            "a Failed body must win regardless of marker order"
+        );
+    }
+
+    #[test]
     fn test_board_scoped_live_partition_excludes_another_boards_cards() {
         let board_1 = seed_board("B1", 0);
         let board_1_id = board_1.id;

@@ -224,7 +224,7 @@ impl App {
                             }
                         }
                     }
-                    _ = async {
+                    Some(()) = async {
                         if let Some(ref mut rx) = &mut self.persistence.save_completion_rx {
                             rx.recv().await
                         } else {
