@@ -2002,6 +2002,89 @@ mod tests {
     }
 
     #[test]
+    fn test_get_current_card_parents_with_a_not_loaded_card_body_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_parents(), Some(vec![fx.p_id]));
+
+        let _ = app
+            .model
+            .invalidate(Invalidation::Entities(EntityIds::cards([fx.a_id])));
+
+        assert_eq!(
+            app.get_current_card_parents(),
+            None,
+            "a NotLoaded card body must be reported as a tier gap, not as zero parents"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_children_with_a_failed_card_body_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_children(), Some(vec![fx.d_id]));
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                by_id: [(
+                    fx.a_id,
+                    LoadState::Failed(std::sync::Arc::new(kanban_domain::KanbanError::unsupported(
+                        "boom",
+                    ))),
+                )]
+                .into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        assert_eq!(
+            app.get_current_card_children(),
+            None,
+            "a Failed card body must be reported as a tier gap, not as zero children"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_parents_with_a_missing_card_body_returns_none() {
+        let mut app = App::test_default();
+        let fx = setup_reload_resort_fixture(&mut app);
+
+        assert_eq!(app.get_current_card_parents(), Some(vec![fx.p_id]));
+
+        let changed = app.model.apply_resolved(kanban_domain::Resolved {
+            cards: kanban_domain::resolved::Collection {
+                by_id: [(fx.a_id, LoadState::Missing)].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        app.controller.resync(&app.model, changed);
+
+        assert_eq!(
+            app.get_current_card_parents(),
+            None,
+            "a Missing card body is unknowable, not known-empty"
+        );
+    }
+
+    #[test]
+    fn test_get_current_card_parents_with_no_active_card_returns_empty() {
+        let mut app = App::test_default();
+        let _fx = setup_reload_resort_fixture(&mut app);
+        app.selection.active_card_id = None;
+
+        assert_eq!(
+            app.get_current_card_parents(),
+            Some(Vec::new()),
+            "no active card is a real empty state, distinct from a not-loaded tier"
+        );
+    }
+
+    #[test]
     fn test_refresh_relationship_counts_with_a_not_loaded_graph_leaves_the_list_counts_untouched() {
         let mut app = App::test_default();
         let _fx = setup_reload_resort_fixture(&mut app);
