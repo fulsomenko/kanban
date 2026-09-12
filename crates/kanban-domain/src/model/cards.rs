@@ -72,7 +72,7 @@ impl Model {
     /// of `cards_by_column`'s membership: `load_from_snapshot` clears the
     /// map and index together, and `mark_failed` transitions state in place
     /// without touching membership.
-    pub fn set_cards_of_column(&mut self, column_id: Uuid, state: LoadState<Vec<Card>>) {
+    pub(crate) fn set_cards_of_column(&mut self, column_id: Uuid, state: LoadState<Vec<Card>>) {
         self.scoped_card_index.retain(|_, col| *col != column_id);
         if let LoadState::Loaded(cards) = &state {
             for c in cards {
