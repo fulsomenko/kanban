@@ -2024,9 +2024,9 @@ mod tests {
             cards: kanban_domain::resolved::Collection {
                 by_id: [(
                     fx.a_id,
-                    LoadState::Failed(std::sync::Arc::new(kanban_domain::KanbanError::unsupported(
-                        "boom",
-                    ))),
+                    LoadState::Failed(std::sync::Arc::new(
+                        kanban_domain::KanbanError::unsupported("boom"),
+                    )),
                 )]
                 .into(),
                 ..Default::default()
@@ -2286,8 +2286,7 @@ mod tests {
     }
 
     #[test]
-    fn test_board_detail_k_from_columns_counts_the_open_boards_columns_not_the_highlighted_ones()
-    {
+    fn test_board_detail_k_from_columns_counts_the_open_boards_columns_not_the_highlighted_ones() {
         let mut app = App::test_default();
         let board_a = app.ctx.create_board("A".into(), None).unwrap();
         for i in 0..3 {

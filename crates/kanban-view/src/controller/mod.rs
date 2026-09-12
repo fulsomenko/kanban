@@ -1196,9 +1196,9 @@ mod tests {
         let mut cards_by_id = std::collections::HashMap::new();
         cards_by_id.insert(
             failed_id,
-            LoadState::Failed(std::sync::Arc::new(kanban_domain::KanbanError::unsupported(
-                "boom",
-            ))),
+            LoadState::Failed(std::sync::Arc::new(
+                kanban_domain::KanbanError::unsupported("boom"),
+            )),
         );
         let changed = model.apply_resolved(Resolved {
             columns: Collection {
@@ -1248,9 +1248,9 @@ mod tests {
         let mut cards_by_id = std::collections::HashMap::new();
         cards_by_id.insert(
             failed_id,
-            LoadState::Failed(std::sync::Arc::new(kanban_domain::KanbanError::unsupported(
-                "boom",
-            ))),
+            LoadState::Failed(std::sync::Arc::new(
+                kanban_domain::KanbanError::unsupported("boom"),
+            )),
         );
         let changed = model.apply_resolved(Resolved {
             columns: Collection {
