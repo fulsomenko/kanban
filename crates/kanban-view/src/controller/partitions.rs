@@ -15,9 +15,10 @@ fn joined<T, A, B>(flat: LoadState<A>, markers: LoadState<B>) -> LoadState<Vec<T
 
 /// Joins a board's archived-marker tier with the per-id card body tier: for
 /// each Loaded marker, resolves its body through `card_by_id_state`. A
-/// `Missing` body is skipped (a stale marker never wedges the view); any
-/// `Failed` body short-circuits the whole join; any `NotLoaded` body means
-/// the join itself is `NotLoaded`, not partially populated.
+/// `Missing` body is skipped (a stale marker never wedges the view); a
+/// `Failed` body wins over the whole join regardless of where in the marker
+/// order it falls; a `NotLoaded` body means the join is `NotLoaded`, unless a
+/// later marker in the same walk turns out `Failed`.
 fn archived_bodies(model: &Model, board_id: uuid::Uuid) -> LoadState<Vec<Card>> {
     let markers = match model.board_archived_cards_state(board_id) {
         LoadState::Loaded(markers) => markers,
@@ -27,13 +28,17 @@ fn archived_bodies(model: &Model, board_id: uuid::Uuid) -> LoadState<Vec<Card>> 
     };
 
     let mut cards = Vec::with_capacity(markers.len());
+    let mut not_loaded = false;
     for marker in markers {
         match model.card_by_id_state(marker.entity_id) {
             LoadState::Loaded(card) => cards.push(card.clone()),
             LoadState::Missing => continue,
             LoadState::Failed(e) => return LoadState::Failed(e),
-            LoadState::NotLoaded => return LoadState::NotLoaded,
+            LoadState::NotLoaded => not_loaded = true,
         }
+    }
+    if not_loaded {
+        return LoadState::NotLoaded;
     }
     LoadState::Loaded(cards)
 }
