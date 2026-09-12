@@ -99,9 +99,8 @@ where
     // per-kind internally — DisplayHelp / DisplayVersion go to stdout
     // with exit code 0; real argument errors go to stderr with exit
     // code 2. No `match e.kind()` needed here. Without it the error
-    // propagates through main's generic eprintln!("Error: {e}") path,
-    // sending the version / help text to stderr with exit 1 and a
-    // doubled trailing newline.
+    // would reach the envelope seam, rendering the version / help text
+    // as a CliResponse failure on stderr with exit code 1.
     let matches = cmd
         .try_get_matches_from_mut(args)
         .unwrap_or_else(|e| e.exit());
@@ -317,7 +316,23 @@ impl CliApp {
     /// Like [`run`], but accepts an explicit argument list instead of reading
     /// from `std::env::args_os()`. Useful for testing without spawning a
     /// subprocess.
+    ///
+    /// On failure, writes the `CliResponse` error envelope to stderr before
+    /// returning, so every non-zero exit emits exactly one envelope regardless
+    /// of whether the failure happened during startup or inside a handler.
     pub async fn run_with_args<I, T>(self, args: I) -> anyhow::Result<()>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let result = self.run_inner(args).await;
+        if let Err(ref e) = result {
+            output::emit_error(&e.to_string());
+        }
+        result
+    }
+
+    async fn run_inner<I, T>(self, args: I) -> anyhow::Result<()>
     where
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
