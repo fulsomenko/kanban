@@ -448,13 +448,16 @@ mod backend_parity {
     /// in-memory context, so every backend under test is seeded from the
     /// exact same `Snapshot` value rather than three independently timed
     /// `create_*` calls that would drift in `created_at`/`updated_at`.
-    async fn seed_non_trivial_snapshot() -> (Snapshot, Uuid, Uuid) {
+    async fn seed_non_trivial_snapshot() -> (Snapshot, Uuid, Uuid, Uuid) {
         let backend: Arc<dyn kanban_service::KanbanBackend> = Arc::new(InMemoryStore::new());
         let mut ctx = KanbanContext::open(backend, AppConfig::default())
             .await
             .unwrap();
         let board1 = ctx.create_board("Board 1".to_string(), None).unwrap();
         let board2 = ctx.create_board("Board 2".to_string(), None).unwrap();
+        let board2_column = ctx
+            .create_column(board2.id, "Todo".to_string(), None)
+            .unwrap();
         let column = ctx
             .create_column(board1.id, "Todo".to_string(), None)
             .unwrap();
@@ -478,7 +481,7 @@ mod backend_parity {
         ctx.create_sprint(board1.id, None, Some("Sprint 1".to_string()))
             .unwrap();
         let snapshot = kanban_service::read_full_snapshot(ctx.data_store()).unwrap();
-        (snapshot, board1.id, board2.id)
+        (snapshot, board1.id, board2.id, board2_column.id)
     }
 
     async fn seed_empty_board_snapshot() -> (Snapshot, Uuid) {
@@ -525,7 +528,7 @@ mod backend_parity {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_startup_scope_reads_the_same_rows_on_every_backend() {
-        let (snapshot, board1, _board2) = seed_non_trivial_snapshot().await;
+        let (snapshot, board1, _board2, _board2_column) = seed_non_trivial_snapshot().await;
         let kinds = ["memory", "json", "sqlite"];
         let dirs = [
             tempfile::tempdir().unwrap(),
@@ -635,7 +638,7 @@ mod backend_parity {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_the_startup_scope_never_reads_the_flat_tiers_on_any_backend() {
-        let (snapshot, board1, _board2) = seed_non_trivial_snapshot().await;
+        let (snapshot, board1, board2, board2_column) = seed_non_trivial_snapshot().await;
         let kinds = ["memory", "json", "sqlite"];
         let dirs = [
             tempfile::tempdir().unwrap(),
@@ -646,18 +649,17 @@ mod backend_parity {
         for (kind, dir) in kinds.iter().zip(dirs.iter()) {
             let ctx = open_seeded(kind, dir, &snapshot).await;
             let model = populate_scope(&ctx, board1);
-            let untouched_id = Uuid::new_v4();
 
             assert!(
-                model.board_columns_state(untouched_id).is_not_loaded(),
+                model.board_columns_state(board2).is_not_loaded(),
                 "{kind}: an unrelated board's column tier must stay unrequested"
             );
             assert!(
-                model.column_cards_state(untouched_id).is_not_loaded(),
+                model.column_cards_state(board2_column).is_not_loaded(),
                 "{kind}: an unrelated column's card tier must stay unrequested"
             );
             assert!(
-                model.board_sprints_state(untouched_id).is_not_loaded(),
+                model.board_sprints_state(board2).is_not_loaded(),
                 "{kind}: an unrelated board's sprint tier must stay unrequested"
             );
             assert!(
@@ -677,7 +679,7 @@ mod backend_parity {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_the_startup_scope_never_reads_the_flat_tiers_over_http() {
-        let (snapshot, board1, _board2) = seed_non_trivial_snapshot().await;
+        let (snapshot, board1, board2, board2_column) = seed_non_trivial_snapshot().await;
         let server = kanban_server::test_helpers::TestServer::start_with(move |ctx| {
             kanban_service::write_full_snapshot(ctx.data_store(), snapshot).unwrap();
         })
@@ -690,18 +692,17 @@ mod backend_parity {
             .unwrap();
 
         let model = populate_scope(&ctx, board1);
-        let untouched_id = Uuid::new_v4();
 
         assert!(
-            model.board_columns_state(untouched_id).is_not_loaded(),
+            model.board_columns_state(board2).is_not_loaded(),
             "an unrelated board's column tier must stay unrequested over http"
         );
         assert!(
-            model.column_cards_state(untouched_id).is_not_loaded(),
+            model.column_cards_state(board2_column).is_not_loaded(),
             "an unrelated column's card tier must stay unrequested over http"
         );
         assert!(
-            model.board_sprints_state(untouched_id).is_not_loaded(),
+            model.board_sprints_state(board2).is_not_loaded(),
             "an unrelated board's sprint tier must stay unrequested over http"
         );
         assert!(
