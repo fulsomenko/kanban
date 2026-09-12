@@ -229,4 +229,96 @@ mod tests {
             "the card must not be archived while the cards tier is not loaded, since it was silently skipped"
         );
     }
+
+    #[test]
+    fn test_handle_animation_tick_archives_a_card_whose_board_was_switched_away_from() {
+        let mut app = App::test_default();
+        let board_a = app.ctx.create_board("A".into(), None).unwrap();
+        let column_a = app
+            .ctx
+            .create_column(board_a.id, "Todo".into(), None)
+            .unwrap();
+        let card = app
+            .ctx
+            .create_card(
+                board_a.id,
+                column_a.id,
+                "Card".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+        let board_b = app.ctx.create_board("B".into(), None).unwrap();
+        app.ctx
+            .create_column(board_b.id, "Todo".into(), None)
+            .unwrap();
+
+        app.selection.active_board_id = Some(board_a.id);
+        refresh(&mut app);
+
+        app.animation.animating.insert(
+            card.id,
+            CardAnimation {
+                animation_type: kanban_domain::AnimationType::Archiving,
+                start_time: Instant::now()
+                    - Duration::from_millis(animation::ANIMATION_DURATION_MS as u64 + 50),
+            },
+        );
+
+        app.controller.set_scope_board(Some(board_b.id), &app.model);
+
+        app.handle_animation_tick();
+
+        let archived = app.ctx.data_store().list_archived_cards().unwrap();
+        assert!(
+            archived.iter().any(|a| a.entity_id == card.id),
+            "a card whose board was switched away from during the animation window must still archive"
+        );
+        assert!(app.ui_state.banner.is_none());
+    }
+
+    #[test]
+    fn test_handle_animation_tick_does_not_rearchive_an_already_archived_card() {
+        let mut app = App::test_default();
+        let board = app.ctx.create_board("Board".into(), None).unwrap();
+        let column = app
+            .ctx
+            .create_column(board.id, "Todo".into(), None)
+            .unwrap();
+        let card = app
+            .ctx
+            .create_card(
+                board.id,
+                column.id,
+                "Card".into(),
+                CreateCardOptions::default(),
+            )
+            .unwrap();
+
+        app.selection.active_board_id = Some(board.id);
+        app.ctx.archive_card(card.id).unwrap();
+        refresh(&mut app);
+
+        app.animation.archive_anchor = Some((column.id, 0));
+        app.animation.animating.insert(
+            card.id,
+            CardAnimation {
+                animation_type: kanban_domain::AnimationType::Archiving,
+                start_time: Instant::now()
+                    - Duration::from_millis(animation::ANIMATION_DURATION_MS as u64 + 50),
+            },
+        );
+
+        app.handle_animation_tick();
+
+        assert_eq!(
+            app.animation.archive_anchor,
+            Some((column.id, 0)),
+            "an already-archived card must not consume the archive anchor"
+        );
+        assert_eq!(
+            app.ctx.data_store().list_archived_cards().unwrap().len(),
+            1,
+            "an already-archived card must not produce a second archived marker"
+        );
+    }
 }
