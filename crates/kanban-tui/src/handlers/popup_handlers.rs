@@ -1139,8 +1139,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relationship_search_backspace_with_a_failed_per_id_entry_leaves_the_buffer_unchanged()
-    {
+    fn test_relationship_search_backspace_with_a_failed_per_id_entry_leaves_the_buffer_unchanged() {
         let mut app = App::test_default();
         let (_board_id, card_id) = seed_relationship_dialog(&mut app);
         let unresolvable_id = uuid::Uuid::new_v4();

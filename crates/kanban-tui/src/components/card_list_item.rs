@@ -221,7 +221,10 @@ fn build_title_spans(title: &str, base_style: Style, query: Option<&str>) -> Vec
 
 #[cfg(test)]
 mod tests {
-    use super::{build_title_spans, card_identifier_suffix, render_card_list_item, CardListItemConfig, SprintTier};
+    use super::{
+        build_title_spans, card_identifier_suffix, render_card_list_item, CardListItemConfig,
+        SprintTier,
+    };
     use crate::theme::HIGHLIGHT_TEXT;
     use kanban_domain::{Board, Card, Column};
     use ratatui::style::{Modifier, Style};
