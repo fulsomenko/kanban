@@ -1167,6 +1167,9 @@ pub async fn setup_app_with_json_file_and_save_worker(dir: &std::path::Path) -> 
 /// `model.archived_card_ids()` or a card's per-id/scoped state for an
 /// archived row without having navigated through the archived-cards view
 /// must call this first, or the tier stays `NotLoaded` and reads as empty.
+/// `Model::archived_card_ids()` is fed by the flat whole-store marker tier
+/// only, never by the by-board tier, which is why the backfill below is by
+/// hand.
 pub fn warm_archived_card_markers(app: &mut App) {
     let prior = app.mode.clone();
     app.mode = kanban_tui::app::mode::AppMode::ArchivedCardsView;

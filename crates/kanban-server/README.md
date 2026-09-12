@@ -2,7 +2,7 @@
 
 HTTP API server for kanban project management. Wraps `kanban-service` behind a REST interface so non-Rust clients (web UIs, scripts, other services) can read and write boards without going through the TUI, CLI, or MCP server.
 
-**Status: early / minimal.** Only boards and column reads are wired up so far — see [Endpoints](#endpoints). The bind address is configurable (see [Configuration](#configuration)); per-request logging is not. Still best treated as a development server rather than a hardened production deployment.
+**Status: early / minimal.** See [Endpoints](#endpoints) for what is wired up; reads and writes are covered across boards, columns, cards, sprints, the graph and transfer, with conditional-request guards on the entity writes. The bind address is configurable (see [Configuration](#configuration)); per-request logging is not. Still best treated as a development server rather than a hardened production deployment.
 
 ## Architecture
 
@@ -182,8 +182,6 @@ Nine v1 write routes return the mutation's `Invalidation`: `POST /v1/boards`, `P
 | `GET` | `/v1/boards/{board_id}/columns` | List a board's columns. 404s if `board_id` doesn't exist (does not collapse into an empty list). Returns `Page<ColumnResponse>`; accepts `?page=&page_size=`. |
 | `GET` | `/v1/boards/{board_id}/columns/{id}` | Get a column by UUID. 404s if the column exists but belongs to a different board. |
 
-Column writes (create/update/delete) aren't implemented yet.
-
 ### Sprints
 
 | Method | Path | Description | Body |
@@ -221,7 +219,7 @@ The remaining card routes (get/create/replace/update/delete, and the flat `/v1/c
 
 | Method | Path | Description | Body |
 |---|---|---|---|
-| `GET` | `/v1/graph` | The whole workspace dependency graph as the domain `DependencyGraph` serde shape (`spawns`/`blocks`/`relates`, each `{"edges": [...]}`). Includes archived (tombstoned) edges and every edge's `created_at`, unlike the card-scoped route. Always `200`, `{}`-shaped empty graph when there are no edges, never `404`. | — |
+| `GET` | `/v1/graph` | The whole workspace dependency graph as the domain `DependencyGraph` serde shape (`spawns`/`blocks`/`relates`, each `{"edges": [...]}`). Includes archived (tombstoned) edges and every edge's `created_at`, unlike the card-scoped route. Always `200`, never `404`. With no edges the body is `{"spawns":{"edges":[]},"blocks":{"edges":[]},"relates":{"edges":[]}}`, not `{}`: all three sub-graphs are always present. | — |
 | `GET` | `/v1/cards/{id}/graph` | The card's dependency edges, scoped to that card: parents/children (spawns), blocked_by/blocks and related, plus `block_edges`/`related_edges` carrying each edge's severity/kind. Only active edges; archived edges are omitted. 404s if the card does not exist, rather than returning empty arrays. | — |
 | `POST` | `/v1/cards/{id}/children` | Attach cards as spawned children of `id`. `200` with the updated `CardGraphResponse`. 404 if `id` or any child is unknown; 409 `CYCLE_DETECTED` if the edge would create a cycle. | `{"children": [uuid, ...]}` |
 | `DELETE` | `/v1/cards/{id}/children/{child_id}` | Detach `child_id` as a spawned child of `id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
@@ -229,6 +227,8 @@ The remaining card routes (get/create/replace/update/delete, and the flat `/v1/c
 | `DELETE` | `/v1/cards/{id}/blocks/{blocked_id}` | Remove the blocking edge from `id` to `blocked_id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
 | `POST` | `/v1/cards/{id}/related` | Add an undirected relates edge between `id` and `other`. `200` with the updated `CardGraphResponse`. `kind` defaults to `general`. 409 `DUPLICATE_EDGE` if the edge already exists. | `{"other": uuid, "kind"?: "general"\|"duplicates"\|"mentioned_in"}` |
 | `DELETE` | `/v1/cards/{id}/related/{other_id}` | Remove the relates edge between `id` and `other_id`. `204` on success. 404 `EDGE_NOT_FOUND` if no such edge exists. | — |
+
+A client that parses `GET /v1/graph`'s body into the domain `DependencyGraph` gets the same cycle/self-reference guard the server itself enforces: `DagGraph`'s `Deserialize` impl (used by `spawns` and `blocks`) replays every edge through `add_edge_with_metadata`, so a body doctored to contain a cycle or a self-reference among active edges fails to deserialize. An edge that only completes a cycle through an archived (tombstoned) edge is accepted, since archived edges no longer constrain the DAG. `relates`, being undirected, has the equivalent guard against a self-reference edge.
 
 ### Transfer
 
@@ -261,6 +261,18 @@ Every write route (`POST`/`PUT`/`PATCH`) broadcasts a change event naming the en
 - Slicing is in-memory: the full collection is read from storage first, then windowed. There is no store-level `LIMIT`/`OFFSET`.
 - Other query params on `GET /v1/boards/{board_id}/cards` (`column_id`, `sprint_id`, `archived`) apply before pagination, so `total` reflects the filtered count, not the whole board.
 
+## Conditional requests
+
+Every single-entity `GET` for boards, columns, cards and sprints (board-scoped and flat alike) responds with an `ETag`: `GET /v1/boards/{id}`, `GET /v1/boards/{board_id}/columns/{id}`, `GET /v1/columns/{id}`, `GET /v1/boards/{board_id}/cards/{id}`, `GET /v1/cards/{id}`, `GET /v1/boards/{board_id}/sprints/{id}` and `GET /v1/sprints/{id}`. The tag is always strong: the response body's SHA-256 digest, truncated to its first 16 bytes, lowercase hex-encoded and quoted (34 characters total, e.g. `"0123456789abcdef0123456789abcdef"`). No route emits a weak (`W/`) tag.
+
+`If-None-Match` short-circuits a `GET` that already holds the current representation: send a `304 Not Modified` with no body, but still carrying the `ETag` header. The header accepts a comma-separated list of tags or `*`; a match on any entry (`*` always matches) triggers the `304`. A `W/`-prefixed candidate is compared with its prefix stripped on both sides, so a weak client tag can still satisfy `If-None-Match` against a strong server tag.
+
+`If-Match` guards a write against a stale representation: `PUT`, `PATCH` and `DELETE` on `/v1/boards/{id}`; `PUT`, `PATCH` and `DELETE` on `/v1/boards/{board_id}/columns/{id}`; `PATCH` and `DELETE` on `/v1/columns/{id}`; `PUT` on `/v1/columns/{column_id}/cards/{id}`; `PATCH` and `DELETE` on `/v1/boards/{board_id}/cards/{id}`; `PATCH` and `DELETE` on `/v1/cards/{id}`; `PUT`, `PATCH` and `DELETE` on `/v1/boards/{board_id}/sprints/{id}`; `PATCH` and `DELETE` on `/v1/sprints/{id}`. No other route emits an ETag - not the collection GETs, not `/v1/cards/lookup`, `/v1/prefixes`, `/v1/export`, `/health` or `/v1/events`, not the graph routes, and not any write response. A missing `If-Match` header always proceeds without building the current representation. When present, the comparison is strong only: a `*` value fails if the target has no current representation at all, and a `W/`-prefixed candidate never matches, even the target's own tag. A stale or non-matching `If-Match` is a `412 PRECONDITION_FAILED`.
+
+Since no write response carries an `ETag`, a client that wants the new tag for its next conditional write must re-`GET` the entity after mutating it.
+
+CORS exposes the `ETag` header to browser clients in both modes: an explicit `KANBAN_CORS_ORIGINS` list names it in `Access-Control-Expose-Headers`, and the permissive (`*`) mode exposes every header via a wildcard. With `KANBAN_CORS_ORIGINS` unset the server sends no CORS headers at all, so a browser client cannot read `ETag` cross-origin.
+
 ## Error Handling
 
 Every non-2xx response is a JSON `ApiError`:
@@ -276,7 +288,7 @@ Every non-2xx response is a JSON `ApiError`:
 | 400 | `BATCH_RESOLUTION_FAILED` |
 | 404 | `NOT_FOUND`, `NOT_FOUND_BY_NAME`, `EDGE_NOT_FOUND` |
 | 409 | `AMBIGUOUS`, `WIP_LIMIT_EXCEEDED`, `CONFLICT_DETECTED`, `ALREADY_EXISTS`, `UNSUPPORTED_VERSION`, `DEPENDENCY_ERROR`, `CYCLE_DETECTED`, `DUPLICATE_EDGE` |
-| 412 | `PRECONDITION_FAILED` |
+| 412 | `PRECONDITION_FAILED` (see [Conditional requests](#conditional-requests)) |
 | 422 | `VALIDATION_FAILED`, `SPRINT_BOARD_MISMATCH`, `SELF_REFERENCE` |
 | 500 | `IO_ERROR`, `SERIALIZATION_ERROR`, `DATABASE_ERROR`, `INTERNAL_ERROR` |
 

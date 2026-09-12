@@ -48,6 +48,10 @@ impl App {
     /// paired for a candidate search across both. `NotLoaded`/`Failed` on the
     /// live partition propagates; the archived half degrades to empty rather
     /// than gating, matching its behaviour outside the archived views.
+    /// Both partitions come from the controller, so a caller that filters
+    /// the result by its own derived `board_id` must have derived it from
+    /// the controller's scope board; any other id yields an empty candidate
+    /// set.
     pub(crate) fn board_candidate_cards(&self) -> LoadState<(&[Card], &[Card])> {
         self.controller.live_cards().map(|live| {
             (

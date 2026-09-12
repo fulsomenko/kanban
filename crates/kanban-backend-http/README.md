@@ -15,9 +15,16 @@ way, and `KanbanBackend::remote_writes()` returns `Some(self)`, so
 `KanbanContext` diverts those nine operations straight to the server instead
 of running them through its local command-execute-then-log path.
 
-Every other `DataStore`/`CommandStore` method (graph, sprints, prefixes,
-archive/restore, the command log) still declines under its own name — see
-`test_http_backend_stub_method_returns_unsupported_error` in `src/lib.rs`.
+The remaining `DataStore`/`CommandStore` *writes* (graph mutations, sprint and
+prefix writes, the command log) still decline under their own name, see
+`test_http_backend_stub_method_returns_unsupported_error` in `src/lib.rs`. The
+reads in those families are implemented: `get_prefix`, `list_prefixes`,
+`get_sprint`, `list_sprints_by_board`, `list_archived_cards_by_board` and
+`get_graph` all go over the wire.
+`HttpDataStore::get_graph` is the one read that does more than deserialize:
+it parses `GET /v1/graph` straight into the domain `DependencyGraph`, whose
+`Deserialize` impl validates the DAG on parse (see
+[the server README's Graph section](../kanban-server/README.md#graph)).
 Returning `Some` from `remote_writes()` also arms a service-layer fence
 (`KanbanContext::execute_with_extra`): every mutation this crate does not
 implement now fails fast with an explicit "not supported over the HTTP
