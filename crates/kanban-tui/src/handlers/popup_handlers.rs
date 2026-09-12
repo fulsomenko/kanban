@@ -689,12 +689,18 @@ impl App {
                     self.relationship.search_active = false;
                 }
                 KeyCode::Backspace => {
-                    self.relationship.search.pop();
-                    self.update_relationship_selection_after_search();
+                    let popped = self.relationship.search.pop();
+                    if !self.update_relationship_selection_after_search() {
+                        if let Some(c) = popped {
+                            self.relationship.search.push(c);
+                        }
+                    }
                 }
                 KeyCode::Char(c) => {
                     self.relationship.search.push(c);
-                    self.update_relationship_selection_after_search();
+                    if !self.update_relationship_selection_after_search() {
+                        self.relationship.search.pop();
+                    }
                 }
                 _ => {}
             }
@@ -779,16 +785,17 @@ impl App {
         }
     }
 
-    fn update_relationship_selection_after_search(&mut self) {
+    fn update_relationship_selection_after_search(&mut self) -> bool {
         let Some(filtered) = self.filtered_relationship_card_ids() else {
             self.set_error("Cards are not loaded yet");
-            return;
+            return false;
         };
         if filtered.is_empty() {
             self.relationship.selection.clear();
         } else {
             self.relationship.selection.set(Some(0));
         }
+        true
     }
 }
 
