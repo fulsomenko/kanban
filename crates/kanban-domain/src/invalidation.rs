@@ -279,11 +279,26 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_card_touched_entities_is_unenumerable() {
-        let cmd = Command::Card(CardCommand::Delete(DeleteCard {
-            card_id: Uuid::new_v4(),
-        }));
-        assert!(cmd.touched_entities().is_none());
+    fn test_delete_card_touched_entities_names_the_card_and_the_graph() {
+        let card_id = Uuid::new_v4();
+        let cmd = Command::Card(CardCommand::Delete(DeleteCard { card_id }));
+        let ids = cmd.touched_entities().expect("enumerable");
+        assert_eq!(ids.cards, HashSet::from([card_id]));
+        assert!(ids.graph);
+        assert!(ids.boards.is_empty());
+        assert!(ids.columns.is_empty());
+        assert!(ids.sprints.is_empty());
+        assert!(!ids.prefixes);
+    }
+
+    #[test]
+    fn test_a_card_creates_inverse_names_the_card_and_the_graph() {
+        let card_id = Uuid::new_v4();
+        let batch = vec![Command::Card(CardCommand::Delete(DeleteCard { card_id }))];
+        assert_eq!(
+            invalidation_from_inverse(&batch),
+            Invalidation::Entities(EntityIds::cards([card_id]).with_graph())
+        );
     }
 
     #[test]
@@ -458,8 +473,11 @@ mod tests {
                 card_id: Uuid::new_v4(),
                 updates: CardUpdate::default(),
             })),
-            Command::Card(CardCommand::Delete(DeleteCard {
+            Command::Card(CardCommand::Restore(RestoreCard {
                 card_id: Uuid::new_v4(),
+                column_id: Uuid::new_v4(),
+                position: 0,
+                timestamp: Utc::now(),
             })),
         ];
         assert_eq!(invalidation_from_inverse(&batch), Invalidation::All);

@@ -5,7 +5,7 @@ use helpers::{CountingBackend, ReadOp, ReadOpLog};
 use kanban_core::Editable;
 use kanban_domain::{
     commands::{CardCommand, Command, DeleteCard},
-    BoardSettingsDto, CardMetadataDto, CreateCardOptions, KanbanOperations,
+    BoardSettingsDto, CardMetadataDto, CreateCardOptions, EntityIds, KanbanOperations,
 };
 use kanban_tui::app::focus::Focus;
 use kanban_tui::app::mode::AppMode;
@@ -593,11 +593,13 @@ async fn test_toggle_completion_for_card_ids_with_no_resolvable_cards_issues_no_
 }
 
 #[tokio::test]
-async fn test_create_card_falls_back_to_a_whole_model_reset_because_its_inverse_is_unenumerable() {
-    let delete = Command::Card(CardCommand::Delete(DeleteCard {
-        card_id: Uuid::new_v4(),
-    }));
-    assert_eq!(delete.touched_entities(), None);
+async fn test_create_card_refetches_the_card_tiers_named_by_its_inverse() {
+    let card_id = Uuid::new_v4();
+    let delete = Command::Card(CardCommand::Delete(DeleteCard { card_id }));
+    assert_eq!(
+        delete.touched_entities(),
+        Some(EntityIds::cards([card_id]).with_graph())
+    );
 
     let mut app = App::test_default();
     let seed = seed_two_columns_two_cards(&mut app);
@@ -613,11 +615,11 @@ async fn test_create_card_falls_back_to_a_whole_model_reset_because_its_inverse_
     assert!(has_op(&refetch, "list_boards"), "got {refetch:?}");
     assert!(has_op(&refetch, "list_cards_by_column"), "got {refetch:?}");
     assert!(
-        has_op_with_id(&refetch, "list_columns_by_board", seed.board),
+        !has_op_with_id(&refetch, "list_columns_by_board", seed.board),
         "got {refetch:?}"
     );
     assert!(
-        has_op_with_id(&refetch, "list_sprints_by_board", seed.board),
+        !has_op_with_id(&refetch, "list_sprints_by_board", seed.board),
         "got {refetch:?}"
     );
 

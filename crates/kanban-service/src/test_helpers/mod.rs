@@ -589,5 +589,9 @@ macro_rules! cache_contract_tests {
         async fn test_the_flat_archived_board_tier_round_trips_markers_on_every_backend() {
             $crate::test_helpers::contract::cache::test_the_flat_archived_board_tier_round_trips_markers_on_every_backend(&$factory_fn()).await;
         }
+        #[tokio::test(flavor = "multi_thread")]
+        async fn test_a_created_cards_invalidation_names_the_card_on_every_backend() {
+            $crate::test_helpers::contract::cache::test_a_created_cards_invalidation_names_the_card_on_every_backend(&$factory_fn()).await;
+        }
     };
 }
