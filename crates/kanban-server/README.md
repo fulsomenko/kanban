@@ -2,7 +2,7 @@
 
 HTTP API server for kanban project management. Wraps `kanban-service` behind a REST interface so non-Rust clients (web UIs, scripts, other services) can read and write boards without going through the TUI, CLI, or MCP server.
 
-**Status: early / minimal.** Only boards and column reads are wired up so far — see [Endpoints](#endpoints). The bind address is configurable (see [Configuration](#configuration)); per-request logging is not. Still best treated as a development server rather than a hardened production deployment.
+**Status: early / minimal.** See [Endpoints](#endpoints) for what is wired up; reads and writes are covered across boards, columns, cards, sprints, the graph and transfer, with conditional-request guards on the entity writes. The bind address is configurable (see [Configuration](#configuration)); per-request logging is not. Still best treated as a development server rather than a hardened production deployment.
 
 ## Architecture
 
@@ -271,7 +271,7 @@ Every single-entity `GET` for boards, columns, cards and sprints (board-scoped a
 
 Since no write response carries an `ETag`, a client that wants the new tag for its next conditional write must re-`GET` the entity after mutating it.
 
-CORS exposes the `ETag` header to browser clients whenever `KANBAN_CORS_ORIGINS` names an explicit origin list; the permissive (`*`) CORS mode does not expose it.
+CORS exposes the `ETag` header to browser clients in both modes: an explicit `KANBAN_CORS_ORIGINS` list names it in `Access-Control-Expose-Headers`, and the permissive (`*`) mode exposes every header via a wildcard. With `KANBAN_CORS_ORIGINS` unset the server sends no CORS headers at all, so a browser client cannot read `ETag` cross-origin.
 
 ## Error Handling
 
