@@ -1,7 +1,8 @@
-//! `HttpBackend`'s SSE subscription reconnects on drop with a doubling
-//! backoff (capped at 30s) between attempts, and `impl Drop for HttpBackend`
-//! shuts its Tokio runtime down in the background rather than blocking, so a
-//! backend dropped mid-backoff never stalls the caller waiting on the sleep.
+//! `HttpBackend`'s SSE subscription reconnects whenever the event stream ends
+//! or the connection fails, with a doubling backoff (capped at 30s) between
+//! attempts, and `impl Drop for HttpBackend` shuts its Tokio runtime down in
+//! the background rather than blocking, so a backend dropped mid-backoff
+//! never stalls the caller waiting on the sleep.
 
 use kanban_backend::KanbanBackend;
 use kanban_backend_http::HttpBackend;

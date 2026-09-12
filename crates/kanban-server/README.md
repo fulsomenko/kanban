@@ -263,7 +263,7 @@ Every write route (`POST`/`PUT`/`PATCH`) broadcasts a change event naming the en
 
 ## Conditional requests
 
-Every single-entity `GET` for boards, columns, cards and sprints (board-scoped and flat alike) responds with an `ETag`: `GET /v1/boards/{id}`, `GET /v1/boards/{board_id}/columns/{id}`, `GET /v1/boards/{board_id}/cards/{id}`, `GET /v1/cards/{id}`, `GET /v1/boards/{board_id}/sprints/{id}` and `GET /v1/sprints/{id}`. The tag is always strong: the response body's SHA-256 digest, truncated to its first 16 bytes, lowercase hex-encoded and quoted (34 characters total, e.g. `"0123456789abcdef0123456789abcdef"`). No route emits a weak (`W/`) tag.
+Every single-entity `GET` for boards, columns, cards and sprints (board-scoped and flat alike) responds with an `ETag`: `GET /v1/boards/{id}`, `GET /v1/boards/{board_id}/columns/{id}`, `GET /v1/columns/{id}`, `GET /v1/boards/{board_id}/cards/{id}`, `GET /v1/cards/{id}`, `GET /v1/boards/{board_id}/sprints/{id}` and `GET /v1/sprints/{id}`. The tag is always strong: the response body's SHA-256 digest, truncated to its first 16 bytes, lowercase hex-encoded and quoted (34 characters total, e.g. `"0123456789abcdef0123456789abcdef"`). No route emits a weak (`W/`) tag.
 
 `If-None-Match` short-circuits a `GET` that already holds the current representation: send a `304 Not Modified` with no body, but still carrying the `ETag` header. The header accepts a comma-separated list of tags or `*`; a match on any entry (`*` always matches) triggers the `304`. A `W/`-prefixed candidate is compared with its prefix stripped on both sides, so a weak client tag can still satisfy `If-None-Match` against a strong server tag.
 
